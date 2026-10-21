@@ -102,19 +102,49 @@ const station = stationEntry && (() => {
       <h2 id="meteogram-title">Soaring meteogram</h2>
       <span class="card-sub" id="meteogram-meta"></span>
     </div>
+    <p class="windgram-scale" id="meteogram-scale" hidden>Expanded lower atmosphere — height spacing varies.</p>
     <div class="chart-scroll meteogram-frame" id="meteogram">
       <p class="chart-status">Loading the model forecast…</p>
     </div>
-    <details style="margin-top:14px">
+    <div class="windgram-reading" id="meteogram-reading" role="status" aria-live="polite" hidden></div>
+    <div class="windgram-key" id="meteogram-key"></div>
+    <details class="windgram-details" id="meteogram-details" hidden>
+      <summary>Weather details <span class="muted">Pressure, precipitation, cloud cover, smoke and convection</span></summary>
+      <div class="chart-scroll meteogram-diagnostics" id="meteogram-diagnostics"></div>
+    </details>
+    <details class="windgram-guide">
       <summary>How to read this chart</summary>
-      <p class="muted" style="margin-bottom:10px">
-        Time runs left to right; height above sea level runs up. The lines show how high thermals are expected to reach
-        (boundary layer top, usable lift top, cloud base), the barbs show wind at each height (km/h), and the strips below
-        show surface conditions. The green and red marks under the hours compare the surface wind with this launch's wind
-        window ({facing} ±{launch.windArcHalfWidthDeg}°).
-        <a href="https://meteo.azohra.com/docs/briefing/reading-a-meteogram/">Full guide to every mark</a>.
+      <p>
+        Time runs left to right; height above sea level runs up. The lower atmosphere is expanded so launch-level winds,
+        inversions and thermal tops are easier to read. Equal vertical distances on the page do not mean equal height
+        differences: use the metre and foot labels. Pressure ticks use the median model heights for the displayed day;
+        inspect the chart for the height at a particular point. The launch line and the model's ground elevation can differ.
       </p>
-      <div class="chart-scroll" id="meteogram-key"></div>
+      <p>
+        Background colours show how quickly air temperature changes with height: warm red and orange bands cool rapidly
+        upward, pink and purple bands cool more slowly, and grey bands indicate inversions. Temperature contours are in
+        °F. Colours describe atmospheric stability, not flight suitability. The emphasized 32°F contour shows every
+        freezing crossing; cyan dots mark the lowest crossing each hour. Neither predicts snowfall.
+      </p>
+      <p>
+        Wind barbs point toward the direction the wind comes from. A half feather means 5 knots, a full feather 10 knots,
+        and a pennant 50 knots; add them together. Green marks identify lighter wind speeds, not suitable flying conditions.
+        Rows between model levels are interpolated to show the changing flow; they do not add forecast resolution.
+        Hover over the chart or focus it and use the arrow keys to inspect an hour and height.
+      </p>
+      <p>
+        Clouds are placed at their estimated altitude. Model cloud fractions are used where the model supplies them;
+        otherwise, relative humidity above 95% identifies inferred cloud layers. Filled cloud cues require at least 30%
+        model cloud fraction or the humidity threshold. The readout identifies
+        the source. These estimates can miss thin layers. A potential cloud-base line shows where a rising surface parcel
+        would condense; that line alone does not mean clouds will form. High cloud cover can also lie above this chart.
+      </p>
+      <p>
+        Thermal strength (w*) is in m/s. Boundary-layer and usable-lift lines estimate thermal reach; usable lift assumes
+        a 1 m/s sink rate. Weather details retains the surface diagnostics; cloud, smoke and convection data depend on
+        the selected model. Ensemble temperatures and winds show the median forecast. Shaded ribbons span the middle
+        50% of ensemble members (the 25th to 75th percentiles).
+      </p>
     </details>
   </section>
 

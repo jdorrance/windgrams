@@ -452,24 +452,129 @@ details[open] > summary {
   -webkit-overflow-scrolling: touch;
 }
 
-.meteogram-frame svg,
-#meteogram-key svg {
+.meteogram-frame > svg,
+.meteogram-diagnostics > svg {
   display: block;
   max-width: none;
   height: auto;
 }
 
-/* The meteogram draws with its own light palette; give it a paper surface in
-   both themes so its labels always sit on the colour they were designed for. */
+/* Keep the chart's paper and text together in both site themes. Its SVG width
+   preserves readable hour columns; narrow screens scroll inside the frame. */
 .meteogram-frame,
-#meteogram-key {
+.meteogram-diagnostics,
+.windgram-key {
+  color-scheme: light;
   background: #fffdf8;
   border-radius: 8px;
   color: #152529;
 }
 
+.meteogram-frame,
+.meteogram-diagnostics {
+  overscroll-behavior-x: contain;
+}
+
 .meteogram-frame .chart-status {
   color: #2f454a;
+}
+
+.windgram-scale {
+  margin: -4px 0 10px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.windgram-reading {
+  margin-top: 10px;
+  padding: 10px 12px;
+  min-height: 44px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.windgram-reading strong {
+  color: var(--ink);
+}
+
+.windgram-key:not(:empty) {
+  margin-top: 10px;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.windgram-legend-ramp,
+.windgram-legend-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.windgram-legend-ramp {
+  margin-bottom: 10px;
+}
+
+.windgram-legend-chip,
+.windgram-legend-symbols > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.windgram-legend-chip::before {
+  content: "";
+  flex: 0 0 16px;
+  width: 16px;
+  height: 12px;
+  background: var(--chip);
+  border: 1px solid rgb(21 37 41 / 20%);
+  border-radius: 2px;
+}
+
+.windgram-legend-symbols svg {
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.windgram-legend-note {
+  margin: 10px 0 0;
+  color: #40565a;
+  font-size: 11px;
+}
+
+.windgram-details,
+.windgram-guide {
+  margin-top: 16px;
+}
+
+.windgram-details > summary .muted {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.windgram-guide p {
+  max-width: 88ch;
+  margin: 10px 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.meteogram-frame:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (max-width: 640px) {
+  .windgram-details > summary .muted {
+    display: block;
+    margin: 3px 0 0 18px;
+  }
 }
 
 .chart-status {

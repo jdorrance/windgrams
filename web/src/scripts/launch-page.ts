@@ -5,8 +5,9 @@
 import { parseForecastManifestJson, parseModelCatalogueJson, parseSiteContextJson } from "@azohra/meteo.briefing/contract";
 import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/meteo.briefing/contract";
 import { localDateKey, localHourOfDay, localInstantMs, runFreshness } from "@azohra/meteo.briefing/derive";
-import { buildKeySpec, buildMeteogramScene, renderKeySvg, renderMeteogramSvg } from "@azohra/meteo.briefing/meteogram";
 import { loadForecast } from "@azohra/meteo.briefing/transport";
+import { buildWindgramView } from "../lib/windgram-view.ts";
+import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
 import { windWindow, compassPoint, type Launch } from "../lib/launches.ts";
 import { EcmwfChart, type EcmwfSiteDocument } from "../lib/ecmwf-chart.ts";
 import { NwsChart, type NwsHour } from "../lib/nws-chart.ts";
@@ -120,6 +121,7 @@ let skewt: SkewTChart | null = null;
 let skewtDay = "";
 let skewtHours: SiteForecast["hours"] = [];
 let ecmwfChart: EcmwfChart | null = null;
+let clearWindgramInspector: (() => void) | null = null;
 const sunlight = new Sunlight(launch);
 
 async function profileFor(slug: string) {
@@ -203,6 +205,18 @@ function renderMeteogram() {
   const meta = $("meteogram-meta");
   const title = $("meteogram-title");
   const key = $("meteogram-key");
+  const diagnostics = $("meteogram-diagnostics");
+  const details = $("meteogram-details");
+  const reading = $("meteogram-reading");
+  const scale = $("meteogram-scale");
+  clearWindgramInspector?.();
+  clearWindgramInspector = null;
+  key.replaceChildren();
+  diagnostics.replaceChildren();
+  reading.replaceChildren();
+  details.hidden = true;
+  reading.hidden = true;
+  scale.hidden = true;
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
   title.textContent = entry
@@ -211,7 +225,6 @@ function renderMeteogram() {
 
   if (!loaded) {
     meta.textContent = "";
-    key.replaceChildren();
     const loading = model !== null && !profiles.has(model);
     frame.innerHTML = `<p class="chart-status">${loading ? "Loading the model forecast…" : "Model forecasts for this launch are not published yet."}</p>`;
     return;
@@ -241,26 +254,28 @@ function renderMeteogram() {
       p.appendChild(b);
     }
     frame.appendChild(p);
-    key.replaceChildren();
     return;
   }
 
   const width = Math.max(frame.clientWidth || 640, 320);
-  const scene = buildMeteogramScene(loaded.profile, {
+  const view = buildWindgramView(loaded.profile, {
     timeZone: tz,
     hours,
     launch: launchElevationM != null ? { name: launch.name, elevationM: launchElevationM } : null,
     launchWindows: [arc],
     capabilities: entry?.capabilities,
-    hourLabel: "12h",
     widthPx: width,
-    minColumnWidthPx: 40,
   });
-  frame.innerHTML = renderMeteogramSvg(scene, { idPrefix: `mg-${launch.slug}` });
-  key.innerHTML = renderKeySvg(buildKeySpec(scene), { idPrefix: `mg-key-${launch.slug}` });
+  frame.innerHTML = renderWindgramSvg(view, { idPrefix: `mg-${launch.slug}` });
+  diagnostics.innerHTML = renderWindgramDiagnosticsSvg(view, { idPrefix: `mg-details-${launch.slug}` });
+  key.innerHTML = renderWindgramKey();
+  details.hidden = false;
+  reading.hidden = false;
+  scale.hidden = false;
+  clearWindgramInspector = mountWindgramInspector(frame, reading, view);
   // The SVG has only a viewBox; pin it to the scene's pixel size so narrow
   // screens scroll sideways instead of shrinking the chart.
-  for (const svg of [frame.querySelector("svg"), key.querySelector("svg")]) {
+  for (const svg of [frame.querySelector("svg"), diagnostics.querySelector("svg")]) {
     const box = svg?.viewBox.baseVal;
     if (svg && box && box.width > 0) svg.style.width = `${box.width}px`;
   }
@@ -571,6 +586,16 @@ let resizeTimer = 0;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(renderMeteogram, 150);
+});
+
+// Keep the shared hour axis aligned when either chart is scrolled on a phone.
+for (const [from, to] of [["meteogram", "meteogram-diagnostics"], ["meteogram-diagnostics", "meteogram"]]) {
+  $(from).addEventListener("scroll", () => {
+    if ($(to).scrollLeft !== $(from).scrollLeft) $(to).scrollLeft = $(from).scrollLeft;
+  }, { passive: true });
+}
+$<HTMLDetailsElement>("meteogram-details").addEventListener("toggle", () => {
+  if ($<HTMLDetailsElement>("meteogram-details").open) $("meteogram-diagnostics").scrollLeft = $("meteogram").scrollLeft;
 });
 
 start();

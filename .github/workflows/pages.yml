@@ -380,7 +380,9 @@ jobs:
           key: forecast-data-${{ github.run_id }}
           restore-keys: forecast-data-
       - name: Require a cached dataset
-        if: github.event_name == 'push' && steps.dataset.outputs.cache-hit != 'true'
+        # cache-hit is true only for an exact key. A push restores the newest
+        # forecast-data-* entry, which is a prefix match, so cache-hit stays false.
+        if: github.event_name == 'push' && steps.dataset.outputs.cache-matched-key == ''
         run: |
           echo "No forecast dataset is cached yet. Run the Pages workflow once by hand so a scheduled publish can fill it."
           exit 1

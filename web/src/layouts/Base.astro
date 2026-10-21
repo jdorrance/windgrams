@@ -6,9 +6,10 @@ interface Props {
   title?: string;
   description?: string;
   current?: "launches" | "about" | "admin";
+  forecast?: boolean;
 }
 
-const { title, description = SITE_TAGLINE, current } = Astro.props;
+const { title, description = SITE_TAGLINE, current, forecast = false } = Astro.props;
 const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
 ---
 
@@ -23,7 +24,7 @@ const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
     <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)" />
   </head>
-  <body>
+  <body class:list={{ "forecast-page": forecast }}>
     <a class="sr-only" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="container">

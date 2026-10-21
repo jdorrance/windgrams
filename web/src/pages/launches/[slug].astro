@@ -31,81 +31,37 @@ const station = stationEntry && (() => {
 })();
 ---
 
-<Base title={launch.name} description={`Soaring meteogram and National Weather Service forecast for ${launch.name}.`}>
+<Base forecast title={launch.name} description={`Soaring meteogram and National Weather Service forecast for ${launch.name}.`}>
   <script type="application/json" id="launch-config" set:html={JSON.stringify(launch)} />
 
-  <p class="eyebrow"><a href={href()}>Launches</a>{launch.region && ` · ${launch.region}`}</p>
-  <h1>{launch.name}</h1>
-  <ul class="facts">
-    <li>Faces <strong>{facing}</strong> ({launch.facingDeg}°)</li>
-    <li>Launch range <strong>{launch.windMinMph}–{launch.windMaxMph} mph</strong>, gusts under {launch.gustMaxMph}</li>
-    <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong></li>
-    <li>Times in {zoneName}</li>
-  </ul>
-  {launch.notes && <p class="notice" style="margin-top:14px">{launch.notes}</p>}
-
-  <p id="sample-notice" class="notice sample" style="margin-top:14px" hidden>
-    Sample data for local development. This is not a forecast.
-  </p>
-
-  {station && (
-    <section class="card station" id="station" aria-labelledby="station-title">
-      <script type="application/json" id="station-config" set:html={JSON.stringify({ id: station.id, name: station.name, url: station.url })} />
-      <div class="card-head">
-        <h2 id="station-title">Live at the launch</h2>
-        <span class="card-sub">{station.name} station ({station.id}) · {station.where} · {station.elevationFt.toLocaleString("en-US")} ft</span>
+  <section class="card windgram-card" aria-labelledby="launch-title">
+    <header class="forecast-heading">
+      <div class="forecast-identity">
+        <h1 id="launch-title">{launch.name}</h1>
+        <span class="forecast-facing">{facing}-facing</span>
       </div>
-      <p class="chart-status" id="station-status">Loading the station's latest report…</p>
-      <div id="station-body" hidden>
-        <div class="station-now">
-          <div class="station-wind">
-            <svg id="station-compass" class="station-compass" viewBox="0 0 112 112" width="112" height="112" role="img" aria-label="Wind direction: the arrow comes in from where the wind blows from; the green sector is the launch's wind window"></svg>
-            <div>
-              <p class="station-hero" id="station-wind" aria-live="polite"></p>
-              <p class="station-gust" id="station-gust"></p>
-              <p class="muted station-age" id="station-age"></p>
-            </div>
-          </div>
-          <div class="station-verdict">
-            <p class="station-headline" id="station-headline" role="status" aria-live="polite"></p>
-            <ul class="findings" id="station-checks"></ul>
-          </div>
-        </div>
-        <dl class="station-stats" id="station-stats"></dl>
-        <details class="station-history" open>
-          <summary>Last 12 hours</summary>
-          <div id="station-chart"></div>
-        </details>
-      </div>
-      <p class="muted station-note">
-        What the station measured, not a forecast, and it sits {station.where === "at the launch" ? "at" : "near"} the launch, not on it:
-        always check the wind on launch. The limits are this launch's
-        ({launch.windMinMph}–{launch.windMaxMph} mph from {facing} ±{launch.windArcHalfWidthDeg}°, gusts under {launch.gustMaxMph} mph).
-        Refreshes every 2 minutes. Data: <a href={station.url}>Weather Underground</a>.
-      </p>
-    </section>
-  )}
-
-  <div class="controls">
-    <div>
-      <span class="control-label" id="day-label">Day</span>
-      <div class="segmented" id="day-tabs" role="group" aria-labelledby="day-label"></div>
+      <button class="forecast-info-button" type="button" popovertarget="launch-info">Launch info</button>
+    </header>
+    <div class="forecast-toolbar">
+      <span class="sr-only" id="day-label">Forecast day</span>
+      <div class="forecast-days" id="day-tabs" role="group" aria-labelledby="day-label"></div>
+      <label class="forecast-model">
+        <span class="sr-only">Forecast model</span>
+        <select id="model-select" disabled><option>Loading models…</option></select>
+      </label>
     </div>
-    <div>
-      <span class="control-label" id="model-label">Model</span>
-      <div class="segmented" id="model-tabs" role="group" aria-labelledby="model-label"></div>
+    <div class="forecast-context">
+      <span id="forecast-date"></span>
+      <span id="meteogram-meta"></span>
     </div>
-  </div>
-
-  <section class="card" aria-labelledby="meteogram-title">
-    <div class="card-head">
-      <h2 id="meteogram-title">Soaring meteogram</h2>
-      <span class="card-sub" id="meteogram-meta"></span>
-    </div>
-    <p class="windgram-scale" id="meteogram-scale" hidden>Expanded lower atmosphere — height spacing varies.</p>
+    <h2 class="sr-only" id="meteogram-title">Soaring meteogram</h2>
+    <p id="sample-notice" class="notice sample" hidden>
+      Sample data for local development. This is not a forecast.
+    </p>
     <div class="chart-scroll meteogram-frame" id="meteogram">
       <p class="chart-status">Loading the model forecast…</p>
     </div>
+    <p class="windgram-scale" id="meteogram-scale" hidden>Expanded lower atmosphere — height spacing varies.</p>
     <div class="windgram-reading" id="meteogram-reading" role="status" aria-live="polite" hidden></div>
     <div class="windgram-key" id="meteogram-key"></div>
     <details class="windgram-details" id="meteogram-details" hidden>
@@ -147,6 +103,60 @@ const station = stationEntry && (() => {
       </p>
     </details>
   </section>
+
+  <div class="launch-info-panel" id="launch-info" popover aria-labelledby="launch-info-title">
+    <div class="card-head">
+      <h2 id="launch-info-title">{launch.name} · launch info</h2>
+      <button class="forecast-info-button" type="button" popovertarget="launch-info" popovertargetaction="hide" aria-label="Close launch info">Close</button>
+    </div>
+    {launch.region && <p class="eyebrow">{launch.region}</p>}
+    <ul class="facts">
+      <li>Faces <strong>{facing}</strong> ({launch.facingDeg}°)</li>
+      <li>Launch range <strong>{launch.windMinMph}–{launch.windMaxMph} mph</strong>, gusts under {launch.gustMaxMph} mph</li>
+      <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong></li>
+      <li>Times in {zoneName}</li>
+    </ul>
+    {launch.notes && <p class="notice">{launch.notes}</p>}
+    <a href={href()}>Browse launches →</a>
+  </div>
+
+  {station && (
+    <section class="card station" id="station" aria-labelledby="station-title">
+      <script type="application/json" id="station-config" set:html={JSON.stringify({ id: station.id, name: station.name, url: station.url })} />
+      <div class="card-head">
+        <h2 id="station-title">Live at the launch</h2>
+        <span class="card-sub">{station.name} station ({station.id}) · {station.where} · {station.elevationFt.toLocaleString("en-US")} ft</span>
+      </div>
+      <p class="chart-status" id="station-status">Loading the station's latest report…</p>
+      <div id="station-body" hidden>
+        <div class="station-now">
+          <div class="station-wind">
+            <svg id="station-compass" class="station-compass" viewBox="0 0 112 112" width="112" height="112" role="img" aria-label="Wind direction: the arrow comes in from where the wind blows from; the green sector is the launch's wind window"></svg>
+            <div>
+              <p class="station-hero" id="station-wind" aria-live="polite"></p>
+              <p class="station-gust" id="station-gust"></p>
+              <p class="muted station-age" id="station-age"></p>
+            </div>
+          </div>
+          <div class="station-verdict">
+            <p class="station-headline" id="station-headline" role="status" aria-live="polite"></p>
+            <ul class="findings" id="station-checks"></ul>
+          </div>
+        </div>
+        <dl class="station-stats" id="station-stats"></dl>
+        <details class="station-history" open>
+          <summary>Last 12 hours</summary>
+          <div id="station-chart"></div>
+        </details>
+      </div>
+      <p class="muted station-note">
+        What the station measured, not a forecast, and it sits {station.where === "at the launch" ? "at" : "near"} the launch, not on it:
+        always check the wind on launch. The limits are this launch's
+        ({launch.windMinMph}–{launch.windMaxMph} mph from {facing} ±{launch.windArcHalfWidthDeg}°, gusts under {launch.gustMaxMph} mph).
+        Refreshes every 2 minutes. Data: <a href={station.url}>Weather Underground</a>.
+      </p>
+    </section>
+  )}
 
   <section class="card" id="skewt-section" aria-labelledby="skewt-title">
     <div class="card-head">

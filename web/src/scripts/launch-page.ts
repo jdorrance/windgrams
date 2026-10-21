@@ -176,6 +176,8 @@ async function selectModel(slug: string) {
 
 function renderDayTabs() {
   const host = $("day-tabs");
+  const restoreFocus = host.contains(document.activeElement);
+  const scrollLeft = host.scrollLeft;
   host.replaceChildren(
     ...days.map((key, i) => {
       const hasModel = MODEL_ORDER.some((slug) => covers(slug, key));
@@ -187,18 +189,31 @@ function renderDayTabs() {
       });
     }),
   );
+  host.scrollLeft = scrollLeft;
+  if (restoreFocus) host.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus({ preventScroll: true });
+  const date = new Date(`${day}T12:00:00Z`);
+  const dateLabel = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(date);
+  const zone = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(new Date(localInstantMs(day, 12, tz))).find((p) => p.type === "timeZoneName")?.value ?? tz;
+  $("forecast-date").textContent = `${dateLabel} · ${zone}`;
 }
 
-function renderModelTabs(available: string[]) {
-  const host = $("model-tabs");
+function renderModelSelect(available: string[]) {
+  const host = $<HTMLSelectElement>("model-select");
   host.replaceChildren(
     ...available.map((slug) => {
       const entry = modelEntry(slug);
-      const sub = entry ? `${entry.gridKm} km${entry.kind === "ensemble" ? " · ens" : ""}` : null;
-      return button(modelLabel(slug), sub, slug === model, false, () => selectModel(slug));
+      const option = document.createElement("option");
+      option.value = slug;
+      option.textContent = `${modelLabel(slug)}${entry ? ` · ${entry.gridKm} km${entry.kind === "ensemble" ? " ens." : ""}` : ""}`;
+      option.selected = slug === model;
+      return option;
     }),
   );
+  host.disabled = available.length === 0;
+  if (!available.length) host.add(new Option("No models available", ""));
 }
+
+$<HTMLSelectElement>("model-select").addEventListener("change", (event) => selectModel((event.target as HTMLSelectElement).value));
 
 function renderMeteogram() {
   const frame = $("meteogram");
@@ -508,7 +523,7 @@ $("skewt-best").addEventListener("click", () => showSkewTHour(bestThermalHour(sk
 
 function render() {
   renderDayTabs();
-  renderModelTabs(MODEL_ORDER.filter((slug) => manifests.has(slug)));
+  renderModelSelect(MODEL_ORDER.filter((slug) => manifests.has(slug)));
   renderMeteogram();
   renderSkewT();
   renderNws();

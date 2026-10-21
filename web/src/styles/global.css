@@ -447,6 +447,235 @@ details[open] > summary {
 
 /* ── charts ──────────────────────────────────────────────────────────── */
 
+/* Forecast pages put navigation and selection in a small band above the chart. */
+.forecast-page .site-header .container {
+  min-height: 40px;
+}
+
+.forecast-page .brand {
+  gap: 7px;
+  font-size: 14px;
+}
+
+.forecast-page .brand svg {
+  width: 22px;
+  height: 22px;
+}
+
+.forecast-page .site-nav {
+  font-size: 13px;
+}
+
+.forecast-page main {
+  padding-top: 8px;
+}
+
+.forecast-page .windgram-card {
+  padding: 12px;
+}
+
+.forecast-heading,
+.forecast-identity,
+.forecast-toolbar,
+.forecast-context {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.forecast-heading {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.forecast-identity {
+  gap: 12px;
+}
+
+.forecast-heading h1 {
+  font-size: 24px;
+}
+
+.forecast-facing {
+  color: var(--ink-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.forecast-info-button {
+  flex: none;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  color: var(--ink-2);
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.forecast-info-button:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.forecast-toolbar {
+  gap: 12px;
+}
+
+.forecast-days {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.forecast-days button {
+  flex: 1 0 auto;
+  min-width: 62px;
+  min-height: 44px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: transparent;
+  cursor: pointer;
+}
+
+.forecast-days button[aria-pressed="true"] {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.forecast-days button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.forecast-days button small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.forecast-model {
+  flex: 0 0 185px;
+  min-width: 0;
+}
+
+.forecast-model select {
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--axis);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.forecast-context {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 12px;
+  margin: 6px 0;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.forecast-context #forecast-date {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.windgram-card .windgram-scale {
+  margin: 7px 0 0;
+}
+
+.windgram-card .notice.sample:not([hidden]) {
+  margin: 8px 0;
+}
+
+.launch-info-panel {
+  inset: 58px max(16px, calc((100vw - 1088px) / 2)) auto auto;
+  width: min(410px, calc(100vw - 32px));
+  max-height: calc(100dvh - 90px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--axis);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 18%);
+}
+
+.launch-info-panel::backdrop {
+  background: rgb(0 0 0 / 8%);
+}
+
+.launch-info-panel .facts {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.launch-info-panel .notice {
+  margin-bottom: 16px;
+}
+
+.launch-info-panel + .card {
+  margin-top: 20px;
+}
+
+@media (max-width: 640px) {
+  .forecast-page main > .container {
+    padding: 0 8px;
+  }
+
+  .forecast-page .windgram-card {
+    padding: 8px;
+  }
+
+  .forecast-heading h1 {
+    font-size: 22px;
+  }
+
+  .forecast-facing {
+    display: none;
+  }
+
+  .forecast-toolbar {
+    gap: 6px;
+  }
+
+  .forecast-model {
+    flex-basis: 170px;
+  }
+
+  .forecast-model select {
+    /* Keep Safari from zooming the page when the model picker receives focus. */
+    font-size: 16px;
+  }
+
+  .forecast-info-button {
+    min-height: 44px;
+  }
+}
+
 .chart-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

@@ -14,6 +14,7 @@ import { SkewTChart } from "../lib/skewt-chart.ts";
 import { buildSounding, readSounding, scalar, type Finding, type Tone } from "../lib/skewt.ts";
 import { choices as balloonChoices, readChoice, type Choice, type RaobDocument } from "../lib/balloon.ts";
 import { parseSrg, type Srg } from "../lib/srg.ts";
+import { fetchWithRetry } from "../lib/http.ts";
 import { DATA_BASE } from "../lib/site.ts";
 import { fmt, ft, relativeTime } from "../lib/units.ts";
 import { Sunlight, type CloudSeries } from "./sunlight.ts";
@@ -50,7 +51,7 @@ let sample = false;
 
 async function getJson<T>(path: string): Promise<T | null> {
   try {
-    const response = await fetch(`${DATA_BASE}/${path}`);
+    const response = await fetchWithRetry(`${DATA_BASE}/${path}`);
     if (response.headers.get("x-sample-data")) sample = true;
     if (!response.ok) return null;
     return (await response.json()) as T;
@@ -123,7 +124,7 @@ const sunlight = new Sunlight(launch);
 
 async function profileFor(slug: string) {
   if (!profiles.has(slug)) {
-    const loaded = await loadForecast({ fetch: (url) => fetch(url), baseUrl: DATA_BASE, modelSlug: slug, siteSlug: launch.slug }).catch(() => null);
+    const loaded = await loadForecast({ fetch: (url) => fetchWithRetry(url), baseUrl: DATA_BASE, modelSlug: slug, siteSlug: launch.slug }).catch(() => null);
     profiles.set(
       slug,
       loaded && !("miss" in loaded)
@@ -139,7 +140,7 @@ function modelEntry(slug: string) {
 }
 
 async function loadManifest(slug: string) {
-  const text = await fetch(`${DATA_BASE}/${slug}/manifest.json`)
+  const text = await fetchWithRetry(`${DATA_BASE}/${slug}/manifest.json`)
     .then((r) => (r.ok ? r.text() : null))
     .catch(() => null);
   const manifest = text ? parseForecastManifestJson(text) : null;

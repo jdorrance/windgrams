@@ -1,4 +1,5 @@
-// Builds the local sample dataset served at /data during `pnpm dev`.
+// Builds the synthetic dataset the Check workflow validates against the meteo
+// contract. `pnpm dev` does not serve it; the dev server serves forecasts/data.
 //
 // Every document is synthetic: the meteogram profiles are meteo's
 // "convective-cycle" scenario re-timed onto today's local days for each launch
@@ -436,7 +437,8 @@ for (const site of sites.sites) {
 // format (units=m), read by the same parser the Worker uses. Light downslope
 // wind from the south-east overnight, turning up-slope from the north-west
 // late morning and building with gusts; one 20-minute gap in the reports.
-// Served in development at /api/stations/<id> (integrations/dev-data.mjs).
+// Written into this sample tree only. The dev server serves a station file
+// from its forecast root when one is there, and answers 503 otherwise.
 {
   const stations = readJson("../src/data/stations.json").stations;
   for (const [id, station] of Object.entries(stations)) {

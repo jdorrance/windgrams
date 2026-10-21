@@ -12,7 +12,8 @@
     "terrain": "node scripts/terrain.mjs",
     "solar": "node scripts/solar.mjs",
     "ecmwf": "node scripts/ecmwf.mjs",
-    "raob": "node scripts/raob.mjs"
+    "raob": "node scripts/raob.mjs",
+    "build:model": "bash scripts/build-local.sh"
   },
   "engines": {
     "node": ">=22"

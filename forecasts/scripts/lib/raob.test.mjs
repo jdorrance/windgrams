@@ -11,6 +11,15 @@ test("Cervidae uses the Boise balloon; far-away launches get none", () => {
   assert.equal(nearestStation({ latitude: 46.5, longitude: 7.9 }), null);
 });
 
+test("eastern and coastal launches get a station within 300 km", () => {
+  const dickey = nearestStation({ latitude: 38.8537, longitude: -78.2066 });
+  assert.equal(dickey.id, "KIAD");
+  assert.equal(dickey.distanceKm, 71);
+  const ellinor = nearestStation({ latitude: 47.5191, longitude: -123.262 });
+  assert.equal(ellinor.id, "KUIL");
+  assert.equal(ellinor.distanceKm, 104);
+});
+
 test("launch times are 00 and 12 UTC, newest first, and URLs follow IEM's format", () => {
   const times = recentLaunchTimes(Date.parse("2026-09-30T05:10:00Z"), 3).map((t) => new Date(t).toISOString());
   assert.deepEqual(times, ["2026-09-30T00:00:00.000Z", "2026-09-29T12:00:00.000Z", "2026-09-29T00:00:00.000Z"]);

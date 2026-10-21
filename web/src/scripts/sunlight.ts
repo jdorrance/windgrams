@@ -8,16 +8,18 @@
 // (/data/solar/<slug>/); the sun's position and the sky are computed here for
 // each 15-minute step, dimmed by the selected model's cloud cover.
 
-import L from "leaflet";
+import { Marker, type Map as MapLibreMap } from "maplibre-gl";
 import { localInstantMs } from "@azohra/meteo.briefing/derive";
 import { clearSky, withClouds } from "../lib/irradiance.ts";
 import { compassPoint, type Launch } from "../lib/launches.ts";
+import { fetchWithRetry } from "../lib/http.ts";
 import { DATA_BASE } from "../lib/site.ts";
 import { RAMP, fetchTile, pointIrradiance, pointParts, pointTerrain, rampLut, renderTile, type Frame, type PointTerrain, type SolarIndex, type SolarTile } from "../lib/solar-tile.ts";
 import { fetchRelief, metresPerPixel } from "../lib/relief.ts";
 import { SunCurve } from "../lib/sun-curve.ts";
 import { sunPosition, sunriseSunset, sunVector } from "../lib/sun.ts";
-import { baseMap, markerStyle } from "./map.ts";
+import { addAttribution, baseMap, onMapReady, worldPixel } from "./map.ts";
+import { SunlightOverlay } from "./sunlight-layer.ts";
 import type { Sunlight3D } from "./sunlight3d.ts";
 
 const STEP_MS = 15 * 60_000;
@@ -34,8 +36,13 @@ export interface CloudSeries {
   points: { ms: number; fraction: number }[];
 }
 
+interface LatLng {
+  lat: number;
+  lng: number;
+}
+
 interface Selected {
-  latlng: L.LatLng;
+  latlng: LatLng;
   terrain: PointTerrain;
   isLaunch: boolean;
 }
@@ -46,34 +53,32 @@ function key(c: { x: number; y: number; z: number }) {
   return `${c.z}/${c.x}/${c.y}`;
 }
 
-type Attach = (canvas: HTMLCanvasElement, coords: L.Coords, done: L.DoneCallback) => void;
+function mapDot(fill: string, radius: number) {
+  const element = document.createElement("span");
+  element.className = "map-dot";
+  element.style.width = element.style.height = `${radius * 2}px`;
+  element.style.background = fill;
+  return element;
+}
 
-/** Map layer whose tiles are canvases the Sunlight controller paints. */
-class SunlightLayer extends L.GridLayer {
-  constructor(
-    private readonly attach: Attach,
-    options: L.GridLayerOptions,
-  ) {
-    super(options);
-  }
+function launchDot() {
+  return mapDot("#1c5cab", 8);
+}
 
-  createTile(coords: L.Coords, done: L.DoneCallback) {
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = 256;
-    this.attach(canvas, coords, done);
-    return canvas;
-  }
+function pickedDot() {
+  const marker = new Marker({ element: mapDot("#0b0b0b", 7), anchor: "center" });
+  return marker;
 }
 
 export class Sunlight {
   private index: SolarIndex | null = null;
-  private map: L.Map | null = null;
+  private map: MapLibreMap | null = null;
+  private overlay: SunlightOverlay | null = null;
   private readonly lut = rampLut();
   private readonly image = new ImageData(256, 256);
   private readonly scratch = new Float32Array(66 * 66);
   private readonly loading = new Map<string, Promise<SolarTile | null>>();
   private readonly decoded = new Map<string, SolarTile>();
-  private readonly visible = new Map<string, HTMLCanvasElement>();
   private started = false;
   private dateKey: string | null = null;
   private clouds: CloudSeries | null = null;
@@ -81,8 +86,11 @@ export class Sunlight {
   private steps: number[] = [];
   private frames: Frame[] = [];
   private step = 0;
+  /** Bumped whenever the sunlight colours change, so the map repaints tiles in place. */
+  private colourRevision = 0;
   private selected: Selected | null = null;
-  private selectedMarker: L.CircleMarker | null = null;
+  private selectedMarker: Marker | null = null;
+  private launchMarker: Marker | null = null;
   private values: number[] = [];
   private timer = 0;
   private raf = 0;
@@ -104,7 +112,7 @@ export class Sunlight {
     $<HTMLInputElement>("sun-time").addEventListener("input", (e) => this.setStep(Number((e.target as HTMLInputElement).value), false));
     $("sun-play").addEventListener("click", () => this.togglePlay());
     $("sun-peak").addEventListener("click", () => this.setStep(this.curve.peakIndex(), true));
-    $("sun-reset").addEventListener("click", () => void this.selectPoint(L.latLng(launch.latitude, launch.longitude), true));
+    $("sun-reset").addEventListener("click", () => void this.selectPoint({ lat: launch.latitude, lng: launch.longitude }, true));
     $<HTMLInputElement>("sun-clouds").addEventListener("change", (e) => {
       this.cloudsOn = (e.target as HTMLInputElement).checked;
       this.rebuildFrames(false);
@@ -146,7 +154,7 @@ export class Sunlight {
     const status = $("sun-status");
     status.textContent = "Loading the terrain…";
     try {
-      const response = await fetch(`${DATA_BASE}/solar/${this.launch.slug}/index.json`);
+      const response = await fetchWithRetry(`${DATA_BASE}/solar/${this.launch.slug}/index.json`);
       this.index = response.ok ? ((await response.json()) as SolarIndex) : null;
     } catch {
       this.index = null;
@@ -170,40 +178,48 @@ export class Sunlight {
     const relief = this.index.relief;
     if (relief) $("sun-relief-spacing").textContent = `~${Math.round(metresPerPixel(this.launch.latitude, relief.zoom) / 5) * 5} m`;
     // The launch's own curve decides the starting time (now, or the day's peak).
-    await this.selectPoint(L.latLng(this.launch.latitude, this.launch.longitude), true);
+    await this.selectPoint({ lat: this.launch.latitude, lng: this.launch.longitude }, true);
     if (this.dateKey) this.rebuildFrames(true);
   }
 
   private mountMap(index: SolarIndex) {
     const b = index.bounds;
-    const bounds = L.latLngBounds([b.south, b.west], [b.north, b.east]);
+    const latPad = (b.north - b.south) * 0.2;
+    const lonPad = (b.east - b.west) * 0.2;
     // A launch with a whole range as its area can zoom out until the range fits a phone-wide map.
     const fitZoom = Math.floor(Math.log2((360 * 300) / (256 * (b.east - b.west))));
     const map = baseMap($("sun-map"), {
+      center: [this.launch.longitude, this.launch.latitude],
+      zoom: 13,
       minZoom: index.inputs.area ? Math.max(9, Math.min(index.tiles.minZoom, fitZoom)) : index.tiles.minZoom,
       maxZoom: 16,
-      maxBounds: bounds.pad(0.2),
-      maxBoundsViscosity: 0.8,
+      maxBounds: [
+        [b.west - lonPad, b.south - latPad],
+        [b.east + lonPad, b.north + latPad],
+      ],
     });
-    map.setView([this.launch.latitude, this.launch.longitude], 13);
-    map.createPane("sunlight").style.zIndex = "250";
-
     const sources = [...new Set(Object.values(index.sources).map((s) => s.name))].join(" and ");
-    const layer = new SunlightLayer((canvas, coords, done) => this.attachTile(canvas, coords, done), {
-      pane: "sunlight",
-      opacity: 0.8,
-      bounds,
-      minNativeZoom: index.tiles.minZoom,
-      maxNativeZoom: index.tiles.maxZoom,
-      updateWhenZooming: false,
-      keepBuffer: 1,
-      attribution: `Sunlight terrain: ${sources}`,
+    addAttribution(map, "sun-credit", `Sunlight terrain: ${sources}`);
+    this.overlay = new SunlightOverlay({
+      minZoom: index.tiles.minZoom,
+      maxZoom: index.tiles.maxZoom,
+      revision: () => this.colourRevision,
+      paint: (tile, rgba) => {
+        const frame = this.frames[this.step];
+        if (!frame) return false;
+        renderTile(tile, frame, rgba, this.lut, SCALE_MAX, this.scratch);
+        return true;
+      },
+      load: (coords) => this.loadTile(coords),
+      peek: (coords) => this.decoded.get(key(coords)) ?? null,
+      inRange: (coords) => this.inRange(coords),
     });
-    layer.on("tileunload", (event: L.TileEvent) => this.visible.delete(key(event.coords)));
-    layer.addTo(map);
-
-    L.circleMarker([this.launch.latitude, this.launch.longitude], markerStyle).bindTooltip(`${this.launch.name} launch`).addTo(map);
-    map.on("click", (event: L.LeafletMouseEvent) => void this.selectPoint(event.latlng, false));
+    onMapReady(map, () => map.addLayer(this.overlay!));
+    this.launchMarker = new Marker({ element: launchDot(), anchor: "center" })
+      .setLngLat([this.launch.longitude, this.launch.latitude])
+      .addTo(map);
+    this.launchMarker.getElement()?.setAttribute("title", `${this.launch.name} launch`);
+    map.on("click", (event) => void this.selectPoint(event.lngLat, false));
     this.map = map;
   }
 
@@ -240,38 +256,21 @@ export class Sunlight {
   private trimCache() {
     for (const k of this.decoded.keys()) {
       if (this.decoded.size <= TILE_CACHE) break;
-      if (this.visible.has(k)) continue;
+      if (this.overlay?.visibleKeys().has(k)) continue;
       this.decoded.delete(k);
       this.loading.delete(k);
     }
   }
 
-  private attachTile(canvas: HTMLCanvasElement, coords: L.Coords, done: L.DoneCallback) {
-    this.visible.set(key(coords), canvas);
-    void this.loadTile(coords).then((tile) => {
-      if (tile && this.frames.length > 0) this.draw(canvas, tile);
-      done(undefined, canvas);
-    });
-  }
-
-  private draw(canvas: HTMLCanvasElement, tile: SolarTile) {
-    const frame = this.frames[this.step];
-    if (!frame) return;
-    renderTile(tile, frame, this.image.data, this.lut, SCALE_MAX, this.scratch);
-    canvas.getContext("2d")?.putImageData(this.image, 0, 0);
-  }
-
   private redraw() {
+    this.colourRevision += 1;
     cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame(() => {
       if (this.view === "3d") {
         this.drawPicture();
         return;
       }
-      for (const [k, canvas] of this.visible) {
-        const tile = this.decoded.get(k);
-        if (tile) this.draw(canvas, tile);
-      }
+      this.map?.triggerRepaint();
     });
   }
 
@@ -286,7 +285,7 @@ export class Sunlight {
     $("sun-3d").hidden = view === "2d";
     $("sun-relief-label").hidden = view === "2d";
     if (view === "2d") {
-      this.map?.invalidateSize();
+      this.map?.resize();
       this.redraw();
       return;
     }
@@ -316,7 +315,7 @@ export class Sunlight {
         heights,
         picture: this.picture,
         launch: this.launch,
-        onPick: (lat, lon) => void this.selectPoint(L.latLng(lat, lon), false),
+        onPick: (lat, lon) => void this.selectPoint({ lat, lng: lon }, false),
       });
       this.three.setExaggeration($<HTMLInputElement>("sun-relief").checked ? EXAGGERATION : 1);
       if (this.selected && !this.selected.isLaunch) this.three.setSelected({ lat: this.selected.latlng.lat, lon: this.selected.latlng.lng });
@@ -489,13 +488,13 @@ export class Sunlight {
 
   // ── point ───────────────────────────────────────────────────────────────
 
-  private async selectPoint(latlng: L.LatLng, isLaunch: boolean) {
+  private async selectPoint(latlng: LatLng, isLaunch: boolean) {
     const map = this.map;
     const index = this.index;
     if (!map || !index) return;
-    const p = map.project(latlng, index.tiles.maxZoom);
-    const X = Math.floor(p.x);
-    const Y = Math.floor(p.y);
+    const pixel = worldPixel(latlng.lat, latlng.lng, index.tiles.maxZoom);
+    const X = Math.floor(pixel.x);
+    const Y = Math.floor(pixel.y);
     const tile = await this.loadTile({ z: index.tiles.maxZoom, x: X >> 8, y: Y >> 8 });
     const terrain = tile ? pointTerrain(tile, X & 255, Y & 255) : null;
     if (!terrain) {
@@ -504,9 +503,7 @@ export class Sunlight {
     }
     this.selected = { latlng, terrain, isLaunch };
     this.selectedMarker?.remove();
-    this.selectedMarker = isLaunch
-      ? null
-      : L.circleMarker(latlng, { radius: 7, color: "#ffffff", weight: 2, fillColor: "#0b0b0b", fillOpacity: 1 }).addTo(map);
+    this.selectedMarker = isLaunch ? null : pickedDot().setLngLat([latlng.lng, latlng.lat]).addTo(map);
     $("sun-reset").hidden = isLaunch;
     this.three?.setSelected(isLaunch ? null : { lat: latlng.lat, lon: latlng.lng });
     const slope = (Math.acos(Math.min(1, terrain.nz / Math.hypot(terrain.nx, terrain.ny, terrain.nz))) * 180) / Math.PI;

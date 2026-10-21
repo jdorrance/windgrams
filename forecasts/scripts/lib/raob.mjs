@@ -19,9 +19,11 @@ export const MAX_DISTANCE_KM = 300;
 export const TOP_HPA = 250;
 
 /**
- * Upper-air stations of the interior West. Positions are approximate and only
- * pick the nearest station; the published document carries the balloon's own
- * surface height.
+ * Upper-air stations that cover the launches in sites.json. Positions are
+ * approximate and only pick the nearest station; the published document
+ * carries the balloon's own surface height. KIAD, KRNK, KGSO, KFFC, KUIL and
+ * KSLE are the IEM RAOB network coordinates, so Virginia, North Carolina, the
+ * Washington coast and the Oregon coast fall inside MAX_DISTANCE_KM.
  */
 export const STATIONS = [
   { id: "KBOI", name: "Boise", latitude: 43.5677, longitude: -116.2109 },
@@ -33,6 +35,12 @@ export const STATIONS = [
   { id: "KTFX", name: "Great Falls", latitude: 47.46, longitude: -111.39 },
   { id: "KRIU", name: "Riverton", latitude: 43.06, longitude: -108.48 },
   { id: "KGJT", name: "Grand Junction", latitude: 39.12, longitude: -108.53 },
+  { id: "KIAD", name: "Dulles", latitude: 38.95, longitude: -77.4 },
+  { id: "KRNK", name: "Roanoke", latitude: 37.2, longitude: -79.5 },
+  { id: "KGSO", name: "Greensboro", latitude: 36.08, longitude: -79.9 },
+  { id: "KFFC", name: "Peachtree City", latitude: 33.37, longitude: -84.5 },
+  { id: "KUIL", name: "Quillayute", latitude: 47.95, longitude: -124.5 },
+  { id: "KSLE", name: "Salem", latitude: 44.92, longitude: -123.0 },
 ];
 
 export function distanceKm(a, b) {

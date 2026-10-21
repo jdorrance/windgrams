@@ -1,7 +1,7 @@
 # Sample data sources
 
-Inputs for `scripts/make-dev-data.mjs`, which builds the local sample dataset
-served at `/data` during `pnpm dev`. Nothing here is a forecast.
+Inputs for `scripts/make-dev-data.mjs`, which builds the synthetic dataset
+the Check workflow validates. `pnpm dev` does not serve it. Nothing here is a forecast.
 
 - `convective-cycle.profile.json`: a synthetic scenario profile from
   [meteo by Azohra](https://github.com/azohra/meteo) (`scenarios/generated/`),

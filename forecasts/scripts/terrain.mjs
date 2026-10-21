@@ -18,6 +18,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { parseSites, roundDocument } from "@azohra/meteo.forecast";
 import { parseSiteContextJson, parseSitesCatalogueJson } from "@azohra/meteo.briefing/contract";
+import { cachingOpen, retryingFetch } from "./lib/http.mjs";
 import { storeFromEnv } from "./lib/store.mjs";
 import { mosaic, tilesAround } from "./lib/mosaic.mjs";
 
@@ -31,11 +32,10 @@ const T = engineTerrain;
  * windows that may span several tiles.
  */
 export async function measure(sites, { open = T.openCog, fetchImpl = globalThis.fetch, log = console.log, warn = console.error, generatedAt } = {}) {
-  const opened = new Map();
-  const openOnce = (url) => {
-    if (!opened.has(url)) opened.set(url, open(url));
-    return opened.get(url);
-  };
+  // A rejected open used to stay in the map, so one timeout failed every later
+  // read of that tile. Retry, and remember the URL only when it succeeds.
+  const openOnce = cachingOpen(open);
+  const fetchRetry = retryingFetch(fetchImpl);
 
   async function windowAround(urlOf, site, halfM) {
     const dLat = halfM / T.M_PER_DEG_LAT;
@@ -61,7 +61,7 @@ export async function measure(sites, { open = T.openCog, fetchImpl = globalThis.
   const elevationOf = async (site) =>
     T.pickElevation(
       async (url) => T.projectedPoint(await openOnce(url), site.latitude, site.longitude),
-      await T.lidarbcUrls(site.latitude, site.longitude, fetchImpl),
+      await T.lidarbcUrls(site.latitude, site.longitude, fetchRetry),
     );
   const landCoverOf = async (site) => {
     const { window, lats, lons } = await windowAround(T.worldcoverUrl, site, Math.max(...T.LAND_COVER_RADII_M) + 100);

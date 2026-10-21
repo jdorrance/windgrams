@@ -2,16 +2,24 @@
 import { defineConfig } from "astro/config";
 import devData from "./integrations/dev-data.mjs";
 
+// WINDGRAMS_SITE is the public origin, including a project-site repo path
+// (https://owner.github.io/windgrams). WINDGRAMS_BASE is "/" or "/windgrams".
+// Local `pnpm dev` leaves both unset.
+const site = process.env.WINDGRAMS_SITE || "https://example.com";
+const base = !process.env.WINDGRAMS_BASE || process.env.WINDGRAMS_BASE === "/"
+  ? "/"
+  : `/${process.env.WINDGRAMS_BASE.replace(/^\/+|\/+$/g, "")}`;
+
 export default defineConfig({
-  // Static pages; the Worker in worker/ adds /data and /api at the edge.
+  // Static pages. Forecast documents are copied to dist/data at publish time.
   output: "static",
-  // Set to the real domain once it is connected (used for canonical URLs).
-  site: "https://example.com",
+  site,
+  base,
   trailingSlash: "ignore",
   // Compression drops the line break between a word and a link that starts the
   // next source line ("under the<a>…"), gluing them together on the page.
   compressHTML: false,
-  integrations: [devData()],
+  integrations: [devData({ root: "../forecasts/data" })],
   vite: {
     // Launch pages are built from ../forecasts/sites.json.
     server: { fs: { allow: [".."] } },

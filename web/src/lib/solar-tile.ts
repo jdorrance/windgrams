@@ -6,6 +6,7 @@
 //   horizons           one (cells + 2·border)² plane per azimuth, in HORIZON_STEP_DEG steps
 
 import { ALBEDO, SHADOW_EDGE_DEG, azimuthWeights, litFraction, onSurface, type Sky } from "./irradiance.ts";
+import { fetchWithRetry } from "./http.ts";
 import type { ReliefMeta } from "./relief.ts";
 
 export interface SolarArea {
@@ -91,7 +92,7 @@ export function decodeTile(raw: Uint8Array, index: SolarIndex): SolarTile {
 
 /** Fetches and decodes one tile; null when it does not exist. */
 export async function fetchTile(url: string, index: SolarIndex, signal?: AbortSignal): Promise<SolarTile | null> {
-  const response = await fetch(url, { signal });
+  const response = await fetchWithRetry(url, signal ? { signal } : undefined);
   if (!response.ok || !response.body) return null;
   const stream = response.body.pipeThrough(new DecompressionStream("gzip"));
   const raw = new Uint8Array(await new Response(stream).arrayBuffer());

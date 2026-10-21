@@ -1,0 +1,410 @@
+# Publishes the static site and the forecast documents it fetches from /data.
+#
+# Twice a day, five jobs run at once, one provider host each. The meteo engine
+# says a provider should see one builder at a time, so models that share a host
+# stay in sequence inside their job:
+#   noaa-cloud   HRRR, then GFS          NOAA cloud buckets, byte-ranged
+#   rrfs          RRFS                    noaa-rrfs-pds, its own bucket
+#   eccc          HRDPS, RDPS, GDPS, GEPS Datamart, one whole-domain GRIB at a time
+#   observations  NWS, Open-Meteo, IEM    three hosts, in parallel with each other
+#   terrain       site-context.json       elevation tiles, only when launches moved
+# Sunlight tiles are not built or uploaded.
+#
+# Canadian GRIB is the whole domain, so publishing fewer launches does not
+# shrink those downloads. Each job has its own disk, so the transfers do not
+# add up on one runner. The ECCC job still has to hold the largest file
+# (GEPS, about 14 GiB). A public runner usually has room. A private runner's
+# guaranteed free disk does not; that job frees preinstalled SDKs first.
+#
+# A push to main only rebuilds the HTML from the cached dataset. It does not
+# download a model. Repository variables WINDGRAMS_SITE, WINDGRAMS_BASE, and
+# WINDGRAMS_DATA_BASE override the GitHub Pages URL derived from the repo name.
+# NWS_USER_AGENT overrides the contact string sent to api.weather.gov.
+# Pages must be set to deploy from GitHub Actions.
+
+name: Pages
+
+on:
+  schedule:
+    - cron: "15 6,18 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "forecasts/sites.json"
+      - "forecasts/package.json"
+      - "forecasts/pnpm-lock.yaml"
+      - ".github/workflows/pages.yml"
+      - ".github/actions/setup-pnpm/**"
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  urls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      site: ${{ steps.urls.outputs.site }}
+      base: ${{ steps.urls.outputs.base }}
+      data: ${{ steps.urls.outputs.data }}
+    steps:
+      - id: urls
+        env:
+          WINDGRAMS_SITE: ${{ vars.WINDGRAMS_SITE }}
+          WINDGRAMS_BASE: ${{ vars.WINDGRAMS_BASE }}
+          WINDGRAMS_DATA_BASE: ${{ vars.WINDGRAMS_DATA_BASE }}
+        run: |
+          set -eu
+          owner="${GITHUB_REPOSITORY%%/*}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          if [ "$repo" = "${owner}.github.io" ]; then
+            default_site="https://${owner}.github.io"
+            default_base="/"
+          else
+            default_site="https://${owner}.github.io/${repo}"
+            default_base="/${repo}"
+          fi
+          site="${WINDGRAMS_SITE:-$default_site}"
+          base="${WINDGRAMS_BASE:-$default_base}"
+          data="${WINDGRAMS_DATA_BASE:-${site%/}/data}"
+          echo "site=$site" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "data=$data" >> "$GITHUB_OUTPUT"
+
+  noaa-cloud:
+    needs: urls
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          package-json: forecasts/package.json
+          lockfile: forecasts/pnpm-lock.yaml
+          working-directory: forecasts
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}
+          restore-keys: forecast-data-
+      - name: Seed the previous profiles
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group noaa-cloud
+      - name: Build HRRR and GFS
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: |
+          set -euo pipefail
+          for model in $(node scripts/seed-published.mjs --list noaa-cloud); do
+            echo "::group::$model"
+            pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output ./data --no-history
+            echo "::endgroup::"
+          done
+      - name: Pack
+        working-directory: forecasts
+        run: sh scripts/pack-slice.sh slice hrrr-conus gfs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: data-noaa-cloud
+          path: forecasts/slice
+          if-no-files-found: error
+          retention-days: 1
+
+  rrfs:
+    needs: urls
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          package-json: forecasts/package.json
+          lockfile: forecasts/pnpm-lock.yaml
+          working-directory: forecasts
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}
+          restore-keys: forecast-data-
+      - name: Seed the previous profiles
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group rrfs
+      - name: Build RRFS
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: |
+          set -euo pipefail
+          for model in $(node scripts/seed-published.mjs --list rrfs); do
+            echo "::group::$model"
+            pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output ./data --no-history
+            echo "::endgroup::"
+          done
+      - name: Pack
+        working-directory: forecasts
+        run: sh scripts/pack-slice.sh slice rrfs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: data-rrfs
+          path: forecasts/slice
+          if-no-files-found: error
+          retention-days: 1
+
+  eccc:
+    needs: urls
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Free disk for whole-domain GRIB
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          package-json: forecasts/package.json
+          lockfile: forecasts/pnpm-lock.yaml
+          working-directory: forecasts
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}
+          restore-keys: forecast-data-
+      - name: Seed the previous profiles
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group eccc
+      - name: Build HRDPS, RDPS, GDPS, and GEPS
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: |
+          set -euo pipefail
+          for model in $(node scripts/seed-published.mjs --list eccc); do
+            echo "::group::$model"
+            pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output ./data --no-history
+            echo "::endgroup::"
+          done
+      - name: Pack
+        working-directory: forecasts
+        run: sh scripts/pack-slice.sh slice hrdps-continental rdps gdps geps
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: data-eccc
+          path: forecasts/slice
+          if-no-files-found: error
+          retention-days: 1
+
+  observations:
+    needs: urls
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: write
+    env:
+      WINDGRAMS_STORE: file
+      WINDGRAMS_DATA_DIR: ${{ github.workspace }}/forecasts/data
+      NWS_USER_AGENT: ${{ vars.NWS_USER_AGENT || format('Windgrams/0.1 ({0}/{1})', github.server_url, github.repository) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          package-json: forecasts/package.json
+          lockfile: forecasts/pnpm-lock.yaml
+          working-directory: forecasts
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}
+          restore-keys: forecast-data-
+      - name: Seed the previous text forecasts
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: |
+          mkdir -p data
+          cp sites.json data/sites.json
+          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group observations
+      - name: Fetch NWS, ECMWF, and balloons
+        working-directory: forecasts
+        run: |
+          set -uo pipefail
+          status=0
+          pnpm run nws -- --output data --publish &
+          nws=$!
+          pnpm run ecmwf -- --output data --publish &
+          ecmwf=$!
+          pnpm run raob -- --output data --publish &
+          raob=$!
+          wait "$nws" || status=1
+          wait "$ecmwf" || status=1
+          wait "$raob" || status=1
+          exit "$status"
+      - name: Pack
+        working-directory: forecasts
+        run: sh scripts/pack-slice.sh slice nws ecmwf raob sites.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: data-observations
+          path: forecasts/slice
+          if-no-files-found: error
+          retention-days: 1
+
+  terrain:
+    needs: urls
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: write
+    env:
+      WINDGRAMS_STORE: file
+      WINDGRAMS_DATA_DIR: ${{ github.workspace }}/forecasts/data
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          package-json: forecasts/package.json
+          lockfile: forecasts/pnpm-lock.yaml
+          working-directory: forecasts
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}
+          restore-keys: forecast-data-
+      - name: Measure site context when launches moved
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: |
+          mkdir -p data
+          cp sites.json data/sites.json
+          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group terrain
+          node scripts/terrain.mjs --sync
+      - name: Pack
+        working-directory: forecasts
+        run: sh scripts/pack-slice.sh slice site-context.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: data-terrain
+          path: forecasts/slice
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: [urls, noaa-cloud, rrfs, eccc, observations, terrain]
+    if: >-
+      always() &&
+      needs.urls.result == 'success' &&
+      (needs.noaa-cloud.result == 'success' || needs.noaa-cloud.result == 'skipped') &&
+      (needs.rrfs.result == 'success' || needs.rrfs.result == 'skipped') &&
+      (needs.eccc.result == 'success' || needs.eccc.result == 'skipped') &&
+      (needs.observations.result == 'success' || needs.observations.result == 'skipped') &&
+      (needs.terrain.result == 'success' || needs.terrain.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          package-json: forecasts/package.json
+          lockfile: forecasts/pnpm-lock.yaml
+          working-directory: forecasts
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          package-json: web/package.json
+          lockfile: web/pnpm-lock.yaml
+          working-directory: web
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: github.event_name != 'push'
+        with:
+          pattern: data-*
+          path: incoming
+      - name: Merge forecast documents
+        if: github.event_name != 'push'
+        run: |
+          set -eu
+          mkdir -p forecasts/data
+          find incoming -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' dir; do
+            # upload-artifact stores the slice's contents. Unwrap if a wrapper directory came along.
+            if [ -d "$dir/slice" ]; then
+              cp -a "$dir/slice"/. forecasts/data/
+            else
+              cp -a "$dir"/. forecasts/data/
+            fi
+          done
+          rm -f forecasts/data/EMPTY
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        if: github.event_name == 'push'
+        id: dataset
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}
+          restore-keys: forecast-data-
+      - name: Require a cached dataset
+        if: github.event_name == 'push' && steps.dataset.outputs.cache-hit != 'true'
+        run: |
+          echo "No forecast dataset is cached yet. Run the Pages workflow once by hand so a scheduled publish can fill it."
+          exit 1
+      - name: Catalogue and run index
+        working-directory: forecasts
+        run: |
+          set -eu
+          mkdir -p data
+          cp sites.json data/sites.json
+          pnpm exec meteo forecast catalogue --output data/models.json
+          node scripts/write-runs-index.mjs --output data
+      - name: Build the site
+        working-directory: web
+        env:
+          WINDGRAMS_SITE: ${{ needs.urls.outputs.site }}
+          WINDGRAMS_BASE: ${{ needs.urls.outputs.base }}
+        run: |
+          set -eu
+          pnpm run build
+          mkdir -p dist/data
+          cp -a ../forecasts/data/. dist/data/
+          rm -f dist/data/EMPTY
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
+        with:
+          path: web/dist
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        if: success()
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}

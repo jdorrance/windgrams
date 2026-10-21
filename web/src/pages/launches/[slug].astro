@@ -4,6 +4,7 @@ import { launches } from "../../lib/catalog.ts";
 import { compassPoint, type Launch } from "../../lib/launches.ts";
 import stationsFile from "../../data/stations.json";
 import { dashboardUrl, type StationsFile } from "../../lib/station.ts";
+import { href } from "../../lib/site.ts";
 
 export function getStaticPaths() {
   return launches.map((launch) => ({ params: { slug: launch.slug }, props: { launch } }));
@@ -33,7 +34,7 @@ const station = stationEntry && (() => {
 <Base title={launch.name} description={`Soaring meteogram and National Weather Service forecast for ${launch.name}.`}>
   <script type="application/json" id="launch-config" set:html={JSON.stringify(launch)} />
 
-  <p class="eyebrow"><a href="/">Launches</a>{launch.region && ` · ${launch.region}`}</p>
+  <p class="eyebrow"><a href={href()}>Launches</a>{launch.region && ` · ${launch.region}`}</p>
   <h1>{launch.name}</h1>
   <ul class="facts">
     <li>Faces <strong>{facing}</strong> ({launch.facingDeg}°)</li>

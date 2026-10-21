@@ -363,8 +363,9 @@ test("reads both elevation models across USGS tile edges, and falls back to GLO-
       },
     };
   };
-  const fallback = await readTerrain(domain, { slug: "cervidae-peak", maxDistanceKm: 5, open: glo, warn: (m) => warnings.push(m) });
+  const fallback = await readTerrain(domain, { slug: "cervidae-peak", maxDistanceKm: 5, open: glo, warn: (m) => warnings.push(m), sleep: async () => {} });
   assert.equal(fallback.sources.surface.id, "copernicus-glo30");
-  assert.match(warnings[0], /^WARN cervidae-peak: USGS 3DEP unavailable/);
+  assert.ok(warnings.some((m) => m.startsWith("  read failed")), "the 3DEP probe is retried before the fallback");
+  assert.match(warnings.at(-1), /^WARN cervidae-peak: USGS 3DEP unavailable/);
   assert.ok(Math.abs(sampleGrid(await fallback.readFine(block), LAT, LON) - elevation(LAT, LON)) < 0.05);
 });

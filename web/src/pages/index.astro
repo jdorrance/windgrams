@@ -2,11 +2,13 @@
 import Base from "../layouts/Base.astro";
 import { launches } from "../lib/catalog.ts";
 import { compassPoint } from "../lib/launches.ts";
-import { SITE_TAGLINE } from "../lib/site.ts";
-
+import { href } from "../lib/site.ts";
 const markers = launches.map((l) => ({ slug: l.slug, name: l.name, latitude: l.latitude, longitude: l.longitude }));
-const stateOrder = ["Virginia", "Washington", "Maryland", "North Carolina", "Oregon"];
-const groups = stateOrder.map((region) => ({
+const regions: string[] = [];
+for (const launch of launches) {
+  if (launch.region && !regions.includes(launch.region)) regions.push(launch.region);
+}
+const groups = regions.map((region) => ({
   region,
   launches: launches.filter((launch) => launch.region === region),
 }));
@@ -14,7 +16,7 @@ const groups = stateOrder.map((region) => ({
 
 <Base current="launches">
   <h1>Launches</h1>
-  <p class="muted" style="margin-top:6px">{SITE_TAGLINE}: model meteograms and the National Weather Service forecast for each launch.</p>
+  <p class="muted" style="margin-top:6px">Model meteograms and the National Weather Service forecast for each launch.</p>
 
   <div id="launch-map" class="map" style="margin-top:20px" role="region" aria-label="Map of launches"></div>
   <script type="application/json" id="launch-markers" set:html={JSON.stringify(markers)} />
@@ -25,12 +27,9 @@ const groups = stateOrder.map((region) => ({
         <h2 id={`state-${group.region.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
           {group.region} <span class="muted">{group.launches.length}</span>
         </h2>
-        {group.launches.length === 0 ? (
-          <p class="muted state-empty">No launches in the source catalog.</p>
-        ) : (
-          <div class="launch-grid">
+        <div class="launch-grid">
             {group.launches.map((launch) => (
-              <a class="card launch-card" href={`/launches/${launch.slug}`}>
+              <a class="card launch-card" href={href(`launches/${launch.slug}`)}>
                 <h3>{launch.name}</h3>
                 <ul class="facts">
                   <li>
@@ -42,8 +41,7 @@ const groups = stateOrder.map((region) => ({
                 </ul>
               </a>
             ))}
-          </div>
-        )}
+        </div>
       </section>
     ))
   }

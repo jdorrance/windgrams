@@ -1,0 +1,23 @@
+name: Setup pnpm
+description: Install one workspace with the pinned pnpm and Node the check workflow uses.
+inputs:
+  package-json:
+    required: true
+  lockfile:
+    required: true
+  working-directory:
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      with:
+        package_json_file: ${{ inputs.package-json }}
+        cache: true
+        cache_dependency_path: ${{ inputs.lockfile }}
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      with:
+        node-version: 24
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: pnpm install --frozen-lockfile

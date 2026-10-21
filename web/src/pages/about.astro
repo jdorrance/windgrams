@@ -9,20 +9,18 @@ import Base from "../layouts/Base.astro";
     <section class="card">
       <h2>This catalog</h2>
       <p style="margin-top:8px">
-        Windgrams lists paragliding launches in Virginia, Washington, Maryland, North Carolina, and Oregon. Coordinates and
-        the direction each launch faces come from the flyingsites catalog. Maryland is included; that source currently has no
-        takeoff inside the state. The pages you open with <code>pnpm dev</code> draw a sample dataset so the charts can be
-        read without downloading a model.
+        Windgrams lists paragliding launches. Coordinates and the direction each launch faces come from the flyingsites
+        catalog. A local <code>pnpm dev</code> serves whatever forecast documents are in <code>forecasts/data</code>.
       </p>
     </section>
 
     <section class="card">
       <h2>Live at the launch</h2>
       <p style="margin-top:8px">
-        Where a personal weather station stands at or next to a launch, the top of the launch page shows what it measures
+        Where a personal weather station stands at or next to a launch, the top of the launch page can show what it measures
         now: wind direction, speed and gusts compared with the launch's own limits, temperature, humidity, pressure and
-        sunshine, and the last 12 hours as a chart. It refreshes every 2 minutes and says when the station stops reporting.
-        It is a measurement near the launch, not on it: always check the wind on launch. Station data:
+        sunshine, and the last 12 hours as a chart. This published site does not poll stations, so that panel is not filled in.
+        A station reading is a measurement near the launch, not on it: always check the wind on launch. Station data:
         <a href="https://www.wunderground.com/">Weather Underground</a>.
       </p>
     </section>
@@ -32,8 +30,8 @@ import Base from "../layouts/Base.astro";
       <p style="margin-top:8px">
         Weather models forecast the whole atmosphere above each launch. The meteogram shows, hour by hour, how high thermals
         should reach, where the cloud base is, how stable the air is, and the wind at every height. It is built with
-        <a href="https://meteo.azohra.com/">meteo by Azohra</a> from two national weather services. New runs are published as
-        soon as each model releases them, usually every six or twelve hours.
+        <a href="https://meteo.azohra.com/">meteo by Azohra</a> from two national weather services. The site is published
+        twice a day, about 06:15 and 18:15 UTC, from the latest 00 and 12 UTC runs. A 06 or 18 UTC run waits for the next publish.
       </p>
       <ul style="margin-top:8px">
         <li><strong>Today and tomorrow</strong>: NOAA's HRRR (3 km) and Canada's HRDPS (2.5 km). When they agree, trust the day more.</li>
@@ -68,24 +66,9 @@ import Base from "../layouts/Base.astro";
         draws the latest flights from the upper-air station nearest the launch as a Skew-T. The morning flight is read the way the NWS Soaring
         Forecast is made: a thermal leaves the ground at the afternoon forecast high and rises until it is no warmer than the
         morning air, which gives the day's thermal top. The Soaring Forecast's own numbers (trigger temperature, lift, soaring
-        index) are shown alongside, and its model hours can be viewed as Skew-Ts too. The site checks for a new Soaring Forecast
-        and a new balloon flight every 10 minutes, so each appears shortly after the NWS releases it. Balloon data: NWS, via the
+        index) are shown alongside, and its model hours can be viewed as Skew-Ts too. The twice-daily publish picks up
+        whichever of those flights is out. Balloon data: NWS, via the
         <a href="https://mesonet.agron.iastate.edu/archive/raob/">Iowa Environmental Mesonet</a>.
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>Sunlight on the terrain</h2>
-      <p style="margin-top:8px">
-        Thermals start where the sun heats the ground hardest. The sunlight map shows, every 15 minutes from sunrise to sunset,
-        how many watts per square metre reach each slope within 15 km of the launch: slopes facing the sun get the most,
-        slopes facing away get less, and ridges up to 20 km away cast their shadows. Press play to watch the sun move, or tap
-        any spot to see its whole day and when it peaks. Switch to 3D to see the same colours on the terrain in relief, with
-        the sun in its place in the sky: the faces turned toward it are the ones heating fastest.
-      </p>
-      <p style="margin-top:8px">
-        The terrain comes from the USGS 3D Elevation Program (10 m). The sky is a clear sky dimmed by the cloud cover of the
-        model you selected, at the launch, so it shows where the sun is, not where individual clouds are.
       </p>
     </section>
 
@@ -93,7 +76,7 @@ import Base from "../layouts/Base.astro";
       <h2>National Weather Service forecast</h2>
       <p style="margin-top:8px">
         The official forecast issued by the National Weather Service for the launch's 2.5 km grid cell — the same data as the
-        hourly graph on <a href="https://www.weather.gov/">weather.gov</a>. It is refreshed every hour.
+        hourly graph on <a href="https://www.weather.gov/">weather.gov</a>. It is refreshed twice a day, with the rest of the site.
       </p>
       <ul style="margin-top:8px">
         <li><strong>Mixing height</strong>: how deep the air near the ground is being stirred; a rough ceiling for thermals.</li>

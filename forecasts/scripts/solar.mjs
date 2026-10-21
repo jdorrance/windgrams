@@ -100,9 +100,10 @@ export async function readGrid(source, bounds, { open = T.openCog, log = () => {
  * the coarse one (the domain and the terrain that can shade it) and returns
  * `readFine(block)` for the fine one, read one block at a time.
  */
-export async function readTerrain(domain, { slug, maxDistanceKm, open, log = () => {}, warn = () => {} }) {
+export async function readTerrain(domain, { slug, maxDistanceKm, open, log = () => {}, warn = () => {}, sleep } = {}) {
   const coarseBounds = expandBounds(domain.bounds, maxDistanceKm * 1000 + 500);
   const firstBlock = blocksOf(domain)[0];
+  const retry = (read) => withRetries(read, { warn, sleep });
   const opened = (fineSource, coarseSource, first, coarse) => ({
     coarse,
     sources: { surface: publicSource(fineSource), horizon: publicSource(coarseSource) },
@@ -113,29 +114,31 @@ export async function readTerrain(domain, { slug, maxDistanceKm, open, log = () 
         first = null;
         return grid;
       }
-      return withRetries(() => readGrid(fineSource, expandBounds(block.bounds, FINE_MARGIN_M), { open, log }), { warn });
+      return retry(() => readGrid(fineSource, expandBounds(block.bounds, FINE_MARGIN_M), { open, log }));
     },
   });
   try {
-    const first = await readGrid(SOURCES.usgs13, expandBounds(firstBlock.bounds, FINE_MARGIN_M), { open, log });
-    const coarse = await readGrid(SOURCES.usgs1, coarseBounds, { open, log });
+    // Both probes retry before the Copernicus fallback. One blip used to drop the whole square onto GLO-30.
+    const first = await retry(() => readGrid(SOURCES.usgs13, expandBounds(firstBlock.bounds, FINE_MARGIN_M), { open, log }));
+    const coarse = await retry(() => readGrid(SOURCES.usgs1, coarseBounds, { open, log }));
     return opened(SOURCES.usgs13, SOURCES.usgs1, first, coarse);
   } catch (error) {
     warn(`WARN ${slug}: USGS 3DEP unavailable (${error.message}); using Copernicus GLO-30 (30 m) instead`);
-    const coarse = await readGrid(SOURCES.glo30, coarseBounds, { open, log });
+    const coarse = await retry(() => readGrid(SOURCES.glo30, coarseBounds, { open, log }));
     return opened(SOURCES.glo30, SOURCES.glo30, null, coarse);
   }
 }
 
 /** Retries a network read a few times: a large area makes many of them, and a rare one fails. */
-async function withRetries(read, { attempts = 3, warn = () => {} } = {}) {
+async function withRetries(read, { attempts = 3, warn = () => {}, sleep } = {}) {
+  const wait = sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await read();
     } catch (error) {
       if (attempt >= attempts) throw error;
       warn(`  read failed (${error.message}); retrying (${attempt}/${attempts - 1})`);
-      await new Promise((resolve) => setTimeout(resolve, 5000 * attempt));
+      await wait(5000 * attempt);
     }
   }
 }

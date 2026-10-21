@@ -2,6 +2,8 @@
 // Web Mercator grid over the launch's square, built by
 // forecasts/scripts/lib/solar.mjs (buildRelief), which documents the format.
 
+import { fetchWithRetry } from "./http.ts";
+
 export interface ReliefMeta {
   version: number;
   /** Path under /data/solar/<slug>/. */
@@ -36,7 +38,7 @@ export function decodeRelief(raw: Uint8Array, meta: ReliefMeta): Float32Array {
 }
 
 export async function fetchRelief(url: string, meta: ReliefMeta): Promise<Float32Array | null> {
-  const response = await fetch(url);
+  const response = await fetchWithRetry(url);
   if (!response.ok || !response.body) return null;
   const raw = new Uint8Array(await new Response(response.body.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
   return decodeRelief(raw, meta);

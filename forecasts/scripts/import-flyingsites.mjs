@@ -2,7 +2,7 @@
 // paragliding takeoffs in the sibling flyingsites catalog.
 //
 // flyingsites has no state field, so a launch is kept when its point falls
-// inside Virginia, Washington, Maryland, North Carolina, or Oregon.
+// inside one of the state outlines listed in STATE_ORDER.
 //
 // Usage (from forecasts/):
 //   node scripts/import-flyingsites.mjs

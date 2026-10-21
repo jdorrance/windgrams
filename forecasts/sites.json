@@ -1,0 +1,600 @@
+{
+  "schemaVersion": 2,
+  "sites": [
+    {
+      "slug": "va-daniels",
+      "name": "Daniels",
+      "latitude": 38.3105,
+      "longitude": -78.512,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "va-dickey-s-ridge",
+      "name": "Dickey's Ridge",
+      "latitude": 38.8537,
+      "longitude": -78.2066,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "va-eagle-rock",
+      "name": "Eagle Rock",
+      "latitude": 37.6314,
+      "longitude": -79.8317,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "va-edith-s-gap",
+      "name": "Edith's Gap",
+      "latitude": 38.7251,
+      "longitude": -78.5089,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "va-raven-s-roost",
+      "name": "Raven's Roost",
+      "latitude": 37.9336,
+      "longitude": -78.9528,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "va-woodstock",
+      "name": "Woodstock",
+      "latitude": 38.8706,
+      "longitude": -78.45,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "wa-bandera",
+      "name": "Bandera",
+      "latitude": 47.4176,
+      "longitude": -121.555,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-big-j",
+      "name": "Big J",
+      "latitude": 48.8605,
+      "longitude": -122.126,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-bingen",
+      "name": "Bingen",
+      "latitude": 45.7255,
+      "longitude": -121.446,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-black-mountain",
+      "name": "Black Mountain",
+      "latitude": 48.9745,
+      "longitude": -122.027,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-blanchard",
+      "name": "Blanchard",
+      "latitude": 48.6097,
+      "longitude": -122.426,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-blyn",
+      "name": "Blyn",
+      "latitude": 48.006,
+      "longitude": -122.985,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-callisto-launch",
+      "name": "Callisto Launch",
+      "latitude": 47.6866,
+      "longitude": -122.963,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-candy-mt",
+      "name": "Candy Mt.",
+      "latitude": 46.2608,
+      "longitude": -119.365,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-cayuse",
+      "name": "Cayuse",
+      "latitude": 47.8226,
+      "longitude": -118.047,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-chelan-butte",
+      "name": "Chelan Butte",
+      "latitude": 47.8042,
+      "longitude": -120.039,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-cliffside",
+      "name": "Cliffside",
+      "latitude": 45.7246,
+      "longitude": -120.727,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-crosswater-ridge",
+      "name": "Crosswater Ridge",
+      "latitude": 45.9846,
+      "longitude": -122.393,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-devils-gap",
+      "name": "Devils Gap",
+      "latitude": 47.7944,
+      "longitude": -117.809,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-dog",
+      "name": "Dog",
+      "latitude": 46.4882,
+      "longitude": -122.173,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-e-spangle-tow",
+      "name": "E Spangle tow",
+      "latitude": 47.4417,
+      "longitude": -117.353,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-eagle-butte",
+      "name": "Eagle Butte",
+      "latitude": 46.189,
+      "longitude": -119.338,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-eagle-creek-raptor-ridge",
+      "name": "Eagle Creek Raptor Ridge",
+      "latitude": 47.6676,
+      "longitude": -120.56,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-elk-rock",
+      "name": "Elk Rock",
+      "latitude": 46.2965,
+      "longitude": -122.346,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-flagstaff",
+      "name": "Flagstaff",
+      "latitude": 48.9138,
+      "longitude": -117.838,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-franson-peak",
+      "name": "Franson Peak",
+      "latitude": 48.8534,
+      "longitude": -118.631,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-goat-peak-mazama",
+      "name": "Goat Peak (Mazama)",
+      "latitude": 48.6187,
+      "longitude": -120.412,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-icicle-ridge",
+      "name": "Icicle Ridge",
+      "latitude": 47.5796,
+      "longitude": -120.686,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-inkler-s-point",
+      "name": "Inkler's Point",
+      "latitude": 48.1939,
+      "longitude": -117.734,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-kiona-pg-launch",
+      "name": "Kiona PG Launch",
+      "latitude": 46.2349,
+      "longitude": -119.497,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-lake-sammamish-state-park",
+      "name": "Lake Sammamish State Park",
+      "latitude": 47.5586,
+      "longitude": -122.067,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-mailbox-peak",
+      "name": "Mailbox Peak",
+      "latitude": 47.4617,
+      "longitude": -121.64,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-manastash-butte",
+      "name": "Manastash Butte",
+      "latitude": 46.9482,
+      "longitude": -120.667,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-mentorcity",
+      "name": "Mentorcity",
+      "latitude": 46.8555,
+      "longitude": -118.4,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-mount-leona",
+      "name": "Mount Leona",
+      "latitude": 48.7667,
+      "longitude": -118.477,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-mt-ellinor",
+      "name": "Mt Ellinor",
+      "latitude": 47.5191,
+      "longitude": -123.262,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-mt-baker-summit",
+      "name": "Mt. Baker Summit",
+      "latitude": 48.7752,
+      "longitude": -121.823,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-mt-si",
+      "name": "Mt. Si",
+      "latitude": 47.5053,
+      "longitude": -121.744,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-parker-mtn",
+      "name": "Parker Mtn",
+      "latitude": 48.243,
+      "longitude": -117.659,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-rampart-ridge",
+      "name": "Rampart Ridge",
+      "latitude": 47.3861,
+      "longitude": -121.364,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-saddle",
+      "name": "Saddle",
+      "latitude": 46.817,
+      "longitude": -119.87,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-sauk-mountain",
+      "name": "Sauk Mountain",
+      "latitude": 48.5186,
+      "longitude": -121.604,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-silver-star",
+      "name": "Silver Star",
+      "latitude": 45.764,
+      "longitude": -122.249,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-spangle-wa",
+      "name": "Spangle WA",
+      "latitude": 47.403,
+      "longitude": -117.292,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-steptoe-butte",
+      "name": "Steptoe Butte",
+      "latitude": 47.0305,
+      "longitude": -117.298,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-tiger-mountain",
+      "name": "Tiger Mountain",
+      "latitude": 47.4995,
+      "longitude": -122.009,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-tokio",
+      "name": "Tokio",
+      "latitude": 47.3424,
+      "longitude": -118.379,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-tokio-wa",
+      "name": "Tokio WA",
+      "latitude": 47.3332,
+      "longitude": -118.305,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-tokio-west",
+      "name": "Tokio West",
+      "latitude": 47.3335,
+      "longitude": -118.264,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-tumwater-mountain",
+      "name": "Tumwater Mountain",
+      "latitude": 47.5983,
+      "longitude": -120.698,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "wa-vulcan",
+      "name": "Vulcan",
+      "latitude": 48.9063,
+      "longitude": -118.662,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "nc-burkemont-mountain",
+      "name": "Burkemont Mountain",
+      "latitude": 35.6551,
+      "longitude": -81.7009,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "nc-dima-s",
+      "name": "Dima's",
+      "latitude": 36.2561,
+      "longitude": -81.4343,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "nc-jones-knob",
+      "name": "JONES KNOB",
+      "latitude": 35.0786,
+      "longitude": -83.2937,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "nc-tater-hill-boone",
+      "name": "Tater Hill (Boone)",
+      "latitude": 36.3012,
+      "longitude": -81.7233,
+      "timeZone": "America/New_York"
+    },
+    {
+      "slug": "or-abert-rim-walkup",
+      "name": "Abert Rim Walkup",
+      "latitude": 42.5611,
+      "longitude": -120.194,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-black-cap",
+      "name": "Black Cap",
+      "latitude": 42.2043,
+      "longitude": -120.33,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-dog-mt-coliumbia-river-gorge-closed",
+      "name": "Dog Mt Coliumbia River Gorge (Closed)",
+      "latitude": 45.7149,
+      "longitude": -121.702,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-doherty-slide",
+      "name": "Doherty Slide",
+      "latitude": 42.0194,
+      "longitude": -119.487,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-grizzly-mountain",
+      "name": "Grizzly Mountain",
+      "latitude": 44.4363,
+      "longitude": -120.955,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-hadley-butte",
+      "name": "Hadley Butte",
+      "latitude": 42.6907,
+      "longitude": -120.668,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-hagelstein-upper-klamath-lake",
+      "name": "Hagelstein (Upper Klamath Lake)",
+      "latitude": 42.3932,
+      "longitude": -121.815,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-haystack",
+      "name": "Haystack",
+      "latitude": 44.4701,
+      "longitude": -121.153,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-hoover-ridge",
+      "name": "Hoover Ridge",
+      "latitude": 44.7216,
+      "longitude": -122.167,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-howard",
+      "name": "Howard",
+      "latitude": 45.2682,
+      "longitude": -117.177,
+      "timeZone": "America/Boise"
+    },
+    {
+      "slug": "or-lands-inn",
+      "name": "Lands Inn",
+      "latitude": 44.6023,
+      "longitude": -119.551,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-lucas-launch",
+      "name": "Lucas Launch",
+      "latitude": 42.5222,
+      "longitude": -118.555,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-mark-s-launch",
+      "name": "Mark's Launch",
+      "latitude": 42.5131,
+      "longitude": -120.233,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-mount-hood",
+      "name": "Mount Hood",
+      "latitude": 45.36,
+      "longitude": -121.705,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-mt-bachelor",
+      "name": "Mt. Bachelor",
+      "latitude": 43.9772,
+      "longitude": -121.685,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-mt-stukel",
+      "name": "Mt. Stukel",
+      "latitude": 42.0944,
+      "longitude": -121.633,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-owl",
+      "name": "OWL",
+      "latitude": 45.8041,
+      "longitude": -123.928,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-palisades",
+      "name": "Palisades",
+      "latitude": 42.3038,
+      "longitude": -120.256,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-pelican-butte",
+      "name": "Pelican Butte",
+      "latitude": 42.5142,
+      "longitude": -122.146,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-peterson-butte",
+      "name": "Peterson Butte",
+      "latitude": 44.5088,
+      "longitude": -122.98,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-pine-mt",
+      "name": "Pine Mt.",
+      "latitude": 43.8202,
+      "longitude": -120.933,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-pine-mt-training-hill",
+      "name": "Pine Mt. (training hill)",
+      "latitude": 43.8344,
+      "longitude": -120.928,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-pine-ridge",
+      "name": "Pine Ridge",
+      "latitude": 44.4266,
+      "longitude": -121.062,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-poodle",
+      "name": "Poodle",
+      "latitude": 42.2855,
+      "longitude": -123.326,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-prairie-peak",
+      "name": "Prairie Peak",
+      "latitude": 44.2772,
+      "longitude": -123.607,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-sand-lake",
+      "name": "Sand Lake",
+      "latitude": 45.2883,
+      "longitude": -123.963,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-sollie-smith",
+      "name": "Sollie Smith",
+      "latitude": 45.4908,
+      "longitude": -123.768,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-tierra-del-mar",
+      "name": "Tierra Del Mar",
+      "latitude": 45.2385,
+      "longitude": -123.97,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-winter-ridge",
+      "name": "Winter Ridge",
+      "latitude": 42.9643,
+      "longitude": -120.808,
+      "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "or-woodrat-mountain",
+      "name": "Woodrat Mountain",
+      "latitude": 42.2317,
+      "longitude": -123.004,
+      "timeZone": "America/Los_Angeles"
+    }
+  ]
+}

@@ -1,0 +1,770 @@
+{
+  "schemaVersion": 1,
+  "launches": {
+    "va-daniels": {
+      "facingDeg": 202,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Virginia",
+      "notes": "1700 MSL, 880' vertical Gentle slop, slot. Glide slope to LZ: 4.3:1 Careful with rotor in bowl to right of launch. Soarable along 1.5 mile ridge."
+    },
+    "va-dickey-s-ridge": {
+      "facingDeg": 247,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Virginia",
+      "notes": "Short cliff launch with trees surrounding. Requires very good inflation and cliff launching skills."
+    },
+    "va-eagle-rock": {
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Virginia",
+      "notes": "The site is on Crawford Mountain and actually has two launches: one NW and one SE. Added information: Eagle Rock gets its name from a town in the valley. NW launch does not work the greatest with a West cross, more favorable with North winds."
+    },
+    "va-edith-s-gap": {
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Virginia",
+      "notes": "Steep slot launch with tall trees in front and on the sides."
+    },
+    "va-raven-s-roost": {
+      "facingDeg": 338,
+      "windArcHalfWidthDeg": 68,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Virginia",
+      "notes": "Cliff Launch - Requires H3/P3 Rating with cliff launch sign off. Extremely serious commitment, and must be comfortable with little room to run."
+    },
+    "va-woodstock": {
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Virginia",
+      "notes": "Slot launch - high trees on both sides"
+    },
+    "wa-bandera": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Relatively popular hike&fly destination with great landing at Bandera airport. Some basic info here: http://mvkazit.blogspot.com/2020/10/mount-bandera-hike-fly.html"
+    },
+    "wa-big-j": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "grassy launch, above very steep hill. Enough room to set up 1-2 wings."
+    },
+    "wa-bingen": {
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Description of Site: Overlooking the Columbia River Gorge, Bingen is Gorgeous. A deluxe manicured grass LZ at the Bingen Marina from a 2100' sled ride with soaring potential with a reasonable drive around makes this one of the gorge's premier sites. With south and west launches it works best sunny & calm, but also works in very light east or west winds (under 10 mph). On good thermal days, gains of 2500' are common with XC potential to the east. if there is a wind, westerlies are best from the Intermediate west launch, east winds tend to be rough and unpredictable making for crosswind launches and tumbling air at the south launch. Unfortunately, Bingen bisects the high wind windsurfing capitol of North America and private property. If there are whitecaps on the river at Bingen Marina or a wind line is moving from the west, it is blown out. Like all other Gorge sites, pilots must keep a sharp eye on the river for the streaks of dull looking water and whitecapswarning signs of the Gorge locomotive, The Wind. Park across the road from the log cabin. The trail starts walking downhill and turns back uphill as it goes around the property owned by the log cabin. Please do not cut across their property as it only takes 1 minute longer to go around (if that) As you approach the gate at the cattle fence, please remember to close it and latch the chain behind you. The hike up to the South launch is 5 -10 minutes from the car. You'll see a large flat launch area west of a large lone oak tree. This launch is suitable only in East or South winds. (most likely East) Make sure you have visited the LZ prior to going to the launch as the Columbia River Gorge is famous for higher winds in the LZ. If it's windy and you can't kite the LZ, don't launch off the top. If the wind is out of the west, continue along the trail for another 15 minutes and you'll end up at the west launch. This is a great launch for spring thermal and ridge soaring. Keep in mind from this launch, you cannot see t"
+    },
+    "wa-black-mountain": {
+      "facingDeg": 293,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Road is now closed to vehicles, gate locked at highway 542. The launch is about 3600' agl, reached by a gated but good logging road off the Mount Baker Highway. It is accessible for two-wheel drive vehicles, but 4-wheel drive is recommended as the last part is quite steep. You launch from the logging road, looking to the west with a spectacular view. Mt. Baker looms large over your left shoulder. Road is now closed to vehicles, gate locked at highway 542."
+    },
+    "wa-blanchard": {
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "TO is at 'Samish Overlook'"
+    },
+    "wa-blyn": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-callisto-launch": {
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-candy-mt": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-cayuse": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-chelan-butte": {
+      "facingDeg": 203,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "beware of dust devils!!"
+    },
+    "wa-cliffside": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Easy walk from major highway (State Highway 14). Or short steep Awd rocky road to top."
+    },
+    "wa-crosswater-ridge": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Take off on north launch. Cliff launch."
+    },
+    "wa-devils-gap": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-dog": {
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Popular HG destination, but some PG flying here as well"
+    },
+    "wa-e-spangle-tow": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-eagle-butte": {
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Drive up site. Top landing typical, usually beside your vehicle."
+    },
+    "wa-eagle-creek-raptor-ridge": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "...Friendly P2 site"
+    },
+    "wa-elk-rock": {
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-flagstaff": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-franson-peak": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-goat-peak-mazama": {
+      "facingDeg": 202,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Clearing in forest; enough space for 1 glider; just off access road."
+    },
+    "wa-icicle-ridge": {
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Faces East, Southeast. Open slope with a few skinny trees nearby and below launch."
+    },
+    "wa-inkler-s-point": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "SSE-SSW"
+    },
+    "wa-kiona-pg-launch": {
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-lake-sammamish-state-park": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-mailbox-peak": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Hike & Fly destination with multiple trails up and few landing options. Some basic info here : http://mvkazit.blogspot.com/2021/04/mailbox-peak-hike-fly-v2.html"
+    },
+    "wa-manastash-butte": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Easy Butte launch. Suitable for P2+ pilots in 5 to 10 mph winds."
+    },
+    "wa-mentorcity": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-mount-leona": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-mt-ellinor": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-mt-baker-summit": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-mt-si": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "This is one of the classic hike & fly destinations. Basic info: http://mvkazit.blogspot.com/2021/03/mount-si-hike-fly.html"
+    },
+    "wa-parker-mtn": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "2 launches. See the site guide @ www.centeroflift.org"
+    },
+    "wa-rampart-ridge": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-saddle": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "The launch is a rocky but but gentle slope that drops away to reveal the and LZ. It is quite large and makes a great place to learn top landing."
+    },
+    "wa-sauk-mountain": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-silver-star": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-spangle-wa": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-steptoe-butte": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-tiger-mountain": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Two take-off areas, N and S. South take-off is lower than N (NW) by about 200'. Some HG activity from N launch. NO POWERED CRAFT.<br> Google Maps <br>http://maps.google.com/?q=Issaquah,+WA&ie=UTF8&t=h&om=1&z=16&ll=47.497546,-122.009525&spn=0.007495,0.021501&iwloc=addr"
+    },
+    "wa-tokio": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-tokio-wa": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-tokio-west": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "wa-tumwater-mountain": {
+      "facingDeg": 113,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": "Mountain launch. Small, room to layout one glider. Steep, narrow corridor launch. 2900ft vertical. Town and LZ is almost directly below launch."
+    },
+    "wa-vulcan": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Washington",
+      "notes": ""
+    },
+    "nc-burkemont-mountain": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "North Carolina",
+      "notes": ""
+    },
+    "nc-dima-s": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "North Carolina",
+      "notes": ""
+    },
+    "nc-jones-knob": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "North Carolina",
+      "notes": ""
+    },
+    "nc-tater-hill-boone": {
+      "facingDeg": 293,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "North Carolina",
+      "notes": ""
+    },
+    "or-abert-rim-walkup": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-black-cap": {
+      "facingDeg": 247,
+      "windArcHalfWidthDeg": 68,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "From a dirt road"
+    },
+    "or-dog-mt-coliumbia-river-gorge-closed": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-doherty-slide": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-grizzly-mountain": {
+      "facingDeg": 202,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "near antennas"
+    },
+    "or-hadley-butte": {
+      "facingDeg": 338,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-hagelstein-upper-klamath-lake": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "small cleared field, enough space for 1 glider. Just 20m off paved road. Park clear off this road, as logging trucks come down, which use whole whith."
+    },
+    "or-haystack": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-hoover-ridge": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-howard": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "Please contact the Eagle Cap Paragliding Club (ECPC) for the latest information and updates on flying from Mt. Howard. Mt. Howard is a foot launch paragliding & hang gliding site located 7 miles south of Joseph, Oregon. The launch site faces north and is most commonly flown from July through the end of September. The Wallowa Lake Tramway (WLT) offers transportation to the public to the top of the mountain. Then, a ½ mile hiking trail leads to the launch site, located on National Forest land. This is a high profile and sensitive flying site so please respect this site guide information and only fly within your limits. All pilots are required to be “CURRENT” members of the United States Hang Gliding & Paragliding Association (USHPA). A minimum Paragliding *Intermediate (P-3) with special skill TUR (Turbulence) or Hang Gliding Advanced (H-4) certification is required. All licenses will be checked, indemnity waiver signed, site guide review completed, and ECPC membership collected before visiting pilots are signed off to fly. Please contact the Eagle Cap Paragliding Club before you arrive to organize paperwork, a site briefing, and a time when club members are available. Paragliding Intermediate (P-3) pilots are required to have the turbulence (TUR) special skill, and it is highly recommended to also have the High Altitude (HA), Restricted Landing Field (RLF), and Cross Country (X-C) special skills."
+    },
+    "or-lands-inn": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-lucas-launch": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-mark-s-launch": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-mount-hood": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-mt-bachelor": {
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "..."
+    },
+    "or-mt-stukel": {
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "West launch walk down from dirt road before towers. NW launch drive around back to north most tower, careful of guidelines."
+    },
+    "or-owl": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-palisades": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-pelican-butte": {
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 67,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "P4 site - Steep caldera slope with loose gravel screed rock is launch ,with also a few flat spots on top to launch from. Winds need to be strong enough when launching in order to ridge soar and top land."
+    },
+    "or-peterson-butte": {
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "Grass slope overlooking farm fields, or hike up to the summit in light conditions."
+    },
+    "or-pine-mt": {
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-pine-mt-training-hill": {
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "This site is TEMPORARILY CLOSED"
+    },
+    "or-pine-ridge": {
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "Pine Ridge is a Central Oregon ridge soaring site with mild thermals mixed in spring and fall, more radical thermals during the summer. It is a one mile long ridge facing the prevailing northwest winds and located entirely within the Crooked River National Grasslands. Launches for this site are all walk-up. North to northwest winds are the best flying, shorter duration flights can be had when winds are from the northeast or west. Regular controlled burning has removed much of the juniper, which once dominated this site leaving a multitude of open grass launches and landing areas."
+    },
+    "or-poodle": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-prairie-peak": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-sand-lake": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-sollie-smith": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "Requires a drive up, 2WD all the way. Open grassy slope in west-facing bowl. Soaring potential along south-facing ridge, west-facing Sugar Hill to southeast."
+    },
+    "or-tierra-del-mar": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-winter-ridge": {
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": ""
+    },
+    "or-woodrat-mountain": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": 5,
+      "windMaxMph": 15,
+      "gustMaxMph": 20,
+      "region": "Oregon",
+      "notes": "Large and perfect grade with gravel. West launch capable of simultaneous launches. Also a north launch. Large and well maintained."
+    }
+  }
+}

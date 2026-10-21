@@ -1,0 +1,312 @@
+---
+import Base from "../../layouts/Base.astro";
+import { launches } from "../../lib/catalog.ts";
+import { compassPoint, type Launch } from "../../lib/launches.ts";
+import stationsFile from "../../data/stations.json";
+import { dashboardUrl, type StationsFile } from "../../lib/station.ts";
+
+export function getStaticPaths() {
+  return launches.map((launch) => ({ params: { slug: launch.slug }, props: { launch } }));
+}
+
+const { launch } = Astro.props as { launch: Launch };
+const facing = compassPoint(launch.facingDeg);
+const zoneName =
+  new Intl.DateTimeFormat("en-US", { timeZone: launch.timeZone, timeZoneName: "long" })
+    .formatToParts(new Date())
+    .find((p) => p.type === "timeZoneName")?.value ?? launch.timeZone;
+
+// The weather station listed for this launch, if any, and where it is from the launch.
+const stationEntry = Object.entries((stationsFile as StationsFile).stations).find(([, s]) => s.launches.includes(launch.slug));
+const station = stationEntry && (() => {
+  const [id, s] = stationEntry;
+  const r = Math.PI / 180;
+  const dy = (s.latitude - launch.latitude) * 111_320;
+  const dx = (s.longitude - launch.longitude) * 111_320 * Math.cos(launch.latitude * r);
+  const distanceM = Math.hypot(dx, dy);
+  const bearing = compassPoint((Math.atan2(dx, dy) / r + 360) % 360);
+  const where = distanceM < 150 ? "at the launch" : `${distanceM < 1000 ? `${Math.round(distanceM / 50) * 50} m` : `${(distanceM / 1000).toFixed(1)} km`} ${bearing} of the launch`;
+  return { id, name: s.name, url: dashboardUrl(id), elevationFt: s.elevationFt, where };
+})();
+---
+
+<Base title={launch.name} description={`Soaring meteogram and National Weather Service forecast for ${launch.name}.`}>
+  <script type="application/json" id="launch-config" set:html={JSON.stringify(launch)} />
+
+  <p class="eyebrow"><a href="/">Launches</a>{launch.region && ` · ${launch.region}`}</p>
+  <h1>{launch.name}</h1>
+  <ul class="facts">
+    <li>Faces <strong>{facing}</strong> ({launch.facingDeg}°)</li>
+    <li>Launch range <strong>{launch.windMinMph}–{launch.windMaxMph} mph</strong>, gusts under {launch.gustMaxMph}</li>
+    <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong></li>
+    <li>Times in {zoneName}</li>
+  </ul>
+  {launch.notes && <p class="notice" style="margin-top:14px">{launch.notes}</p>}
+
+  <p id="sample-notice" class="notice sample" style="margin-top:14px" hidden>
+    Sample data for local development. This is not a forecast.
+  </p>
+
+  {station && (
+    <section class="card station" id="station" aria-labelledby="station-title">
+      <script type="application/json" id="station-config" set:html={JSON.stringify({ id: station.id, name: station.name, url: station.url })} />
+      <div class="card-head">
+        <h2 id="station-title">Live at the launch</h2>
+        <span class="card-sub">{station.name} station ({station.id}) · {station.where} · {station.elevationFt.toLocaleString("en-US")} ft</span>
+      </div>
+      <p class="chart-status" id="station-status">Loading the station's latest report…</p>
+      <div id="station-body" hidden>
+        <div class="station-now">
+          <div class="station-wind">
+            <svg id="station-compass" class="station-compass" viewBox="0 0 112 112" width="112" height="112" role="img" aria-label="Wind direction: the arrow comes in from where the wind blows from; the green sector is the launch's wind window"></svg>
+            <div>
+              <p class="station-hero" id="station-wind" aria-live="polite"></p>
+              <p class="station-gust" id="station-gust"></p>
+              <p class="muted station-age" id="station-age"></p>
+            </div>
+          </div>
+          <div class="station-verdict">
+            <p class="station-headline" id="station-headline" role="status" aria-live="polite"></p>
+            <ul class="findings" id="station-checks"></ul>
+          </div>
+        </div>
+        <dl class="station-stats" id="station-stats"></dl>
+        <details class="station-history" open>
+          <summary>Last 12 hours</summary>
+          <div id="station-chart"></div>
+        </details>
+      </div>
+      <p class="muted station-note">
+        What the station measured, not a forecast, and it sits {station.where === "at the launch" ? "at" : "near"} the launch, not on it:
+        always check the wind on launch. The limits are this launch's
+        ({launch.windMinMph}–{launch.windMaxMph} mph from {facing} ±{launch.windArcHalfWidthDeg}°, gusts under {launch.gustMaxMph} mph).
+        Refreshes every 2 minutes. Data: <a href={station.url}>Weather Underground</a>.
+      </p>
+    </section>
+  )}
+
+  <div class="controls">
+    <div>
+      <span class="control-label" id="day-label">Day</span>
+      <div class="segmented" id="day-tabs" role="group" aria-labelledby="day-label"></div>
+    </div>
+    <div>
+      <span class="control-label" id="model-label">Model</span>
+      <div class="segmented" id="model-tabs" role="group" aria-labelledby="model-label"></div>
+    </div>
+  </div>
+
+  <section class="card" aria-labelledby="meteogram-title">
+    <div class="card-head">
+      <h2 id="meteogram-title">Soaring meteogram</h2>
+      <span class="card-sub" id="meteogram-meta"></span>
+    </div>
+    <div class="chart-scroll meteogram-frame" id="meteogram">
+      <p class="chart-status">Loading the model forecast…</p>
+    </div>
+    <details style="margin-top:14px">
+      <summary>How to read this chart</summary>
+      <p class="muted" style="margin-bottom:10px">
+        Time runs left to right; height above sea level runs up. The lines show how high thermals are expected to reach
+        (boundary layer top, usable lift top, cloud base), the barbs show wind at each height (km/h), and the strips below
+        show surface conditions. The green and red marks under the hours compare the surface wind with this launch's wind
+        window ({facing} ±{launch.windArcHalfWidthDeg}°).
+        <a href="https://meteo.azohra.com/docs/briefing/reading-a-meteogram/">Full guide to every mark</a>.
+      </p>
+      <div class="chart-scroll" id="meteogram-key"></div>
+    </details>
+  </section>
+
+  <section class="card" id="skewt-section" aria-labelledby="skewt-title">
+    <div class="card-head">
+      <h2 id="skewt-title">Sounding (Skew-T)</h2>
+      <span class="card-sub" id="skewt-meta"></span>
+    </div>
+    <p class="chart-status" id="skewt-status">Loading the sounding…</p>
+    <div id="skewt-body" hidden>
+      <div class="sun-controls">
+        <label class="sun-slider">
+          <span class="sr-only">Hour of the sounding</span>
+          <input type="range" id="skewt-hour" min="0" max="0" step="1" value="0" />
+        </label>
+        <output id="skewt-hour-label" for="skewt-hour" class="sun-time">–</output>
+        <button type="button" class="button secondary" id="skewt-best">Best thermals</button>
+      </div>
+      <p class="skewt-headline" id="skewt-headline" role="status" aria-live="polite"></p>
+      <div class="skewt-layout">
+        <div class="skewt-figure">
+          <ul class="legend skewt-legend">
+            <li><span class="key-line" style="color:var(--series-2)"></span>Temperature</li>
+            <li><span class="key-line" style="color:var(--series-3)"></span>Dew point</li>
+            <li><span class="key-line key-dash"></span>Rising thermal</li>
+            <li><span class="key-swatch skewt-key-zone"></span>Thermal zone</li>
+            <li><span class="key-swatch skewt-key-buoyant"></span>Thermal warmer than the air</li>
+            <li><span class="key-swatch skewt-key-lid"></span>Inversion (lid)</li>
+            <li><span class="key-swatch skewt-key-cloud"></span>Cloud layer</li>
+          </ul>
+          <div id="skewt-chart"></div>
+        </div>
+        <div class="skewt-reading">
+          <h3>What this sounding says</h3>
+          <ul class="findings" id="skewt-findings"></ul>
+        </div>
+      </div>
+      <details style="margin-top:14px">
+        <summary>How to read a Skew-T</summary>
+        <div class="muted skewt-howto">
+          <p>
+            Height goes up the left side in feet. The <strong>orange line</strong> is the air temperature at each height and the
+            <strong>green line</strong> is the dew point: where the two lines touch, the air is saturated and cloud forms. The faint grid
+            lines leaning to the right are lines of equal temperature. The more the orange line leans left of them, the faster the air
+            cools with height: unstable air, good for thermals. Where it runs parallel to them or leans further right, the air is
+            stable or inverted, and thermals stop.
+          </p>
+          <p>
+            The <strong>dashed line</strong> is a thermal: a bubble of air warmed at the ground, rising and cooling about 3 °C per
+            1000 ft. While it is warmer than the air around it (right of the orange line, shaded) it keeps rising; where it meets the
+            orange line it stops. That is the top of the thermals. If it reaches the dew point before it stops, it makes a cumulus
+            cloud.
+          </p>
+          <p>
+            An <strong>inversion</strong> is a layer where the air gets warmer with height (the orange line bends right). Thermals
+            cannot push through it, so it caps the lift. Wind barbs on the right show the wind at each level, with the speed in mph.
+          </p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="card" id="sun-section" aria-labelledby="sun-title">
+    <div class="card-head">
+      <h2 id="sun-title">Sunlight on the terrain</h2>
+      <span class="card-sub"><span id="sun-daylight"></span> · <span id="sun-cloud-note"></span></span>
+    </div>
+    <p class="chart-status" id="sun-status">Scroll here to load the sunlight map.</p>
+    <div id="sun-body" hidden>
+      <div class="sun-toolbar">
+        <div class="segmented" id="sun-view" role="group" aria-label="View">
+          <button type="button" data-view="2d" aria-pressed="true">2D map</button>
+          <button type="button" data-view="3d" aria-pressed="false">3D terrain</button>
+        </div>
+        <label class="sun-check" id="sun-relief-label" hidden><input type="checkbox" id="sun-relief" /> Exaggerate relief ×2</label>
+      </div>
+      <div class="map sun-map" id="sun-map" tabindex="0" aria-label="Map of sunlight on the ground around the launch. Click a spot to see its day."></div>
+      <div class="sun-3d" id="sun-3d" hidden role="img" aria-label="3D view of the terrain around the launch, coloured by the sunlight reaching each slope at the chosen time. The table below lists the same values for the selected spot.">
+        <p class="chart-status sun-3d-status" id="sun-3d-status" hidden></p>
+        <p class="sun-3d-sun" id="sun-3d-sun"></p>
+        <p class="sun-3d-hint">Drag to turn · scroll or pinch to zoom · tap a spot for its day</p>
+      </div>
+      <div class="sun-controls">
+        <button type="button" class="button secondary" id="sun-play" aria-pressed="false">Play</button>
+        <label class="sun-slider">
+          <span class="sr-only">Time of day</span>
+          <input type="range" id="sun-time" min="0" max="0" step="1" value="0" />
+        </label>
+        <output id="sun-time-label" for="sun-time" class="sun-time">–</output>
+      </div>
+      <div class="sun-options">
+        <div class="sun-legend" aria-label="Colour scale: sunlight in watts per square metre">
+          <div class="sun-legend-bar" id="sun-legend-bar"></div>
+          <div class="sun-legend-ticks" id="sun-legend-ticks"></div>
+          <span class="sun-legend-unit">W/m² reaching the ground</span>
+        </div>
+        <div class="sun-buttons">
+          <button type="button" class="button secondary" id="sun-peak" disabled>Peak</button>
+          <label class="sun-check"><input type="checkbox" id="sun-clouds" checked /> Forecast clouds</label>
+        </div>
+      </div>
+      <div class="sun-point-head">
+        <strong id="sun-point"></strong>
+        <button type="button" class="link-button" id="sun-reset" hidden>Back to the launch</button>
+      </div>
+      <p class="sun-readout" id="sun-readout" role="status" aria-live="polite"></p>
+      <div class="sun-curve" id="sun-curve"></div>
+      <details style="margin-top:10px">
+        <summary>Table</summary>
+        <table class="sun-table">
+          <thead><tr><th scope="col">Time</th><th scope="col">W/m²</th></tr></thead>
+          <tbody id="sun-table"></tbody>
+        </table>
+      </details>
+      <details style="margin-top:10px">
+        <summary>How this is calculated</summary>
+        <p class="muted">
+          Darker orange means more sunlight reaching the ground, and more heating to set off thermals. For every spot the map
+          uses the slope and the direction the ground faces (from a 10 m elevation model), whether a ridge up to 20 km away
+          hides the sun, and how much open sky the spot sees. The sun's position is computed for every 15 minutes from sunrise
+          to sunset. <span id="sun-terrain"></span>.
+        </p>
+        <p class="muted">
+          A clear sky is dimmed by the cloud cover of the model selected above, at the launch, so a cloud over one ridge but
+          not the next does not show. Haze and smoke are not included. Tap or click anywhere on the map to see that spot's day.
+        </p>
+        <p class="muted">
+          The 3D view drapes the same colours over the terrain (heights every <span id="sun-relief-spacing">~55 m</span>, true scale unless exaggerated), with the
+          sun shown in its direction for the chosen time: the slopes turned toward it are the ones heating fastest.
+        </p>
+      </details>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="nws-title">
+    <div class="card-head">
+      <h2 id="nws-title">National Weather Service forecast</h2>
+      <span class="card-sub"><span id="nws-meta"></span> · <a id="nws-link" hidden>Open on weather.gov</a></span>
+    </div>
+    <div id="nws-charts">
+      <p class="chart-status">Loading the NWS forecast…</p>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="ecmwf-title">
+    <div class="card-head">
+      <h2 id="ecmwf-title">ECMWF forecast</h2>
+      <span class="card-sub" id="ecmwf-meta"></span>
+    </div>
+    <div id="ecmwf-charts">
+      <p class="chart-status">Loading the ECMWF forecast…</p>
+    </div>
+    <details style="margin-top:14px">
+      <summary>About this forecast</summary>
+      <p class="muted">
+        The European Centre for Medium-Range Weather Forecasts' IFS model, at 9 km, for the grid point nearest the launch.
+        Winds at 850 and 700 hPa come from its 0.25° run. The boundary-layer height is roughly how deep the air near the
+        ground is mixing, a rough ceiling for thermals like the NWS mixing height. ECMWF's open data has no surface heat
+        flux, so it cannot drive the soaring meteogram's thermal strength.
+      </p>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="text-title">
+    <div class="card-head">
+      <h2 id="text-title">Forecast discussion</h2>
+      <span class="card-sub">National Weather Service text products</span>
+    </div>
+    <ul class="periods" id="nws-periods"></ul>
+    <div class="balloon" id="balloon" hidden>
+      <div class="card-head">
+        <h3 id="balloon-title">Weather balloon sounding</h3>
+        <span class="card-sub" id="balloon-meta"></span>
+      </div>
+      <div class="segmented" id="balloon-tabs" role="group" aria-labelledby="balloon-title"></div>
+      <p class="skewt-headline" id="balloon-headline" role="status" aria-live="polite"></p>
+      <div class="skewt-layout">
+        <div class="skewt-figure">
+          <ul class="legend skewt-legend" id="balloon-legend"></ul>
+          <div id="balloon-chart"></div>
+        </div>
+        <div class="skewt-reading">
+          <h3>What this sounding says</h3>
+          <ul class="findings" id="balloon-findings"></ul>
+        </div>
+      </div>
+      <p class="muted balloon-note" id="balloon-note"></p>
+    </div>
+    <div class="stack" id="nws-products" style="margin-top:18px"></div>
+  </section>
+
+  <script>
+    import "../../scripts/launch-page.ts";
+    import "../../scripts/station.ts";
+  </script>
+</Base>

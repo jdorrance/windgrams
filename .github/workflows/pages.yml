@@ -109,7 +109,7 @@ jobs:
           test -n "$models"
           for model in $models; do
             echo "::group::$model"
-            pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output ./data --no-history
+            node scripts/build-covered.mjs --model "$model" --sites ./sites.json --output ./data
             echo "::endgroup::"
           done
       - name: Pack
@@ -157,7 +157,7 @@ jobs:
           test -n "$models"
           for model in $models; do
             echo "::group::$model"
-            pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output ./data --no-history
+            node scripts/build-covered.mjs --model "$model" --sites ./sites.json --output ./data
             echo "::endgroup::"
           done
       - name: Pack
@@ -209,7 +209,7 @@ jobs:
           test -n "$models"
           for model in $models; do
             echo "::group::$model"
-            pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output ./data --no-history
+            node scripts/build-covered.mjs --model "$model" --sites ./sites.json --output ./data
             echo "::endgroup::"
           done
       - name: Pack

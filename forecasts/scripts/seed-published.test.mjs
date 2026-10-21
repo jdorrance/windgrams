@@ -1,9 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { applyGroup, collectGroup, groupHasLocal } from "./seed-published.mjs";
+
+const script = join(dirname(fileURLToPath(import.meta.url)), "seed-published.mjs");
 
 test("collectGroup follows a model manifest and skips a 404", async () => {
   const docs = {
@@ -36,6 +40,14 @@ test("collectGroup reads NWS offices, ECMWF sites, and one balloon file per laun
     "ecmwf/sites/va-daniels.json",
     "raob/sites/va-daniels.json",
   ]);
+});
+
+test("--list prints that group's model slugs", () => {
+  const listed = spawnSync(process.execPath, [script, "--list", "noaa-cloud"], { encoding: "utf8" });
+  assert.equal(listed.status, 0);
+  assert.equal(listed.stdout, "hrrr-conus gfs\n");
+  const missing = spawnSync(process.execPath, [script, "--list", "nope"], { encoding: "utf8" });
+  assert.equal(missing.status, 1);
 });
 
 test("applyGroup replaces a model directory and leaves an unfetched model", () => {

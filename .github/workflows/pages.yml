@@ -105,7 +105,9 @@ jobs:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
         run: |
           set -euo pipefail
-          for model in $(node scripts/seed-published.mjs --list noaa-cloud); do
+          models=$(node scripts/seed-published.mjs --list noaa-cloud)
+          test -n "$models"
+          for model in $models; do
             echo "::group::$model"
             pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output ./data --no-history
             echo "::endgroup::"
@@ -151,7 +153,9 @@ jobs:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
         run: |
           set -euo pipefail
-          for model in $(node scripts/seed-published.mjs --list rrfs); do
+          models=$(node scripts/seed-published.mjs --list rrfs)
+          test -n "$models"
+          for model in $models; do
             echo "::group::$model"
             pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output ./data --no-history
             echo "::endgroup::"
@@ -201,7 +205,9 @@ jobs:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
         run: |
           set -euo pipefail
-          for model in $(node scripts/seed-published.mjs --list eccc); do
+          models=$(node scripts/seed-published.mjs --list eccc)
+          test -n "$models"
+          for model in $models; do
             echo "::group::$model"
             pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output ./data --no-history
             echo "::endgroup::"
@@ -253,11 +259,11 @@ jobs:
         run: |
           set -uo pipefail
           status=0
-          pnpm run nws -- --output data --publish &
+          node scripts/nws.mjs --output data --publish &
           nws=$!
-          pnpm run ecmwf -- --output data --publish &
+          node scripts/ecmwf.mjs --output data --publish &
           ecmwf=$!
-          pnpm run raob -- --output data --publish &
+          node scripts/raob.mjs --output data --publish &
           raob=$!
           wait "$nws" || status=1
           wait "$ecmwf" || status=1

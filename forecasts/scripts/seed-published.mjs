@@ -126,15 +126,15 @@ async function main() {
       from: { type: "string" },
       group: { type: "string" },
       sites: { type: "string", default: "sites.json" },
-      list: { type: "boolean", default: false },
+      list: { type: "string" },
     },
   });
   if (values.list) {
-    if (!values.group || !Object.hasOwn(GROUPS, values.group)) {
+    if (!Object.hasOwn(GROUPS, values.list)) {
       console.error(`--list needs a group: ${groupNames().join(", ")}`);
       process.exit(1);
     }
-    process.stdout.write(`${GROUPS[values.group].join(" ")}\n`);
+    process.stdout.write(`${GROUPS[values.list].join(" ")}\n`);
     return;
   }
   if (!values.group || !values.from) throw new Error("usage: node scripts/seed-published.mjs --output data --from URL --group GROUP");

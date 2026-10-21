@@ -14,6 +14,7 @@ import {
 } from "maplibre-gl";
 import mapWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { href } from "../lib/site.ts";
 
 setWorkerUrl(mapWorkerUrl);
 
@@ -193,7 +194,7 @@ export function mountLaunchMap(element: HTMLElement, markers: MarkerSpec[]) {
   for (const m of markers) {
     bounds.extend(m.longitude, m.latitude);
     const link = document.createElement("a");
-    link.href = `/launches/${m.slug}`;
+    link.href = href(`launches/${m.slug}`);
     link.textContent = m.name;
     dot("#1c5cab", 8)
       .setLngLat([m.longitude, m.latitude])

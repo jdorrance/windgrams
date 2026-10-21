@@ -71,4 +71,6 @@ for (const { station, sites: stationSites } of byStation.values()) {
   }
 }
 if (store) console.log(`✓ Published balloon soundings for ${sites.length} launch(es)`);
-if (failed > 0) process.exit(1);
+// A station with no flight in the archive is normal. Those launches have no
+// balloon chart. It must not fail the publish.
+if (failed > 0) console.warn(`WARN ${failed} station(s) had no sounding in the last 48 hours`);

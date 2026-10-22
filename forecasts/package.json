@@ -9,11 +9,14 @@
     "test": "node --test",
     "nws": "node scripts/nws.mjs",
     "publish:sites": "node scripts/publish-sites.mjs",
+    "publish:soaring": "node scripts/publish-soaring.mjs",
     "terrain": "node scripts/terrain.mjs",
     "solar": "node scripts/solar.mjs",
     "ecmwf": "node scripts/ecmwf.mjs",
     "raob": "node scripts/raob.mjs",
-    "build:model": "bash scripts/build-local.sh"
+    "build:model": "bash scripts/build-local.sh",
+    "soaring:capture": "node scripts/soaring.mjs capture",
+    "soaring:replay": "node scripts/soaring.mjs replay"
   },
   "engines": {
     "node": ">=22"
@@ -21,6 +24,7 @@
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
     "@azohra/meteo.briefing": "0.6.2",
-    "@azohra/meteo.forecast": "0.6.0"
+    "@azohra/meteo.forecast": "0.6.0",
+    "@azohra/meteo.grib": "0.1.4"
   }
 }

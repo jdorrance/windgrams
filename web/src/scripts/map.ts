@@ -90,9 +90,9 @@ function whenStyleReady(map: MapLibreMap, run: () => void) {
   else map.once("load", run);
 }
 
-/** Insert basemap rasters under the sunlight overlay when that layer exists. */
+/** Keep new basemap rasters beneath an existing scientific overlay. */
 function beforeOverlay(map: MapLibreMap) {
-  return map.getLayer("sunlight") ? "sunlight" : undefined;
+  return map.getStyle().layers.find(layer => layer.id === "sunlight" || layer.id === "lift-fill")?.id;
 }
 
 function ensureRaster(map: MapLibreMap, id: string, tiles: string[], attribution: string, opacity: number, maxzoom: number) {

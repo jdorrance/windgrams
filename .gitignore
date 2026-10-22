@@ -4,3 +4,6 @@ forecasts/data/
 .env
 .env.*
 worker-bundle/
+
+# Original NOAA byte ranges; never served by the web app.
+forecasts/.soaring-cache/

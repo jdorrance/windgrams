@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "modelSlug": "wrf-north-sound-1km",
+  "label": "WRF-ARW North Sound 1 km Pilot",
+  "experimental": true,
+  "wrfRelease": "4.6.0",
+  "wpsRelease": "4.6.0",
+  "forcing": {
+    "primary": "hrrr-conus-wrfprs",
+    "fallback": "gfs-0p25",
+    "spinupHours": 6,
+    "integrationHours": 30,
+    "evaluatedWindowHours": [6, 30],
+    "cycleUtc": "06:00",
+    "morningDeliveryTargetLocal": "08:00 America/Los_Angeles"
+  },
+  "projection": {
+    "mapProj": "lambert",
+    "refLat": 48.55,
+    "refLon": -122.35,
+    "truelat1": 48.0,
+    "truelat2": 49.0,
+    "standLon": -122.35
+  },
+  "domains": [
+    {
+      "id": "d01",
+      "role": "parent",
+      "dxM": 3000,
+      "dyM": 3000,
+      "eWe": 100,
+      "eSn": 100,
+      "eVert": 51,
+      "cumulusScheme": "none (explicit at 3 km)"
+    },
+    {
+      "id": "d02",
+      "role": "child-north-sound",
+      "parentId": "d01",
+      "parentGridRatio": 3,
+      "iParentStart": 28,
+      "jParentStart": 25,
+      "dxM": 1000,
+      "dyM": 1000,
+      "eWe": 136,
+      "eSn": 136,
+      "eVert": 51,
+      "bboxApprox": [-123.5, 47.8, -121.5, 49.0],
+      "cumulusScheme": "cu_physics=0 (explicit convection on 1 km nest)"
+    }
+  ],
+  "physics": {
+    "mpPhysics": "8 (Thompson graupel microphysics)",
+    "raLwPhysics": "4 (RRTMG longwave)",
+    "raSwPhysics": "4 (RRTMG shortwave, radt=3 min)",
+    "sfSfclayPhysics": "5 (MYNN surface layer)",
+    "sfSurfacePhysics": "2 (Noah LSM 4-layer soil)",
+    "blPblPhysics": "5 (MYNN 2.5 level TKE scale-aware boundary layer)",
+    "cuPhysics": [0, 0],
+    "topoWind": [1, 1],
+    "diffOpt": 2,
+    "kmOpt": 4
+  },
+  "launchesCovered": [
+    "wa-blanchard",
+    "wa-big-j",
+    "wa-black-mountain",
+    "wa-blyn",
+    "wa-mt-baker-summit",
+    "wa-sauk-mountain"
+  ],
+  "excludedRegionsNote": "Bingen (Columbia River Gorge) is intentionally excluded from this North Sound nest and requires its own Gorge domain."
+}

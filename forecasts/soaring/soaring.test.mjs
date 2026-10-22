@@ -1,0 +1,152 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile, rm, readdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { nearestGridpoint } from '@azohra/meteo.grib';
+import { parseSiteForecast } from '@azohra/meteo.briefing/contract';
+import { DRY_ADIABATIC_LAPSE_C_PER_M } from '@azohra/meteo.briefing/derive';
+import { capture, captureAsset, inspectField } from './capture.mjs';
+import { replay, verifyCapture } from './replay.mjs';
+import { readJson, json } from './common.mjs';
+import { fields } from './fields.mjs';
+import { projection, regionalGrid, storageIndex, wind } from './grid.mjs';
+import {
+  WXTOFLY_SINK_MPS,
+  assertAgreement,
+  cellSource,
+  computeNativeGridConvergence,
+  deriveCell,
+  differences,
+  geometricWFromOmegaMps,
+  metric,
+  metrics,
+  profileFor,
+} from './science.mjs';
+import { fixtureTransport } from './fixture-helper.mjs';
+const c = await readJson(new URL('./cases/north-sound-20261021-00z.json',import.meta.url));
+const real = await readJson(new URL('./fixtures/blanchard-raw.json',import.meta.url));
+const golden = await readJson(new URL('./fixtures/blanchard-published.json',import.meta.url));
+const quiet = () => {};
+async function temporary(t) { const root=await mkdtemp(join(tmpdir(),'soaring-test-')); t.after(()=>rm(root,{recursive:true,force:true})); return root; }
+
+test('real archived Blanchard columns reproduce every published hour exactly and compute v2 diagnostics', () => {
+  const results = real.hours.map(h => deriveCell(c,real.terrain,cellSource(c,real.grid,real.cell,h.forecastHour,h.raw),golden.run.generatedAt));
+  const profile = profileFor(c,results[0].site,results.map(r=>r.hour),golden.run.generatedAt);
+  assert.deepEqual(differences(profile,golden),[]);
+  assert.ok(parseSiteForecast(profile));
+  assert.equal(profile.hours[0].derived.thermalVelocityMps,0);
+  assert.equal(profile.hours[6].derived.thermalVelocityMps,1.06);
+  assert.equal(profile.hours[6].derived.usableLiftTopM,724.5);
+  // Phase 1 v2 diagnostic checks at f14 (stable morning) and f20 (1 PM PDT):
+  assert.equal(results[0].v2.resolvedThermalTopM, null);
+  assert.equal(results[6].v2.resolvedThermalTopM, 504.3); // 221.7 m terrain + 282.6 m HPBL instead of 778.9 m 925 hPa jump
+  assert.ok(results[6].v2.thermalTopPlus1CM > results[6].v2.resolvedThermalTopM);
+  assert.ok(results[6].v2.hcritWxtoflyM < profile.hours[6].derived.usableLiftTopM);
+  assert.ok(Math.abs(WXTOFLY_SINK_MPS - 1.143) < 0.001);
+  assert.equal(results[6].v2.surfaceLclM, 1315.0);
+  assert.ok(results[6].v2.cuPotentialM < 0); // Blue thermal day
+  assert.ok(results[6].v2.blMeanWindSpeedMps > 0);
+  assert.ok(results[6].v2.blWindShearMps >= 0);
+  const wTest = geometricWFromOmegaMps(-1.0, 925, 14.46);
+  assert.ok(wTest > 0.08 && wTest < 0.12);
+  const hourly=profile.hours.map(h=>({validAt:h.validAt,...Object.fromEntries(metrics.map(k=>[k,[metric(h,k)]]))}));
+  assert.equal(assertAgreement(profile,hourly,0).valuesChecked,70);
+  hourly[6].thermalVelocityMps[0] += .01;
+  assert.throws(()=>assertAgreement(profile,hourly,0),/mismatch/);
+});
+
+test('independent dry-column numerical reference, zero flux, and column ceiling', () => {
+  const source=structuredClone(real.hours[6].source);
+  Object.assign(source,{temperatureC:20,dewPointDepressionC:20,sensibleHeatFluxWm2:100,latentHeatFluxWm2:0});
+  source.levels=[500,1000,1500].map((z,i)=>({heightM:z,pressureHpa:[950,900,850][i],temperatureC:16-.006*z,dewPointDepressionC:20,windSpeedMps:2,windDirectionDeg:180}));
+  const depth=4/(DRY_ADIABATIC_LAPSE_C_PER_M-.006);
+  const w=Math.cbrt(.0075516/(293.15*(1015/950)**.28482)*100*depth);
+  const hour=deriveCell(c,0,source,'2026-10-22T00:00:00Z').hour;
+  assert.equal(hour.derived.boundaryLayerTopM,Math.round(depth*10)/10);
+  assert.equal(hour.derived.thermalVelocityMps,Math.round(w*100)/100);
+  source.sensibleHeatFluxWm2=-10;
+  assert.equal(deriveCell(c,0,source,golden.run.generatedAt).hour.derived.thermalVelocityMps,0);
+  assert.equal(deriveCell(c,0,source,golden.run.generatedAt).hour.derived.usableLiftTopM,null);
+  source.temperatureC=50;
+  assert.equal(deriveCell(c,0,source,golden.run.generatedAt).ceilingReached,true);
+});
+
+test('terrain masks inadequate coverage; missing inputs never become zero lift', () => {
+  const source=structuredClone(real.hours[6].source);
+  const heights=source.levels.map(l=>l.heightM).sort((a,b)=>a-b);
+  const result=deriveCell(c,heights.at(-3),source,golden.run.generatedAt);
+  assert.equal(result.status,'insufficient-levels'); assert.equal(result.hour,null);
+  assert.equal(deriveCell(c,null,source,golden.run.generatedAt).status,'missing');
+  const raw={...real.hours[6].raw,temperature:null};
+  assert.equal(cellSource(c,real.grid,real.cell,20,raw),null);
+  const optional={...real.hours[6].raw,'smoke.aot':null,pblHeightM:null};
+  const without=cellSource(c,real.grid,real.cell,20,optional);
+  assert.equal(without.smoke,undefined); assert.equal(without.pblHeightM,undefined);
+});
+
+test('Lambert geometry, native nearest cell, scanning orders, wind rotation, and native convergence', () => {
+  const p=projection(real.grid), region=regionalGrid(real.grid,c);
+  assert.equal(region.cells.length,2259); assert.equal(region.nearest.index,1779497);
+  assert.equal(region.siteCell,1478);
+  for (const cell of region.cells.filter((_,i)=>i%100===0)) {
+    const [i,j]=p.fractional(cell.longitude,cell.latitude);
+    assert.ok(Math.abs(i-Math.round(i))<1e-7); assert.ok(Math.abs(j-Math.round(j))<1e-7);
+    assert.equal(storageIndex(real.grid,Math.round(i),Math.round(j)),cell.index);
+    assert.equal(nearestGridpoint(real.grid,cell.latitude,cell.longitude).index,cell.index);
+  }
+  for (const jPointsAreConsecutive of [true,false]) for (const alternativeRowScanning of [true,false]) {
+    const grid={...real.grid,ni:4,nj:3,jPointsAreConsecutive,alternativeRowScanning};
+    const indices=[];for(let j=0;j<3;j++)for(let i=0;i<4;i++)indices.push(storageIndex(grid,i,j));
+    assert.deepEqual(indices.sort((a,b)=>a-b),Array.from({length:12},(_,i)=>i));
+    assert.equal(storageIndex(grid,1,1),jPointsAreConsecutive?4:(alternativeRowScanning?6:5));
+  }
+  const rotated=wind(real.grid,real.grid.loV-20,0,10);
+  const angle=20*Math.sin(38.5*Math.PI/180);
+  assert.ok(Math.abs(rotated.windSpeedMps-10)<1e-12);
+  assert.ok(Math.abs(rotated.windDirectionDeg-(180-angle))<1e-9);
+  assert.equal(wind(real.grid,0,null,1),null);
+  const zeroConv = computeNativeGridConvergence(real.grid, region.cells, new Array(region.cells.length).fill(5), new Array(region.cells.length).fill(3));
+  assert.equal(zeroConv[region.siteCell], 0);
+});
+
+test('capture/replay is offline, deterministic, atomic, and rejects damaged inputs', async t => {
+  const root=await temporary(t), cache=join(root,'cache'), output=join(root,'output');
+  const small={...c,forecastHours:[14,20]};
+  const transport=await fixtureTransport(small);
+  const captured=await capture(small,cache,{fetchImpl:transport,log:quiet});
+  const noNetwork=()=>{throw new Error('NETWORK DISABLED');};
+  const resumed=await capture(small,cache,{fetchImpl:noNetwork,log:quiet});
+  assert.deepEqual(captured,resumed);
+  const oldFetch=globalThis.fetch;globalThis.fetch=noNetwork;t.after(()=>{globalThis.fetch=oldFetch;});
+  const first=await replay(small,cache,output,{log:quiet});
+  const second=await replay(small,cache,output,{log:quiet});
+  assert.deepEqual(first.hashes,second.hashes);assert.equal(first.path,second.path);
+  assert.equal(first.audit.mapProfileAgreement.exact,true);
+  assert.equal((await readdir(output)).some(n=>n.startsWith('.staging')),false);
+  const pointer=await readFile(join(output,c.id,'index.json'),'utf8');
+  const manifestPath=join(cache,'capture.json'), original=await readFile(manifestPath);
+  const broken=structuredClone(captured);broken.sources[1].records.splice(0,1);
+  await writeFile(manifestPath,json(broken));await assert.rejects(verifyCapture(small,cache),/inventory/);
+  await writeFile(manifestPath,original);
+  await assert.rejects(verifyCapture({...small,referenceTime:'2026-10-20T00:00:00Z'},cache),/case\/run/);
+  const record=captured.sources[1].records[0], path=join(cache,record.file), bytes=await readFile(path);
+  const wrong=Buffer.from(bytes);wrong[16+16]=20;
+  assert.throws(()=>inspectField(wrong,small,14),/Wrong run/);
+  assert.throws(()=>inspectField(bytes,small,20),/forecast time/);
+  assert.throws(()=>inspectField(bytes,small,14,'wrong-grid'),/grid/);
+  assert.throws(()=>inspectField(bytes,small,14,undefined,fields(small,14)[1]),/variable\/level/);
+  await writeFile(path,bytes.subarray(0,bytes.length-1));
+  await assert.rejects(replay(small,cache,output,{log:quiet}),/Corrupt cache/);
+  assert.equal(await readFile(join(output,c.id,'index.json'),'utf8'),pointer);
+  await rm(path);await assert.rejects(verifyCapture(small,cache),/ENOENT/);
+});
+
+test('ignored ranges, wrong content ranges, partial responses leave no reusable asset', async t => {
+  const root=await temporary(t), record={offset:10,length:4};
+  for(const [name,status,body,range] of [['ignored',200,'1234','bytes 10-13/99'],['partial',206,'12','bytes 10-13/99'],['wrong',206,'1234','bytes 0-3/99']]) {
+    await assert.rejects(captureAsset(root,name,'https://example.invalid',record,()=>{},async()=>new Response(body,{status,headers:{'content-range':range}})));
+    assert.equal((await readdir(root)).includes(`${name}.json`),false);
+  }
+  assert.deepEqual(await readdir(root),[]);
+});

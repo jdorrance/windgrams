@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "archivedRuns": [
+    {
+      "model": "hrrr-conus",
+      "runKey": "20261021T000000Z",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "archivedNorthSoundSites": 6
+    },
+    {
+      "model": "hrdps-continental",
+      "runKey": "20261021T060000Z",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "archivedNorthSoundSites": 6
+    },
+    {
+      "model": "rdps",
+      "runKey": "20261021T000000Z",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "archivedNorthSoundSites": 6
+    },
+    {
+      "model": "gdps",
+      "runKey": "20261021T000000Z",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "archivedNorthSoundSites": 6
+    },
+    {
+      "model": "gfs",
+      "runKey": "20261021T000000Z",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "archivedNorthSoundSites": 6
+    },
+    {
+      "model": "geps",
+      "runKey": "20261021T000000Z",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "archivedNorthSoundSites": 6
+    }
+  ]
+}

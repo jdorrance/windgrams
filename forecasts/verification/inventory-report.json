@@ -1,0 +1,272 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-22T09:30:00Z",
+  "hrrrWrfprsInventory": {
+    "totalGribRecordsPerHour": 711,
+    "availablePressureLevelsCount": 40,
+    "availableSub925PressureLevelsHpa": [
+      1013.2,
+      1000.0,
+      975.0,
+      950.0
+    ],
+    "ingestedV1PressureLevelsHpa": [
+      925,
+      900,
+      875,
+      850,
+      800,
+      750,
+      700,
+      650,
+      600
+    ],
+    "has80mAglWind": true,
+    "explicitCloudAndStabilityFields": [
+      "HGT:cloud base",
+      "HGT:cloud ceiling",
+      "HGT:cloud top",
+      "HGT:level of adiabatic condensation from sfc",
+      "HGT:level of free convection",
+      "HGT:equilibrium level",
+      "MAXUVV:100-1000 mb",
+      "MAXDVV:100-1000 mb"
+    ]
+  },
+  "lifecycleAudit": [
+    {
+      "slug": "nam",
+      "catalogueSunset": "2026-10-06",
+      "officialTransition": "2026-11-03",
+      "successor": "rrfs",
+      "status": "retired-from-active-order"
+    },
+    {
+      "slug": "nam-conus-nest",
+      "catalogueSunset": "2026-10-06",
+      "officialTransition": "2026-11-03",
+      "successor": "rrfs",
+      "status": "retired-from-active-order"
+    },
+    {
+      "slug": "hrdps-west",
+      "catalogueSunset": "2027-09-30",
+      "officialTransition": "Fall 2027 removal",
+      "successor": "hrdps-continental",
+      "status": "experimental-optional-only"
+    }
+  ],
+  "kuilRaobComparison": {
+    "station": {
+      "id": "KUIL",
+      "name": "Quillayute",
+      "latitude": 47.95,
+      "longitude": -124.5,
+      "distanceKm": 170,
+      "elevationM": 62
+    },
+    "soundingValidAt": "2026-10-21T00:00:00Z",
+    "levelComparisons": [
+      {
+        "pressureHpa": 925,
+        "kuilObsTempC": 15,
+        "kuilObsDewPointC": -10,
+        "kuilObsWindSpeedMps": 3.1,
+        "kuilObsWindDirDeg": 315,
+        "hrrrBlynF14TempC": 15.1,
+        "hrrrBlynF14DewPointC": -0.6,
+        "hrrrBlynF14WindSpeedMps": 2.8,
+        "hrrrBlynF14WindDirDeg": 176,
+        "tempDeltaC": 0.1
+      },
+      {
+        "pressureHpa": 850,
+        "kuilObsTempC": 10,
+        "kuilObsDewPointC": -12,
+        "kuilObsWindSpeedMps": 4.1,
+        "kuilObsWindDirDeg": 100,
+        "hrrrBlynF14TempC": 11.6,
+        "hrrrBlynF14DewPointC": -3.3,
+        "hrrrBlynF14WindSpeedMps": 5.1,
+        "hrrrBlynF14WindDirDeg": 193,
+        "tempDeltaC": 1.6
+      },
+      {
+        "pressureHpa": 700,
+        "kuilObsTempC": 1.6,
+        "kuilObsDewPointC": -28.4,
+        "kuilObsWindSpeedMps": 5.7,
+        "kuilObsWindDirDeg": 160,
+        "hrrrBlynF14TempC": 0.6,
+        "hrrrBlynF14DewPointC": -9.3,
+        "hrrrBlynF14WindSpeedMps": 9.5,
+        "hrrrBlynF14WindDirDeg": 218,
+        "tempDeltaC": -1.0
+      },
+      {
+        "pressureHpa": 600,
+        "kuilObsTempC": -7.5,
+        "kuilObsDewPointC": -26.5,
+        "kuilObsWindSpeedMps": null,
+        "kuilObsWindDirDeg": null,
+        "hrrrBlynF14TempC": -6.9,
+        "hrrrBlynF14DewPointC": -20.5,
+        "hrrrBlynF14WindSpeedMps": 13.6,
+        "hrrrBlynF14WindDirDeg": 225,
+        "tempDeltaC": 0.6
+      }
+    ]
+  },
+  "blanchardMultiModelComparison": [
+    {
+      "model": "hrrr-conus",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "modelElevationM": 221.7,
+      "peakWstarMps": 1.06,
+      "peakUsableLiftTopM": 724.5,
+      "meanWindSpeedMps": 1.3,
+      "maxTempC": 17.0
+    },
+    {
+      "model": "hrdps-continental",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "modelElevationM": 186.9,
+      "peakWstarMps": 0.76,
+      "peakUsableLiftTopM": 263,
+      "meanWindSpeedMps": 0.97,
+      "maxTempC": 14.8
+    },
+    {
+      "model": "rdps",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "modelElevationM": 243.9,
+      "peakWstarMps": 1.16,
+      "peakUsableLiftTopM": 600.5,
+      "meanWindSpeedMps": 0.9,
+      "maxTempC": 17.1
+    },
+    {
+      "model": "gdps",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "modelElevationM": 77.4,
+      "peakWstarMps": 1.34,
+      "peakUsableLiftTopM": 734.3,
+      "meanWindSpeedMps": 1.09,
+      "maxTempC": 15.5
+    },
+    {
+      "model": "gfs",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "modelElevationM": 30.8,
+      "peakWstarMps": 1.4,
+      "peakUsableLiftTopM": 749,
+      "meanWindSpeedMps": 1.69,
+      "maxTempC": 13.5
+    },
+    {
+      "model": "ecmwf",
+      "referenceTime": "2026-10-20T18:00:00Z",
+      "modelElevationM": 386,
+      "peakWstarMps": null,
+      "peakUsableLiftTopM": null,
+      "meanWindSpeedMps": null,
+      "maxTempC": 15.5
+    },
+    {
+      "model": "nws",
+      "referenceTime": "2026-10-21T06:26:42+00:00",
+      "modelElevationM": 0,
+      "peakWstarMps": null,
+      "peakUsableLiftTopM": null,
+      "meanWindSpeedMps": null,
+      "maxTempC": null
+    }
+  ],
+  "wrfPilotDomain": {
+    "schemaVersion": 1,
+    "modelSlug": "wrf-north-sound-1km",
+    "label": "WRF-ARW North Sound 1 km Pilot",
+    "experimental": true,
+    "wrfRelease": "4.6.0",
+    "wpsRelease": "4.6.0",
+    "forcing": {
+      "primary": "hrrr-conus-wrfprs",
+      "fallback": "gfs-0p25",
+      "spinupHours": 6,
+      "integrationHours": 30,
+      "evaluatedWindowHours": [
+        6,
+        30
+      ],
+      "cycleUtc": "06:00",
+      "morningDeliveryTargetLocal": "08:00 America/Los_Angeles"
+    },
+    "projection": {
+      "mapProj": "lambert",
+      "refLat": 48.55,
+      "refLon": -122.35,
+      "truelat1": 48.0,
+      "truelat2": 49.0,
+      "standLon": -122.35
+    },
+    "domains": [
+      {
+        "id": "d01",
+        "role": "parent",
+        "dxM": 3000,
+        "dyM": 3000,
+        "eWe": 100,
+        "eSn": 100,
+        "eVert": 51,
+        "cumulusScheme": "none (explicit at 3 km)"
+      },
+      {
+        "id": "d02",
+        "role": "child-north-sound",
+        "parentId": "d01",
+        "parentGridRatio": 3,
+        "iParentStart": 28,
+        "jParentStart": 25,
+        "dxM": 1000,
+        "dyM": 1000,
+        "eWe": 136,
+        "eSn": 136,
+        "eVert": 51,
+        "bboxApprox": [
+          -123.5,
+          47.8,
+          -121.5,
+          49.0
+        ],
+        "cumulusScheme": "cu_physics=0 (explicit convection on 1 km nest)"
+      }
+    ],
+    "physics": {
+      "mpPhysics": "8 (Thompson graupel microphysics)",
+      "raLwPhysics": "4 (RRTMG longwave)",
+      "raSwPhysics": "4 (RRTMG shortwave, radt=3 min)",
+      "sfSfclayPhysics": "5 (MYNN surface layer)",
+      "sfSurfacePhysics": "2 (Noah LSM 4-layer soil)",
+      "blPblPhysics": "5 (MYNN 2.5 level TKE scale-aware boundary layer)",
+      "cuPhysics": [
+        0,
+        0
+      ],
+      "topoWind": [
+        1,
+        1
+      ],
+      "diffOpt": 2,
+      "kmOpt": 4
+    },
+    "launchesCovered": [
+      "wa-blanchard",
+      "wa-big-j",
+      "wa-black-mountain",
+      "wa-blyn",
+      "wa-mt-baker-summit",
+      "wa-sauk-mountain"
+    ],
+    "excludedRegionsNote": "Bingen (Columbia River Gorge) is intentionally excluded from this North Sound nest and requires its own Gorge domain."
+  }
+}

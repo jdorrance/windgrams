@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "caseId": "north-sound-20261021-00z",
+      "regime": "blue-thermals-under-cirrus",
+      "region": "North Sound, WA",
+      "primarySite": "wa-blanchard",
+      "referenceTime": "2026-10-21T00:00:00Z",
+      "holdoutRole": "baseline-verification",
+      "terrainMismatchM": -156.8
+    },
+    {
+      "caseId": "north-sound-mountain-alpine-20261021-06z",
+      "regime": "alpine-high-terrain-masking",
+      "region": "North Cascades, WA",
+      "primarySite": "wa-black-mountain",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "terrain-masking-holdout",
+      "terrainMismatchM": -412.4
+    },
+    {
+      "caseId": "strait-sea-breeze-convergence-20261021-06z",
+      "regime": "strait-marine-breeze",
+      "region": "Olympic Peninsula / Strait of Juan de Fuca, WA",
+      "primarySite": "wa-blyn",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "convergence-holdout",
+      "terrainMismatchM": -189.0
+    },
+    {
+      "caseId": "tiger-puget-trough-20261021-06z",
+      "regime": "puget-lowland-stratus-burnoff",
+      "region": "Central Puget Sound / Issaquah Alps, WA",
+      "primarySite": "wa-tiger-mountain",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "regional-expansion-tier-1",
+      "terrainMismatchM": -215.3
+    },
+    {
+      "caseId": "columbia-gorge-gap-flow-20261021-06z",
+      "regime": "gorge-pressure-gradient",
+      "region": "Columbia River Gorge, WA/OR",
+      "primarySite": "wa-bingen",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "regional-expansion-tier-2",
+      "terrainMismatchM": -178.2
+    },
+    {
+      "caseId": "east-cascades-chelan-20261021-06z",
+      "regime": "east-slope-dry-thermals",
+      "region": "East Cascades / Chelan, WA",
+      "primarySite": "wa-chelan-butte",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "regional-expansion-tier-3",
+      "terrainMismatchM": -310.5
+    },
+    {
+      "caseId": "oregon-desert-abert-rim-20261021-06z",
+      "regime": "high-desert-deep-convection",
+      "region": "South-Central Oregon Outback",
+      "primarySite": "or-abert-rim-walkup",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "ceiling-reached-test",
+      "terrainMismatchM": -145.0
+    },
+    {
+      "caseId": "rogue-valley-woodrat-20261021-06z",
+      "regime": "valley-inversion-break",
+      "region": "Applegate / Rogue Valley, OR",
+      "primarySite": "or-woodrat-mountain",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "inversion-break-holdout",
+      "terrainMismatchM": -265.0
+    },
+    {
+      "caseId": "shenandoah-massanutten-20261021-06z",
+      "regime": "appalachian-ridge-thermal",
+      "region": "Shenandoah Valley, VA",
+      "primarySite": "va-woodstock",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "regional-expansion-tier-4-va",
+      "terrainMismatchM": -195.4
+    },
+    {
+      "caseId": "blue-ridge-tater-hill-20261021-06z",
+      "regime": "blue-ridge-upslope-convergence",
+      "region": "Blue Ridge Mountains, NC",
+      "primarySite": "nc-tater-hill-boone",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "regional-expansion-tier-4-nc",
+      "terrainMismatchM": -210.0
+    },
+    {
+      "caseId": "north-sound-frontal-approach-20261022-21z",
+      "regime": "pre-frontal-overcast-rain-transition",
+      "region": "North Sound, WA",
+      "primarySite": "wa-blanchard",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "poor-soaring-rain-holdout",
+      "terrainMismatchM": -156.8
+    },
+    {
+      "caseId": "north-cascade-sauk-shear-20261021-06z",
+      "regime": "valley-to-crest-wind-shear",
+      "region": "Skagit Valley / North Cascades, WA",
+      "primarySite": "wa-sauk-mountain",
+      "referenceTime": "2026-10-21T06:00:00Z",
+      "holdoutRole": "shear-sensitivity-holdout",
+      "terrainMismatchM": -340.2
+    }
+  ]
+}

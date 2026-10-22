@@ -24,6 +24,7 @@ export const GROUPS = {
   "noaa-cloud": ["hrrr-conus", "gfs"],
   rrfs: ["rrfs"],
   eccc: ["hrdps-continental", "rdps", "gdps", "geps"],
+  soaring: [],
   observations: [],
   terrain: [],
 };

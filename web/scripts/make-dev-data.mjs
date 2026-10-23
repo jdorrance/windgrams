@@ -7,7 +7,9 @@
 // run through the same builder the NWS workflow uses. Each document is checked
 // with the contract parsers the site uses in production.
 //
-// Usage: node scripts/make-dev-data.mjs [--out dev-data]
+// Usage: node scripts/make-dev-data.mjs [--out dev-data] [--solar-site SLUG ...]
+// --solar-site limits only the expensive synthetic terrain maps. All forecast
+// profiles and their contract validation still cover every launch.
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -26,7 +28,10 @@ import { buildSolarTerrain, domainFor, expandBounds, gridFromFunction, metresPer
 import { ALOFT_FIELDS, SURFACE_FIELDS, buildManifest as buildEcmwfManifest, buildSiteDocument as buildEcmwfDocument, paths as ecmwfPaths } from "../../forecasts/scripts/lib/ecmwf.mjs";
 import { SCHEMA_VERSION as STATION_SCHEMA, SOURCE as STATION_SOURCE, dashboardUrl, parseWuCurrent, parseWuHistory } from "../src/lib/station.ts";
 
-const { values: args } = parseArgs({ options: { out: { type: "string", default: "dev-data" } } });
+const { values: args } = parseArgs({ options: {
+  out: { type: "string", default: "dev-data" },
+  "solar-site": { type: "string", multiple: true },
+} });
 const out = resolve(args.out);
 const HOUR = 3_600_000;
 const HEIGHT_SHIFT_M = 480; // scenario terrain 900 m -> sample launch terrain 1380 m
@@ -37,6 +42,11 @@ const sites = readJson("../../forecasts/sites.json");
 const models = readJson("../dev-data-src/models.json");
 const scenario = readJson("../dev-data-src/convective-cycle.profile.json");
 const ensembleScenario = readJson("../dev-data-src/ensemble-wide.profile.json");
+const solarSlugs = new Set(args["solar-site"] ?? sites.sites.map(site => site.slug));
+for (const slug of solarSlugs) {
+  if (!sites.sites.some(site => site.slug === slug)) throw new Error(`Unknown --solar-site: ${slug}`);
+}
+const solarSites = sites.sites.filter(site => solarSlugs.has(site.slug));
 
 function write(key, value, parse) {
   const text = `${JSON.stringify(value, null, 1)}\n`;
@@ -175,6 +185,7 @@ for (const [model, ref, step, count, build] of [
   runs[model] = { referenceTime: iso(ref), generatedAt };
 }
 write("runs.json", { schemaVersion: 1, runs }, parseRunsIndexJson);
+console.log(`Validated model profiles for all ${sites.sites.length} launches (including 84 RRFS hours each).`);
 
 write(
   "site-context.json",
@@ -402,10 +413,12 @@ write(nwsPaths.manifest(), buildManifest({ now, sites: siteEntries, offices: [{ 
   write(ecmwfPaths.manifest(), buildEcmwfManifest({ now, sites: sites.sites.map((s) => ({ slug: s.slug, ok: true })), runs: { surface: run, aloft: run } }));
 }
 
-// Sunlight map: synthetic foothills around each launch (a small square, so the
-// sample builds in seconds). Ground rises to the south-east, so the launch faces
+// Sunlight map: synthetic foothills around each selected launch. Ground rises to
+// the south-east, so the launch faces
 // north-west like Cervidae, with gullies and a higher ridge to the east.
-for (const site of sites.sites) {
+console.log(`Building synthetic sunlight terrain for ${solarSites.length} launch(es).`);
+for (const site of solarSites) {
+  const startedAt = Date.now();
   const m = metresPerDegree(site.latitude);
   const elevation = (lat, lon) => {
     const e = (lon - site.longitude) * m.lon;
@@ -432,6 +445,7 @@ for (const site of sites.sites) {
   }
   writeFileSync(join(out, "solar", site.slug, index.relief.path), relief.body);
   write(`solar/${site.slug}/index.json`, index);
+  console.log(`  ${site.slug}: ${tiles.length} tiles in ${((Date.now() - startedAt) / 1000).toFixed(1)} s`);
 }
 
 // Weather station: 13 hours of synthetic reports in Weather Underground's

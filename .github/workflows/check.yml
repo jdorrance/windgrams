@@ -49,26 +49,28 @@ jobs:
       # Fetches the live NWS forecast for every launch without publishing it,
       # so a change in api.weather.gov's responses shows up here first. NWS
       # has occasional outages, so a failure here does not block the check.
+      # Bound each optional smoke process so slow external services cannot
+      # consume the entire job timeout and cancel otherwise-passing checks.
       - name: NWS live fetch (no publish)
         continue-on-error: true
-        run: pnpm run nws --output nws-smoke
+        run: timeout --kill-after=10s 90s pnpm run nws --output nws-smoke
       # Fetches the live ECMWF forecast from Open-Meteo without publishing; its
       # notice annotation lists the hours and how many values each field has.
       - name: ECMWF live fetch (no publish)
         continue-on-error: true
-        run: scripts/run-annotated.sh "ECMWF smoke" pnpm run ecmwf --output ecmwf-smoke --notice
+        run: timeout --kill-after=10s 90s scripts/run-annotated.sh "ECMWF smoke" pnpm run ecmwf --output ecmwf-smoke --notice
       # Fetches the latest weather-balloon soundings without publishing; its
       # notice annotation shows what the archive returned.
       - name: Balloon soundings live fetch (no publish)
         continue-on-error: true
-        run: scripts/run-annotated.sh "balloon smoke" pnpm run raob --output raob-smoke --notice
+        run: timeout --kill-after=10s 90s scripts/run-annotated.sh "balloon smoke" pnpm run raob --output raob-smoke --notice
       # Reads the real USGS elevation tiles for a small square around each
       # launch and builds its sunlight tiles, without publishing. Its notice
       # annotation shows the launch's measured slope, facing and horizons.
       # Launches with a whole range as their area get the small square too.
       - name: Sunlight terrain live read (no publish)
         continue-on-error: true
-        run: scripts/run-annotated.sh "sunlight terrain smoke" pnpm run solar --output solar-smoke --radius-km 2 --max-distance-km 20 --ignore-areas
+        run: timeout --kill-after=10s 90s scripts/run-annotated.sh "sunlight terrain smoke" pnpm run solar --output solar-smoke --radius-km 2 --max-distance-km 20 --ignore-areas
 
   web:
     runs-on: ubuntu-latest
@@ -92,6 +94,8 @@ jobs:
       - name: Type checks
         run: pnpm run check
       - name: Sample dataset
-        run: pnpm run dev-data
+        # All 85 model profiles are validated; synthetic terrain is exercised
+        # at western and eastern launches without rebuilding 85 tile pyramids.
+        run: pnpm run dev-data --solar-site wa-blanchard --solar-site va-woodstock
       - name: Build
         run: pnpm run build

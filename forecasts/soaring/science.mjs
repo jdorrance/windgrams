@@ -12,7 +12,7 @@ import {
 } from '@azohra/meteo.briefing/derive';
 import { deriveSiteForecast } from './vendor/derive-0.6.0.mjs';
 import { wind, storageCoordinates } from './grid.mjs';
-import { semantics, validAt } from './common.mjs';
+import { modelFor, semanticsFor, validAt } from './common.mjs';
 
 export const SOARING_CONTRACT_VERSION = '2.0.0';
 export const metrics = ['thermalVelocityMps', 'usableLiftTopM', 'boundaryLayerTopM', 'cloudBaseM', 'pblHeightM'];
@@ -538,7 +538,7 @@ export function cellSource(c, grid, cell, hour, raw) {
     cloudCoverPercent: raw.cloudCoverPercent,
     latentHeatFluxWm2: raw.latentHeatFluxWm2,
     sensibleHeatFluxWm2: raw.sensibleHeatFluxWm2,
-    precipitationMm: raw.precipitationMm * 3600,
+    precipitationMm: raw.precipitationMm * (modelFor(c) === 'rrfs' ? 1 : 3600),
     seaLevelPressureHpa: raw.seaLevelPressureHpa / 100,
     levels: [],
   };
@@ -567,7 +567,9 @@ export function cellSource(c, grid, cell, hour, raw) {
       dewPointDepressionC: get('TMP') - get('DPT'),
       ...w,
     };
-    if (finite(get('VVEL'))) level.verticalVelocityPaS = get('VVEL');
+    if (finite(get('VVEL'))) level.verticalVelocityPaS = modelFor(c) === 'rrfs'
+      ? -(p * 100 * 9.80665 * get('VVEL')) / (287.05 * get('TMP'))
+      : get('VVEL');
     source.levels.push(level);
   }
   return source;
@@ -587,7 +589,7 @@ export function deriveCell(c, terrain, source, capturedAt) {
     referenceTime: c.referenceTime,
     generatedAt: capturedAt,
     hours: [source],
-  }, 'hrrr-conus', semantics));
+  }, modelFor(c), semanticsFor(c)));
   const v2 = deriveDiagnosticsV2(terrain, source, profile.hours[0], {
     launchElevationM: c.launchElevation?.elevationM ?? null,
   });
@@ -595,7 +597,7 @@ export function deriveCell(c, terrain, source, capturedAt) {
 }
 
 export function profileFor(c, site, hours, capturedAt) {
-  const profile = { schemaVersion: 2, model: 'hrrr-conus', run: { referenceTime: c.referenceTime, generatedAt: capturedAt }, site, semantics, hours };
+  const profile = { schemaVersion: 2, model: modelFor(c), run: { referenceTime: c.referenceTime, generatedAt: capturedAt }, site, semantics: semanticsFor(c), hours };
   if (!parseSiteForecast(profile)) throw new Error('Blanchard profile failed the public SiteForecast contract');
   return profile;
 }

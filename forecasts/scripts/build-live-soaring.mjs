@@ -1,4 +1,4 @@
-// Build regional HRRR daylight forecasts. Historical case namespaces are immutable;
+// Build regional HRRR/RRFS daylight forecasts. Historical case namespaces are immutable;
 // rolling updates use a separate -live namespace. Regions with the same field/hour
 // selection share a capture. Replay and enrichment stay private until validated.
 
@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { capture } from '../soaring/capture.mjs';
 import { replay } from '../soaring/replay.mjs';
+import { modelFor } from '../soaring/common.mjs';
+import { greatCircleDistanceKm } from '@azohra/meteo.grib';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -53,10 +55,12 @@ export function daytimeForecastHoursForCycle(referenceTimeIso, timeZone = 'Ameri
 /**
  * Builds a live case specification from a regional case template and a target HRRR `referenceTime`.
  */
-export function buildLiveCaseSpec(templateCase, referenceTimeIso) {
+export function buildLiveCaseSpec(templateCase, referenceTimeIso, model = 'hrrr-conus') {
+  modelFor({ model });
   return {
     ...templateCase,
-    id: `${templateCase.id}-live`,
+    model,
+    id: `${templateCase.id}${model === 'rrfs' ? '-rrfs' : ''}-live`,
     referenceTime: referenceTimeIso,
     forecastHours: daytimeForecastHoursForCycle(referenceTimeIso, templateCase.site.timeZone),
   };
@@ -93,20 +97,38 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
   const validSet = new Set((manifest.hours ?? []).map(h => h.validAt));
 
   const sameGeometry = previousSidecars.gridSha256 === manifest.files['grid.geojson'];
-  if (sameGeometry && previousSidecars.crossSection) {
-    const bytes = Buffer.from(`${JSON.stringify(previousSidecars.crossSection)}\n`);
+  const grid = JSON.parse(readFileSync(join(newBundleDir, 'grid.geojson'), 'utf8'));
+  const remap = item => {
+    const cells = grid.features ?? [];
+    if (!cells.length) return sameGeometry ? item : null;
+    if (![item.latitude, item.longitude].every(Number.isFinite)) return null;
+    const ranked = cells.map(cell => ({ cell: cell.properties, distance: greatCircleDistanceKm(6371, item.latitude, item.longitude, cell.properties.latitude, cell.properties.longitude) }));
+    const nearest = ranked.reduce((a, b) => b.distance < a.distance ? b : a);
+    if (nearest.distance > 5) return null;
+    return { ...item, cellIndex: nearest.cell.cellIndex, gridIndex: nearest.cell.gridIndex, modelElevationM: nearest.cell.modelElevationM, distanceKm: Math.round(nearest.distance * 100) / 100 };
+  };
+  if (previousSidecars.crossSection) {
+    const crossSection = { ...previousSidecars.crossSection, caseId, model: manifest.model ?? 'hrrr-conus', nodes: (previousSidecars.crossSection.nodes ?? []).map(remap).filter(Boolean) };
+    // Distances along the transect retain their existing meaning; nearest-cell
+    // distance belongs only to launch metadata.
+    crossSection.nodes = crossSection.nodes.map((node, i) => ({ ...node, distanceKm: previousSidecars.crossSection.nodes[i]?.distanceKm }));
+    if (crossSection.nodes.length !== (previousSidecars.crossSection.nodes ?? []).length) throw new Error('Cross-section falls outside the new regional grid');
+    const bytes = Buffer.from(`${JSON.stringify(crossSection)}\n`);
     writeFileSync(join(newBundleDir, 'cross-section.json'), bytes);
     manifest.files['cross-section.json'] = sha256(bytes);
   }
 
-  if (previousSidecars.referenceTime === manifest.case.referenceTime && previousSidecars.verification) {
+  if (previousSidecars.referenceTime === manifest.case.referenceTime && (previousSidecars.model ?? 'hrrr-conus') === (manifest.model ?? 'hrrr-conus') && previousSidecars.verification) {
     const bytes = Buffer.from(`${JSON.stringify(previousSidecars.verification)}\n`);
     writeFileSync(join(newBundleDir, 'verification.json'), bytes);
     manifest.files['verification.json'] = sha256(bytes);
   }
 
-  if (sameGeometry && previousSidecars.launches) {
+  if (previousSidecars.launches && (sameGeometry || grid.features?.length)) {
     const launchesDoc = structuredClone(previousSidecars.launches);
+    launchesDoc.caseId = caseId;
+    launchesDoc.model = manifest.model ?? 'hrrr-conus';
+    launchesDoc.launches = (launchesDoc.launches ?? []).map(remap).filter(Boolean);
     delete launchesDoc.raob;
     const office = launchesDoc.nwsOffice?.office;
     const officePath = office && join(dataRoot, 'nws', 'offices', `${office}.json`);
@@ -114,12 +136,15 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
     for (const launch of launchesDoc.launches ?? []) {
       launch.models = {};
       const slug = launch.slug;
-      for (const mslug of ['hrrr-conus', 'hrdps-continental', 'rdps', 'gdps', 'gfs', 'geps', 'ecmwf', 'nws']) {
+      for (const mslug of ['hrrr-conus', 'rrfs', 'hrdps-continental', 'rdps', 'gdps', 'gfs', 'geps', 'ecmwf', 'nws']) {
         const mp = join(dataRoot, mslug, 'sites', `${slug}.json`);
         if (!existsSync(mp)) continue;
         const mdoc = JSON.parse(readFileSync(mp, 'utf8'));
-        const byValid = new Map((mdoc.hours ?? []).map(h => [h.validAt, h]));
-        const matchedHours = [...validSet].map(v => byValid.get(v)).filter(Boolean);
+        const byValid = new Map((mdoc.hours ?? []).filter(h => Number.isFinite(Date.parse(h.validAt))).map(h => [Date.parse(h.validAt), h]));
+        const matchedHours = [...validSet].map(v => {
+          const hour = byValid.get(Date.parse(v));
+          return hour ? { ...hour, validAt: v } : null;
+        }).filter(Boolean);
         if (matchedHours.length === 0) continue;
         launch.models[mslug] = {
           referenceTime: mdoc.run?.referenceTime ?? mdoc.models?.surface?.run ?? mdoc.updateTime ?? null,
@@ -245,6 +270,7 @@ function readPreviousSidecars(soaringV1Root, caseId) {
     const manifest = readOpt('manifest.json');
     return {
       referenceTime: manifest?.case?.referenceTime,
+      model: manifest?.model ?? manifest?.case?.model ?? 'hrrr-conus',
       gridSha256: manifest?.files?.['grid.geojson'],
       launches: readOpt('launches.json'),
       crossSection: readOpt('cross-section.json'),
@@ -261,10 +287,12 @@ async function main() {
       output: { type: 'string', default: 'data' },
       'reference-time': { type: 'string' },
       'cache-root': { type: 'string' },
+      model: { type: 'string', default: 'hrrr-conus' },
     },
   });
 
   const dataRoot = resolve(values.output);
+  const model = modelFor({ model: values.model });
   const soaringV1Root = join(dataRoot, 'soaring', 'v1');
   const regionsPath = join(soaringV1Root, 'regions.json');
   if (!existsSync(regionsPath)) {
@@ -272,18 +300,27 @@ async function main() {
     return;
   }
 
-  const hrrrManifestPath = join(dataRoot, 'hrrr-conus', 'manifest.json');
+  const modelManifestPath = join(dataRoot, model, 'manifest.json');
   const referenceTime = values['reference-time'] ?? (
-    existsSync(hrrrManifestPath)
-      ? JSON.parse(readFileSync(hrrrManifestPath, 'utf8'))?.referenceTime
+    existsSync(modelManifestPath)
+      ? JSON.parse(readFileSync(modelManifestPath, 'utf8'))?.referenceTime
       : null
   );
   if (!referenceTime) {
-    console.log('No HRRR referenceTime available; keeping seeded soaring bundles.');
+    console.log(`No ${model} referenceTime available; keeping seeded soaring bundles.`);
     return;
   }
 
   const regionsDoc = JSON.parse(readFileSync(regionsPath, 'utf8'));
+  const modelRegionsPath = model === 'rrfs' ? join(soaringV1Root, 'regions-rrfs.json') : regionsPath;
+  if (model === 'rrfs' && existsSync(modelRegionsPath)) {
+    const prior = JSON.parse(readFileSync(modelRegionsPath, 'utf8'));
+    for (const region of regionsDoc.regions ?? []) {
+      const entry = prior.regions?.find(r => r.id === region.id)?.nativeModels?.find(m => m.model === model);
+      if (entry) region.nativeModels = [...(region.nativeModels ?? []).filter(m => m.model !== model), entry];
+    }
+  }
+  for (const region of regionsDoc.regions ?? []) region.deterministicModels = [...new Set([...(region.deterministicModels ?? []), 'rrfs'])];
   const activeRegions = (regionsDoc.regions ?? []).filter(r => r.status === 'active-verified-trial' && typeof r.caseId === 'string');
   if (activeRegions.length === 0) {
     console.log('No active-verified-trial regions configured; skipping.');
@@ -291,24 +328,26 @@ async function main() {
   }
 
   const templateId = r => r.templateCaseId ?? r.caseId.replace(/-live$/, '');
-  const pendingRegions = activeRegions.filter(r => !isRegionBundleCurrent(soaringV1Root, `${templateId(r)}-live`, referenceTime));
+  const liveId = r => `${templateId(r)}${model === 'rrfs' ? '-rrfs' : ''}-live`;
+  const pendingRegions = activeRegions.filter(r => !isRegionBundleCurrent(soaringV1Root, liveId(r), referenceTime));
   if (pendingRegions.length === 0) {
     console.log(`All ${activeRegions.length} active soaring region(s) already at ${referenceTime}; skipping rebuild.`);
     return;
   }
 
   const runKey = referenceTime.replace(/[-:]/g, '').replace('.000Z', 'Z');
-  const sharedCacheDir = resolve(values['cache-root'] ?? join(ROOT, '.soaring-cache', `live-${runKey}`));
+  const sharedCacheDir = resolve(values['cache-root'] ?? join(ROOT, '.soaring-cache', `live-${model}-${runKey}`));
 
   const liveCases = pendingRegions.map(region => {
     const templatePath = join(ROOT, 'soaring', 'cases', `${templateId(region)}.json`);
     const template = JSON.parse(readFileSync(templatePath, 'utf8'));
-    const previousSidecars = readPreviousSidecars(soaringV1Root, region.caseId);
-    return { region, caseSpec: buildLiveCaseSpec(template, referenceTime), previousSidecars };
+    let previousSidecars = readPreviousSidecars(soaringV1Root, liveId(region));
+    if (!previousSidecars.launches) previousSidecars = readPreviousSidecars(soaringV1Root, region.caseId);
+    return { region, caseSpec: buildLiveCaseSpec(template, referenceTime, model), previousSidecars };
   });
 
   try {
-    console.log(`Capturing shared CONUS HRRR records for ${referenceTime} into ${sharedCacheDir}...`);
+    console.log(`Capturing shared CONUS ${model} records for ${referenceTime} into ${sharedCacheDir}...`);
     const captures = new Set();
 
     for (const { region, caseSpec, previousSidecars } of liveCases) {
@@ -321,15 +360,16 @@ async function main() {
         const res = await replay(caseSpec, cache, staging);
         const enrichedPath = enrichBundleWithSidecars(dataRoot, soaringV1Root, caseSpec.id, res.path, previousSidecars);
         region.templateCaseId = templateId(region);
-        region.caseId = caseSpec.id;
-        writeAtomic(regionsPath, regionsDoc);
+        region.nativeModels = [...(region.nativeModels ?? [{ model: 'hrrr-conus', caseId: region.caseId }]).filter(m => m.model !== model), { model, caseId: caseSpec.id }];
+        if (model === 'hrrr-conus') region.caseId = caseSpec.id;
+        writeAtomic(modelRegionsPath, regionsDoc);
         const pruned = pruneSupersededBundles(soaringV1Root, caseSpec.id);
         console.log(`Built ${region.id} -> ${enrichedPath} (pruned ${pruned} old bundle(s))`);
       } finally { rmSync(staging, { recursive: true, force: true }); }
     }
 
     regionsDoc.generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-    writeAtomic(regionsPath, regionsDoc);
+    writeAtomic(modelRegionsPath, regionsDoc);
   } finally {
     if (!values['cache-root']) {
       rmSync(sharedCacheDir, { recursive: true, force: true });

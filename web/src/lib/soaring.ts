@@ -98,6 +98,8 @@ export interface ReplayHour {
 
 export interface ReplayManifest {
   schemaVersion: number;
+  model?: string;
+  semantics?: SiteForecast['semantics'];
   soaringContractVersion?: string;
   capturedAt: string;
   cellCount: number;
@@ -105,6 +107,7 @@ export interface ReplayManifest {
   siteCell: number;
   case: {
     id: string;
+    model?: string;
     referenceTime: string;
     bbox: [number, number, number, number];
     sinkMps: number;
@@ -122,6 +125,7 @@ export interface RegionDescriptor {
   status: string;
   caseId: string;
   expandedCaseId?: string;
+  nativeModels?: { model: string; caseId: string; expandedCaseId?: string }[];
   timeZone: string;
   morningBriefingLocalHour: number;
   bbox: [number, number, number, number];
@@ -418,11 +422,11 @@ export const SUPPORTED_CASES = new Set([
 
 export function replayLocation(search: string, dataBase: string) {
   const query = new URLSearchParams(search), caseId = query.get('case') ?? DEFAULT_CASE;
-  if (!SUPPORTED_CASES.has(caseId.replace(/-live$/, ''))) throw new Error(`Unknown replay case: ${caseId}`);
+  if (!SUPPORTED_CASES.has(caseId.replace(/-(?:rrfs-)?live$/, ''))) throw new Error(`Unknown replay case: ${caseId}`);
   const hour = Number(query.get('hour') ?? 20);
   return {
     caseId,
-    hour: Number.isInteger(hour) && hour >= 1 && hour <= 48 ? hour : 20,
+    hour: Number.isInteger(hour) && hour >= 1 && hour <= 84 ? hour : 20,
     root: `${dataBase.replace(/\/$/, '')}/soaring/v1/${caseId}`,
   };
 }
@@ -433,8 +437,105 @@ export function hourIndex(hours: { forecastHour: number }[], requested: number) 
   return hours.length > 6 ? 6 : 0;
 }
 
-export function historicalLabel(referenceTime: string, rolling = false) {
-  return `${rolling ? 'Forecast run' : 'Historical forecast'} · HRRR ${referenceTime.slice(0, 10)} · ${referenceTime.slice(11, 16)} UTC`;
+export function forecastHourAtValidTime(hours: { forecastHour: number; validAt: string }[], validAt: string | null) {
+  const target = validAt ? Date.parse(validAt) : NaN;
+  if (!Number.isFinite(target) || !hours.length) return null;
+  return hours.reduce((best, hour) => Math.abs(Date.parse(hour.validAt) - target) < Math.abs(Date.parse(best.validAt) - target) ? hour : best).forecastHour;
+}
+
+interface ReplayCellLocation { cellIndex: number; latitude: number; longitude: number }
+interface ReplayLaunchLocation extends ReplayCellLocation { slug: string }
+export interface ReplaySelection extends ReplayCellLocation { launchSlug?: string }
+
+const validCoordinates = (point: { latitude: number; longitude: number }) =>
+  Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90
+  && Number.isFinite(point.longitude) && Math.abs(point.longitude) <= 180;
+
+function distanceKm(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+  const rad = Math.PI / 180;
+  const h = Math.sin((a.latitude - b.latitude) * rad / 2) ** 2
+    + Math.cos(a.latitude * rad) * Math.cos(b.latitude * rad) * Math.sin((a.longitude - b.longitude) * rad / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(Math.min(1, Math.max(0, h))));
+}
+
+/** Cell indexes belong to one model grid. Carry geography across runs instead. */
+export function replaySelection(
+  query: URLSearchParams,
+  cells: readonly ReplayCellLocation[],
+  launches: readonly ReplayLaunchLocation[],
+  fallbackCell: number,
+): ReplaySelection {
+  const validCells = cells.filter(cell => Number.isInteger(cell.cellIndex) && cell.cellIndex >= 0 && validCoordinates(cell));
+  const nearest = (point: { latitude: number; longitude: number }) => {
+    if (!validCoordinates(point) || !validCells.length) return undefined;
+    const cell = validCells.reduce((best, candidate) => distanceKm(candidate, point) < distanceKm(best, point) ? candidate : best);
+    // The regional products use 3 km grids; do not snap an out-of-region link to a distant edge.
+    return distanceKm(cell, point) <= 5 ? cell : undefined;
+  };
+  const launch = launches.find(entry => entry.slug === query.get('launch'));
+  if (launch && validCoordinates(launch)) {
+    const mapped = validCells.find(cell => cell.cellIndex === launch.cellIndex && distanceKm(cell, launch) <= 5);
+    const cell = mapped ?? nearest(launch);
+    if (cell) return { cellIndex: cell.cellIndex, latitude: launch.latitude, longitude: launch.longitude, launchSlug: launch.slug };
+  }
+  const latitude = query.get('lat'), longitude = query.get('lon');
+  if (latitude?.trim() && longitude?.trim()) {
+    const point = { latitude: Number(latitude), longitude: Number(longitude) };
+    const cell = nearest(point);
+    // Keep the original anchor so switching back and forth cannot drift between grid centres.
+    if (cell) return { cellIndex: cell.cellIndex, ...point };
+  }
+  const fallback = validCells.find(cell => cell.cellIndex === fallbackCell) ?? validCells[0];
+  if (!fallback) throw new Error('Regional forecast has no valid grid locations');
+  const fallbackLaunch = launches.find(entry => entry.cellIndex === fallback.cellIndex && validCoordinates(entry) && distanceKm(entry, fallback) <= 5);
+  return fallbackLaunch
+    ? { cellIndex: fallback.cellIndex, latitude: fallbackLaunch.latitude, longitude: fallbackLaunch.longitude, launchSlug: fallbackLaunch.slug }
+    : { cellIndex: fallback.cellIndex, latitude: fallback.latitude, longitude: fallback.longitude };
+}
+
+export function setReplaySelectionQuery(query: URLSearchParams, selection: ReplaySelection) {
+  query.set('lat', String(selection.latitude));
+  query.set('lon', String(selection.longitude));
+  if (selection.launchSlug) query.set('launch', selection.launchSlug);
+  else query.delete('launch');
+}
+
+export function replayModel(manifest: ReplayManifest) {
+  return manifest.model ?? manifest.case.model ?? 'hrrr-conus';
+}
+
+export function modelLabel(model: string) {
+  return ({ 'hrrr-conus': 'HRRR', rrfs: 'RRFS' } as Record<string, string>)[model] ?? model;
+}
+
+export function nativeModels(region: RegionDescriptor) {
+  return region.nativeModels?.length ? region.nativeModels : [{ model: 'hrrr-conus', caseId: region.caseId, expandedCaseId: region.expandedCaseId }];
+}
+
+export function regionForCase(regions: RegionDescriptor[], caseId: string) {
+  return regions.find(region => region.caseId === caseId || region.expandedCaseId === caseId
+    || nativeModels(region).some(entry => entry.caseId === caseId || entry.expandedCaseId === caseId));
+}
+
+/** Explicit archived links always retain their original case, even with a model parameter. */
+export function defaultReplayQuery(search: string, catalogue: RegionCatalogue | null) {
+  const query = new URLSearchParams(search);
+  if (query.has('case')) return query;
+  const region = catalogue?.regions.find(r => r.status === 'active-verified-trial' && r.caseId.startsWith('north-sound-')
+    && nativeModels(r).some(entry => entry.caseId.endsWith('-live')));
+  if (region) {
+    const requestedModel = query.get('model');
+    const selected = nativeModels(region).find(entry => requestedModel ? entry.model === requestedModel : entry.caseId === region.caseId);
+    if (requestedModel && !selected) throw new Error(`${modelLabel(requestedModel)} regional forecast is unavailable.`);
+    query.set('case', selected?.caseId ?? region.caseId);
+  } else if (query.has('model') && query.get('model') !== 'hrrr-conus') {
+    throw new Error(`${modelLabel(query.get('model')!)} regional forecast is unavailable.`);
+  }
+  return query;
+}
+
+export function historicalLabel(referenceTime: string, rolling = false, model = 'hrrr-conus') {
+  return `${rolling ? 'Forecast run' : 'Historical forecast'} · ${modelLabel(model)} ${referenceTime.slice(0, 10)} · ${referenceTime.slice(11, 16)} UTC`;
 }
 
 export function localTime(validAt: string, timeZone: string) {
@@ -556,7 +657,7 @@ export function buildCellSiteForecast(
   }
   return {
     schemaVersion: 2,
-    model: 'hrrr-conus',
+    model: replayModel(manifest),
     run: { referenceTime: manifest.case.referenceTime, generatedAt: manifest.capturedAt },
     site: {
       id: `cell-${cellProps.gridIndex}`,
@@ -566,7 +667,9 @@ export function buildCellSiteForecast(
       modelElevationM: elev,
       timeZone: manifest.case.site.timeZone,
     },
-    semantics: { gust: 'instant', precipitation: 'instantRate', smoke: 'radiativelyCoupled' },
+    semantics: manifest.semantics ?? (replayModel(manifest) === 'rrfs'
+      ? { gust: 'instant', precipitation: 'windowMeanRate' }
+      : { gust: 'instant', precipitation: 'instantRate', smoke: 'radiativelyCoupled' }),
     hours: siteHours,
   };
 }

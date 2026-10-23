@@ -2,6 +2,7 @@
 // plus optional extended real pressure levels (1000..400 hPa), 80 m AGL winds,
 // and native HRRR cloud/LCL/convective records from the wrfprs inventory.
 // Keys identify raw quantities; conversions happen only after decoding.
+import { modelFor } from './common.mjs';
 const spec = (key, variable, level, required = true, conversion = 'identity') => ({ key, variable, level, required, conversion });
 
 export const LEGACY_V1_PRESSURE_LEVELS = Object.freeze([925, 900, 875, 850, 800, 750, 700, 650, 600]);
@@ -12,11 +13,12 @@ export const EXTENDED_HRRR_PRESSURE_LEVELS = Object.freeze([
 // GRIB2 discipline 0, HRRR/NCEP parameter and fixed-surface codes. Checked
 // against the captured indices and decoded product definitions independently.
 export const parameters = {
-  TMP: [0, 0], DPT: [0, 6], UGRD: [2, 2], VGRD: [2, 3], HGT: [3, 5], VVEL: [2, 8],
+  TMP: [0, 0], DPT: [0, 6], UGRD: [2, 2], VGRD: [2, 3], HGT: [3, 5], VVEL: [2, 8], DZDT: [2, 9],
   TCDC: [6, 1], LHTFL: [0, 10], SHTFL: [0, 11], PRATE: [1, 7], MSLMA: [3, 198], GUST: [2, 22],
   CAPE: [7, 6], CIN: [7, 7], HPBL: [3, 18], LCDC: [6, 3], MCDC: [6, 4], HCDC: [6, 5],
   MASSDEN: [20, 0], COLMD: [20, 1], AOTK: [20, 102],
   MAXUVV: [2, 220], MAXDVV: [2, 221],
+  APCP: [1, 8], MSLET: [3, 192],
 };
 
 export function fixedSurface(level) {
@@ -52,7 +54,8 @@ export const EXTENDED_BOUNDARY_LAYER_SPECS = Object.freeze([
 ]);
 
 export function fields(c, hour) {
-  if (hour === c.terrainForecastHour) return [spec('terrain', 'HGT', 'surface')];
+  const rrfs = modelFor(c) === 'rrfs';
+  if (hour === c.terrainForecastHour) return [{ ...spec('terrain', 'HGT', 'surface'), ...(rrfs ? { product: '2dfld' } : {}) }];
   const base = [
     spec('temperature', 'TMP', '2 m above ground', true, 'K → °C: subtract 273.15'),
     spec('dewpoint', 'DPT', '2 m above ground', true, 'K → °C: subtract 273.15'),
@@ -76,12 +79,20 @@ export function fields(c, hour) {
     ...levels.flatMap(p => ['TMP', 'DPT', 'HGT', 'UGRD', 'VGRD', 'VVEL'].map(v =>
       spec(`${p}.${v}`, v, `${p} mb`, v !== 'VVEL', ['TMP', 'DPT'].includes(v) ? 'K → °C: subtract 273.15' : v === 'VVEL' ? 'omega, Pa/s (converted to geometric w in v2)' : 'identity'))),
   );
-  return base;
+  if (!rrfs) return base;
+  return base.filter(f => !f.key.startsWith('smoke.')).map(f => {
+    const converted = { ...f, product: f.level.endsWith(' mb') ? 'prslev' : '2dfld' };
+    if (f.variable === 'TCDC') converted.level = 'entire atmosphere (considered as a single layer)';
+    if (f.variable === 'MSLMA') converted.variable = 'MSLET';
+    if (f.variable === 'PRATE') Object.assign(converted, { variable: 'APCP', forecast: `${hour - 1}-${hour} hour acc fcst`, conversion: 'one-hour accumulation kg m⁻² → mm/hr: identity' });
+    if (f.variable === 'VVEL') Object.assign(converted, { variable: 'DZDT', conversion: 'geometric w, m/s → omega, Pa/s: −p g w / (R_d T)' });
+    return converted;
+  });
 }
 
-export function selectRecords(records, c, hour) {
-  return fields(c, hour).map(field => {
-    const matches = records.filter(r => r.variable === field.variable && r.level === field.level && r.forecast === `${hour} hour fcst`);
+export function selectRecords(records, c, hour, product) {
+  return fields(c, hour).filter(f => !product || f.product === product).map(field => {
+    const matches = records.filter(r => r.variable === field.variable && r.level === field.level && r.forecast === (field.forecast ?? `${hour} hour fcst`));
     if (!matches.length && field.required) throw new Error(`Missing required record f${hour} ${field.key}`);
     if (matches.length > 1) throw new Error(`Ambiguous record f${hour} ${field.key}`);
     const record = matches[0];

@@ -15,6 +15,7 @@
     "ecmwf": "node scripts/ecmwf.mjs",
     "raob": "node scripts/raob.mjs",
     "build:model": "bash scripts/build-local.sh",
+    "validate:rrfs": "node scripts/validate-rrfs.mjs",
     "soaring:capture": "node scripts/soaring.mjs capture",
     "soaring:replay": "node scripts/soaring.mjs replay"
   },

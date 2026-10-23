@@ -10,7 +10,7 @@ Published documents go through `forecasts/scripts/lib/store.mjs`. The built-in p
 
 ## Run it locally
 
-Requires Node 22 or later and pnpm.
+Use Node 24 and pnpm 10.28.0 (the version pinned in both packages).
 
 ```sh
 cd web
@@ -36,7 +36,41 @@ cp sites.json data/sites.json
 pnpm run build:model -- hrrr-conus
 ```
 
-`build:model` also takes `hrdps-continental`, `rrfs`, `rdps`, `gfs`, `gdps`, and `geps`. Set `METEO_DATA_BASE` to build against a published dataset instead of the dev server. HRDPS refuses the whole build when any launch lies outside its grid; Jones Knob in North Carolina does, so that model has to be built from a sites file that omits it. RRFS often has no complete run. The balloon script skips a launch with no upper-air station within 300 km, and exits non-zero if a station it did reach has no sounding in the last 48 hours. Sunlight tiles are the slow step: one elevation mosaic per launch.
+`build:model` also takes `hrdps-continental`, `rrfs`, `rdps`, `gfs`, `gdps`, and `geps`. Set `METEO_DATA_BASE` to build against a published dataset instead of the dev server. The build wrapper omits launches outside a model's grid, postprocesses soaring diagnostics, and preserves the last complete forecast if a refresh fails. The balloon script skips a launch with no upper-air station within 300 km, and exits non-zero if a station it did reach has no sounding in the last 48 hours. Sunlight tiles are the slow step: one elevation mosaic per launch.
+
+### RRFS
+
+RRFS uses NOAA's `noaa-rrfs-ops-pds` feed, with hourly CONUS forecasts through
+84 hours from 00/06/12/18 UTC runs. Both the pressure and surface products must
+be complete before building. `METEO_RRFS_BASE` can override the source root for
+a compatible mirror. The old `noaa-rrfs-pds/rrfs_public` feed is retired.
+
+From `forecasts/`, with the local web server running:
+
+```sh
+pnpm run build:model -- rrfs
+node scripts/validate-rrfs.mjs --data data --sites sites.json
+node scripts/build-live-soaring.mjs --model rrfs --output data
+node scripts/merge-soaring-regions.mjs --output data
+node scripts/write-runs-index.mjs --output data
+```
+
+The launch model picker discovers RRFS once its manifest is published. The
+regional soaring page offers HRRR and RRFS where their native grid bundles
+exist; changing model preserves the selected location and matching valid time.
+Regional maps cover the first available local day's 07:00–20:00 window, matching
+the HRRR regional view. Historical case links
+retain their original model. RRFS regional bundles and caches have separate
+namespaces, and their one-hour precipitation accumulations and geometric
+vertical velocities are converted explicitly into the forecast contract.
+
+Scheduled RRFS refreshes run at 03:55/09:55/15:55/21:55 UTC, independently of
+the earlier HRRR schedule. Failed RRFS refreshes remain visible in Actions,
+retain the last complete RRFS run, and allow other refreshed models to publish.
+NOAA's October 15 notice schedules the production transition for November 3,
+2026; the replacement bucket currently carries parallel forecasts. These
+forecasts are labelled experimental in the model catalogue until that transition
+is confirmed. [NWS implementation notice](https://www.weather.gov/media/notification/pdf_2026/scn26-048_Updated_RRFS_and_REFS_Implementation.aaf.pdf)
 
 The Check workflow still builds a synthetic dataset (`pnpm run dev-data` in `web/`) and checks it against the meteo contract. `pnpm dev` does not serve that dataset.
 

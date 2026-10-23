@@ -9,12 +9,17 @@ try {
   if (Number(process.versions.node.split('.')[0]) !== 24) throw new Error('Soaring replay requires Node 24 (same runtime as CI)');
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
     case: { type: 'string' }, cache: { type: 'string' }, output: { type: 'string' },
+    model: { type: 'string' }, 'reference-time': { type: 'string' },
   } });
   const [command] = positionals;
   if (!['capture','replay'].includes(command) || positionals.length !== 1 || !/^[a-z0-9-]+$/.test(values.case ?? '')) {
     throw new Error('Usage: soaring.mjs capture|replay --case north-sound-20261021-00z [--cache DIR] [--output DIR]');
   }
-  const c = await readJson(resolve(root, 'soaring/cases', `${values.case}.json`));
+  let c = await readJson(resolve(root, 'soaring/cases', `${values.case}.json`));
+  if (values.model || values['reference-time']) {
+    const { buildLiveCaseSpec } = await import('./build-live-soaring.mjs');
+    c = buildLiveCaseSpec(c, values['reference-time'] ?? c.referenceTime, values.model ?? 'hrrr-conus');
+  }
   const cache = resolve(values.cache ?? resolve(root, '.soaring-cache', c.id));
   if (command === 'capture') {
     const { capture } = await import('../soaring/capture.mjs');

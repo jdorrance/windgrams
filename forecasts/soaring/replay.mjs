@@ -18,12 +18,13 @@ import {
   profileFor,
   v2LayerMetrics,
 } from './science.mjs';
-import { assertRuntime, atomicWrite, concurrent, fileUrl, json, readJson, sha256, validAt, versions } from './common.mjs';
+import { assertRuntime, atomicWrite, concurrent, fileUrl, json, modelFor, readJson, semanticsFor, sha256, validAt, versionsFor } from './common.mjs';
 
 function sameCaptureInputs(a, b) {
   return Boolean(
     a && b &&
     a.schemaVersion === b.schemaVersion &&
+    modelFor(a) === modelFor(b) &&
     a.referenceTime === b.referenceTime &&
     json(a.forecastHours) === json(b.forecastHours) &&
     json(a.pressureLevels) === json(b.pressureLevels) &&
@@ -38,18 +39,24 @@ export async function verifyCapture(c, root) {
   if (manifest.schemaVersion !== 1 || (!exactCaseMatch && !sameCaptureInputs(manifest.case, c))) {
     throw new Error('Capture case/run does not match requested case');
   }
-  if (json(manifest.versions) !== json(versions)) throw new Error('Capture dependency/algorithm versions differ');
+  if (json(manifest.versions) !== json(versionsFor(c))) throw new Error('Capture dependency/algorithm versions differ');
   const hours = [c.terrainForecastHour, ...c.forecastHours];
   if (json(manifest.sources.map(s => s.hour)) !== json(hours)) throw new Error('Incomplete or duplicate captured hours');
   for (const source of manifest.sources) {
-    const url = fileUrl(c, source.hour);
-    if (source.index.url !== `${url}.idx`) throw new Error('Wrong index source URL');
-    const selected = selectRecords(parseIdx((await verifiedBytes(root, source.index)).toString()), c, source.hour);
+    const products = modelFor(c) === 'rrfs' ? [...new Set(fields(c, source.hour).map(f => f.product))] : [null];
+    const selections = [];
+    for (const product of products) {
+      const index = product ? source.indices?.[product] : source.index;
+      if (!index || index.url !== `${fileUrl(c, source.hour, product ?? undefined)}.idx`) throw new Error('Wrong index source URL');
+      selections.push(...selectRecords(parseIdx((await verifiedBytes(root, index)).toString()), c, source.hour, product));
+    }
+    const byKey = new Map(selections.map(s => [s.key, s]));
+    const selected = fields(c, source.hour).map(f => byKey.get(f.key));
     if (json(source.records.map(r => r.key)) !== json(selected.map(s => s.key))) throw new Error('Incomplete captured field inventory');
     for (let i = 0; i < selected.length; i++) {
       const r = source.records[i], expected = selected[i];
       if (!expected.record) { if (!r.absent) throw new Error('Optional record inventory mismatch'); continue; }
-      if (r.absent || r.url !== url || r.range !== byteRange(expected.record)) throw new Error(`Missing/wrong record: ${r.key}`);
+      if (r.absent || r.url !== fileUrl(c, source.hour, expected.product) || r.range !== byteRange(expected.record)) throw new Error(`Missing/wrong record: ${r.key}`);
       const metadata = inspectField(await verifiedBytes(root, r), c, source.hour, manifest.gridKey, expected);
       if (metadata.validAt !== r.validAt || metadata.referenceTime !== r.referenceTime || metadata.grid.gridKey !== r.gridKey || json(metadata.product) !== json(r.product)) throw new Error(`Record metadata mismatch: ${r.key}`);
     }
@@ -176,7 +183,7 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
   const agreement = assertAgreement(profile, hourly, region.siteCell);
   const baselinePath = new URL('./fixtures/blanchard-published.json', import.meta.url);
   const baseline = await readJson(baselinePath);
-  const isPinnedBaseline = c.site?.slug === 'wa-blanchard' && c.referenceTime === baseline.run?.referenceTime;
+  const isPinnedBaseline = modelFor(c) === 'hrrr-conus' && c.site?.slug === 'wa-blanchard' && c.referenceTime === baseline.run?.referenceTime;
   const comparison = isPinnedBaseline ? differences({ ...profile, hours: profile.hours.map(({ soaring, ...hour }) => hour) }, baseline) : [];
   const geojson = {
     type: 'FeatureCollection',
@@ -198,6 +205,7 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
     schemaVersion: 1,
     soaringContractVersion: SOARING_CONTRACT_VERSION,
     caseId: c.id,
+    model: modelFor(c),
     referenceTime: c.referenceTime,
     capturedAt: capture.capturedAt,
     requiredRecordsComplete: true,
@@ -229,23 +237,25 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
     'grid.geojson': geojson,
     'profile.json': profile,
     'audit.json': audit,
-    'blanchard-raw.json': { provenance: 'Decoded NOAA HRRR values before conversion/rounding', grid, cell: region.cells[region.siteCell], terrain: terrain[region.siteCell], hours: siteRaw },
+    'blanchard-raw.json': { provenance: `Decoded NOAA ${modelFor(c) === 'rrfs' ? 'RRFS' : 'HRRR'} values before conversion/rounding`, grid, cell: region.cells[region.siteCell], terrain: terrain[region.siteCell], hours: siteRaw },
     ...Object.fromEntries(hourly.map(h => [`f${h.forecastHour}.json`, h])),
   };
   const hashes = Object.fromEntries(Object.entries(files).map(([name, value]) => [name, sha256(json(value))]));
-  const sourceFiles = ['common.mjs', 'fields.mjs', 'grid.mjs', 'capture.mjs', 'science.mjs', 'replay.mjs', 'vendor/derive-0.6.0.mjs'];
+  const sourceFiles = ['common.mjs', 'fields.mjs', 'grid.mjs', 'capture.mjs', 'science.mjs', 'replay.mjs', 'vendor/derive-0.6.0.mjs', '../scripts/lib/model-feeds.mjs'];
   const codeHashes = Object.fromEntries(await Promise.all(sourceFiles.map(async name => [name, sha256(await readFile(new URL(name, import.meta.url)))])));
   const manifest = {
     schemaVersion: 1,
     soaringContractVersion: SOARING_CONTRACT_VERSION,
     case: c,
+    model: modelFor(c),
+    semantics: semanticsFor(c),
     capturedAt: capture.capturedAt,
-    versions,
+    versions: versionsFor(c),
     nodeMajor: 24,
     codeHashes,
     dependencyLockSha256: sha256(await readFile(new URL('../pnpm-lock.yaml', import.meta.url))),
     captureSha256: sha256(json(capture)),
-    inputs: capture.sources.flatMap(s => [s.index, ...s.records.filter(r => !r.absent)]),
+    inputs: capture.sources.flatMap(s => [...(s.indices ? Object.values(s.indices) : [s.index]), ...s.records.filter(r => !r.absent)]),
     gridKey: grid.gridKey,
     cellCount: region.cells.length,
     siteCell: region.siteCell,

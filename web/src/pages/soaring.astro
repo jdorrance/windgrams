@@ -15,6 +15,11 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
               <option value="north-sound">North Sound & Olympic Peninsula, WA</option>
             </select>
           </label>
+          <label>Model
+            <select id="replay-model-select">
+              <option value="hrrr-conus">HRRR</option>
+            </select>
+          </label>
           <label>Show
             <select id="replay-layer">
               {PRIMARY_LAYERS.map(id => <option value={id}>{LAYER_SPECS[id].label}</option>)}

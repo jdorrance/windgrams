@@ -14,9 +14,17 @@ import {
   PRIMARY_LAYERS,
   buildCellSiteForecast,
   displayMetric,
+  defaultReplayQuery,
+  forecastHourAtValidTime,
   historicalLabel,
+  modelLabel,
+  nativeModels,
+  regionForCase,
   replayLocation,
+  replayModel,
+  replaySelection,
   selectedState,
+  setReplaySelectionQuery,
   type Layer,
   type RegionCatalogue,
   type ReplayHour,
@@ -247,17 +255,15 @@ function renderCrossSectionSvg(
 
 async function main() {
   const regionsCatalogue = await readOptional<RegionCatalogue>(`${DATA_BASE.replace(/\/$/, '')}/soaring/v1/regions.json`);
-  const query = new URLSearchParams(window.location.search);
-  if (!query.has('case')) {
-    const region = regionsCatalogue?.regions.find(r => r.caseId.startsWith('north-sound-') && r.caseId.endsWith('-live'));
-    if (region) query.set('case', region.caseId);
-  }
+  const query = defaultReplayQuery(window.location.search, regionsCatalogue);
   const location = replayLocation(query.toString(), DATA_BASE);
   const pointer = await read<{ bundle: string }>(`${location.root}/index.json`);
   if (!/^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)) throw new Error('Invalid replay bundle pointer');
   const root = `${location.root}/${pointer.bundle}`;
   const manifest = await read<ReplayManifest>(`${root}/manifest.json`);
   if (manifest.schemaVersion !== 1 || manifest.case.id !== location.caseId) throw new Error('Replay manifest mismatch');
+  const activeModel = replayModel(manifest);
+  const activeRegionMeta = regionForCase(regionsCatalogue?.regions ?? [], location.caseId);
   const [grid, profileData, audit, hours, launchesDoc, crossSectionDoc, verificationDoc] = await Promise.all([
     read<Grid>(`${root}/grid.geojson`),
     read<unknown>(`${root}/profile.json`),
@@ -268,16 +274,36 @@ async function main() {
     readOptional<VerificationDoc>(`${root}/verification.json`),
   ]);
   const blanchardProfile = parseSiteForecast(profileData);
-  if (!blanchardProfile || blanchardProfile.hours.length !== hours.length || blanchardProfile.hours.some((h, i) => h.validAt !== hours[i].validAt)) {
-    throw new Error('Invalid or unsynchronized Blanchard profile');
+  if (!blanchardProfile || blanchardProfile.model !== activeModel || blanchardProfile.hours.length !== hours.length || blanchardProfile.hours.some((h, i) => h.validAt !== hours[i].validAt)) {
+    throw new Error('Invalid or unsynchronized regional profile');
   }
 
-  let requested = location.hour;
-  if (!query.has('hour') && location.caseId.endsWith('-live')) {
+  const selectedValidHour = forecastHourAtValidTime(hours, query.get('valid'));
+  let requested = selectedValidHour ?? location.hour;
+  if (selectedValidHour === null && !query.has('hour') && location.caseId.endsWith('-live')) {
     requested = hours.reduce((best, h) => Math.abs(Date.parse(h.validAt) - Date.now()) < Math.abs(Date.parse(best.validAt) - Date.now()) ? h : best).forecastHour;
   }
   let layer: Layer = 'thermalVelocityV2Mps';
-  let selectedCell = manifest.siteCell;
+  const launches = launchesDoc?.launches ?? [];
+  const launchByCell = new Map(launches.map(launch => [launch.cellIndex, launch]));
+  let selection = replaySelection(query, grid.features.map(feature => feature.properties), launches, manifest.siteCell);
+  let selectedCell = selection.cellIndex;
+  const launchForCell = (cellIndex: number) =>
+    (cellIndex === selection.cellIndex && selection.launchSlug ? launches.find(launch => launch.slug === selection.launchSlug) : undefined)
+    ?? launchByCell.get(cellIndex);
+  function selectCell(cellIndex: number, launchSlug?: string) {
+    const cell = grid.features[cellIndex]?.properties;
+    if (!cell || cell.cellIndex !== cellIndex) return;
+    const launch = launchSlug ? launches.find(entry => entry.slug === launchSlug && entry.cellIndex === cellIndex) : launchByCell.get(cellIndex);
+    selectedCell = cellIndex;
+    selection = {
+      cellIndex,
+      latitude: launch?.latitude ?? cell.latitude,
+      longitude: launch?.longitude ?? cell.longitude,
+      launchSlug: launch?.slug,
+    };
+    update();
+  }
   let showBarbs = true;
   let playTimer: number | null = null;
 
@@ -286,23 +312,58 @@ async function main() {
   const next = el<HTMLButtonElement>('replay-next');
   const playBtn = el<HTMLButtonElement>('replay-play');
   const regionSelect = el<HTMLSelectElement>('replay-region-select');
+  const modelSelect = el<HTMLSelectElement>('replay-model-select');
   const launchSelect = el<HTMLSelectElement>('replay-launch-select');
   const barbsCheckbox = el<HTMLInputElement>('toggle-barbs');
 
   if (regionSelect && regionsCatalogue?.regions?.length) {
     regionSelect.replaceChildren();
+    if (!activeRegionMeta) {
+      const current = document.createElement('option');
+      current.textContent = `${manifest.case.site.name} · archived forecast`;
+      current.value = '';
+      current.selected = true;
+      current.disabled = true;
+      regionSelect.append(current);
+    }
     for (const r of regionsCatalogue.regions) {
       const opt = document.createElement('option');
-      opt.value = r.caseId;
+      opt.value = r.id;
       const available = r.status === 'active-verified-trial';
       opt.textContent = `${r.name}${available ? '' : ' — unavailable'}`;
       opt.disabled = !available;
-      if (r.caseId === location.caseId) opt.selected = true;
+      if (r.id === activeRegionMeta?.id) opt.selected = true;
       regionSelect.append(opt);
     }
     regionSelect.addEventListener('change', () => {
       const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.set('case', regionSelect.value);
+      setReplaySelectionQuery(nextUrl.searchParams, selection);
+      const region = regionsCatalogue.regions.find(r => r.id === regionSelect.value)!;
+      const selected = nativeModels(region).find(entry => entry.model === activeModel) ?? nativeModels(region)[0];
+      nextUrl.searchParams.set('case', selected.caseId);
+      nextUrl.searchParams.set('model', selected.model);
+      nextUrl.searchParams.delete('hour');
+      window.location.href = nextUrl.toString();
+    });
+  }
+  if (modelSelect) {
+    const models = activeRegionMeta ? nativeModels(activeRegionMeta) : [{ model: activeModel, caseId: location.caseId }];
+    modelSelect.replaceChildren();
+    for (const entry of models) {
+      const option = document.createElement('option');
+      option.value = entry.model;
+      option.textContent = modelLabel(entry.model);
+      option.selected = entry.model === activeModel;
+      modelSelect.append(option);
+    }
+    modelSelect.disabled = models.length < 2;
+    modelSelect.addEventListener('change', () => {
+      const selected = models.find(entry => entry.model === modelSelect.value)!;
+      const nextUrl = new URL(window.location.href);
+      setReplaySelectionQuery(nextUrl.searchParams, selection);
+      nextUrl.searchParams.set('case', selected.caseId);
+      nextUrl.searchParams.set('model', selected.model);
+      nextUrl.searchParams.delete('hour');
       window.location.href = nextUrl.toString();
     });
   }
@@ -311,9 +372,8 @@ async function main() {
   el('replay-content').hidden = false;
   set('replay-status', '');
   el('replay-status').hidden = true;
-  set('replay-run', historicalLabel(manifest.case.referenceTime, location.caseId.endsWith('-live')));
+  set('replay-run', historicalLabel(manifest.case.referenceTime, location.caseId.endsWith('-live'), activeModel));
   set('select-blanchard', `Back to ${manifest.case.site.name}`);
-  const activeRegionMeta = regionsCatalogue?.regions?.find(r => r.caseId === location.caseId);
   if (activeRegionMeta) {
     set('launches-heading', `Compare launches · ${activeRegionMeta.name}`);
   }
@@ -324,16 +384,13 @@ async function main() {
     set('nws-afd-summary', `Area Forecast Discussion · NWS ${launchesDoc.nwsOffice.office}`);
   }
 
-  const launches = launchesDoc?.launches ?? [];
-  const launchByCell = new Map<number, LaunchEntry>();
   if (launches.length && launchSelect) {
     launchSelect.replaceChildren();
     for (const l of launches) {
-      launchByCell.set(l.cellIndex, l);
       const opt = document.createElement('option');
       opt.value = l.slug;
       opt.textContent = l.name;
-      if (l.slug === manifest.case.site.slug || l.cellIndex === manifest.siteCell) opt.selected = true;
+      if (l.slug === launchForCell(selectedCell)?.slug) opt.selected = true;
       launchSelect.append(opt);
     }
   }
@@ -349,8 +406,7 @@ async function main() {
       m.title = `${l.name} launch (${l.launchElevationM ?? '–'} m MSL)`;
       m.addEventListener('click', e => {
         e.stopPropagation();
-        selectedCell = l.cellIndex;
-        update();
+        selectCell(l.cellIndex, l.slug);
       });
       new Marker({ element: m }).setLngLat([l.longitude, l.latitude]).addTo(map);
     }
@@ -358,7 +414,7 @@ async function main() {
     const launch = manifest.case.site;
     const marker = document.createElement('div');
     marker.style.cssText = 'background:#111;border:3px solid white;border-radius:50%;width:17px;height:17px;box-shadow:0 0 0 2px #111';
-    marker.title = 'Blanchard launch';
+    marker.title = `${launch.name} launch`;
     new Marker({ element: marker }).setLngLat([launch.longitude, launch.latitude]).addTo(map);
   }
 
@@ -368,12 +424,12 @@ async function main() {
   let currentView = buildWindgramView(blanchardProfile, {
     timeZone: manifest.case.site.timeZone,
     widthPx: 1100,
-    launch: { elevationM: manifest.case.launchElevation.elevationM, name: 'Blanchard launch' },
+    launch: { elevationM: manifest.case.launchElevation.elevationM, name: `${manifest.case.site.name} launch` },
   });
   let cursor: SVGRectElement | null = null;
 
   function renderActiveCellWindgram(activeProfile: SiteForecast, cellIdx: number, index: number) {
-    const matchedLaunch = launchByCell.get(cellIdx);
+    const matchedLaunch = launchForCell(cellIdx);
     const launchMeta = matchedLaunch && matchedLaunch.launchElevationM != null
       ? { elevationM: matchedLaunch.launchElevationM, name: `${matchedLaunch.name} launch` }
       : cellIdx === manifest.siteCell
@@ -418,7 +474,7 @@ async function main() {
     }
   }
 
-  const inv = verificationDoc?.hrrrWrfprsInventory;
+  const inv = activeModel === 'hrrr-conus' ? verificationDoc?.hrrrWrfprsInventory : undefined;
   set('audit-summary', 'About this forecast');
   set(
     'audit-results',
@@ -480,7 +536,7 @@ async function main() {
     next.disabled = index === hours.length - 1;
     set('replay-valid', state.validLabel);
     const properties = grid.features[selectedCell].properties;
-    const matchedLaunch = launchByCell.get(selectedCell);
+    const matchedLaunch = launchForCell(selectedCell);
     const activeLabel = matchedLaunch?.name ?? (selectedCell === manifest.siteCell ? manifest.case.site.name : 'Selected location');
     set('cell-title', activeLabel);
     set(
@@ -541,8 +597,8 @@ async function main() {
     const blwd = hour.blMeanWindDirDeg?.[selectedCell];
     const blsh = hour.blWindShearMps?.[selectedCell];
     const bsr = hour.buoyancyShearRatio?.[selectedCell];
-    const hrrrLaunchHour = matchedLaunch?.models?.['hrrr-conus']?.hours?.find(mh => mh.validAt === hour.validAt);
-    const expTerr = hrrrLaunchHour?.experimentalTerrain;
+    const modelLaunchHour = matchedLaunch?.models?.[activeModel]?.hours?.find(mh => mh.validAt === hour.validAt);
+    const expTerr = modelLaunchHour?.experimentalTerrain;
     const detailRows: [string, string][] = [
       ['Thermal strength W* (v2 / v1)', `${displayMetric(hour.thermalVelocityV2Mps?.[selectedCell], 'thermalVelocityV2Mps', hour.status[selectedCell])} · v1: ${displayMetric(hour.thermalVelocityMps[selectedCell], 'thermalVelocityMps', hour.status[selectedCell])}`],
       ['Usable-lift top (v2 / v1, 1.0 m/s)', `${displayMetric(hour.usableLiftTopV2M?.[selectedCell], 'usableLiftTopV2M', hour.status[selectedCell])} · v1: ${displayMetric(hour.usableLiftTopM[selectedCell], 'usableLiftTopM', hour.status[selectedCell])}`],
@@ -550,7 +606,7 @@ async function main() {
       ['Resolved thermal top (v2)', fmtM(hour.resolvedThermalTopM?.[selectedCell], 'MSL')],
       ['+1 °C thermal top sensitivity', fmtM(hour.thermalTopPlus1CM?.[selectedCell], 'MSL')],
       ['Baseline parcel top (v1)', fmtM(hour.boundaryLayerTopM[selectedCell], 'MSL')],
-      ['HRRR model PBL (HPBL)', fmtM(hour.pblHeightM[selectedCell], 'AGL')],
+      [`${modelLabel(activeModel)} model boundary-layer depth`, fmtM(hour.pblHeightM[selectedCell], 'AGL')],
       ['Surface LCL (Cu base)', fmtM((hour.surfaceLclM ?? hour.cloudBaseM)[selectedCell], 'MSL')],
       ['Mixed-layer LCL (zblcl, physical)', fmtM(hour.mixedLayerLclM?.[selectedCell], 'MSL')],
       ['Cu / OD potential', `${hour.cuPotentialM?.[selectedCell] != null ? `${hour.cuPotentialM[selectedCell]! >= 0 ? '+' : ''}${hour.cuPotentialM[selectedCell]!.toFixed(0)} m` : '–'} / ${hour.odPotentialM?.[selectedCell] != null ? `${hour.odPotentialM[selectedCell]! >= 0 ? '+' : ''}${hour.odPotentialM[selectedCell]!.toFixed(0)} m` : '–'}`],
@@ -654,8 +710,7 @@ async function main() {
           `<td>${blw != null ? `${(blw * MPS_TO_MPH).toFixed(0)} mph` : '–'} / ${bls != null ? `${bls.toFixed(1)} m/s` : '–'}</td>` +
           `<td>${conv != null ? `${conv >= 0 ? '+' : ''}${conv.toFixed(0)}` : '–'}</td>`;
         tr.addEventListener('click', () => {
-          selectedCell = ci;
-          update();
+          selectCell(ci, l.slug);
         });
         detailBody.append(tr);
         const simpleRow = document.createElement('tr');
@@ -664,7 +719,7 @@ async function main() {
         const launchButton = document.createElement('button');
         launchButton.type = 'button'; launchButton.className = 'launch-link';
         launchButton.textContent = l.name;
-        launchButton.addEventListener('click', () => { selectedCell = ci; update(); });
+        launchButton.addEventListener('click', () => selectCell(ci, l.slug));
         launchCell.append(launchButton);
         simpleRow.append(launchCell);
         const readings = [
@@ -677,7 +732,7 @@ async function main() {
           const td = document.createElement('td'); td.textContent = reading; simpleRow.append(td);
         }
         simpleRow.addEventListener('click', event => {
-          if (!(event.target as HTMLElement).closest('button')) { selectedCell = ci; update(); }
+          if (!(event.target as HTMLElement).closest('button')) selectCell(ci, l.slug);
         });
         tbody.append(simpleRow);
       }
@@ -687,8 +742,7 @@ async function main() {
       const host = el('replay-cross-section');
       host.replaceChildren(
         renderCrossSectionSvg(crossSectionDoc, hour, selectedCell, ci => {
-          selectedCell = ci;
-          update();
+          selectCell(ci);
         }),
       );
     }
@@ -700,6 +754,7 @@ async function main() {
       tbody.replaceChildren();
       const modelLabels: [string, string][] = [
         ['hrrr-conus', 'HRRR'],
+        ['rrfs', 'RRFS'],
         ['hrdps-continental', 'HRDPS'],
         ['rdps', 'RDPS'],
         ['gdps', 'GDPS'],
@@ -772,7 +827,10 @@ async function main() {
 
     const url = new URL(window.location.href);
     url.searchParams.set('case', location.caseId);
+    url.searchParams.set('model', activeModel);
     url.searchParams.set('hour', String(requested));
+    url.searchParams.set('valid', hour.validAt);
+    setReplaySelectionQuery(url.searchParams, selection);
     window.history.replaceState(null, '', url);
   }
 
@@ -822,8 +880,7 @@ async function main() {
     map.on('click', 'lift-fill', event => {
       const index = event.features?.[0]?.properties?.cellIndex;
       if (typeof index === 'number') {
-        selectedCell = index;
-        update();
+        selectCell(index);
       }
     });
     map.on('mouseenter', 'lift-fill', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -861,8 +918,7 @@ async function main() {
     launchSelect.addEventListener('change', () => {
       const found = launches.find(l => l.slug === launchSelect.value);
       if (found) {
-        selectedCell = found.cellIndex;
-        update();
+        selectCell(found.cellIndex, found.slug);
       }
     });
   }
@@ -896,7 +952,7 @@ async function main() {
     layer = (event.target as HTMLSelectElement).value as Layer;
     update();
   });
-  el('select-blanchard').addEventListener('click', () => { selectedCell = manifest.siteCell; update(); });
+  el('select-blanchard').addEventListener('click', () => selectCell(manifest.siteCell, manifest.case.site.slug));
   el('replay-windgram').addEventListener('keydown', event => {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault();

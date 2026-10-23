@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildCovered, launchOutsideGrid } from "./build-covered.mjs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { buildCovered, launchOutsideGrid, stageModelBuild } from "./build-covered.mjs";
 
 const sites = [
   { slug: "va-daniels", name: "Daniels", latitude: 38.3105, longitude: -78.512 },
@@ -34,4 +37,69 @@ test("buildCovered stops on an error that is not an uncovered launch", async () 
     () => buildCovered("hrdps-continental", sites, async () => ({ status: 1, text: "error: disk full" }), () => {}),
     /disk full/,
   );
+});
+
+function modelOutput(root, run, { omitProfile = false } = {}) {
+  mkdirSync(join(root, 'rrfs', 'sites'), { recursive: true });
+  writeFileSync(join(root, 'rrfs', 'manifest.json'), JSON.stringify({ model: 'rrfs', referenceTime: run, forecastHours: 2, sites: [{ slug: 'wa-tiger' }] }));
+  if (!omitProfile) {
+    const document = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+    document.run.referenceTime = run;
+    document.site.id = 'wa-tiger';
+    document.hours = document.hours.slice(0, 2).map((hour, i) => ({ ...hour, validAt: new Date(Date.parse(run) + (i + 1) * 3600000).toISOString().replace('.000Z', 'Z') }));
+    writeFileSync(join(root, 'rrfs', 'sites', 'wa-tiger.json'), JSON.stringify(document));
+  }
+}
+const finish = () => ({ postprocessedCount: 1, archived: null });
+const oldRun = '2026-10-22T18:00:00Z';
+const newRun = '2026-10-23T00:00:00Z';
+
+test('partial builds and postprocessing failures retain all last-good bytes', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'build-covered-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  modelOutput(root, oldRun);
+  const before = readFileSync(join(root, 'rrfs', 'manifest.json'), 'utf8');
+  await assert.rejects(stageModelBuild(root, 'rrfs', async staging => {
+    modelOutput(staging, newRun);
+    throw new Error('download interrupted');
+  }, finish), /download interrupted/);
+  await assert.rejects(stageModelBuild(root, 'rrfs', async staging => modelOutput(staging, newRun),
+    () => { throw new Error('invalid diagnostics'); }), /invalid diagnostics/);
+  await assert.rejects(stageModelBuild(root, 'rrfs', async staging => modelOutput(staging, newRun, { omitProfile: true }), finish), /ENOENT/);
+  assert.equal(readFileSync(join(root, 'rrfs', 'manifest.json'), 'utf8'), before);
+  assert.deepEqual(readdirSync(root), ['rrfs']);
+});
+
+test('complete staged builds replace stale launch files and reject older fallback runs', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'build-covered-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  modelOutput(root, oldRun);
+  writeFileSync(join(root, 'rrfs', 'sites', 'removed-launch.json'), '{}');
+  const result = await stageModelBuild(root, 'rrfs', async staging => modelOutput(staging, newRun), finish);
+  assert.equal(result.changed, true);
+  assert.deepEqual(readdirSync(join(root, 'rrfs', 'sites')), ['wa-tiger.json']);
+  await assert.rejects(stageModelBuild(root, 'rrfs', async staging => modelOutput(staging, oldRun), finish), /refusing to replace/);
+  assert.equal(JSON.parse(readFileSync(join(root, 'rrfs', 'manifest.json'))).referenceTime, newRun);
+});
+
+test('a builder with no new run retains seeded output but cannot publish an empty first run', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'build-covered-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  await assert.rejects(stageModelBuild(root, 'rrfs', async () => {}, finish), /no complete output/);
+  modelOutput(root, oldRun);
+  assert.equal((await stageModelBuild(root, 'rrfs', async () => {}, finish)).changed, false);
+});
+
+test('semantic RRFS errors after postprocessing cannot replace last-good output', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'build-covered-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  modelOutput(root, oldRun);
+  await assert.rejects(stageModelBuild(root, 'rrfs', async staging => modelOutput(staging, newRun), staging => {
+    const path = join(staging, 'rrfs', 'sites', 'wa-tiger.json');
+    const document = JSON.parse(readFileSync(path));
+    document.hours[0].soaring.usableLiftTopV2M = document.hours[0].soaring.resolvedThermalTopM + 1000;
+    writeFileSync(path, JSON.stringify(document));
+    return finish();
+  }), /exceeds thermal top/);
+  assert.equal(JSON.parse(readFileSync(join(root, 'rrfs', 'manifest.json'))).referenceTime, oldRun);
 });

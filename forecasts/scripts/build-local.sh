@@ -19,4 +19,4 @@ if [[ "$code" == "000" || -z "$code" ]]; then
   echo "cannot reach ${METEO_DATA_BASE} (start web/: pnpm dev, or set METEO_DATA_BASE to the published dataset URL)" >&2
   exit 1
 fi
-exec pnpm exec meteo forecast build --model "$model" --sites sites.json --output data --no-history
+exec node scripts/build-covered.mjs --model "$model" --sites sites.json --output data

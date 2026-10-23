@@ -4,6 +4,9 @@
 # initialization time (Track 5 / Feedback 7):
 #   - Cron runs at `55 1,7,13,19 * * *` UTC (115 minutes after 00, 06, 12, 18Z
 #     initialization, right after HRRR complete-run availability at ~107 minutes).
+#   - RRFS refreshes at `55 3,9,15,21 * * *` UTC (235 minutes after init),
+#     after both f084 CONUS products are normally available. Its own later run
+#     publishes over the previous dataset without rebuilding other providers.
 #   - Before each model build, `scripts/check-readiness.mjs` probes upstream
 #     complete-run availability with bounded retries and evaluates regional
 #     freshness deadlines against each region's local morning briefing window
@@ -11,7 +14,7 @@
 #
 # Five jobs run at once, one provider host each:
 #   noaa-cloud   HRRR, then GFS          NOAA cloud buckets, byte-ranged
-#   rrfs         RRFS                    noaa-rrfs-pds, its own bucket
+#   rrfs         RRFS                    noaa-rrfs-ops-pds, its own bucket
 #   eccc         HRDPS, RDPS, GDPS, GEPS Datamart, one whole-domain GRIB at a time
 #   observations NWS, Open-Meteo, IEM    three hosts, in parallel with each other
 #   terrain      site-context.json       elevation tiles, only when launches moved
@@ -21,14 +24,13 @@ name: Pages
 on:
   schedule:
     - cron: "55 1,7,13,19 * * *"
+    - cron: "55 3,9,15,21 * * *"
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - "web/**"
-      - "forecasts/sites.json"
-      - "forecasts/package.json"
-      - "forecasts/pnpm-lock.yaml"
+      - "forecasts/**"
       - ".github/workflows/pages.yml"
       - ".github/actions/setup-pnpm/**"
 
@@ -70,7 +72,7 @@ jobs:
 
   noaa-cloud:
     needs: urls
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -114,7 +116,7 @@ jobs:
           echo "::endgroup::"
       - name: Pack
         working-directory: forecasts
-        run: sh scripts/pack-slice.sh slice hrrr-conus gfs soaring history
+        run: sh scripts/pack-provider.sh noaa-cloud slice
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: data-noaa-cloud
@@ -124,7 +126,7 @@ jobs:
 
   rrfs:
     needs: urls
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' && github.event.schedule != '55 1,7,13,19 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -142,29 +144,30 @@ jobs:
           path: forecasts/data
           key: forecast-data-${{ github.run_id }}
           restore-keys: forecast-data-
-      - name: Seed the previous profiles
+      - name: Seed the previous profiles and soaring bundles
         working-directory: forecasts
         env:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group rrfs
+        run: |
+          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group rrfs
+          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group soaring
       - name: Probe complete-run availability and build RRFS
         working-directory: forecasts
         env:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
         run: |
           set -euo pipefail
-          models=$(node scripts/seed-published.mjs --list rrfs)
-          test -n "$models"
-          for model in $models; do
-            echo "::group::$model"
-            node scripts/check-readiness.mjs --model "$model" || true
-            node scripts/build-covered.mjs --model "$model" --sites ./sites.json --output ./data
-            echo "::endgroup::"
-          done
-      - name: Pack
+          reference_time=$(node scripts/check-readiness.mjs --model rrfs --attempts 6 --retry-delay-ms 60000 --reference-time-only)
+          node scripts/build-covered.mjs --model rrfs --reference-time "$reference_time" --sites ./sites.json --output ./data
+      - name: Build RRFS regional soaring maps
         working-directory: forecasts
-        run: sh scripts/pack-slice.sh slice rrfs history
+        run: SOARING_CAPTURE_CONCURRENCY=8 node scripts/build-live-soaring.mjs --model rrfs --output ./data
+      - name: Pack
+        if: always()
+        working-directory: forecasts
+        run: sh scripts/pack-provider.sh rrfs slice
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
         with:
           name: data-rrfs
           path: forecasts/slice
@@ -173,7 +176,7 @@ jobs:
 
   eccc:
     needs: urls
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -216,7 +219,7 @@ jobs:
           done
       - name: Pack
         working-directory: forecasts
-        run: sh scripts/pack-slice.sh slice hrdps-continental rdps gdps geps history
+        run: sh scripts/pack-provider.sh eccc slice
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: data-eccc
@@ -226,7 +229,7 @@ jobs:
 
   observations:
     needs: urls
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -283,7 +286,7 @@ jobs:
 
   terrain:
     needs: urls
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -329,7 +332,7 @@ jobs:
       always() &&
       needs.urls.result == 'success' &&
       (needs.noaa-cloud.result == 'success' || needs.noaa-cloud.result == 'skipped') &&
-      (needs.rrfs.result == 'success' || needs.rrfs.result == 'skipped') &&
+      (needs.rrfs.result == 'success' || needs.rrfs.result == 'skipped' || needs.rrfs.result == 'failure') &&
       (needs.eccc.result == 'success' || needs.eccc.result == 'skipped') &&
       (needs.observations.result == 'success' || needs.observations.result == 'skipped') &&
       (needs.terrain.result == 'success' || needs.terrain.result == 'skipped')
@@ -355,6 +358,28 @@ jobs:
           package-json: web/package.json
           lockfile: web/pnpm-lock.yaml
           working-directory: web
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: dataset
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}
+          restore-keys: forecast-data-
+      - name: Preserve the complete previous dataset before overlaying refreshed providers
+        if: github.event_name != 'push'
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: |
+          set -eu
+          for group in noaa-cloud rrfs eccc observations terrain soaring; do
+            node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group "$group"
+          done
+      - name: Report RRFS refresh failure while retaining last-good data
+        if: needs.rrfs.result == 'failure'
+        run: |
+          echo '::warning::RRFS refresh failed. Publishing other models with the last complete RRFS profiles and regional bundles.'
+          echo '### RRFS refresh failed' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Other providers are being published. RRFS retains its last complete run; the RRFS job contains the failure details.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         if: github.event_name != 'push'
         with:
@@ -373,13 +398,6 @@ jobs:
             fi
           done
           rm -f forecasts/data/EMPTY
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        if: github.event_name == 'push'
-        id: dataset
-        with:
-          path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
-          restore-keys: forecast-data-
       - name: Require a cached dataset
         if: github.event_name == 'push' && steps.dataset.outputs.cache-matched-key == ''
         run: |
@@ -392,6 +410,7 @@ jobs:
           mkdir -p data
           cp sites.json data/sites.json
           pnpm exec meteo forecast catalogue --output data/models.json
+          node scripts/merge-soaring-regions.mjs --output data
           node verification/verify-observations.mjs ./data
           node scripts/write-runs-index.mjs --output data
       - name: Build the site

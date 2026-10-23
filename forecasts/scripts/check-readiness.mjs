@@ -12,6 +12,7 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { rrfsBase } from './lib/model-feeds.mjs';
 
 export const FEED_AVAILABILITY_SPECS = Object.freeze({
   'hrrr-conus': {
@@ -25,12 +26,13 @@ export const FEED_AVAILABILITY_SPECS = Object.freeze({
   },
   rrfs: {
     slug: 'rrfs',
-    provider: 'NOAA AWS Open Data (noaa-rrfs-pds)',
+    provider: 'NOAA AWS Open Data (noaa-rrfs-ops-pds)',
     cyclesUtc: [0, 6, 12, 18],
     horizonHours: 84,
     completeRunAvailabilityMinutes: 185,
     typicalMaxLagMinutes: 225,
-    completionProbeTemplate: 'https://noaa-rrfs-pds.s3.amazonaws.com/rrfs_a/rrfs.{YYYYMMDD}/{HH}/rrfs.t{HH}z.prslev.3km.f084.na.grib2.idx',
+    completionProbeTemplates: ['prslev', '2dfld'].map(product =>
+      `{RRFS_BASE}/rrfs.{YYYYMMDD}/{HH}/rrfs.t{HH}z.${product}.3km.f084.conus.grib2.idx`),
   },
   rdps: {
     slug: 'rdps',
@@ -140,9 +142,10 @@ export const REGIONAL_FRESHNESS_DEADLINES = Object.freeze([
  * Selects the newest cycle for `modelSlug` whose complete-run availability window
  * has elapsed as of `nowMs`, plus the previous fallback cycle.
  */
-export function selectTargetCycles(modelSlug, nowMs = Date.now()) {
+export function selectTargetCycles(modelSlug, nowMs = Date.now(), env = process.env) {
   const spec = FEED_AVAILABILITY_SPECS[modelSlug];
   if (!spec) throw new Error(`Unknown model feed: ${modelSlug}`);
+  if (!Number.isFinite(nowMs)) throw new Error('Readiness clock must be a valid timestamp');
 
   const candidates = [];
   const baseDayMs = Math.floor(nowMs / 86_400_000) * 86_400_000;
@@ -154,15 +157,17 @@ export function selectTargetCycles(modelSlug, nowMs = Date.now()) {
         const dt = new Date(refMs);
         const yyyymmdd = dt.toISOString().slice(0, 10).replace(/-/g, '');
         const hh = String(cycleHour).padStart(2, '0');
-        const probeUrl = spec.completionProbeTemplate
+        const probeUrls = (spec.completionProbeTemplates ?? [spec.completionProbeTemplate]).map(template => template
+          .replaceAll('{RRFS_BASE}', rrfsBase(env))
           .replaceAll('{YYYYMMDD}', yyyymmdd)
-          .replaceAll('{HH}', hh);
+          .replaceAll('{HH}', hh));
         candidates.push({
           referenceTime: dt.toISOString().replace('.000Z', 'Z'),
           cycleHourUtc: cycleHour,
           elapsedMinutes: Math.round(elapsedMinutes),
           expectedAvailableAtMinutes: spec.completeRunAvailabilityMinutes,
-          probeUrl,
+          probeUrl: probeUrls[0],
+          probeUrls,
         });
       }
     }
@@ -205,65 +210,78 @@ export function evaluateRegionalFreshness(referenceTimeIso, nowMs = Date.now()) 
  * Probes upstream completion URL with bounded retries before launching heavy GRIB builds.
  */
 export async function probeCycleReadiness(modelSlug, {
-  nowMs = Date.now(),
+  nowMs,
+  now = nowMs === undefined ? Date.now : () => nowMs,
   maxAttempts = 3,
   retryDelayMs = 5_000,
   fetchImpl = globalThis.fetch,
+  sleep = delay => new Promise(resolve => setTimeout(resolve, delay)),
+  env = process.env,
 } = {}) {
-  const selection = selectTargetCycles(modelSlug, nowMs);
-  for (const candidate of [selection.primaryCandidate, selection.fallbackCandidate].filter(Boolean)) {
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      try {
-        const response = await fetchImpl(candidate.probeUrl, {
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error('maxAttempts must be a positive integer');
+  if (!Number.isFinite(retryDelayMs) || retryDelayMs < 0) throw new Error('retryDelayMs must be nonnegative');
+  const isReady = async candidate => {
+    if (!candidate) return false;
+    const probes = await Promise.allSettled(candidate.probeUrls.map(url =>
+        fetchImpl(url, {
           method: 'HEAD',
           signal: AbortSignal.timeout(15_000),
-        });
-        if (response.ok) {
-          return {
-            ready: true,
-            model: modelSlug,
-            selectedCycle: candidate,
-            attempts: attempt,
-            regionalFreshness: evaluateRegionalFreshness(candidate.referenceTime, nowMs),
-          };
-        }
-      } catch {
-        // Retry bounded times before falling back to prior cycle
-      }
-      if (attempt < maxAttempts && retryDelayMs > 0) {
-        await new Promise(r => setTimeout(r, retryDelayMs * attempt));
-      }
-    }
+        })));
+    return probes.every(result => result.status === 'fulfilled' && result.value.ok);
+  };
+  const readyResult = (candidate, attempts, fallback) => ({
+    ready: true, model: modelSlug, selectedCycle: candidate, attempts, fallback,
+    regionalFreshness: evaluateRegionalFreshness(candidate.referenceTime, now()),
+  });
+  let selection;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // Re-evaluate after waiting: a newly eligible cycle or UTC day boundary must
+    // never leave the heavy builder pinned to an obsolete readiness decision.
+    selection = selectTargetCycles(modelSlug, now(), env);
+    if (await isReady(selection.primaryCandidate)) return readyResult(selection.primaryCandidate, attempt, false);
+    if (attempt < maxAttempts && retryDelayMs > 0) await sleep(retryDelayMs);
+  }
+  if (await isReady(selection.fallbackCandidate)) {
+    return readyResult(selection.fallbackCandidate, maxAttempts, true);
   }
   return {
-    ready: false,
-    model: modelSlug,
-    selectedCycle: selection.fallbackCandidate ?? selection.primaryCandidate,
-    attempts: maxAttempts,
-    regionalFreshness: selection.primaryCandidate
-      ? evaluateRegionalFreshness(selection.primaryCandidate.referenceTime, nowMs)
-      : [],
+    ready: false, model: modelSlug, selectedCycle: null, attempts: maxAttempts,
+    regionalFreshness: [],
   };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+async function main() {
   const { values } = parseArgs({
     options: {
       model: { type: 'string', default: 'hrrr-conus' },
       offline: { type: 'boolean', default: false },
-    },
+      now: { type: 'string' },
+      attempts: { type: 'string', default: '3' },
+      'retry-delay-ms': { type: 'string', default: '5000' },
+      'reference-time-only': { type: 'boolean', default: false },
+    }
   });
-  const selection = selectTargetCycles(values.model);
+  const now = values.now === undefined ? Date.now : () => Date.parse(values.now);
+  const selection = selectTargetCycles(values.model, now());
   if (values.offline) {
     console.log(JSON.stringify({
       ...selection,
       regionalFreshness: selection.primaryCandidate
-        ? evaluateRegionalFreshness(selection.primaryCandidate.referenceTime)
+        ? evaluateRegionalFreshness(selection.primaryCandidate.referenceTime, now())
         : [],
     }, null, 2));
   } else {
-    probeCycleReadiness(values.model, { maxAttempts: 2, retryDelayMs: 1000 }).then(res => {
-      console.log(JSON.stringify(res, null, 2));
+    const result = await probeCycleReadiness(values.model, {
+      now, maxAttempts: Number(values.attempts), retryDelayMs: Number(values['retry-delay-ms']),
     });
+    if (values['reference-time-only']) {
+      if (result.ready) console.log(result.selectedCycle.referenceTime);
+      else console.error(`${values.model}: no complete upstream run after ${result.attempts} readiness attempt(s); retaining last-good output`);
+    } else console.log(JSON.stringify(result, null, 2));
+    if (!result.ready) process.exitCode = 1;
   }
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(error => { console.error(`error: ${error.message}`); process.exitCode = 1; });
 }

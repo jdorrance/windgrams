@@ -15,6 +15,7 @@ set -uo pipefail
 model="${1:?usage: scripts/build-model.sh <model-slug>}"
 here="$(dirname "$0")"
 status=0
+export METEO_RRFS_BASE="${METEO_RRFS_BASE:-https://noaa-rrfs-ops-pds.s3.amazonaws.com}"
 
 "$here/run-annotated.sh" "$model build" pnpm exec meteo forecast build --model "$model" --sites dataset --output data || status=1
 "$here/run-annotated.sh" "$model publish" pnpm exec meteo forecast publish --model "$model" --data data || status=1

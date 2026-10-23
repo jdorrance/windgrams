@@ -10,7 +10,8 @@
 //   node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group eccc
 //   node scripts/seed-published.mjs --list eccc
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -18,6 +19,7 @@ import { paths as ecmwfPaths } from "./lib/ecmwf.mjs";
 import { retryingFetch } from "./lib/http.mjs";
 import { paths as nwsPaths } from "./lib/nws.mjs";
 import { paths as raobPaths } from "./lib/raob.mjs";
+import { isPublishedCase } from './merge-soaring-regions.mjs';
 
 /** Model slugs for each runner. Observations, soaring, and terrain publish no single model. */
 export const GROUPS = {
@@ -49,38 +51,62 @@ function officesOf(document) {
  * The keys to copy for `group`. `get` returns the parsed JSON of a key, or
  * null when the live site has no such object. Throws when a read fails.
  */
-export async function collectGroup(group, { get, sites = [] }) {
+export async function collectGroup(group, { get, getBytes, sites = [] }) {
   if (!Object.hasOwn(GROUPS, group)) throw new Error(`unknown group "${group}". Known: ${groupNames().join(", ")}`);
   const files = new Map();
   const take = async (key) => {
-    const document = await get(key);
-    if (document === null) return null;
-    files.set(key, document);
+    const payload = getBytes ? await getBytes(key) : await get(key);
+    if (payload === null) return null;
+    const document = getBytes ? parseJsonBytes(payload, key) : payload;
+    files.set(key, payload);
     return document;
   };
+  const digest = key => createHash('sha256').update(bytesOf(files.get(key))).digest('hex');
 
   for (const model of GROUPS[group]) {
     const manifest = await take(`${model}/manifest.json`);
     if (!manifest) continue;
-    for (const slug of slugsOf(manifest)) await take(`${model}/sites/${slug}.json`);
+    for (const slug of slugsOf(manifest)) {
+      const profile = await take(`${model}/sites/${slug}.json`);
+      if (model === 'rrfs' && (!profile || profile.run?.referenceTime !== manifest.referenceTime)) {
+        throw new Error(`Incomplete published RRFS run: ${slug}`);
+      }
+    }
   }
 
   if (group === "soaring") {
     const regions = await take("soaring/v1/regions.json");
-    const caseIds = new Set(["north-sound-20261021-00z"]);
-    for (const r of regions?.regions ?? []) {
+    const rrfsRegions = await take('soaring/v1/regions-rrfs.json');
+    const caseIds = new Set();
+    for (const r of [...(regions?.regions ?? []), ...(rrfsRegions?.regions ?? [])]) {
       if (r?.status === "active-verified-trial" && typeof r.caseId === "string") {
         caseIds.add(r.caseId);
       }
+      for (const native of r?.nativeModels ?? []) {
+        if (typeof native.caseId === 'string') caseIds.add(native.caseId);
+      }
     }
+    const advertisedCases = new Set(caseIds);
+    caseIds.add('north-sound-20261021-00z');
     for (const caseId of caseIds) {
+      if (!/^[a-zA-Z0-9_-]+$/.test(caseId)) throw new Error(`Invalid soaring case id: ${caseId}`);
       const pointer = await take(`soaring/v1/${caseId}/index.json`);
-      if (!pointer || typeof pointer.bundle !== "string") continue;
+      if (!pointer) {
+        if (advertisedCases.has(caseId)) throw new Error(`Missing published soaring pointer: ${caseId}`);
+        continue;
+      }
+      if (!/^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)) throw new Error(`Invalid soaring pointer: ${caseId}`);
       const bundleRoot = `soaring/v1/${caseId}/${pointer.bundle}`;
       const manifest = await take(`${bundleRoot}/manifest.json`);
-      if (!manifest) continue;
-      for (const fileName of Object.keys(manifest.files ?? {})) {
-        await take(`${bundleRoot}/${fileName}`);
+      if (!manifest || digest(`${bundleRoot}/manifest.json`) !== pointer.manifestSha256 || manifest.case?.id !== caseId) {
+        throw new Error(`Incomplete or corrupt soaring manifest: ${caseId}`);
+      }
+      const names = Object.keys(manifest.files ?? {});
+      if (!names.length) throw new Error(`Empty soaring bundle: ${caseId}`);
+      for (const fileName of names) {
+        if (!/^[a-zA-Z0-9.-]+$/.test(fileName)) throw new Error(`Invalid soaring bundle file: ${fileName}`);
+        const key = `${bundleRoot}/${fileName}`;
+        if (!await take(key) || digest(key) !== manifest.files[fileName]) throw new Error(`Incomplete or corrupt soaring bundle: ${key}`);
       }
     }
   }
@@ -105,7 +131,12 @@ export function groupHasLocal(output, group) {
   if (!Object.hasOwn(GROUPS, group)) return false;
   if (GROUPS[group].some((model) => existsSync(join(output, model, "manifest.json")))) return true;
   if (group === "soaring") {
-    return existsSync(join(output, "soaring", "v1", "north-sound-20261021-00z", "index.json"));
+    const root = join(output, 'soaring', 'v1');
+    try {
+      const regions = JSON.parse(readFileSync(join(root, 'regions.json')));
+      return regions.regions.some(region => [region.caseId, ...(region.nativeModels ?? []).map(item => item.caseId)]
+        .filter(Boolean).some(caseId => isPublishedCase(root, caseId)));
+    } catch { return isPublishedCase(root, 'north-sound-20261021-00z'); }
   }
   if (group === "observations") {
     return existsSync(join(output, nwsPaths.manifest())) || existsSync(join(output, ecmwfPaths.manifest())) || existsSync(join(output, "raob"));
@@ -123,11 +154,15 @@ export function applyGroup(output, group, files) {
     if (!files.has(`${model}/manifest.json`)) continue;
     rmSync(join(output, model), { recursive: true, force: true });
   }
-  for (const [key, document] of files) {
+  // Content and manifests land before pointers, then regional catalogues. Raw
+  // bytes are preserved because every soaring pointer/file is content hashed.
+  const priority = key => /\/regions(?:-rrfs)?\.json$/.test(key) ? 3 : /\/index\.json$/.test(key) ? 2 : /\/manifest\.json$/.test(key) ? 1 : 0;
+  for (const [key, document] of [...files].sort((a, b) => priority(a[0]) - priority(b[0]))) {
     const path = join(output, key);
     mkdirSync(dirname(path), { recursive: true });
-    const text = typeof document === "string" ? document : `${JSON.stringify(document)}\n`;
-    writeFileSync(path, text);
+    const temp = `${path}.${randomUUID()}.tmp`;
+    try { writeFileSync(temp, bytesOf(document)); renameSync(temp, path); }
+    finally { rmSync(temp, { force: true }); }
   }
 }
 
@@ -135,9 +170,11 @@ function rootUrl(from) {
   return from.replace(/\/+$/, "");
 }
 
-async function readJson(getBytes, key) {
-  const bytes = await getBytes(key);
-  if (bytes === null) return null;
+function bytesOf(document) {
+  return Buffer.isBuffer(document) || typeof document === 'string' ? document : `${JSON.stringify(document)}\n`;
+}
+
+function parseJsonBytes(bytes, key) {
   const text = bytes.toString("utf8").trimStart();
   if (!JSON_START.test(text)) throw new Error(`${key} was not JSON`);
   return JSON.parse(text);
@@ -176,7 +213,7 @@ async function main() {
 
   let files;
   try {
-    files = await collectGroup(values.group, { get: (key) => readJson(getBytes, key), sites });
+    files = await collectGroup(values.group, { getBytes, sites });
   } catch (error) {
     if (groupHasLocal(output, values.group)) {
       console.warn(`WARN keeping cached ${values.group}: ${error.message}`);

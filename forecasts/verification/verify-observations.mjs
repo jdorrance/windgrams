@@ -147,7 +147,7 @@ export function verifyModelAgainstRaob(dataRoot, modelSlug, pair, targetSounding
 }
 
 export function buildBlanchardCrossModelSpread(dataRoot) {
-  const models = ['hrrr-conus', 'hrdps-continental', 'rdps', 'gdps', 'gfs', 'geps', 'ecmwf', 'nws'];
+  const models = ['hrrr-conus', 'rrfs', 'hrdps-continental', 'rdps', 'gdps', 'gfs', 'geps', 'ecmwf', 'nws'];
   const windowStart = Date.parse('2026-10-21T14:00:00Z');
   const windowEnd = Date.parse('2026-10-22T03:00:00Z');
   const rows = [];
@@ -223,7 +223,7 @@ export function buildBlanchardCrossModelSpread(dataRoot) {
 }
 
 export function buildSkillReport(dataRoot) {
-  const modelsToVerify = ['hrrr-conus', 'rdps'];
+  const modelsToVerify = ['hrrr-conus', 'rrfs', 'rdps'];
   const matchedPairVerifications = [];
 
   for (const pair of MATCHED_RAOB_SITE_PAIRS) {

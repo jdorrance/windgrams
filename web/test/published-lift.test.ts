@@ -37,6 +37,19 @@ test('a missing surface or incomplete column never invents a valid profile', () 
   broken[3] = { ...hours[3], status: ['insufficient-levels'] };
   assert.equal(buildCellSiteForecast(manifest, broken, 0, cell), null);
 });
+test('cell profiles retain the source model and precipitation semantics', () => {
+  const legacy = buildCellSiteForecast(manifest, hours, 0, cell)!;
+  assert.equal(legacy.model, 'hrrr-conus');
+  assert.equal(legacy.semantics.precipitation, 'instantRate');
+  const rrfsManifest: ReplayManifest = { ...manifest, model: 'rrfs', semantics: { gust: 'instant', precipitation: 'windowMeanRate' } };
+  const rrfs = buildCellSiteForecast(rrfsManifest, hours, 0, cell)!;
+  assert.equal(rrfs.model, 'rrfs');
+  assert.equal(rrfs.semantics.precipitation, 'windowMeanRate');
+  assert.deepEqual(rrfs.hours, legacy.hours);
+  const caseModel = buildCellSiteForecast({ ...manifest, case: { ...manifest.case, model: 'rrfs' } }, hours, 0, cell)!;
+  assert.equal(caseModel.model, 'rrfs');
+  assert.equal(caseModel.semantics.precipitation, 'windowMeanRate');
+});
 test('point loading retains published diagnostics and nulls without resurrecting baseline lift', () => {
   const rawProfile = structuredClone(golden);
   rawProfile.hours[6].soaring = { thermalVelocityV2Mps: 0.85, usableLiftTopV2M: null, resolvedThermalTopM: 504.3, surfaceLclM: 1315 };

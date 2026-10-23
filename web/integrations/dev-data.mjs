@@ -4,11 +4,19 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join, normalize, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export default function devData({ root = "../forecasts/data", sample = false } = {}) {
   return {
     name: "dev-data",
     hooks: {
+      "astro:config:setup": ({ config, command, updateConfig }) => {
+        // Checks/builds must not replace a running dev server's optimized imports.
+        // Different base paths also produce different browser dependency URLs.
+        updateConfig({ vite: { cacheDir: resolve(
+          fileURLToPath(config.root), 'node_modules/.vite', command, encodeURIComponent(config.base),
+        ) } });
+      },
       "astro:server:setup": ({ server, logger }) => {
         const base = resolve(root);
         if (!existsSync(base)) {

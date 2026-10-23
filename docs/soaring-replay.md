@@ -14,7 +14,7 @@ pnpm run soaring:replay --case north-sound-20261021-00z
 
 Start `pnpm dev` in `web/`, then visit `/soaring?case=north-sound-20261021-00z&hour=20`. The `hour` parameter is a forecast lead hour, not the slider index. At f20 the initial publication gives Blanchard W* = 1.06 m/s and usable-lift top = 724.5 m MSL (2,377 ft). At f14 W* is zero and usable-lift top is null.
 
-The application uses the same base-path helper as the rest of the site. `/windgrams/soaring` reads `/windgrams/data/soaring/...` when built with `WINDGRAMS_BASE=/windgrams`. The normal production build creates the page; this milestone does not upload or schedule its data. A static preview needs the separately generated `data/soaring` directory copied beneath its served data root. Local development serves `forecasts/data` directly.
+The application uses the same base-path helper as the rest of the site. `/windgrams/soaring` reads `/windgrams/data/soaring/...` when built with `WINDGRAMS_BASE=/windgrams`. For a local production preview, run `pnpm preview` in `web/`; it builds the site and links the complete `forecasts/data` dataset so both soaring and launch pages work. Local development serves `forecasts/data` directly.
 
 ## Capture and reproducibility
 

@@ -7,6 +7,7 @@ import { renderWindgramSvg, renderWindgramKey } from '../lib/windgram-chart.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
 import { SkewTChart } from '../lib/skewt-chart.ts';
 import { compassPoint } from '../lib/launches.ts';
+import { windArrows } from '../lib/map-wind.ts';
 import {
   LAYER_SPECS,
   PRIMARY_LAYERS,
@@ -738,30 +739,7 @@ async function main() {
         const useBlWind = layer === 'blMeanWindSpeedMps';
         const wsArr = (useBlWind ? hour.blMeanWindSpeedMps : hour.wind10mSpeedMps) ?? [];
         const wdArr = (useBlWind ? hour.blMeanWindDirDeg : hour.wind10mDirDeg) ?? [];
-        const arrowFeatures = [];
-        if (showBarbs) {
-          for (let i = 0; i < grid.features.length; i += 3) {
-            const ws = wsArr[i], wd = wdArr[i];
-            if (ws == null || wd == null) continue;
-            const c = grid.features[i].properties;
-            const rad = ((wd + 180) * Math.PI) / 180;
-            const lenDeg = Math.min(0.06, 0.012 + ws * 0.004);
-            const dLon = (lenDeg * Math.sin(rad)) / Math.cos((c.latitude * Math.PI) / 180);
-            const dLat = lenDeg * Math.cos(rad);
-            arrowFeatures.push({
-              type: 'Feature' as const,
-              properties: { speedMps: ws },
-              geometry: {
-                type: 'LineString' as const,
-                coordinates: [
-                  [c.longitude, c.latitude],
-                  [c.longitude + dLon, c.latitude + dLat],
-                ],
-              },
-            });
-          }
-        }
-        windSource.setData({ type: 'FeatureCollection', features: arrowFeatures });
+        windSource.setData(windArrows(showBarbs ? grid.features.map(f => f.properties) : [], wsArr, wdArr));
       }
     }
 
@@ -798,12 +776,32 @@ async function main() {
       });
     }
 
+    // A north-pointing arrow with a white outline stays legible over terrain.
+    // Symbol rotation follows geographic bearing, with a fixed on-screen size.
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(2, 2);
+    ctx.beginPath();
+    ctx.moveTo(16, 27); ctx.lineTo(16, 5);
+    ctx.moveTo(9, 13); ctx.lineTo(16, 5); ctx.lineTo(23, 13);
+    ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4.5; ctx.stroke();
+    ctx.strokeStyle = '#172b38'; ctx.lineWidth = 2.3; ctx.stroke();
+    map.addImage('wind-arrow', ctx.getImageData(0, 0, 64, 64), { pixelRatio: 2 });
     map.addSource('wind-vectors', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
-      id: 'wind-vectors-line',
-      type: 'line',
+      id: 'wind-vectors-arrows',
+      type: 'symbol',
       source: 'wind-vectors',
-      paint: { 'line-color': '#1f2937', 'line-width': 1.5, 'line-opacity': 0.75 },
+      layout: {
+        'icon-image': 'wind-arrow',
+        'icon-rotate': ['get', 'bearing'],
+        'icon-rotation-alignment': 'map',
+        'icon-size': 0.85,
+        'icon-padding': 7,
+        'icon-allow-overlap': false,
+      },
     });
 
     map.fitBounds([[west, south], [east, north]], { padding: 20, duration: 0 });

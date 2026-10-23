@@ -6,6 +6,7 @@
   "scripts": {
     "dev-data": "node scripts/make-dev-data.mjs",
     "dev": "astro dev",
+    "preview": "astro build && node scripts/preview-data.mjs && astro preview",
     "build": "astro build",
     "check": "astro check && tsc -p worker/tsconfig.json",
     "test": "node --test test/*.test.ts"

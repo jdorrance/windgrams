@@ -495,7 +495,7 @@ function renderSkewT() {
     status.textContent = !model
       ? "Model forecasts for this launch are not published yet."
       : !loaded
-        ? "Loading the sounding…"
+        ? profiles.has(model) ? "The sounding is unavailable for this model. Try another model." : "Loading the sounding…"
         : `${modelLabel(model)} has no upper-air levels for this day.`;
     skewtDay = "";
     return;
@@ -562,7 +562,7 @@ function renderText(office: NwsOfficeDocument | null) {
   add(`Area Forecast Discussion (NWS ${office?.office ?? ""})`, office?.products.afd);
 }
 
-async function start() {
+export async function start() {
   for (const id of ["meteogram", "nws-charts", "ecmwf-charts"]) $(id).classList.add("is-loading");
   const raobPromise = getJson<RaobDocument>(`raob/sites/${launch.slug}.json`);
   const [modelsJson, contextJson, nwsDoc, ecmwfDoc] = await Promise.all([
@@ -612,5 +612,3 @@ for (const [from, to] of [["meteogram", "meteogram-diagnostics"], ["meteogram-di
 $<HTMLDetailsElement>("meteogram-details").addEventListener("toggle", () => {
   if ($<HTMLDetailsElement>("meteogram-details").open) $("meteogram-diagnostics").scrollLeft = $("meteogram").scrollLeft;
 });
-
-start();

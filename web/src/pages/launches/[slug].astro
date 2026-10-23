@@ -58,6 +58,9 @@ const station = stationEntry && (() => {
     <p id="sample-notice" class="notice sample" hidden>
       Sample data for local development. This is not a forecast.
     </p>
+    <p id="forecast-error" class="notice" role="alert" hidden>
+      The forecast could not load. <button id="forecast-reload" type="button" class="button secondary">Reload</button>
+    </p>
     <div class="chart-scroll meteogram-frame" id="meteogram">
       <p class="chart-status">Loading the model forecast…</p>
     </div>
@@ -347,7 +350,6 @@ const station = stationEntry && (() => {
   </section>
 
   <script>
-    import "../../scripts/launch-page.ts";
-    import "../../scripts/station.ts";
+    import "../../scripts/launch-bootstrap.ts";
   </script>
 </Base>

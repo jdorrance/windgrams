@@ -2,11 +2,13 @@ import type { SiteForecast } from '@azohra/meteo.briefing/contract';
 
 export const DEFAULT_CASE = 'north-sound-20261021-00z';
 export type Layer =
-  | 'thermalVelocityMps'
-  | 'usableLiftTopM'
+  | 'thermalVelocityV2Mps'
+  | 'usableLiftTopV2M'
   | 'hcritWxtoflyM'
   | 'dryHcritM'
   | 'resolvedThermalTopM'
+  | 'thermalVelocityMps'
+  | 'usableLiftTopM'
   | 'boundaryLayerTopM'
   | 'pblHeightM'
   | 'surfaceLclM'
@@ -39,6 +41,7 @@ export interface LevelArrays {
 export interface ReplayHour {
   forecastHour: number;
   validAt: string;
+  soaringContractVersion?: string;
   thermalVelocityMps: (number | null)[];
   usableLiftTopM: (number | null)[];
   boundaryLayerTopM: (number | null)[];
@@ -46,6 +49,8 @@ export interface ReplayHour {
   pblHeightM: (number | null)[];
   resolvedThermalTopM?: (number | null)[];
   thermalTopPlus1CM?: (number | null)[];
+  thermalVelocityV2Mps?: (number | null)[];
+  usableLiftTopV2M?: (number | null)[];
   hcritWxtoflyM?: (number | null)[];
   dryHcritM?: (number | null)[];
   surfaceLclM?: (number | null)[];
@@ -60,6 +65,8 @@ export interface ReplayHour {
   buoyancyShearRatio?: (number | null)[];
   wind10mSpeedMps?: (number | null)[];
   wind10mDirDeg?: (number | null)[];
+  wind80mSpeedMps?: (number | null)[];
+  wind80mDirDeg?: (number | null)[];
   windGustMps?: (number | null)[];
   wind925SpeedMps?: (number | null)[];
   wind925DirDeg?: (number | null)[];
@@ -91,6 +98,7 @@ export interface ReplayHour {
 
 export interface ReplayManifest {
   schemaVersion: number;
+  soaringContractVersion?: string;
   capturedAt: string;
   cellCount: number;
   siteCell: number;
@@ -105,6 +113,31 @@ export interface ReplayManifest {
   };
   versions: { algorithm: string };
   hours: { forecastHour: number; validAt: string; file: string }[];
+}
+
+export interface RegionDescriptor {
+  id: string;
+  name: string;
+  status: string;
+  caseId: string;
+  expandedCaseId?: string;
+  timeZone: string;
+  morningBriefingLocalHour: number;
+  bbox: [number, number, number, number];
+  primarySite: string;
+  matchedRaobStation?: string;
+  launches: string[];
+  deterministicModels: string[];
+  ensembleModels: string[];
+  sparseAdapters: string[];
+}
+
+export interface RegionCatalogue {
+  schemaVersion: number;
+  soaringContractVersion: string;
+  generatedAt: string;
+  trialRegionId: string;
+  regions: RegionDescriptor[];
 }
 
 export interface LayerSpec {
@@ -123,49 +156,49 @@ const MPS_TO_MPH = 2.23693629;
 const MPS_TO_FPM = 196.850394;
 
 export const LAYER_SPECS: Record<Layer, LayerSpec> = {
-  thermalVelocityMps: {
-    id: 'thermalVelocityMps',
-    label: 'Thermal strength W* · m/s (ft/min)',
+  thermalVelocityV2Mps: {
+    id: 'thermalVelocityV2Mps',
+    label: 'Thermal strength · m/s',
     group: 'Thermal Opportunity',
     scale: 1,
     stops: [0, 0.5, 1, 2, 3],
     colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'W* m/s: 0 ◻ · 0.5 pale blue (100 fpm) · 1.0 teal (200 fpm) · 2.0 gold (400 fpm) · 3.0+ red',
+    legend: 'v2 W* (resolved depth) m/s: 0 ◻ · 0.5 pale blue (100 fpm) · 1.0 teal (200 fpm) · 2.0 gold (400 fpm) · 3.0+ red',
     format: v => `${v.toFixed(2)} m/s (${Math.round(v * MPS_TO_FPM)} ft/min)`,
   },
-  usableLiftTopM: {
-    id: 'usableLiftTopM',
-    label: 'Usable-lift top (1.0 m/s sink) · ft MSL',
+  usableLiftTopV2M: {
+    id: 'usableLiftTopV2M',
+    label: 'Usable lift top · ft MSL',
     group: 'Thermal Opportunity',
     scale: M_TO_FT,
     stops: [0, 1000, 2000, 5000, 10000],
     colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'Usable top (1.0 m/s sink) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
+    legend: 'v2 Usable top (1.0 m/s sink, bounded by resolved top) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
     format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
   },
   hcritWxtoflyM: {
     id: 'hcritWxtoflyM',
-    label: 'WxToFly Hcrit (225 ft/min = 1.14 m/s sink) · ft MSL',
+    label: 'Lift top at 225 ft/min · ft MSL',
     group: 'Thermal Opportunity',
     scale: M_TO_FT,
     stops: [0, 1000, 2000, 5000, 10000],
     colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'WxToFly Hcrit (225 ft/min sink) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
+    legend: 'WxToFly Hcrit (225 ft/min sink, bounded by resolved top) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
     format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
   },
   dryHcritM: {
     id: 'dryHcritM',
-    label: 'Dry Hcrit (unclipped by cloud base) · ft MSL',
+    label: 'Dry thermal lift top · ft MSL',
     group: 'Thermal Opportunity',
     scale: M_TO_FT,
     stops: [0, 1000, 2000, 5000, 10000],
     colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'Dry Hcrit ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
+    legend: 'Dry Hcrit (v2) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
     format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
   },
   resolvedThermalTopM: {
     id: 'resolvedThermalTopM',
-    label: 'Resolved thermal top (v2 sub-925 hPa) · ft MSL',
+    label: 'Thermal top · ft MSL',
     group: 'Thermal Opportunity',
     scale: M_TO_FT,
     stops: [0, 1500, 3000, 6000, 10000],
@@ -173,9 +206,29 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
     legend: 'Resolved thermal top (v2) ft MSL: 0 pale blue · 3,000 teal · 6,000 gold · 10,000+ red',
     format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
   },
+  thermalVelocityMps: {
+    id: 'thermalVelocityMps',
+    label: 'Earlier thermal strength estimate · m/s',
+    group: 'Thermal Opportunity',
+    scale: 1,
+    stops: [0, 0.5, 1, 2, 3],
+    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
+    legend: 'Baseline v1 W* m/s: 0 ◻ · 0.5 pale blue (100 fpm) · 1.0 teal (200 fpm) · 2.0 gold (400 fpm) · 3.0+ red',
+    format: v => `${v.toFixed(2)} m/s (${Math.round(v * MPS_TO_FPM)} ft/min)`,
+  },
+  usableLiftTopM: {
+    id: 'usableLiftTopM',
+    label: 'Earlier lift top estimate · ft MSL',
+    group: 'Thermal Opportunity',
+    scale: M_TO_FT,
+    stops: [0, 1000, 2000, 5000, 10000],
+    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
+    legend: 'Baseline v1 usable top (1.0 m/s sink) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
+    format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
+  },
   boundaryLayerTopM: {
     id: 'boundaryLayerTopM',
-    label: 'Baseline parcel top (v1) · ft MSL',
+    label: 'Earlier parcel top estimate · ft MSL',
     group: 'Thermal Opportunity',
     scale: M_TO_FT,
     stops: [0, 1500, 3000, 6000, 10000],
@@ -185,7 +238,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   pblHeightM: {
     id: 'pblHeightM',
-    label: 'HRRR model PBL depth (HPBL) · m AGL',
+    label: 'Mixing depth · m AGL',
     group: 'Thermal Opportunity',
     scale: 1,
     stops: [0, 250, 500, 1000, 2000],
@@ -195,7 +248,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   sensibleHeatFluxWm2: {
     id: 'sensibleHeatFluxWm2',
-    label: 'Surface sensible heating · W/m²',
+    label: 'Surface heating · W/m²',
     group: 'Thermal Opportunity',
     scale: 1,
     stops: [-30, 0, 50, 150, 300],
@@ -205,7 +258,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   surfaceLclM: {
     id: 'surfaceLclM',
-    label: 'Cu cloud base (Surface LCL / zsfclcl) · ft MSL',
+    label: 'Potential cloud base · ft MSL',
     group: 'Clouds & Precipitation',
     scale: M_TO_FT,
     stops: [500, 2000, 4000, 7000, 11000],
@@ -215,7 +268,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   mixedLayerLclM: {
     id: 'mixedLayerLclM',
-    label: 'Mixed-layer LCL (zblcl) · ft MSL',
+    label: 'Mixed-layer cloud base · ft MSL',
     group: 'Clouds & Precipitation',
     scale: M_TO_FT,
     stops: [500, 2000, 4000, 7000, 11000],
@@ -225,7 +278,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   cuPotentialM: {
     id: 'cuPotentialM',
-    label: 'Cumulus potential (zsfclcldif) · m',
+    label: 'Cumulus potential · m',
     group: 'Clouds & Precipitation',
     scale: 1,
     stops: [-1500, -500, 0, 300, 1000],
@@ -235,7 +288,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   odPotentialM: {
     id: 'odPotentialM',
-    label: 'Overcast-development potential (zblcldif) · m',
+    label: 'Overcast potential · m',
     group: 'Clouds & Precipitation',
     scale: 1,
     stops: [-1500, -500, 0, 300, 1000],
@@ -245,7 +298,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   cloudCoverPercent: {
     id: 'cloudCoverPercent',
-    label: 'Total cloud cover · %',
+    label: 'Cloud cover · %',
     group: 'Clouds & Precipitation',
     scale: 1,
     stops: [0, 25, 50, 75, 100],
@@ -265,7 +318,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   precipitationMmHr: {
     id: 'precipitationMmHr',
-    label: 'Hourly rain rate · mm/hr',
+    label: 'Rain · mm/hr',
     group: 'Clouds & Precipitation',
     scale: 1,
     stops: [0, 0.2, 1, 3, 8],
@@ -275,7 +328,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   capeJkg: {
     id: 'capeJkg',
-    label: 'Surface CAPE · J/kg',
+    label: 'Convective energy (CAPE) · J/kg',
     group: 'Clouds & Precipitation',
     scale: 1,
     stops: [0, 50, 200, 500, 1000],
@@ -285,7 +338,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   wind10mSpeedMps: {
     id: 'wind10mSpeedMps',
-    label: '10 m surface wind · mph (m/s)',
+    label: 'Surface wind · mph',
     group: 'Winds & Shear',
     scale: MPS_TO_MPH,
     stops: [0, 5, 12, 20, 30],
@@ -295,7 +348,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   blMeanWindSpeedMps: {
     id: 'blMeanWindSpeedMps',
-    label: 'Boundary-layer mean wind (blwind) · mph (m/s)',
+    label: 'Average boundary-layer wind · mph',
     group: 'Winds & Shear',
     scale: MPS_TO_MPH,
     stops: [0, 5, 12, 20, 30],
@@ -305,7 +358,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   blWindShearMps: {
     id: 'blWindShearMps',
-    label: 'Boundary-layer vector wind shear · m/s',
+    label: 'Wind shear · m/s',
     group: 'Winds & Shear',
     scale: 1,
     stops: [0, 2, 4, 7, 12],
@@ -315,7 +368,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   buoyancyShearRatio: {
     id: 'buoyancyShearRatio',
-    label: 'Buoyancy / Shear ratio (W* / ΔV)',
+    label: 'Thermal strength / wind shear',
     group: 'Winds & Shear',
     scale: 1,
     stops: [0, 0.15, 0.35, 0.7, 1.2],
@@ -325,7 +378,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   w925Mps: {
     id: 'w925Mps',
-    label: '925 hPa vertical velocity w · m/s',
+    label: 'Rising air at 925 hPa · m/s',
     group: 'Lift & Convergence',
     scale: 1,
     stops: [-0.3, -0.1, 0, 0.1, 0.3],
@@ -335,7 +388,7 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
   convergence10mX1e5: {
     id: 'convergence10mX1e5',
-    label: '10 m horizontal convergence (−∇·V) · ×10⁻⁵ s⁻¹',
+    label: 'Surface convergence · ×10⁻⁵ s⁻¹',
     group: 'Lift & Convergence',
     scale: 1,
     stops: [-100, -30, 0, 30, 100],
@@ -345,24 +398,42 @@ export const LAYER_SPECS: Record<Layer, LayerSpec> = {
   },
 };
 
+export const PRIMARY_LAYERS: Layer[] = [
+  'thermalVelocityV2Mps', 'usableLiftTopV2M', 'surfaceLclM',
+  'wind10mSpeedMps', 'blMeanWindSpeedMps', 'cloudCoverPercent',
+  'lowCloudPercent', 'precipitationMmHr', 'convergence10mX1e5',
+];
+
+export const SUPPORTED_CASES = new Set([
+  'north-sound-20261021-00z',
+  'north-sound-expanded-v2',
+  'shenandoah-blue-ridge-20261021-00z',
+  'shenandoah-massanutten-20261021-06z',
+  'tiger-puget-trough-20261021-06z',
+  'columbia-gorge-gap-flow-20261021-06z',
+  'rogue-valley-woodrat-20261021-06z',
+  'intermountain-idaho-utah-v2',
+]);
+
 export function replayLocation(search: string, dataBase: string) {
   const query = new URLSearchParams(search), caseId = query.get('case') ?? DEFAULT_CASE;
-  if (caseId !== DEFAULT_CASE) throw new Error(`Unknown replay case: ${caseId}`);
+  if (!SUPPORTED_CASES.has(caseId)) throw new Error(`Unknown replay case: ${caseId}`);
   const hour = Number(query.get('hour') ?? 20);
   return {
     caseId,
-    hour: Number.isInteger(hour) && hour >= 14 && hour <= 27 ? hour : 20,
+    hour: Number.isInteger(hour) && hour >= 1 && hour <= 48 ? hour : 20,
     root: `${dataBase.replace(/\/$/, '')}/soaring/v1/${caseId}`,
   };
 }
 
 export function hourIndex(hours: { forecastHour: number }[], requested: number) {
   const found = hours.findIndex(h => h.forecastHour === requested);
-  return found < 0 ? 0 : found;
+  if (found >= 0) return found;
+  return hours.length > 6 ? 6 : 0;
 }
 
 export function historicalLabel(referenceTime: string) {
-  return `Historical HRRR · initialized ${referenceTime.slice(0, 10)} at ${referenceTime.slice(11, 16)} UTC`;
+  return `Historical forecast · HRRR ${referenceTime.slice(0, 10)} · ${referenceTime.slice(11, 16)} UTC`;
 }
 
 export function localTime(validAt: string, timeZone: string) {
@@ -380,25 +451,29 @@ export function displayMetric(value: number | null | undefined, layer: Layer, st
   if (status === 'missing') return 'Unavailable';
   if (status === 'insufficient-levels') return 'Insufficient vertical coverage';
   if (value === null || value === undefined) {
-    if (layer === 'usableLiftTopM') return 'No lift above 1.0 m/s threshold';
+    if (layer === 'usableLiftTopM' || layer === 'usableLiftTopV2M') return 'No lift above 1.0 m/s threshold';
     if (layer === 'hcritWxtoflyM') return 'No lift above 225 ft/min (1.14 m/s)';
     if (layer === 'resolvedThermalTopM') return 'Stable / no convective thermal top';
     return 'Unavailable';
   }
-  if (layer === 'thermalVelocityMps') return `${value.toFixed(2)} m/s`;
-  if (layer === 'usableLiftTopM') return `${Math.round(value * M_TO_FT).toLocaleString('en-US')} ft MSL`;
+  if (layer === 'thermalVelocityMps' || layer === 'thermalVelocityV2Mps') return `${value.toFixed(2)} m/s`;
+  if (layer === 'usableLiftTopM' || layer === 'usableLiftTopV2M') return `${Math.round(value * M_TO_FT).toLocaleString('en-US')} ft MSL`;
   return LAYER_SPECS[layer]?.format(value) ?? String(value);
 }
 
 export function selectedState(manifest: ReplayManifest, hours: ReplayHour[], requested: number) {
   const index = hourIndex(manifest.hours, requested), hour = hours[index];
   if (!hour || hour.validAt !== manifest.hours[index].validAt) throw new Error('Replay hour does not match manifest');
+  const v2Strength = hour.thermalVelocityV2Mps ? hour.thermalVelocityV2Mps[manifest.siteCell] : hour.thermalVelocityMps[manifest.siteCell];
+  const v2Top = hour.usableLiftTopV2M ? hour.usableLiftTopV2M[manifest.siteCell] : hour.usableLiftTopM[manifest.siteCell];
   return {
     index,
     hour,
     validLabel: localTime(hour.validAt, manifest.case.site.timeZone),
     siteStrength: displayMetric(hour.thermalVelocityMps[manifest.siteCell], 'thermalVelocityMps', hour.status[manifest.siteCell]),
     siteTop: displayMetric(hour.usableLiftTopM[manifest.siteCell], 'usableLiftTopM', hour.status[manifest.siteCell]),
+    siteStrengthV2: displayMetric(v2Strength, 'thermalVelocityV2Mps', hour.status[manifest.siteCell]),
+    siteTopV2: displayMetric(v2Top, 'usableLiftTopV2M', hour.status[manifest.siteCell]),
   };
 }
 
@@ -420,7 +495,7 @@ export function buildCellSiteForecast(
   const siteHours: SiteForecast['hours'] = [];
   for (const h of hours) {
     if (h.status[cellIndex] !== 'valid') return null;
-    const levels: SiteForecast['hours'][number]['levels'] = [];
+    const levels: (SiteForecast['hours'][number]['levels'][number] & { heightM: number })[] = [];
     if (h.levelsByPressure) {
       for (const p of pList) {
         const la = h.levelsByPressure[String(p)];
@@ -428,7 +503,7 @@ export function buildCellSiteForecast(
         const hm = la.h[cellIndex], tc = la.t[cellIndex], tdc = la.td[cellIndex], ws = la.ws[cellIndex], wd = la.wd[cellIndex];
         if (hm == null || tc == null || tdc == null || ws == null || wd == null) continue;
         if (hm <= elev + 20) continue;
-        const lv: SiteForecast['hours'][number]['levels'][number] = {
+        const lv: (typeof levels)[number] = {
           pressureHpa: p,
           heightM: hm,
           temperatureC: tc,

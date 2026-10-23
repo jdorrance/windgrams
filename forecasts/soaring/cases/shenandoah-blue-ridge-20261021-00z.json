@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "shenandoah-blue-ridge-20261021-00z",
+  "referenceTime": "2026-10-21T00:00:00Z",
+  "forecastHours": [
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27
+  ],
+  "bbox": [
+    -80.1,
+    37.5,
+    -78.0,
+    39.0
+  ],
+  "site": {
+    "slug": "va-woodstock",
+    "name": "Woodstock",
+    "latitude": 38.8706,
+    "longitude": -78.45,
+    "timeZone": "America/New_York"
+  },
+  "launchElevation": {
+    "source": "glo30",
+    "elevationM": 594.9
+  },
+  "launchElevationCapturedAt": "2026-10-21T07:36:10Z",
+  "pressureLevels": [
+    925,
+    900,
+    875,
+    850,
+    800,
+    750,
+    700,
+    650,
+    600
+  ],
+  "terrainForecastHour": 1,
+  "sinkMps": 1.0,
+  "minimumAboveGroundLevels": 3
+}

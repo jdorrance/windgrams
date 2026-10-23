@@ -1,9 +1,10 @@
-// Phase 0: Provider field inventory, DrJack / WxToFly parameter equivalence matrix,
-// and feed lifecycle audit (NAM -> RRFS November 3, 2026 transition & HRDPS-West fall 2027 sunset).
+// Provider field inventory, DrJack / WxToFly parameter equivalence matrix (v2.0.0),
+// complete-run availability table (Feedback 7), and feed lifecycle audit.
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FEED_AVAILABILITY_SPECS, REGIONAL_FRESHNESS_DEADLINES } from '../scripts/check-readiness.mjs';
 
 export const DRJACK_WXTOFLY_COMPARISON = [
   {
@@ -11,36 +12,36 @@ export const DRJACK_WXTOFLY_COMPARISON = [
     drjackId: 'wstar',
     wxtoflyUnit: 'ft/min (and kt/m·s⁻¹)',
     windgramsV1Field: 'derived.thermalVelocityMps',
-    windgramsV2Field: 'thermalVelocityMps / wstarFpm',
-    status: 'derived-equivalent',
-    notes: 'Deardorff convective velocity scale driven by surface virtual heat flux (SHTFL + 0.61·cp/Lv·T·LHTFL) and convective boundary-layer depth. W* is an air-motion scale, not net glider climb rate.'
+    windgramsV2Field: 'thermalVelocityV2Mps',
+    status: 'audited-consistent-in-v2',
+    notes: 'Deardorff convective velocity scale driven by surface virtual heat flux (SHTFL + 0.61·cp/Lv·T·LHTFL) and resolvedDepthM (resolvedThermalTopM - terrainM). Fixes v1/v2 hybrid depth mismatch.'
   },
   {
     parameter: 'Boundary-layer top / thermal top',
     drjackId: 'hbl',
     wxtoflyUnit: 'ft MSL',
     windgramsV1Field: 'derived.boundaryLayerTopM & surface.pblHeightM',
-    windgramsV2Field: 'parcelThermalTopM / hrrrPblTopM / resolvedThermalTopM',
+    windgramsV2Field: 'resolvedThermalTopM / boundaryLayerTopM / pblHeightM',
     status: 'separated-in-v2',
-    notes: 'DrJack uses WRF MYJ/YSU turbulence PBL top (or TI=0 parcel top). Windgrams v1 used dry parcel crossing with an index===0 jump to the first sampled level (925 hPa) when stable. Windgrams v2 keeps HRRR HPBL (m MSL/AGL), v1 parcel top, and sub-first-level interpolated parcel top distinct.'
+    notes: 'v1 used dry parcel crossing with an index===0 jump to 925 hPa when stable. v2 resolves shallow convective boundary layers using HPBL and couples all v2 lift diagnostics to resolvedThermalTopM.'
   },
   {
     parameter: 'Height of critical updraft strength (Hcrit)',
     drjackId: 'experimental1 / hglider',
     wxtoflyUnit: 'ft MSL (225 ft/min = 1.143 m/s sink)',
     windgramsV1Field: 'derived.usableLiftTopM (1.0 m/s sink)',
-    windgramsV2Field: 'usableLiftTopM (1.0 m/s) & hcritWxtoflyM (1.143 m/s / 225 fpm) & hgliderM',
-    status: 'matched-in-v2',
-    notes: 'WxToFly windgram explanation specifies 225 ft/min (1.143 m/s) minimum updraft threshold; Windgrams v1 uses 1.0 m/s (197 ft/min). Both thresholds and cloud/inversion caps are explicitly computed in v2.'
+    windgramsV2Field: 'usableLiftTopV2M (1.0 m/s) & hcritWxtoflyM (1.143 m/s / 225 fpm) & dryHcritM',
+    status: 'audited-bounded-in-v2',
+    notes: 'Evaluated using resolvedThermalTopM and thermalVelocityV2Mps so hcritWxtoflyM <= usableLiftTopV2M <= dryHcritM <= resolvedThermalTopM holds strictly by construction.'
   },
   {
     parameter: 'Cu cloud base (Surface LCL)',
     drjackId: 'zsfclcl',
     wxtoflyUnit: 'ft MSL',
     windgramsV1Field: 'derived.cloudBaseM (combined min of sfc LCL and first ΔTd<=0.5°C layer)',
-    windgramsV2Field: 'surfaceLclM / cloudBaseM / firstSaturatedLayerM',
+    windgramsV2Field: 'surfaceLclM / cloudBaseM',
     status: 'separated-in-v2',
-    notes: 'v1 combined Bolton surface LCL with the first near-saturated pressure level. v2 preserves surface LCL (zsfclcl), mixed-layer LCL (zblcl), and explicit saturated cloud base separately.'
+    notes: 'Bolton (1980) surface parcel LCL in meters MSL. Also supported on ECMWF and NWS surface adapters.'
   },
   {
     parameter: 'Cu potential (zsfclcldif)',
@@ -57,8 +58,8 @@ export const DRJACK_WXTOFLY_COMPARISON = [
     wxtoflyUnit: 'ft MSL / ft',
     windgramsV1Field: null,
     windgramsV2Field: 'mixedLayerLclM / odPotentialM',
-    status: 'added-in-v2',
-    notes: 'Computed from boundary-layer mean potential temperature and mixing ratio across sampled BL levels. Positive zblcldif indicates overcast-development / stratocumulus spreadout potential.'
+    status: 'audited-physical-in-v2',
+    notes: 'Computed from boundary-layer mean potential temperature θ and water-vapor mixing ratio r referenced to surface pressure and lifted via Bolton LCL (unexplained 0.85 multiplier removed).'
   },
   {
     parameter: 'Boundary-layer average wind',
@@ -67,7 +68,7 @@ export const DRJACK_WXTOFLY_COMPARISON = [
     windgramsV1Field: null,
     windgramsV2Field: 'blMeanWindSpeedMps / blMeanWindDirDeg',
     status: 'added-in-v2',
-    notes: 'Thickness-weighted vector average of Earth-rotated (u, v) from 10 m surface wind through the boundary-layer top.'
+    notes: 'Vector average of Earth-rotated (u, v) from 10 m surface wind (and 80 m wind when present) through resolvedThermalTopM.'
   },
   {
     parameter: 'Wind at BL top & BL vertical wind shear',
@@ -76,30 +77,32 @@ export const DRJACK_WXTOFLY_COMPARISON = [
     windgramsV1Field: null,
     windgramsV2Field: 'blTopWindSpeedMps / blTopWindDirDeg / blWindShearMps / buoyancyShearRatio',
     status: 'added-in-v2',
-    notes: 'Vector wind difference between 10 m and BL top, plus DrJack Buoyancy/Shear ratio W* / |ΔV_BL|.'
+    notes: 'Vector wind difference between 10 m and resolvedThermalTopM, plus Buoyancy/Shear ratio coupled to thermalVelocityV2Mps.'
   },
   {
     parameter: 'Geometric vertical velocity & BL max up/down motion',
     drjackId: 'wblmaxmin / press850..600',
     wxtoflyUnit: 'cm/s or ft/min',
     windgramsV1Field: 'levels[].verticalVelocityPaS (raw omega, Pa/s)',
-    windgramsV2Field: 'maxUpwardVelocityMps / minDownwardVelocityMps / levels[].geometricWMps',
+    windgramsV2Field: 'maxUpwardVelocityMps / minDownwardVelocityMps / w925Mps / w850Mps',
     status: 'converted-in-v2',
-    notes: 'Converts pressure vertical velocity ω (Pa/s) to geometric w = -ω / (ρ·g) using local pressure and virtual/dry air density ρ = p/(Rd·T). Flagged as sparse 9-level pressure extremum.'
+    notes: 'Converts pressure vertical velocity ω (Pa/s) to geometric w = -ω / (ρ·g) using local pressure and dry air density ρ = p/(Rd·T).'
   },
   {
     parameter: 'Horizontal convergence on native grid',
     drjackId: 'wblmaxmin / convergence',
     wxtoflyUnit: '×10⁻⁵ s⁻¹',
     windgramsV1Field: null,
-    windgramsV2Field: 'convergencePerSec (native Lambert centered finite difference -∇·V)',
+    windgramsV2Field: 'convergence10mX1e5 / convergence925X1e5',
     status: 'added-in-v2',
-    notes: 'Computed directly on the native 3 km Lambert conformal grid using grid-relative (u_grid, v_grid) and map scale factor before reprojection.'
+    notes: 'Computed directly on the native 3 km Lambert conformal grid using centered finite differences before reprojection.'
   }
 ];
 
 export const FEED_LIFECYCLE_AUDIT = {
-  auditedAt: '2026-10-22T00:00:00Z',
+  auditedAt: '2026-10-22T12:00:00Z',
+  completeRunAvailabilitySpecs: FEED_AVAILABILITY_SPECS,
+  regionalFreshnessDeadlines: REGIONAL_FRESHNESS_DEADLINES,
   findings: [
     {
       slug: 'nam',
@@ -149,6 +152,7 @@ export function parseHrrrIdxInventory(idxText) {
     totalRecordsInWrfprs: records.length,
     availablePressureLevelsHpa: pressureLevelsHpa,
     ingestedV1PressureLevelsHpa: [925, 900, 875, 850, 800, 750, 700, 650, 600],
+    expandedV2PressureLevelsHpa: [1000, 975, 950, 925, 900, 875, 850, 825, 800, 775, 750, 700, 650, 600, 550, 500, 450, 400],
     unharvestedLowPressureLevelsHpa: lowLevelSub925Hpa,
     has80mWind: records.some(r => r.variable === 'UGRD' && r.level === '80 m above ground'),
     explicitCloudAndStabilityFields

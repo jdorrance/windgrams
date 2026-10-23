@@ -106,6 +106,18 @@ export function createClient({ fetchImpl = globalThis.fetch, retryDelayMs = 2000
 
 const round = (value, digits) => (value === null || value === undefined || Number.isNaN(value) ? null : Number(value.toFixed(digits)));
 
+const DRY_ADIABATIC_LAPSE_C_PER_M = 0.0098;
+function computeSurfaceLclM(temperatureC, dewPointC, elevationM) {
+  if (typeof temperatureC !== "number" || typeof dewPointC !== "number" || typeof elevationM !== "number") return null;
+  if (!Number.isFinite(temperatureC) || !Number.isFinite(dewPointC) || !Number.isFinite(elevationM)) return null;
+  if (dewPointC >= temperatureC) return round(elevationM, 1);
+  const tk = temperatureC + 273.15;
+  const tdk = dewPointC + 273.15;
+  const tlcl = 1 / (1 / (tdk - 56) + Math.log(tk / tdk) / 800) + 56;
+  const aglM = Math.max(0, (tk - tlcl) / DRY_ADIABATIC_LAPSE_C_PER_M);
+  return round(elevationM + aglM, 1);
+}
+
 /** Reads one Open-Meteo response into { times (ms), columns: field -> values }, checking units. */
 export function readResponse(response, fields, { label, warn = () => {} }) {
   if (!response?.hourly || !Array.isArray(response.hourly.time)) throw new Error(`${label}: the response has no hourly data`);
@@ -139,6 +151,9 @@ export function runFromMeta(meta) {
 /**
  * Builds a launch's document from the two responses (aloft may be null when
  * that request failed). Hours run from the current hour for DAYS days.
+ * Supported soaring diagnostics (`surfaceLclM`, `modelBlTopM`) are derived,
+ * while unsupported flux/profile diagnostics (`thermalVelocityV2Mps`, `usableLiftTopV2M`)
+ * are kept explicitly `null`.
  */
 export function buildSiteDocument({ site, surface, aloft, runs = {}, now = Date.now(), warn = () => {} }) {
   const s = readResponse(surface, SURFACE_FIELDS, { label: `${site.slug} ${SURFACE_MODEL}`, warn });
@@ -153,6 +168,7 @@ export function buildSiteDocument({ site, surface, aloft, runs = {}, now = Date.
   const aloftIndex = new Map((a?.times ?? []).map((t, i) => [t, i]));
   const start = Math.floor(now / HOUR) * HOUR;
   const end = start + DAYS * 24 * HOUR;
+  const gridElevationM = typeof surface.elevation === "number" && Number.isFinite(surface.elevation) ? surface.elevation : null;
   const hours = [];
   s.times.forEach((t, i) => {
     if (t < start || t > end) return;
@@ -162,6 +178,21 @@ export function buildSiteDocument({ site, surface, aloft, runs = {}, now = Date.
     for (const field of Object.keys(ALOFT_FIELDS)) row[field] = j === undefined ? null : a.columns[field][j];
     // Open-Meteo pads hours past a model's horizon with nulls: skip hours with no core data.
     if (row.windSpeedMps === null && row.boundaryLayerHeightM === null && row.cloudCoverPct === null) return;
+    row.soaring = {
+      contractVersion: "2.0.0",
+      modelKind: "surface-or-sparse-adapter",
+      surfaceLclM: gridElevationM === null ? null : computeSurfaceLclM(row.temperatureC, row.dewPointC, gridElevationM),
+      modelBlTopM: gridElevationM !== null && typeof row.boundaryLayerHeightM === "number" ? round(gridElevationM + row.boundaryLayerHeightM, 1) : null,
+      blMeanWindSpeedMps: null,
+      blMeanWindDirDeg: null,
+      thermalVelocityV2Mps: null,
+      usableLiftTopV2M: null,
+      hcritWxtoflyM: null,
+      dryHcritM: null,
+      mixedLayerLclM: null,
+      unsupportedDiagnostics: ["thermalVelocityV2Mps", "usableLiftTopV2M", "hcritWxtoflyM", "dryHcritM", "mixedLayerLclM"],
+      unsupportedReason: "ECMWF Open-Meteo feed lacks surface sensible/latent heat fluxes and dense vertical thermodynamic levels.",
+    };
     hours.push(row);
   });
   if (hours.length === 0) throw new Error(`${site.slug}: ECMWF returned no forecast hours from now on`);
@@ -169,6 +200,15 @@ export function buildSiteDocument({ site, surface, aloft, runs = {}, now = Date.
     schemaVersion: SCHEMA_VERSION,
     source: SOURCE,
     generatedAt: new Date(now).toISOString().replace(/\.\d{3}Z$/, "Z"),
+    soaringMeta: {
+      contractVersion: "2.0.0",
+      model: "ecmwf",
+      modelKind: "surface-or-sparse-adapter",
+      supportedDiagnostics: ["surfaceLclM", "modelBlTopM"],
+      unsupportedDiagnostics: ["thermalVelocityV2Mps", "usableLiftTopV2M", "hcritWxtoflyM", "dryHcritM", "mixedLayerLclM"],
+      unsupportedReason: "ECMWF Open-Meteo feed lacks surface sensible/latent heat fluxes and dense vertical thermodynamic levels.",
+      synthesizedLevels: 0,
+    },
     models: {
       surface: { id: SURFACE_MODEL, label: "ECMWF IFS 9 km", run: runs.surface ?? null },
       aloft: { id: ALOFT_MODEL, label: "ECMWF IFS 0.25°", run: runs.aloft ?? null },
@@ -181,7 +221,7 @@ export function buildSiteDocument({ site, surface, aloft, runs = {}, now = Date.
       timeZone: site.timeZone,
       gridLatitude: surface.latitude ?? null,
       gridLongitude: surface.longitude ?? null,
-      gridElevationM: surface.elevation ?? null,
+      gridElevationM,
     },
     units: UNITS,
     hours,

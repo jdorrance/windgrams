@@ -131,7 +131,7 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
   for (const barb of view.barbs) {
     const geometry = barbPaths(barb.speedKt, barb.directionDeg);
     const color = barb.speedKt < 6 ? "#c8ffc8" : barb.speedKt < 9 ? "#78ff78" : "#ffffff";
-    const title = `${barb.speedKt.toFixed(1)} kt from ${degrees(barb.directionDeg)} · ${feet(barb.heightM)} ft · ${barb.interpolated ? "interpolated" : "native model level"}`;
+    const title = `${barb.speedKt.toFixed(1)} kt from ${degrees(barb.directionDeg)} · ${feet(barb.heightM)} ft · ${barb.interpolated ? "estimated between forecast levels" : "forecast level"}`;
     const shape = geometry.calm ? '<circle r="3" class="wg-barb"/>' : `<path d="${geometry.staff}" class="wg-barb-rim"/><path d="${geometry.staff}" class="wg-barb"/>${geometry.flags.map((flag) => `<path d="${flag}" class="wg-barb"${flag.endsWith("Z") ? ' style="fill:currentColor"' : ""}/>`).join("")}`;
     parts.push(`<g transform="translate(${fmt(barb.x)} ${fmt(barb.y)})" style="color:${color}" class="${barb.interpolated ? "wg-barb-interpolated" : "wg-barb-native"}" data-wind-source="${barb.interpolated ? "interpolated" : "native"}"><title>${escape(title)}</title>${shape}</g>`);
   }
@@ -215,7 +215,7 @@ export function renderWindgramKey(): string {
   const wind = icon('<path d="M9 21L9 3M9 3L20 7M9 8L15 10" fill="none" stroke="#355963" stroke-width="1.4"/>');
   const freezing = icon('<path d="M1 12H34" stroke="#237d92" stroke-width="1.5" stroke-dasharray="5 3"/><circle cx="17" cy="12" r="2.5" fill="#fff" stroke="#237d92"/>');
   const lift = icon(`<path d="${WING_PATH}" transform="translate(17 12) scale(.7)" fill="none" stroke="#134ac4" stroke-width="1.8"/>`);
-  return `<div class="windgram-legend"><div class="windgram-legend-ramp"><strong>Lapse rate · °C / 1,000 ft</strong>${STABILITY.map(([, color, range]) => `<span class="windgram-legend-chip" style="--chip:${color}">${range}</span>`).join("")}</div><div class="windgram-legend-symbols"><span>${wind}Wind · half 5 / full 10 / flag 50 kt</span><span>${cloud}Model / humidity cloud</span><span>${potential}Potential cumulus</span><span>${freezing}32°F freezing level</span><span>${lift}Usable lift top</span></div><p class="windgram-legend-note">Color shows stability, not flight suitability. Red/orange: fastest cooling with height. Gray: inversion. Hatching: unavailable profile. Cyan dots: lowest freezing crossing. Wind colors: pale green &lt;6 kt, green 6–9 kt, white ≥9 kt. Fainter barbs interpolate between model levels. Filled clouds need model cloud or humidity evidence; outlined clouds indicate potential only. All heights are above sea level.</p></div>`;
+  return `<div class="windgram-legend"><div class="windgram-legend-ramp"><strong>Lapse rate · °C / 1,000 ft</strong>${STABILITY.map(([, color, range]) => `<span class="windgram-legend-chip" style="--chip:${color}">${range}</span>`).join("")}</div><div class="windgram-legend-symbols"><span>${wind}Wind · half 5 / full 10 / flag 50 kt</span><span>${cloud}Cloud layer</span><span>${potential}Potential cumulus</span><span>${freezing}32°F freezing level</span><span>${lift}Usable lift top</span></div><details class="windgram-legend-note"><summary>How to read this chart</summary><p>Color shows stability, not flight suitability. Red/orange: fastest cooling with height. Gray: inversion. Hatching: unavailable profile. Cyan dots: lowest freezing crossing. Wind colors: pale green &lt;6 kt, green 6–9 kt, white ≥9 kt. Fainter barbs show display interpolation between native model levels (not additional vertical resolution). Filled clouds need model cloud or humidity evidence; outlined clouds indicate potential only. All heights are above sea level.</p></details></div>`;
 }
 
 /** Pointer and keyboard inspection stays in the same nonlinear height coordinates. */
@@ -255,7 +255,7 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement, 
     const title = `${when} · ${feet(reading.heightM)} ft (${Math.round(reading.heightM).toLocaleString("en-US")} m MSL)`;
     const values = [reading.temperatureF == null ? "Temperature unavailable" : `${reading.temperatureF.toFixed(1)}°F`,
       reading.speedKt == null ? "Wind unavailable" : reading.speedKt < .1 ? "Calm" : `${reading.speedKt.toFixed(1)} kt${reading.directionDeg == null ? "" : ` from ${degrees(reading.directionDeg)}`}`,
-      reading.speedKt == null ? null : reading.interpolated ? "Interpolated between model levels" : "Native model level",
+      reading.speedKt == null ? null : reading.interpolated ? "Estimated between forecast levels" : "Forecast level",
       reading.gustKt == null ? null : `Surface gust ${Math.round(reading.gustKt)} kt`,
       reading.cloud === "model" ? "Model cloud layer" : reading.cloud === "humidity" ? "Cloud inferred from humidity >95%" : reading.cloud === "potential" ? "Potential cumulus, not confirmed cloud" : null,
       view.ensemble ? "Ensemble median" : null].filter((value): value is string => value !== null);

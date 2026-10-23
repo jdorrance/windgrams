@@ -36,6 +36,7 @@ export interface WindgramView {
   diagnostics: readonly MetricStrip[]; diagnosticLeft: number;
   sampling: readonly HourSampling[]; selectedHourIndex: number;
   ensemble: boolean; sourceNote: string | null;
+  displayInterpolationNote: string;
 }
 export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "launch" | "launchWindows" | "capabilities" | "widthPx">;
 export interface WindgramReading {
@@ -327,6 +328,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const view: WindgramView = {
     width: left + plotWidth + right, height: bottom + 86, left, top, plotWidth, plotHeight, bottom, columnWidth, floorM, topM,
     timeZone: options.timeZone, anchors, sampling, ensemble, sourceNote: scene.smokeSource ? `Smoke: ${scene.smokeSource.model} · run ${scene.smokeSource.referenceTime}` : null,
+    displayInterpolationNote: "Contours, lapse-rate bands, and intermediate wind barbs use linear display interpolation between captured model levels and do not add vertical resolution or resolve sub-grid inversions.",
     hours: hours.map((h, i) => {
       const temp = scalar(h.surface.temperatureC), gust = scalar(h.surface.windGustMps), direction = scalar(h.surface.windDirectionDeg);
       const arcs = options.launchWindows;

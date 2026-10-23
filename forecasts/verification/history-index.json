@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "archivedRuns": [
     {
       "model": "hrrr-conus",
@@ -37,5 +37,11 @@
       "referenceTime": "2026-10-21T00:00:00Z",
       "archivedNorthSoundSites": 6
     }
-  ]
+  ],
+  "retentionPolicy": {
+    "maxRollingRuns": 120,
+    "cyclesPerDay": 4,
+    "retainedDaysCapacity": 30,
+    "prospectiveGateDaysRequired": 30
+  }
 }

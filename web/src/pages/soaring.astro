@@ -1,188 +1,154 @@
 ---
 import Base from '../layouts/Base.astro';
+import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
 ---
-<Base title="North Sound soaring forecast & replay">
+<Base title="Soaring forecast">
   <div class="soaring-page">
-    <p class="eyebrow">REGIONAL SOARING · NORTH SOUND</p>
-    <h1>Lift across the landscape</h1>
-    <p class="intro">Native 3 km HRRR grid cells, WxToFly/DrJack v2 soaring diagnostics, arbitrary-point soundings, cross-sections, and multi-model reality checks across North Sound.</p>
-    <p id="replay-run" class="run-label">Historical HRRR · October 21, 2026 · 00 UTC</p>
-    <p id="replay-status" role="status">Loading the locally captured replay…</p>
+    <h1>Soaring forecast</h1>
+    <p id="replay-run" class="run-label">Historical forecast · October 21, 2026</p>
+    <p id="replay-status" role="status">Loading forecast…</p>
     <div id="replay-content" hidden>
       <div class="replay-controls">
         <div class="control-row">
-          <label>Map layer
+          <label>Region
+            <select id="replay-region-select">
+              <option value="north-sound">North Sound & Olympic Peninsula, WA</option>
+            </select>
+          </label>
+          <label>Show
             <select id="replay-layer">
-              <optgroup label="Thermal Opportunity">
-                <option value="thermalVelocityMps">Thermal strength W* · m/s (ft/min)</option>
-                <option value="usableLiftTopM">Usable-lift top (1.0 m/s sink) · ft MSL</option>
-                <option value="hcritWxtoflyM">WxToFly Hcrit (225 ft/min = 1.14 m/s) · ft MSL</option>
-                <option value="dryHcritM">Dry Hcrit (unclipped by cloud base) · ft MSL</option>
-                <option value="resolvedThermalTopM">Resolved thermal top (v2 sub-925 hPa) · ft MSL</option>
-                <option value="boundaryLayerTopM">Baseline parcel top (v1) · ft MSL</option>
-                <option value="pblHeightM">HRRR model PBL depth (HPBL) · m AGL</option>
-                <option value="sensibleHeatFluxWm2">Surface sensible heating · W/m²</option>
-              </optgroup>
-              <optgroup label="Winds & Shear">
-                <option value="wind10mSpeedMps">10 m surface wind · mph (m/s)</option>
-                <option value="blMeanWindSpeedMps">Boundary-layer mean wind (blwind) · mph</option>
-                <option value="blWindShearMps">BL vector wind shear · m/s</option>
-                <option value="buoyancyShearRatio">Buoyancy / Shear ratio (W* / ΔV)</option>
-              </optgroup>
-              <optgroup label="Clouds & Precipitation">
-                <option value="surfaceLclM">Cu cloud base (Surface LCL / zsfclcl) · ft MSL</option>
-                <option value="mixedLayerLclM">Mixed-layer LCL (zblcl) · ft MSL</option>
-                <option value="cuPotentialM">Cumulus potential (zsfclcldif) · m</option>
-                <option value="odPotentialM">Overcast-development potential (zblcldif) · m</option>
-                <option value="cloudCoverPercent">Total cloud cover · %</option>
-                <option value="lowCloudPercent">Low cloud cover · %</option>
-                <option value="precipitationMmHr">Hourly rain rate · mm/hr</option>
-                <option value="capeJkg">Surface CAPE · J/kg</option>
-              </optgroup>
-              <optgroup label="Lift & Convergence">
-                <option value="w925Mps">925 hPa vertical velocity w · m/s</option>
-                <option value="convergence10mX1e5">10 m horizontal convergence (−∇·V) · ×10⁻⁵ s⁻¹</option>
-              </optgroup>
+              {PRIMARY_LAYERS.map(id => <option value={id}>{LAYER_SPECS[id].label}</option>)}
             </select>
           </label>
-          <label>Jump to launch
+          <label>Launch
             <select id="replay-launch-select">
-              <option value="wa-blanchard">Blanchard (379 m)</option>
+              <option value="wa-blanchard">Blanchard</option>
             </select>
           </label>
-          <label class="checkbox-label"><input type="checkbox" id="toggle-barbs" checked /> Wind arrows</label>
         </div>
         <div class="hour-controls">
           <button id="replay-play" type="button" aria-label="Play hourly animation">▶ Play</button>
           <button id="replay-prev" type="button" aria-label="Previous hour">←</button>
-          <label for="replay-hour">Valid time <strong id="replay-valid"></strong></label>
+          <label for="replay-hour"><strong id="replay-valid"></strong></label>
           <button id="replay-next" type="button" aria-label="Next hour">→</button>
         </div>
         <input id="replay-hour" type="range" min="0" max="13" step="1" value="6" aria-label="Forecast hour" />
       </div>
+      <details class="map-options">
+        <summary>Map options</summary>
+        <div class="control-row">
+          <label class="checkbox-label"><input type="checkbox" id="toggle-barbs" checked /> Wind arrows</label>
+          <label class="checkbox-label"><input type="checkbox" id="additional-layers" /> Show additional map layers</label>
+        </div>
+        <p class="muted">Heights are above sea level unless marked AGL (above ground). Usable lift assumes a 1.0 m/s sink rate.</p>
+      </details>
 
       <div class="replay-layout">
-        <div>
-          <div id="soaring-map" aria-label="North Sound native HRRR lift grid"></div>
+        <div class="map-panel">
+          <div id="soaring-map" aria-label="Soaring forecast map"></div>
           <div id="replay-legend" class="map-legend"></div>
         </div>
         <aside class="cell-inspection">
-          <p class="eyebrow">SELECTED GRID CELL</p>
-          <h2 id="cell-title">Blanchard sample</h2>
-          <p id="cell-location" class="muted"></p>
+          <p class="eyebrow">SELECTED LOCATION</p>
+          <h2 id="cell-title">Blanchard</h2>
           <dl id="cell-values"></dl>
-          <p id="cell-quality"></p>
-          <button id="select-blanchard" type="button">Return to Blanchard cell</button>
-          <p class="muted">Click any cell or launch marker to update this readout, the windgram, and the Skew-T sounding below.</p>
+          <p id="cell-notice" class="muted" hidden></p>
+          <details class="cell-details">
+            <summary>More weather details</summary>
+            <p id="cell-location" class="muted"></p>
+            <dl id="cell-extra-values"></dl>
+            <p id="cell-quality" class="muted"></p>
+          </details>
+          <button id="select-blanchard" type="button">Back to Blanchard</button>
+          <p class="muted">Select a location on the map to see its forecast.</p>
         </aside>
       </div>
 
-      <div class="blanchard-stats">
-        <div><span>Blanchard · W*</span><strong id="site-strength"></strong></div>
-        <div><span>Blanchard · usable-lift top (1.0 m/s)</span><strong id="site-top"></strong></div>
-        <div><span>WxToFly Hcrit (225 ft/min)</span><strong id="site-hcrit-wx"></strong></div>
-        <div><span>Resolved top (v2) vs HPBL</span><strong id="site-resolved-pbl"></strong></div>
-      </div>
-
       <section aria-labelledby="launches-heading">
-        <h2 id="launches-heading">North Sound launch comparison at selected hour</h2>
-        <p class="muted">Click any launch row to inspect its grid cell, full 14-hour windgram, and Skew-T sounding. Compares v1 and v2 soaring diagnostics across the 6 North Sound sites.</p>
+        <h2 id="launches-heading">Compare launches</h2>
+        <p class="muted">Select a launch to see its charts. Heights are above sea level.</p>
         <div class="table-scroll">
           <table class="soaring-table" id="launches-table">
-            <thead>
-              <tr>
-                <th>Launch (3DEP / Model)</th>
-                <th>W* (ft/min)</th>
-                <th>Usable Top (1.0 m/s)</th>
-                <th>WxToFly Hcrit (225 fpm)</th>
-                <th>Resolved Top (v2)</th>
-                <th>v1 Parcel Top</th>
-                <th>HRRR HPBL</th>
-                <th>Surface LCL</th>
-                <th>Cu / OD Pot.</th>
-                <th>10 m Wind (Window)</th>
-                <th>BL Mean / Shear</th>
-                <th>Conv. 10 m</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Launch</th><th>Thermal strength</th><th>Usable lift top</th><th>Potential cloud base</th><th>Surface wind</th></tr></thead>
             <tbody id="launches-table-body"></tbody>
           </table>
         </div>
+        <details class="section-details">
+          <summary>More launch details</summary>
+          <div class="table-scroll">
+            <table class="soaring-table">
+              <thead><tr><th>Launch / model elevation</th><th>Thermal strength</th><th>Usable lift top · 1.0 m/s</th><th>Lift top · 225 ft/min</th><th>Thermal top</th><th>Earlier parcel estimate</th><th>Model boundary-layer depth</th><th>Potential cloud base</th><th>Cumulus / overcast potential</th><th>Surface wind</th><th>Average wind / shear</th><th>Convergence</th></tr></thead>
+              <tbody id="launch-details-body"></tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
+      <section aria-labelledby="nws-afd-summary" class="forecast-discussion">
+        <h2 id="nws-afd-summary">Area Forecast Discussion</h2>
+        <pre id="nws-afd-text" class="afd-pre">Discussion unavailable for this forecast.</pre>
       </section>
 
       <section aria-labelledby="cross-section-heading">
-        <h2 id="cross-section-heading">Terrain-following vertical cross-section (Olympic Strait → North Cascades)</h2>
-        <p class="muted">166 km transect from Blyn across Puget Sound and Blanchard into the North Cascades (Big J, Black Mountain, Mt. Baker, Sauk Mountain). Click any column to select that grid cell.</p>
+        <h2 id="cross-section-heading">Lift along the route</h2>
+        <p id="cross-section-route" class="muted"></p>
+        <p class="muted">Select a point along the route to see its forecast.</p>
         <div id="replay-cross-section" class="replay-chart"></div>
       </section>
 
       <section aria-labelledby="windgram-heading">
-        <h2 id="windgram-heading">Selected cell windgram</h2>
-        <p id="windgram-subtitle">Click a column to select its hour on the map and sounding. Clicking any map cell rebuilds this windgram for that coordinate.</p>
-        <div id="replay-windgram" class="replay-chart" tabindex="0" role="group" aria-label="Selected cell windgram. Click a column or use left and right arrows to select an hour."></div>
+        <h2 id="windgram-heading">Windgram</h2>
+        <p id="windgram-subtitle" class="muted">Select an hour to update the map and sounding.</p>
+        <div id="replay-windgram" class="replay-chart" tabindex="0" role="group" aria-label="Windgram. Click a column or use left and right arrows to select an hour."></div>
         <div id="windgram-key"></div>
       </section>
 
       <section aria-labelledby="sounding-heading">
-        <h2 id="sounding-heading">Selected cell Skew-T sounding</h2>
-        <p id="sounding-valid"></p>
+        <h2 id="sounding-heading">Sounding</h2>
+        <p id="sounding-valid" class="muted"></p>
         <p id="sounding-headline" class="sounding-headline"></p>
         <div id="replay-sounding"></div>
-        <ul id="sounding-findings" class="findings-list"></ul>
-        <p class="muted">Temperature, dew point, and winds sampled at the nine pressure levels for the currently selected grid cell.</p>
-      </section>
-
-      <section aria-labelledby="multimodel-heading">
-        <h2 id="multimodel-heading">Multi-model comparison & reality checks (Phase 0 / Phase 4)</h2>
-        <p class="muted">Compares operational deterministic and ensemble guidance at the selected launch for the active valid hour alongside Quillayute (KUIL) radiosonde observations and NWS Seattle forecast discussion.</p>
-        <div class="table-scroll">
-          <table class="soaring-table" id="multimodel-table">
-            <thead>
-              <tr>
-                <th>Model / Source</th>
-                <th>Run Issued</th>
-                <th>Model Elev</th>
-                <th>Temp / Dew Point</th>
-                <th>10 m Wind (Gust)</th>
-                <th>W*</th>
-                <th>Usable Top</th>
-                <th>BL Top / HPBL</th>
-                <th>Cloud Base / Cover</th>
-              </tr>
-            </thead>
-            <tbody id="multimodel-table-body"></tbody>
-          </table>
-        </div>
-        <div class="reality-grid">
-          <div class="reality-card">
-            <h3>KUIL Quillayute Balloon Sounding Verification</h3>
-            <p id="raob-meta" class="muted"></p>
-            <table class="soaring-table compact-table">
-              <thead>
-                <tr><th>Level</th><th>KUIL Obs T / Td</th><th>HRRR Blyn T / Td</th><th>ΔT</th><th>KUIL Wind</th><th>HRRR Wind</th></tr>
-              </thead>
-              <tbody id="raob-table-body"></tbody>
-            </table>
-          </div>
-          <div class="reality-card">
-            <h3>WRF-ARW 1 km North Sound Pilot & Feed Lifecycle</h3>
-            <div id="wrf-lifecycle-summary"></div>
-          </div>
-        </div>
-        <details class="replay-audit" style="margin-top:1rem">
-          <summary>NWS Seattle (SEW) Area Forecast Discussion</summary>
-          <pre id="nws-afd-text" class="afd-pre"></pre>
+        <details class="section-details">
+          <summary>Sounding details</summary>
+          <ul id="sounding-findings" class="findings-list"></ul>
+          <p class="muted">Temperature, dew point, and winds are sampled at the available pressure levels. Changes between those levels may be missed.</p>
         </details>
       </section>
 
-      <details class="replay-audit" style="margin-top:1.5rem">
-        <summary id="audit-summary">Numerical audit, HRRR wrfprs field inventory, and model limitations</summary>
+      <details class="replay-audit section-details">
+        <summary id="multimodel-heading">Compare forecast models</summary>
+        <div class="table-scroll">
+          <table class="soaring-table" id="multimodel-table">
+            <thead><tr><th>Model</th><th>Issued</th><th>Terrain elevation</th><th>Temperature / dew point</th><th>Surface wind (gust)</th><th>Thermal strength</th><th>Usable lift top</th><th>Thermal top / mixing depth</th><th>Cloud base / cover</th></tr></thead>
+            <tbody id="multimodel-table-body"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <details class="replay-audit section-details">
+        <summary id="audit-summary">About this forecast</summary>
         <p id="audit-results"></p>
         <ul id="audit-limitations"></ul>
-        <a id="audit-download">Open machine-readable audit</a>
+        <a id="audit-download">Download audit data</a>
+        <div class="reality-grid">
+          <div class="reality-card">
+            <h3>Observation checks</h3>
+            <p id="raob-meta" class="muted"></p>
+            <div class="table-scroll">
+              <table class="soaring-table compact-table">
+                <thead><tr><th>Station → Launch</th><th>Model</th><th>Regime (Lead)</th><th>Temp MAE (Bias)</th><th>Td MAE</th><th>Wind Vec RMSE</th></tr></thead>
+                <tbody id="raob-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="reality-card">
+            <h3>Model information</h3>
+            <div id="wrf-lifecycle-summary"></div>
+          </div>
+        </div>
       </details>
     </div>
-    <noscript>This replay needs JavaScript to draw the map and profiles.</noscript>
+    <noscript>Enable JavaScript to view the map and charts.</noscript>
   </div>
   <script>import '../scripts/soaring.ts';</script>
 </Base>
@@ -190,14 +156,23 @@ import Base from '../layouts/Base.astro';
   .soaring-page { padding: 2.5rem 0; }
   .eyebrow { font-size: .72rem; letter-spacing: .13em; font-weight: 700; color: var(--muted); }
   h1 { font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -.045em; margin: .4rem 0 .7rem; }
-  .intro { max-width: 52rem; font-size: 1.05rem; }
   .run-label { display: inline-block; padding: .45rem .7rem; border: 1px solid #b98938; border-radius: 4px; font-size: .85rem; }
-  .replay-controls { display: grid; grid-template-columns: 1fr auto; gap: .9rem; margin: 1.2rem 0; align-items: center; }
+  .replay-controls { display: grid; gap: .9rem; margin: 1.2rem 0 .8rem; align-items: center; }
   .control-row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; }
   .replay-controls label { display: flex; gap: .45rem; align-items: center; font-size: .84rem; }
   .checkbox-label { cursor: pointer; user-select: none; }
   select, button { padding: .45rem .65rem; background: var(--surface); color: inherit; border: 1px solid var(--rule); border-radius: 4px; font-size: .84rem; cursor: pointer; }
-  .hour-controls { display: flex; justify-content: flex-end; align-items: center; gap: .5rem; }
+  .hour-controls { display: flex; align-items: center; gap: .5rem; }
+  .map-options { font-size: .82rem; margin: 0 0 1rem; color: var(--muted); }
+  .map-options .control-row { margin-top: .8rem; }
+  .map-panel { min-width: 0; }
+  .section-details { margin-top: 1.3rem; }
+  .cell-details { margin: 1rem 0; font-size: .82rem; }
+  .cell-inspection :global(dt) { font-size: .76rem; margin-top: .75rem; color: var(--muted); }
+  .cell-inspection :global(dd) { margin: .2rem 0 0; font-weight: 600; font-size: .95rem; }
+  .map-legend :global(.legend-scale) { display: flex; gap: .7rem; flex-wrap: wrap; margin: .5rem 0; }
+  .map-legend :global(.legend-key) { display: inline-flex; align-items: center; gap: .3rem; }
+  .map-legend :global(.legend-swatch) { width: .85rem; height: .85rem; border: 1px solid #0002; border-radius: 2px; }
   #replay-hour { grid-column: 1 / -1; width: 100%; accent-color: #237e81; }
   .replay-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
   #soaring-map { height: 560px; }
@@ -206,10 +181,6 @@ import Base from '../layouts/Base.astro';
   .cell-inspection h2 { font-size: 1.2rem; margin: .25rem 0; }
   .cell-inspection p { font-size: .8rem; }
   .muted { color: var(--muted); }
-  .blanchard-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 1.5rem 0; }
-  .blanchard-stats div { border-bottom: 2px solid #237e81; padding-bottom: .8rem; }
-  .blanchard-stats span { display: block; font-size: .78rem; color: var(--muted); }
-  .blanchard-stats strong { display: block; font-size: 1.15rem; margin-top: .25rem; }
   .replay-audit { border: 1px solid var(--rule); border-radius: 6px; padding: 1rem; font-size: .88rem; }
   summary { cursor: pointer; font-weight: 600; }
   section { margin-top: 2.3rem; }
@@ -217,15 +188,16 @@ import Base from '../layouts/Base.astro';
   #replay-sounding { max-width: 900px; }
   .table-scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; margin-top: .6rem; }
   .soaring-table { width: 100%; border-collapse: collapse; font-size: .81rem; text-align: left; }
-  .soaring-table th, .soaring-table td { padding: .5rem .65rem; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  .soaring-table th, .soaring-table :global(td) { padding: .5rem .65rem; border-bottom: 1px solid var(--rule); white-space: nowrap; }
   .soaring-table th { background: var(--surface); font-weight: 600; color: var(--muted); font-size: .75rem; }
-  .soaring-table tbody tr { cursor: pointer; }
-  .soaring-table tbody tr:hover { background: rgba(35, 126, 129, 0.08); }
-  .soaring-table tbody tr.is-selected { background: rgba(35, 126, 129, 0.15); font-weight: 600; }
+  .soaring-table :global(tbody tr) { cursor: pointer; }
+  .soaring-table :global(tbody tr:hover) { background: rgba(35, 126, 129, 0.08); }
+  .soaring-table :global(tbody tr.is-selected) { background: rgba(35, 126, 129, 0.15); font-weight: 600; }
+  .soaring-table :global(.launch-link) { border: 0; padding: 0; background: none; color: inherit; font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
   .reality-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
-  .reality-card { border: 1px solid var(--rule); border-radius: 6px; padding: .9rem; font-size: .83rem; }
+  .reality-card { border: 1px solid var(--rule); border-radius: 6px; padding: .9rem; font-size: .83rem; min-width: 0; }
   .reality-card h3 { margin: 0 0 .4rem; font-size: .95rem; }
-  .afd-pre { white-space: pre-wrap; font-size: .78rem; line-height: 1.4; max-height: 320px; overflow-y: auto; margin-top: .6rem; }
+  .afd-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; line-height: 1.6; max-height: 360px; overflow-y: auto; margin-top: .6rem; padding: 1rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; }
   .sounding-headline { font-weight: 600; font-size: .92rem; margin: .3rem 0 .6rem; }
   .findings-list { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .6rem; margin: .8rem 0; font-size: .82rem; }
   .findings-list li { border: 1px solid var(--rule); border-radius: 5px; padding: .55rem .7rem; }
@@ -235,7 +207,8 @@ import Base from '../layouts/Base.astro';
     #soaring-map { height: 420px; }
     .replay-controls { grid-template-columns: 1fr; }
     .hour-controls { justify-content: flex-start; }
-    .blanchard-stats { grid-template-columns: 1fr 1fr; }
+    .control-row > label:not(.checkbox-label) { flex: 1 1 100%; justify-content: space-between; min-width: 0; }
+    select { min-width: 0; max-width: 78%; }
     .reality-grid { grid-template-columns: 1fr; }
   }
 </style>

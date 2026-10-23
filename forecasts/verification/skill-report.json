@@ -1,137 +1,847 @@
 {
-  "schemaVersion": 1,
-  "evaluatedAt": "2026-10-22T09:40:00Z",
-  "promotionGates": {
-    "daytimeWindVectorErrorReductionTargetPct": 10.0,
-    "minProspectiveIndependentDays": 30,
-    "morningDeliveryDeadlineLocalHour": 8,
-    "morningDeliveryReliabilityTargetPct": 95.0,
-    "wrfPromotionStatus": "experimental-pending-30-day-prospective-sample"
-  },
-  "kuilRaobComparison": {
-    "station": {
-      "id": "KUIL",
-      "name": "Quillayute",
-      "latitude": 47.95,
-      "longitude": -124.5,
-      "distanceKm": 170,
-      "elevationM": 62
-    },
-    "soundingValidAt": "2026-10-21T00:00:00Z",
-    "levelComparisons": [
+  "schemaVersion": 2,
+  "evaluatedAt": "2026-10-22T12:00:00Z",
+  "matchingRules": {
+    "schemaVersion": 2,
+    "raobExactTimeDeltaMinutes": 0,
+    "raobNearInitMaxTimeDeltaMinutes": 60,
+    "surfaceStationMaxTimeDeltaMinutes": 30,
+    "raobPreferredDistanceKm": 50,
+    "raobMaxSiteVerificationDistanceKm": 60,
+    "elevationDifferenceWarningM": 350,
+    "pressureLevelsEvaluatedHpa": [
+      925,
+      850,
+      700,
+      600
+    ],
+    "leadTimeBuckets": [
       {
-        "pressureHpa": 925,
-        "kuilObsTempC": 15,
-        "kuilObsDewPointC": -10,
-        "kuilObsWindSpeedMps": 3.1,
-        "kuilObsWindDirDeg": 315,
-        "hrrrBlynF14TempC": 15.1,
-        "hrrrBlynF14DewPointC": -0.6,
-        "hrrrBlynF14WindSpeedMps": 2.8,
-        "hrrrBlynF14WindDirDeg": 176,
-        "tempDeltaC": 0.1
+        "id": "f00-f06",
+        "minHours": 0,
+        "maxHours": 6,
+        "label": "Near-Initialization / Nowcast (f00\u2013f06)"
       },
       {
-        "pressureHpa": 850,
-        "kuilObsTempC": 10,
-        "kuilObsDewPointC": -12,
-        "kuilObsWindSpeedMps": 4.1,
-        "kuilObsWindDirDeg": 100,
-        "hrrrBlynF14TempC": 11.6,
-        "hrrrBlynF14DewPointC": -3.3,
-        "hrrrBlynF14WindSpeedMps": 5.1,
-        "hrrrBlynF14WindDirDeg": 193,
-        "tempDeltaC": 1.6
+        "id": "f07-f12",
+        "minHours": 7,
+        "maxHours": 12,
+        "label": "Short-Range (f07\u2013f12)"
       },
       {
-        "pressureHpa": 700,
-        "kuilObsTempC": 1.6,
-        "kuilObsDewPointC": -28.4,
-        "kuilObsWindSpeedMps": 5.7,
-        "kuilObsWindDirDeg": 160,
-        "hrrrBlynF14TempC": 0.6,
-        "hrrrBlynF14DewPointC": -9.3,
-        "hrrrBlynF14WindSpeedMps": 9.5,
-        "hrrrBlynF14WindDirDeg": 218,
-        "tempDeltaC": -1.0
+        "id": "f13-f24",
+        "minHours": 13,
+        "maxHours": 24,
+        "label": "Day-1 Soaring Window (f13\u2013f24)"
       },
       {
-        "pressureHpa": 600,
-        "kuilObsTempC": -7.5,
-        "kuilObsDewPointC": -26.5,
-        "kuilObsWindSpeedMps": null,
-        "kuilObsWindDirDeg": null,
-        "hrrrBlynF14TempC": -6.9,
-        "hrrrBlynF14DewPointC": -20.5,
-        "hrrrBlynF14WindSpeedMps": 13.6,
-        "hrrrBlynF14WindDirDeg": 225,
-        "tempDeltaC": 0.6
+        "id": "f25-f48",
+        "minHours": 25,
+        "maxHours": 48,
+        "label": "Day-2 Outlook (f25\u2013f48)"
       }
     ]
   },
-  "blanchardMultiModelComparison": [
-    {
-      "model": "hrrr-conus",
-      "referenceTime": "2026-10-21T00:00:00Z",
-      "modelElevationM": 221.7,
-      "peakWstarMps": 1.06,
-      "peakUsableLiftTopM": 724.5,
-      "meanWindSpeedMps": 1.3,
-      "maxTempC": 17.0
+  "promotionGates": {
+    "schemaVersion": 2,
+    "daytimeWindVectorErrorReductionTargetPct": 10,
+    "minProspectiveIndependentDays": 30,
+    "rollingRunsRetentionCount": 120,
+    "morningDeliveryDeadlineLocalHour": 8,
+    "morningDeliveryReliabilityTargetPct": 95,
+    "requireNoMaterialWorseningCloudBaseOrHazardWind": true,
+    "requireMatchedTimeAndLocationVerification": true,
+    "wrfPromotionStatus": "experimental-pending-30-day-prospective-sample"
+  },
+  "historyRetention": {
+    "maxRollingRuns": 120,
+    "cyclesPerDay": 4,
+    "retainedDaysCapacity": 30,
+    "meetsProspectiveGateCapacity": true
+  },
+  "observationVerificationSkill": {
+    "note": "True observation verification skill requires matched valid times and station-to-launch proximity <= 60 km. Model agreement alone is not skill.",
+    "matchedCount": 8,
+    "byLeadTimeBucket": {
+      "f00-f06": {
+        "comparisons": 8,
+        "models": [
+          "hrrr-conus",
+          "rdps"
+        ],
+        "meanTemperatureMaeC": 0.76,
+        "meanWindVectorRmseMps": 4.47
+      }
     },
-    {
-      "model": "hrdps-continental",
-      "referenceTime": "2026-10-21T06:00:00Z",
-      "modelElevationM": 186.9,
-      "peakWstarMps": 0.76,
-      "peakUsableLiftTopM": 263,
-      "meanWindSpeedMps": 0.97,
-      "maxTempC": 14.8
+    "byRegime": {
+      "valley-inversion-break": {
+        "comparisons": 4,
+        "models": [
+          "hrrr-conus",
+          "rdps"
+        ],
+        "meanTemperatureMaeC": 0.55,
+        "meanWindVectorRmseMps": 4.46
+      },
+      "willamette-lowland": {
+        "comparisons": 2,
+        "models": [
+          "hrrr-conus",
+          "rdps"
+        ],
+        "meanTemperatureMaeC": 0.46,
+        "meanWindVectorRmseMps": 3.15
+      },
+      "appalachian-ridge-thermal": {
+        "comparisons": 2,
+        "models": [
+          "hrrr-conus",
+          "rdps"
+        ],
+        "meanTemperatureMaeC": 1.47,
+        "meanWindVectorRmseMps": 5.81
+      }
     },
-    {
-      "model": "rdps",
-      "referenceTime": "2026-10-21T00:00:00Z",
-      "modelElevationM": 243.9,
-      "peakWstarMps": 1.16,
-      "peakUsableLiftTopM": 600.5,
-      "meanWindSpeedMps": 0.9,
-      "maxTempC": 17.1
-    },
-    {
-      "model": "gdps",
-      "referenceTime": "2026-10-21T00:00:00Z",
-      "modelElevationM": 77.4,
-      "peakWstarMps": 1.34,
-      "peakUsableLiftTopM": 734.3,
-      "meanWindSpeedMps": 1.09,
-      "maxTempC": 15.5
-    },
-    {
-      "model": "gfs",
-      "referenceTime": "2026-10-21T00:00:00Z",
-      "modelElevationM": 30.8,
-      "peakWstarMps": 1.4,
-      "peakUsableLiftTopM": 749,
-      "meanWindSpeedMps": 1.69,
-      "maxTempC": 13.5
-    },
-    {
-      "model": "ecmwf",
-      "referenceTime": "2026-10-20T18:00:00Z",
-      "modelElevationM": 386,
-      "peakWstarMps": null,
-      "peakUsableLiftTopM": null,
-      "meanWindSpeedMps": null,
-      "maxTempC": 15.5
-    },
-    {
-      "model": "nws",
-      "referenceTime": "2026-10-21T06:26:42+00:00",
-      "modelElevationM": 0,
-      "peakWstarMps": null,
-      "peakUsableLiftTopM": null,
-      "meanWindSpeedMps": null,
-      "maxTempC": null
-    }
-  ]
+    "matchedPairs": [
+      {
+        "model": "hrrr-conus",
+        "siteSlug": "or-woodrat-mountain",
+        "siteName": "Woodrat Mountain, OR",
+        "regime": "valley-inversion-break",
+        "region": "Rogue Valley, OR",
+        "station": {
+          "id": "KMFR",
+          "name": "Medford",
+          "latitude": 42.37,
+          "longitude": -122.88,
+          "distanceKm": 18,
+          "elevationM": 405
+        },
+        "modelElevationM": 850.6,
+        "elevationDeltaM": 445.6,
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "soundingValidAt": "2026-10-21T00:00:00Z",
+        "forecastValidAt": "2026-10-21T01:00:00Z",
+        "matched": true,
+        "matchStatus": "matched",
+        "matchTier": "near-init-f01-60min",
+        "distanceKm": 18,
+        "timeDeltaMinutes": 60,
+        "leadTimeHours": 1,
+        "leadTimeBucket": "f00-f06",
+        "metrics": {
+          "levelsCompared": 2,
+          "temperatureMaeC": 0.32,
+          "temperatureBiasC": 0.09,
+          "dewPointMaeC": 1.8,
+          "windVectorRmseMps": 4.8,
+          "windSpeedBiasMps": -3.43
+        },
+        "levelComparisons": [
+          {
+            "pressureHpa": 850,
+            "obsTempC": 15.4,
+            "fcstTempC": 15.16,
+            "tempErrorC": -0.24,
+            "obsDewPointC": -4.6,
+            "fcstDewPointC": -3.19,
+            "dewPointErrorC": 1.41,
+            "obsWindSpeedMps": 10.8,
+            "obsWindDirDeg": 145,
+            "fcstWindSpeedMps": 4.44,
+            "fcstWindDirDeg": 157,
+            "windSpeedErrorMps": -6.36,
+            "windVectorErrorMps": 6.52
+          },
+          {
+            "pressureHpa": 700,
+            "obsTempC": 0.6,
+            "fcstTempC": 1.01,
+            "tempErrorC": 0.41,
+            "obsDewPointC": -11.4,
+            "fcstDewPointC": -9.21,
+            "dewPointErrorC": 2.19,
+            "obsWindSpeedMps": 13.4,
+            "obsWindDirDeg": 150,
+            "fcstWindSpeedMps": 12.9,
+            "fcstWindDirDeg": 158,
+            "windSpeedErrorMps": -0.5,
+            "windVectorErrorMps": 1.9
+          }
+        ]
+      },
+      {
+        "model": "rdps",
+        "siteSlug": "or-woodrat-mountain",
+        "siteName": "Woodrat Mountain, OR",
+        "regime": "valley-inversion-break",
+        "region": "Rogue Valley, OR",
+        "station": {
+          "id": "KMFR",
+          "name": "Medford",
+          "latitude": 42.37,
+          "longitude": -122.88,
+          "distanceKm": 18,
+          "elevationM": 405
+        },
+        "modelElevationM": 743.9,
+        "elevationDeltaM": 338.9,
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "soundingValidAt": "2026-10-21T00:00:00Z",
+        "forecastValidAt": "2026-10-21T01:00:00Z",
+        "matched": true,
+        "matchStatus": "matched",
+        "matchTier": "near-init-f01-60min",
+        "distanceKm": 18,
+        "timeDeltaMinutes": 60,
+        "leadTimeHours": 1,
+        "leadTimeBucket": "f00-f06",
+        "metrics": {
+          "levelsCompared": 3,
+          "temperatureMaeC": 0.6,
+          "temperatureBiasC": 0.39,
+          "dewPointMaeC": 3.1,
+          "windVectorRmseMps": 3.15,
+          "windSpeedBiasMps": -1.73
+        },
+        "levelComparisons": [
+          {
+            "pressureHpa": 925,
+            "obsTempC": 18,
+            "fcstTempC": 18.93,
+            "tempErrorC": 0.93,
+            "obsDewPointC": 0,
+            "fcstDewPointC": 4.68,
+            "dewPointErrorC": 4.68,
+            "obsWindSpeedMps": 2.1,
+            "obsWindDirDeg": 320,
+            "fcstWindSpeedMps": 1.43,
+            "fcstWindDirDeg": 32,
+            "windSpeedErrorMps": -0.67,
+            "windVectorErrorMps": 2.14
+          },
+          {
+            "pressureHpa": 850,
+            "obsTempC": 15.4,
+            "fcstTempC": 15.08,
+            "tempErrorC": -0.32,
+            "obsDewPointC": -4.6,
+            "fcstDewPointC": -2.54,
+            "dewPointErrorC": 2.06,
+            "obsWindSpeedMps": 10.8,
+            "obsWindDirDeg": 145,
+            "fcstWindSpeedMps": 5.95,
+            "fcstWindDirDeg": 142,
+            "windSpeedErrorMps": -4.85,
+            "windVectorErrorMps": 4.87
+          },
+          {
+            "pressureHpa": 700,
+            "obsTempC": 0.6,
+            "fcstTempC": 1.16,
+            "tempErrorC": 0.56,
+            "obsDewPointC": -11.4,
+            "fcstDewPointC": -8.84,
+            "dewPointErrorC": 2.56,
+            "obsWindSpeedMps": 13.4,
+            "obsWindDirDeg": 150,
+            "fcstWindSpeedMps": 13.72,
+            "fcstWindDirDeg": 155,
+            "windSpeedErrorMps": 0.32,
+            "windVectorErrorMps": 1.23
+          }
+        ]
+      },
+      {
+        "model": "hrrr-conus",
+        "siteSlug": "or-poodle",
+        "siteName": "Poodle Mountain, OR",
+        "regime": "valley-inversion-break",
+        "region": "Rogue Valley, OR",
+        "station": {
+          "id": "KMFR",
+          "name": "Medford",
+          "latitude": 42.37,
+          "longitude": -122.88,
+          "distanceKm": 38,
+          "elevationM": 405
+        },
+        "modelElevationM": 963.9,
+        "elevationDeltaM": 558.9,
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "soundingValidAt": "2026-10-21T00:00:00Z",
+        "forecastValidAt": "2026-10-21T01:00:00Z",
+        "matched": true,
+        "matchStatus": "matched",
+        "matchTier": "near-init-f01-60min",
+        "distanceKm": 38,
+        "timeDeltaMinutes": 60,
+        "leadTimeHours": 1,
+        "leadTimeBucket": "f00-f06",
+        "metrics": {
+          "levelsCompared": 2,
+          "temperatureMaeC": 0.67,
+          "temperatureBiasC": -0.26,
+          "dewPointMaeC": 2.27,
+          "windVectorRmseMps": 5.08,
+          "windSpeedBiasMps": -3.23
+        },
+        "levelComparisons": [
+          {
+            "pressureHpa": 850,
+            "obsTempC": 15.4,
+            "fcstTempC": 14.47,
+            "tempErrorC": -0.93,
+            "obsDewPointC": -4.6,
+            "fcstDewPointC": -1.63,
+            "dewPointErrorC": 2.97,
+            "obsWindSpeedMps": 10.8,
+            "obsWindDirDeg": 145,
+            "fcstWindSpeedMps": 4.01,
+            "fcstWindDirDeg": 131,
+            "windSpeedErrorMps": -6.79,
+            "windVectorErrorMps": 6.98
+          },
+          {
+            "pressureHpa": 700,
+            "obsTempC": 0.6,
+            "fcstTempC": 1.01,
+            "tempErrorC": 0.41,
+            "obsDewPointC": -11.4,
+            "fcstDewPointC": -9.84,
+            "dewPointErrorC": 1.56,
+            "obsWindSpeedMps": 13.4,
+            "obsWindDirDeg": 150,
+            "fcstWindSpeedMps": 13.73,
+            "fcstWindDirDeg": 157,
+            "windSpeedErrorMps": 0.33,
+            "windVectorErrorMps": 1.69
+          }
+        ]
+      },
+      {
+        "model": "rdps",
+        "siteSlug": "or-poodle",
+        "siteName": "Poodle Mountain, OR",
+        "regime": "valley-inversion-break",
+        "region": "Rogue Valley, OR",
+        "station": {
+          "id": "KMFR",
+          "name": "Medford",
+          "latitude": 42.37,
+          "longitude": -122.88,
+          "distanceKm": 38,
+          "elevationM": 405
+        },
+        "modelElevationM": 825.9,
+        "elevationDeltaM": 420.9,
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "soundingValidAt": "2026-10-21T00:00:00Z",
+        "forecastValidAt": "2026-10-21T01:00:00Z",
+        "matched": true,
+        "matchStatus": "matched",
+        "matchTier": "near-init-f01-60min",
+        "distanceKm": 38,
+        "timeDeltaMinutes": 60,
+        "leadTimeHours": 1,
+        "leadTimeBucket": "f00-f06",
+        "metrics": {
+          "levelsCompared": 2,
+          "temperatureMaeC": 0.62,
+          "temperatureBiasC": -0.4,
+          "dewPointMaeC": 2.79,
+          "windVectorRmseMps": 4.81,
+          "windSpeedBiasMps": -3.03
+        },
+        "levelComparisons": [
+          {
+            "pressureHpa": 850,
+            "obsTempC": 15.4,
+            "fcstTempC": 14.38,
+            "tempErrorC": -1.02,
+            "obsDewPointC": -4.6,
+            "fcstDewPointC": -1.37,
+            "dewPointErrorC": 3.23,
+            "obsWindSpeedMps": 10.8,
+            "obsWindDirDeg": 145,
+            "fcstWindSpeedMps": 4.48,
+            "fcstWindDirDeg": 128,
+            "windSpeedErrorMps": -6.32,
+            "windVectorErrorMps": 6.65
+          },
+          {
+            "pressureHpa": 700,
+            "obsTempC": 0.6,
+            "fcstTempC": 0.82,
+            "tempErrorC": 0.22,
+            "obsDewPointC": -11.4,
+            "fcstDewPointC": -9.05,
+            "dewPointErrorC": 2.35,
+            "obsWindSpeedMps": 13.4,
+            "obsWindDirDeg": 150,
+            "fcstWindSpeedMps": 13.65,
+            "fcstWindDirDeg": 156,
+            "windSpeedErrorMps": 0.25,
+            "windVectorErrorMps": 1.44
+          }
+        ]
+      },
+      {
+        "model": "hrrr-conus",
+        "siteSlug": "or-peterson-butte",
+        "siteName": "Peterson Butte, OR",
+        "regime": "willamette-lowland",
+        "region": "Willamette Valley, OR",
+        "station": {
+          "id": "KSLE",
+          "name": "Salem",
+          "latitude": 44.92,
+          "longitude": -123,
+          "distanceKm": 46,
+          "elevationM": 61
+        },
+        "modelElevationM": 100,
+        "elevationDeltaM": 39,
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "soundingValidAt": "2026-10-21T00:00:00Z",
+        "forecastValidAt": "2026-10-21T01:00:00Z",
+        "matched": true,
+        "matchStatus": "matched",
+        "matchTier": "near-init-f01-60min",
+        "distanceKm": 46,
+        "timeDeltaMinutes": 60,
+        "leadTimeHours": 1,
+        "leadTimeBucket": "f00-f06",
+        "metrics": {
+          "levelsCompared": 3,
+          "temperatureMaeC": 0.16,
+          "temperatureBiasC": 0.16,
+          "dewPointMaeC": 2.63,
+          "windVectorRmseMps": 3.62,
+          "windSpeedBiasMps": -1.44
+        },
+        "levelComparisons": [
+          {
+            "pressureHpa": 925,
+            "obsTempC": 16.6,
+            "fcstTempC": 16.83,
+            "tempErrorC": 0.23,
+            "obsDewPointC": 2.6,
+            "fcstDewPointC": 3.8,
+            "dewPointErrorC": 1.2,
+            "obsWindSpeedMps": 5.1,
+            "obsWindDirDeg": 65,
+            "fcstWindSpeedMps": 3.09,
+            "fcstWindDirDeg": 11,
+            "windSpeedErrorMps": -2.01,
+            "windVectorErrorMps": 4.13
+          },
+          {
+            "pressureHpa": 850,
+            "obsTempC": 13.6,
+            "fcstTempC": 13.85,
+            "tempErrorC": 0.25,
+            "obsDewPointC": -3.4,
+            "fcstDewPointC": -5.75,
+            "dewPointErrorC": -2.35,
+            "obsWindSpeedMps": 4.6,
+            "obsWindDirDeg": 190,
+            "fcstWindSpeedMps": 1.69,
+            "fcstWindDirDeg": 127,
+            "windSpeedErrorMps": -2.91,
+            "windVectorErrorMps": 4.12
+          },
+          {
+            "pressureHpa": 700,
+            "obsTempC": 1,
+            "fcstTempC": 1.01,
+            "tempErrorC": 0.01,
+            "obsDewPointC": -15,
+            "fcstDewPointC": -10.65,
+            "dewPointErrorC": 4.35,
+            "obsWindSpeedMps": 10.3,
+            "obsWindDirDeg": 175,
+            "fcstWindSpeedMps": 10.9,
+            "fcstWindDirDeg": 187,
+            "windSpeedErrorMps": 0.6,
+            "windVectorErrorMps": 2.29
+          }
+        ]
+      },
+      {
+        "model": "rdps",
+        "siteSlug": "or-peterson-butte",
+        "siteName": "Peterson Butte, OR",
+        "regime": "willamette-lowland",
+        "region": "Willamette Valley, OR",
+        "station": {
+          "id": "KSLE",
+          "name": "Salem",
+          "latitude": 44.92,
+          "longitude": -123,
+          "distanceKm": 46,
+          "elevationM": 61
+        },
+        "modelElevationM": 129.9,
+        "elevationDeltaM": 68.9,
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "soundingValidAt": "2026-10-21T00:00:00Z",
+        "forecastValidAt": "2026-10-21T01:00:00Z",
+        "matched": true,
+        "matchStatus": "matched",
+        "matchTier": "near-init-f01-60min",
+        "distanceKm": 46,
+        "timeDeltaMinutes": 60,
+        "leadTimeHours": 1,
+        "leadTimeBucket": "f00-f06",
+        "metrics": {
+          "levelsCompared": 3,
+          "temperatureMaeC": 0.76,
+          "temperatureBiasC": 0.76,
+          "dewPointMaeC": 2.18,
+          "windVectorRmseMps": 2.67,
+          "windSpeedBiasMps": -0.68
+        },
+        "levelComparisons": [
+          {
+            "pressureHpa": 925,
+            "obsTempC": 16.6,
+            "fcstTempC": 17.91,
+            "tempErrorC": 1.31,
+            "obsDewPointC": 2.6,
+            "fcstDewPointC": 2.16,
+            "dewPointErrorC": -0.44,
+            "obsWindSpeedMps": 5.1,
+            "obsWindDirDeg": 65,
+            "fcstWindSpeedMps": 5.47,
+            "fcstWindDirDeg": 43,
+            "windSpeedErrorMps": 0.37,
+            "windVectorErrorMps": 2.05
+          },
+          {
+            "pressureHpa": 850,
+            "obsTempC": 13.6,
+            "fcstTempC": 14.16,
+            "tempErrorC": 0.56,
+            "obsDewPointC": -3.4,
+            "fcstDewPointC": -4.84,
+            "dewPointErrorC": -1.44,
+            "obsWindSpeedMps": 4.6,
+            "obsWindDirDeg": 190,
+            "fcstWindSpeedMps": 1.45,
+            "fcstWindDirDeg": 189,
+            "windSpeedErrorMps": -3.15,
+            "windVectorErrorMps": 3.15
+          },
+          {
+            "pressureHpa": 700,
+            "obsTempC": 1,
+            "fcstTempC": 1.42,
+            "tempErrorC": 0.42,
+            "obsDewPointC": -15,
+            "fcstDewPointC": -10.33,
+            "dewPointErrorC": 4.67,
+            "obsWindSpeedMps": 10.3,
+            "obsWindDirDeg": 175,
+            "fcstWindSpeedMps": 11.03,
+            "fcstWindDirDeg": 189,
+            "windSpeedErrorMps": 0.73,
+            "windVectorErrorMps": 2.7
+          }
+        ]
+      },
+      {
+        "model": "hrrr-conus",
+        "siteSlug": "va-eagle-rock",
+        "siteName": "Eagle Rock, VA",
+        "regime": "appalachian-ridge-thermal",
+        "region": "Shenandoah / Blue Ridge, VA",
+        "station": {
+          "id": "KRNK",
+          "name": "Roanoke",
+          "latitude": 37.2,
+          "longitude": -79.5,
+          "distanceKm": 56,
+          "elevationM": 654
+        },
+        "modelElevationM": 371.6,
+        "elevationDeltaM": -282.4,
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "soundingValidAt": "2026-10-21T00:00:00Z",
+        "forecastValidAt": "2026-10-21T01:00:00Z",
+        "matched": true,
+        "matchStatus": "matched",
+        "matchTier": "near-init-f01-60min",
+        "distanceKm": 56,
+        "timeDeltaMinutes": 60,
+        "leadTimeHours": 1,
+        "leadTimeBucket": "f00-f06",
+        "metrics": {
+          "levelsCompared": 3,
+          "temperatureMaeC": 1.47,
+          "temperatureBiasC": -0.75,
+          "dewPointMaeC": 3.93,
+          "windVectorRmseMps": 5.19,
+          "windSpeedBiasMps": 0.37
+        },
+        "levelComparisons": [
+          {
+            "pressureHpa": 925,
+            "obsTempC": 17.8,
+            "fcstTempC": 15.51,
+            "tempErrorC": -2.29,
+            "obsDewPointC": 0.8,
+            "fcstDewPointC": -4.32,
+            "dewPointErrorC": -5.12,
+            "obsWindSpeedMps": 4.6,
+            "obsWindDirDeg": 325,
+            "fcstWindSpeedMps": 7.32,
+            "fcstWindDirDeg": 40,
+            "windSpeedErrorMps": 2.72,
+            "windVectorErrorMps": 7.57
+          },
+          {
+            "pressureHpa": 850,
+            "obsTempC": 11.2,
+            "fcstTempC": 10.16,
+            "tempErrorC": -1.04,
+            "obsDewPointC": -1.8,
+            "fcstDewPointC": -3.32,
+            "dewPointErrorC": -1.52,
+            "obsWindSpeedMps": 4.6,
+            "obsWindDirDeg": 355,
+            "fcstWindSpeedMps": 4.33,
+            "fcstWindDirDeg": 24,
+            "windSpeedErrorMps": -0.27,
+            "windVectorErrorMps": 2.25
+          },
+          {
+            "pressureHpa": 700,
+            "obsTempC": 1,
+            "fcstTempC": 2.07,
+            "tempErrorC": 1.07,
+            "obsDewPointC": -19,
+            "fcstDewPointC": -24.15,
+            "dewPointErrorC": -5.15,
+            "obsWindSpeedMps": 7.7,
+            "obsWindDirDeg": 15,
+            "fcstWindSpeedMps": 6.37,
+            "fcstWindDirDeg": 49,
+            "windSpeedErrorMps": -1.33,
+            "windVectorErrorMps": 4.31
+          }
+        ]
+      },
+      {
+        "model": "rdps",
+        "siteSlug": "va-eagle-rock",
+        "siteName": "Eagle Rock, VA",
+        "regime": "appalachian-ridge-thermal",
+        "region": "Shenandoah / Blue Ridge, VA",
+        "station": {
+          "id": "KRNK",
+          "name": "Roanoke",
+          "latitude": 37.2,
+          "longitude": -79.5,
+          "distanceKm": 56,
+          "elevationM": 654
+        },
+        "modelElevationM": 391.9,
+        "elevationDeltaM": -262.1,
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "soundingValidAt": "2026-10-21T00:00:00Z",
+        "forecastValidAt": "2026-10-21T01:00:00Z",
+        "matched": true,
+        "matchStatus": "matched",
+        "matchTier": "near-init-f01-60min",
+        "distanceKm": 56,
+        "timeDeltaMinutes": 60,
+        "leadTimeHours": 1,
+        "leadTimeBucket": "f00-f06",
+        "metrics": {
+          "levelsCompared": 3,
+          "temperatureMaeC": 1.46,
+          "temperatureBiasC": -0.66,
+          "dewPointMaeC": 5.33,
+          "windVectorRmseMps": 6.43,
+          "windSpeedBiasMps": 0.89
+        },
+        "levelComparisons": [
+          {
+            "pressureHpa": 925,
+            "obsTempC": 17.8,
+            "fcstTempC": 15.36,
+            "tempErrorC": -2.44,
+            "obsDewPointC": 0.8,
+            "fcstDewPointC": -3.14,
+            "dewPointErrorC": -3.94,
+            "obsWindSpeedMps": 4.6,
+            "obsWindDirDeg": 325,
+            "fcstWindSpeedMps": 7.99,
+            "fcstWindDirDeg": 51,
+            "windSpeedErrorMps": 3.39,
+            "windVectorErrorMps": 8.94
+          },
+          {
+            "pressureHpa": 850,
+            "obsTempC": 11.2,
+            "fcstTempC": 10.46,
+            "tempErrorC": -0.74,
+            "obsDewPointC": -1.8,
+            "fcstDewPointC": -6.04,
+            "dewPointErrorC": -4.24,
+            "obsWindSpeedMps": 4.6,
+            "obsWindDirDeg": 355,
+            "fcstWindSpeedMps": 3.3,
+            "fcstWindDirDeg": 355,
+            "windSpeedErrorMps": -1.3,
+            "windVectorErrorMps": 1.3
+          },
+          {
+            "pressureHpa": 700,
+            "obsTempC": 1,
+            "fcstTempC": 2.2,
+            "tempErrorC": 1.2,
+            "obsDewPointC": -19,
+            "fcstDewPointC": -26.8,
+            "dewPointErrorC": -7.8,
+            "obsWindSpeedMps": 7.7,
+            "obsWindDirDeg": 15,
+            "fcstWindSpeedMps": 8.27,
+            "fcstWindDirDeg": 63,
+            "windSpeedErrorMps": 0.57,
+            "windVectorErrorMps": 6.52
+          }
+        ]
+      }
+    ],
+    "rejectedMismatchedComparisons": [
+      {
+        "id": "legacy-kuil-00z-vs-blyn-f14",
+        "stationId": "KUIL",
+        "siteSlug": "wa-blyn",
+        "matched": false,
+        "matchStatus": "rejected-time-and-spatial-mismatch",
+        "matchTier": "unmatched",
+        "distanceKm": 113,
+        "timeDeltaMinutes": 840,
+        "leadTimeHours": 14,
+        "leadTimeBucket": "f13-f24",
+        "reason": "Rejected: 14-hour temporal mismatch (00Z sounding vs 14Z forecast) and 113 km coastal-to-strait spatial separation."
+      },
+      {
+        "id": "kuil-00z-vs-blanchard-f01",
+        "stationId": "KUIL",
+        "siteSlug": "wa-blanchard",
+        "matched": false,
+        "matchStatus": "rejected-spatial-distance",
+        "matchTier": "near-init-f01-60min",
+        "distanceKm": 170,
+        "timeDeltaMinutes": 60,
+        "leadTimeHours": 1,
+        "leadTimeBucket": "f00-f06",
+        "reason": "Rejected for local site skill: 170 km separation between coastal Quillayute RAOB and inland North Sound ridge exceeds 60 km spatial gate; retained only as synoptic upstream boundary context."
+      }
+    ]
+  },
+  "crossModelSpreadSummary": {
+    "note": "Cross-model spread measures inter-model disagreement and grid-elevation smoothing differences across Wa-Blanchard (2026-10-21 14Z-27Z), NOT observation verification skill. Unsupported ECMWF and NWS W* and usable-lift fields remain explicitly null.",
+    "blanchardMultiModelComparison": [
+      {
+        "model": "hrrr-conus",
+        "modelKind": "deterministic-column",
+        "contractVersion": "2.0.0",
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "modelElevationM": 221.7,
+        "peakWstarMps": 0.85,
+        "peakUsableLiftTopM": 492.9,
+        "peakResolvedThermalTopM": 536,
+        "meanWindSpeedMps": 1.13,
+        "maxTempC": 17
+      },
+      {
+        "model": "hrdps-continental",
+        "modelKind": "deterministic-column",
+        "contractVersion": "2.0.0",
+        "referenceTime": "2026-10-21T06:00:00Z",
+        "modelElevationM": 186.9,
+        "peakWstarMps": 0.76,
+        "peakUsableLiftTopM": 275.5,
+        "peakResolvedThermalTopM": 296.5,
+        "meanWindSpeedMps": 0.65,
+        "maxTempC": 14.8
+      },
+      {
+        "model": "rdps",
+        "modelKind": "deterministic-column",
+        "contractVersion": "2.0.0",
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "modelElevationM": 243.9,
+        "peakWstarMps": 1.16,
+        "peakUsableLiftTopM": 609.6,
+        "peakResolvedThermalTopM": 617.9,
+        "meanWindSpeedMps": 0.84,
+        "maxTempC": 17.1
+      },
+      {
+        "model": "gdps",
+        "modelKind": "deterministic-column",
+        "contractVersion": "2.0.0",
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "modelElevationM": 77.4,
+        "peakWstarMps": 0.88,
+        "peakUsableLiftTopM": 292.9,
+        "peakResolvedThermalTopM": 322.7,
+        "meanWindSpeedMps": 0.74,
+        "maxTempC": 15.5
+      },
+      {
+        "model": "gfs",
+        "modelKind": "deterministic-column",
+        "contractVersion": "2.0.0",
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "modelElevationM": 30.8,
+        "peakWstarMps": 0.89,
+        "peakUsableLiftTopM": 294.5,
+        "peakResolvedThermalTopM": 329.3,
+        "meanWindSpeedMps": 0.99,
+        "maxTempC": 13.5
+      },
+      {
+        "model": "geps",
+        "modelKind": "ensemble-percentiles",
+        "derivationRule": "per-member-before-percentiles",
+        "referenceTime": "2026-10-21T00:00:00Z",
+        "modelElevationM": 45.6,
+        "peakWstarMps": 0.59,
+        "peakUsableLiftTopM": 72.7,
+        "meanWindSpeedMps": 1,
+        "maxTempC": 14.6
+      },
+      {
+        "model": "ecmwf",
+        "modelKind": "surface-or-sparse-adapter",
+        "referenceTime": "2026-10-20T18:00:00Z",
+        "modelElevationM": 386,
+        "peakWstarMps": null,
+        "peakUsableLiftTopM": null,
+        "minSurfaceLclM": 598.4,
+        "meanWindSpeedMps": 0.79,
+        "maxTempC": 15.5,
+        "unsupportedReason": "Missing surface sensible/latent heat fluxes and dense vertical profile levels."
+      },
+      {
+        "model": "nws",
+        "modelKind": "surface-or-sparse-adapter",
+        "referenceTime": "2026-10-21T06:26:42+00:00",
+        "modelElevationM": 0,
+        "peakWstarMps": null,
+        "peakUsableLiftTopM": null,
+        "minSurfaceLclM": 515.6,
+        "meanWindSpeedMps": 0.82,
+        "maxTempC": 16.7,
+        "unsupportedReason": "Missing surface sensible/latent heat fluxes and dense vertical profile levels."
+      }
+    ]
+  }
 }

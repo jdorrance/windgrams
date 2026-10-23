@@ -187,6 +187,19 @@ export function buildSiteDocument({ site, point, grid, hourly, forecast, now = D
   const first = floorHour(now);
   const last = Math.min(Math.max(...covered), first + (MAX_HOURS - 1) * HOUR);
 
+  const pointProps = point.properties;
+  const elevation = props.elevation;
+  const gridElevationM = elevation?.value == null ? null : round(convert("ceilingHeightM", elevation.unitCode, elevation.value), 0);
+  const DRY_ADIABATIC_LAPSE_C_PER_M = 0.0098;
+  const computeSurfaceLclM = (tempC, dewC, elevM) => {
+    if (typeof tempC !== "number" || typeof dewC !== "number" || typeof elevM !== "number") return null;
+    if (dewC >= tempC) return round(elevM, 1);
+    const tk = tempC + 273.15;
+    const tdk = dewC + 273.15;
+    const tlcl = 1 / (1 / (tdk - 56) + Math.log(tk / tdk) / 800) + 56;
+    return round(elevM + Math.max(0, (tk - tlcl) / DRY_ADIABATIC_LAPSE_C_PER_M), 1);
+  };
+
   const hours = [];
   for (let t = first; t <= last; t += HOUR) {
     const row = { validAt: new Date(t).toISOString() };
@@ -195,6 +208,21 @@ export function buildSiteDocument({ site, point, grid, hourly, forecast, now = D
     }
     row.weather = describeWeather(weather.get(t));
     row.shortForecast = shortText.get(t) ?? null;
+    row.soaring = {
+      contractVersion: "2.0.0",
+      modelKind: "surface-or-sparse-adapter",
+      surfaceLclM: gridElevationM === null ? null : computeSurfaceLclM(row.temperatureC, row.dewpointC, gridElevationM),
+      modelBlTopM: gridElevationM !== null && typeof row.mixingHeightM === "number" ? round(gridElevationM + row.mixingHeightM, 1) : null,
+      blMeanWindSpeedMps: row.transportWindSpeedMps ?? null,
+      blMeanWindDirDeg: row.transportWindDirectionDeg ?? null,
+      thermalVelocityV2Mps: null,
+      usableLiftTopV2M: null,
+      hcritWxtoflyM: null,
+      dryHcritM: null,
+      mixedLayerLclM: null,
+      unsupportedDiagnostics: ["thermalVelocityV2Mps", "usableLiftTopV2M", "hcritWxtoflyM", "dryHcritM", "mixedLayerLclM"],
+      unsupportedReason: "NWS NDFD grid lacks surface sensible/latent heat fluxes and vertical thermodynamic profile levels.",
+    };
     hours.push(row);
   }
 
@@ -207,8 +235,6 @@ export function buildSiteDocument({ site, point, grid, hourly, forecast, now = D
     detailedForecast: p.detailedForecast,
   }));
 
-  const pointProps = point.properties;
-  const elevation = props.elevation;
   return {
     schemaVersion: SCHEMA_VERSION,
     source: "National Weather Service (NOAA), api.weather.gov",
@@ -216,6 +242,15 @@ export function buildSiteDocument({ site, point, grid, hourly, forecast, now = D
     updateTime: props.updateTime ?? null,
     hourlyUpdateTime: hourly?.properties?.updateTime ?? null,
     periodsUpdateTime: forecast?.properties?.updateTime ?? null,
+    soaringMeta: {
+      contractVersion: "2.0.0",
+      model: "nws",
+      modelKind: "surface-or-sparse-adapter",
+      supportedDiagnostics: ["surfaceLclM", "modelBlTopM", "blMeanWindSpeedMps", "blMeanWindDirDeg"],
+      unsupportedDiagnostics: ["thermalVelocityV2Mps", "usableLiftTopV2M", "hcritWxtoflyM", "dryHcritM", "mixedLayerLclM"],
+      unsupportedReason: "NWS NDFD grid lacks surface sensible/latent heat fluxes and vertical thermodynamic profile levels.",
+      synthesizedLevels: 0,
+    },
     site: {
       slug: site.slug,
       name: site.name,
@@ -227,7 +262,7 @@ export function buildSiteDocument({ site, point, grid, hourly, forecast, now = D
       office: pointProps.gridId,
       x: pointProps.gridX,
       y: pointProps.gridY,
-      elevationM: elevation?.value == null ? null : round(convert("ceilingHeightM", elevation.unitCode, elevation.value), 0),
+      elevationM: gridElevationM,
     },
     pageUrl: forecastPageUrl(site),
     units: UNITS,

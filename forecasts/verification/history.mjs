@@ -1,8 +1,27 @@
-// Phase 0 & Phase 4: Rolling forecast-history retention, multi-model & RAOB/NWS
-// observation alignment, promotion-gate scoring, and historical soaring case catalogue.
+// Rolling forecast-history retention (120 runs = 30 days at 4x/day),
+// explicit observation-matching rules, promotion-gate scoring, and historical soaring case catalogue.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+
+export const DEFAULT_MAX_ROLLING_RUNS = 120; // 30 days × 4 cycles/day
+
+export const OBSERVATION_MATCHING_RULES = Object.freeze({
+  schemaVersion: 2,
+  raobExactTimeDeltaMinutes: 0,
+  raobNearInitMaxTimeDeltaMinutes: 60, // Explicit f01 (+60 min) initialization-step fallback when f00 is not in site profile
+  surfaceStationMaxTimeDeltaMinutes: 30,
+  raobPreferredDistanceKm: 50.0,
+  raobMaxSiteVerificationDistanceKm: 60.0,
+  elevationDifferenceWarningM: 350.0,
+  pressureLevelsEvaluatedHpa: [925, 850, 700, 600],
+  leadTimeBuckets: [
+    { id: 'f00-f06', minHours: 0, maxHours: 6, label: 'Near-Initialization / Nowcast (f00–f06)' },
+    { id: 'f07-f12', minHours: 7, maxHours: 12, label: 'Short-Range (f07–f12)' },
+    { id: 'f13-f24', minHours: 13, maxHours: 24, label: 'Day-1 Soaring Window (f13–f24)' },
+    { id: 'f25-f48', minHours: 25, maxHours: 48, label: 'Day-2 Outlook (f25–f48)' },
+  ],
+});
 
 export const HISTORICAL_CASE_REGIMES = [
   {
@@ -14,8 +33,8 @@ export const HISTORICAL_CASE_REGIMES = [
     validWindowUtc: ['2026-10-21T14:00:00Z', '2026-10-22T03:00:00Z'],
     holdoutRole: 'baseline-verification',
     terrainMismatchM: -156.8,
-    stationExposure: 'KUIL RAOB 170 km WSW (coastal marine profile); KBLI Bellingham Intl 22 km NNW (lowland bay exposure); Blanchard 3DEP launch 378.5 m vs HRRR cell 221.7 m.',
-    summary: 'Light southerly flow (1.4 m/s 10 m, 5.2 m/s 925 hPa) with 100% high cirrus, shallow 283 m AGL HRRR HPBL, and 1.06 m/s W* peaking 20–21Z (1–2 PM PDT).'
+    stationExposure: 'KUIL RAOB 170 km WSW (coastal marine profile — exceeds 60 km spatial gate, classified as synoptic boundary only); KBLI Bellingham Intl 22 km NNW (lowland bay exposure); Blanchard 3DEP launch 378.5 m vs HRRR cell 221.7 m.',
+    summary: 'Light southerly flow (1.4 m/s 10 m, 5.2 m/s 925 hPa) with 100% high cirrus, shallow 283 m AGL HRRR HPBL (504.3 m MSL thermal top), and v2 W* 0.85 m/s peaking 20–21Z (1–2 PM PDT).'
   },
   {
     caseId: 'north-sound-mountain-alpine-20261021-06z',
@@ -38,7 +57,7 @@ export const HISTORICAL_CASE_REGIMES = [
     validWindowUtc: ['2026-10-21T18:00:00Z', '2026-10-22T02:00:00Z'],
     holdoutRole: 'convergence-holdout',
     terrainMismatchM: -189.0,
-    stationExposure: 'Blyn launch (471 m MSL) overlooking Sequim Bay and Strait of Juan de Fuca; sensitive to marine inflow boundary.',
+    stationExposure: 'Blyn launch (471 m MSL) overlooking Sequim Bay and Strait of Juan de Fuca; KUIL is 113 km W (rejected by spatial gate for local site verification).',
     summary: 'Strait marine layer abutting Olympic foothills with sharp horizontal moisture and sensible heat flux gradients between water and terrain.'
   },
   {
@@ -98,7 +117,7 @@ export const HISTORICAL_CASE_REGIMES = [
     validWindowUtc: ['2026-10-21T17:00:00Z', '2026-10-22T02:00:00Z'],
     holdoutRole: 'inversion-break-holdout',
     terrainMismatchM: -265.0,
-    stationExposure: 'KMFR Medford RAOB directly in adjacent valley; optimal balloon-to-launch proximity in the western catalogue.',
+    stationExposure: 'KMFR Medford RAOB 18 km NE in adjacent valley; primary matched balloon-to-launch verification site in the western catalogue.',
     summary: 'Strong nocturnal valley inversion in the Rogue/Applegate basin eroded by afternoon heating along south-west facing slopes.'
   },
   {
@@ -110,7 +129,7 @@ export const HISTORICAL_CASE_REGIMES = [
     validWindowUtc: ['2026-10-21T14:00:00Z', '2026-10-21T23:00:00Z'],
     holdoutRole: 'regional-expansion-tier-4-va',
     terrainMismatchM: -195.4,
-    stationExposure: 'KIAD Sterling RAOB; narrow Massanutten ridge geometry smoothed in 3 km HRRR vs 3DEP.',
+    stationExposure: 'KIAD Sterling RAOB & KRNK Blacksburg RAOB (56 km from va-eagle-rock); narrow ridge geometry smoothed in 3 km HRRR vs 3DEP.',
     summary: 'Eastern US ridge launch testing HRRR vs GFS/ECMWF boundary-layer wind alignment and dry afternoon thermals.'
   },
   {
@@ -152,34 +171,115 @@ export const HISTORICAL_CASE_REGIMES = [
 ];
 
 export const PROMOTION_GATES = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   daytimeWindVectorErrorReductionTargetPct: 10.0,
   minProspectiveIndependentDays: 30,
+  rollingRunsRetentionCount: DEFAULT_MAX_ROLLING_RUNS,
   morningDeliveryDeadlineLocalHour: 8,
   morningDeliveryReliabilityTargetPct: 95.0,
-  requireNoMaterialWorseningCloudBaseOrHazardWind: true
+  requireNoMaterialWorseningCloudBaseOrHazardWind: true,
+  requireMatchedTimeAndLocationVerification: true,
 };
 
 export function runKeyFromIso(referenceTime) {
   return referenceTime.replace(/[-:]/g, '').replace('.000Z', 'Z');
 }
 
+export function leadTimeBucketForHours(leadHours) {
+  if (typeof leadHours !== 'number' || !Number.isFinite(leadHours) || leadHours < 0) return 'unknown';
+  for (const bucket of OBSERVATION_MATCHING_RULES.leadTimeBuckets) {
+    if (leadHours >= bucket.minHours && leadHours <= bucket.maxHours) return bucket.id;
+  }
+  return 'f49+';
+}
+
+/**
+ * Evaluates whether a forecast hour and RAOB sounding satisfy spatial and temporal matching gates.
+ */
+export function evaluateRaobMatch({ distanceKm, soundingValidAt, forecastValidAt, referenceTime }) {
+  const obsMs = Date.parse(soundingValidAt);
+  const fcstMs = Date.parse(forecastValidAt);
+  const refMs = referenceTime ? Date.parse(referenceTime) : NaN;
+  const timeDeltaMinutes = Number.isFinite(obsMs) && Number.isFinite(fcstMs)
+    ? Math.round(Math.abs(fcstMs - obsMs) / 60000)
+    : Infinity;
+  const leadTimeHours = Number.isFinite(fcstMs) && Number.isFinite(refMs)
+    ? Math.round((fcstMs - refMs) / 3600000)
+    : null;
+
+  const spatialMatched = typeof distanceKm === 'number' && distanceKm <= OBSERVATION_MATCHING_RULES.raobMaxSiteVerificationDistanceKm;
+  const exactTimeMatched = timeDeltaMinutes <= OBSERVATION_MATCHING_RULES.raobExactTimeDeltaMinutes;
+  const nearInitTimeMatched = timeDeltaMinutes <= OBSERVATION_MATCHING_RULES.raobNearInitMaxTimeDeltaMinutes && (leadTimeHours === null || leadTimeHours <= 1);
+
+  let matchStatus = 'matched';
+  if (!spatialMatched && !exactTimeMatched && !nearInitTimeMatched) {
+    matchStatus = 'rejected-time-and-spatial-mismatch';
+  } else if (! exactTimeMatched && !nearInitTimeMatched) {
+    matchStatus = 'rejected-time-mismatch';
+  } else if (!spatialMatched) {
+    matchStatus = 'rejected-spatial-distance';
+  }
+
+  return {
+    matched: matchStatus === 'matched',
+    matchStatus,
+    matchTier: exactTimeMatched ? 'exact-valid-time' : nearInitTimeMatched ? 'near-init-f01-60min' : 'unmatched',
+    distanceKm,
+    timeDeltaMinutes,
+    leadTimeHours,
+    leadTimeBucket: leadTimeBucketForHours(leadTimeHours),
+  };
+}
+
+/**
+ * Compacts a site forecast document for rolling 120-run (30-day) history archival so that
+ * 120 runs × 7 models stay well under GitHub Actions cache and artifact limits (~1.5 MB/run
+ * instead of ~220 MB/run) while retaining all surface, soaring (v1 + v2), experimental, and
+ * standard verification pressure levels (925, 850, 700, 600 hPa + lowest above-ground level).
+ */
+export function compactSiteDocForHistory(doc) {
+  if (!doc || typeof doc !== 'object' || !Array.isArray(doc.hours)) return doc;
+  const keepPressures = new Set(OBSERVATION_MATCHING_RULES.pressureLevelsEvaluatedHpa);
+  return {
+    schemaVersion: doc.schemaVersion,
+    model: doc.model,
+    run: doc.run,
+    site: doc.site,
+    soaringMeta: doc.soaringMeta,
+    hours: doc.hours.map(h => {
+      const levels = Array.isArray(h.levels)
+        ? h.levels.filter((l, idx) => idx === 0 || keepPressures.has(l.pressureHpa))
+        : undefined;
+      return {
+        validAt: h.validAt,
+        surface: h.surface,
+        derived: h.derived,
+        soaring: h.soaring,
+        experimental: h.experimental,
+        ...(levels ? { levels } : {}),
+      };
+    }),
+  };
+}
+
 /**
  * Archives an issued model run into an immutable key `history/<model>/<runKey>/`
- * and enforces a bounded rolling window while preserving pinned case runs.
+ * and enforces a 120-run (30-day at 4x/day) bounded rolling window while preserving pinned case runs.
  */
-export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = 16, pinnedRunKeys = [] } = {}) {
+export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = [] } = {}) {
   const manifestPath = join(dataRoot, modelSlug, 'manifest.json');
   if (!existsSync(manifestPath)) return null;
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const runKey = runKeyFromIso(manifest.referenceTime);
   const runDir = join(dataRoot, 'history', modelSlug, runKey);
   mkdirSync(join(runDir, 'sites'), { recursive: true });
-  writeFileSync(join(runDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  writeFileSync(join(runDir, 'manifest.json'), JSON.stringify(manifest) + '\n');
   for (const site of manifest.sites ?? []) {
     const src = join(dataRoot, modelSlug, 'sites', `${site.slug}.json`);
     if (existsSync(src)) {
-      writeFileSync(join(runDir, 'sites', `${site.slug}.json`), readFileSync(src));
+      const rawDoc = JSON.parse(readFileSync(src, 'utf8'));
+      const compactDoc = compactSiteDocForHistory(rawDoc);
+      writeFileSync(join(runDir, 'sites', `${site.slug}.json`), JSON.stringify(compactDoc) + '\n');
     }
   }
   const modelHistoryDir = join(dataRoot, 'history', modelSlug);
@@ -189,7 +289,13 @@ export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = 16, pinn
     const oldest = unpinned.shift();
     rmSync(join(modelHistoryDir, oldest), { recursive: true, force: true });
   }
-  return { model: modelSlug, referenceTime: manifest.referenceTime, runKey, siteCount: (manifest.sites ?? []).length };
+  return {
+    model: modelSlug,
+    referenceTime: manifest.referenceTime,
+    runKey,
+    siteCount: (manifest.sites ?? []).length,
+    maxRollingRuns,
+  };
 }
 
 export function windVectorComponents(speedMps, directionDeg) {

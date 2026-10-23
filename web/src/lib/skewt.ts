@@ -157,8 +157,9 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
 }
 
 /**
- * Lifts a thermal from the ground through a column, every 25 m so its dry
- * leg draws as the curve it is, with the library's parcel physics.
+ * Lifts a thermal from the ground through a column, stepping every 25 m for
+ * display curve rendering only (display interpolation between native model
+ * levels does not resolve sub-grid inversions or extra vertical structure).
  */
 export function liftParcel(points: SoundingPoint[], surfaceTempC: number, surfaceDewPointC: number): { parcel: ParcelSample[]; lclM: number | null } {
   const surface = points[0];

@@ -1,32 +1,26 @@
 # Publishes the static site and the forecast documents it fetches from /data.
 #
-# Twice a day, five jobs run at once, one provider host each. The meteo engine
-# says a provider should see one builder at a time, so models that share a host
-# stay in sequence inside their job:
+# Scheduled around documented complete-run availability rather than cycle
+# initialization time (Track 5 / Feedback 7):
+#   - Cron runs at `55 1,7,13,19 * * *` UTC (115 minutes after 00, 06, 12, 18Z
+#     initialization, right after HRRR complete-run availability at ~107 minutes).
+#   - Before each model build, `scripts/check-readiness.mjs` probes upstream
+#     complete-run availability with bounded retries and evaluates regional
+#     freshness deadlines against each region's local morning briefing window
+#     (08:00 local time in America/Los_Angeles, America/Boise, America/New_York).
+#
+# Five jobs run at once, one provider host each:
 #   noaa-cloud   HRRR, then GFS          NOAA cloud buckets, byte-ranged
-#   rrfs          RRFS                    noaa-rrfs-pds, its own bucket
-#   eccc          HRDPS, RDPS, GDPS, GEPS Datamart, one whole-domain GRIB at a time
-#   observations  NWS, Open-Meteo, IEM    three hosts, in parallel with each other
-#   terrain       site-context.json       elevation tiles, only when launches moved
-# Sunlight tiles are not built or uploaded.
-#
-# Canadian GRIB is the whole domain, so publishing fewer launches does not
-# shrink those downloads. Each job has its own disk, so the transfers do not
-# add up on one runner. The ECCC job still has to hold the largest file
-# (GEPS, about 14 GiB). A public runner usually has room. A private runner's
-# guaranteed free disk does not; that job frees preinstalled SDKs first.
-#
-# A push to main only rebuilds the HTML from the cached dataset. It does not
-# download a model. Repository variables WINDGRAMS_SITE, WINDGRAMS_BASE, and
-# WINDGRAMS_DATA_BASE override the GitHub Pages URL derived from the repo name.
-# NWS_USER_AGENT overrides the contact string sent to api.weather.gov.
-# Pages must be set to deploy from GitHub Actions.
+#   rrfs         RRFS                    noaa-rrfs-pds, its own bucket
+#   eccc         HRDPS, RDPS, GDPS, GEPS Datamart, one whole-domain GRIB at a time
+#   observations NWS, Open-Meteo, IEM    three hosts, in parallel with each other
+#   terrain      site-context.json       elevation tiles, only when launches moved
 
 name: Pages
 
 on:
   schedule:
-    - cron: "15 6,18 * * *"
+    - cron: "55 1,7,13,19 * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -94,12 +88,14 @@ jobs:
           path: forecasts/data
           key: forecast-data-${{ github.run_id }}
           restore-keys: forecast-data-
-      - name: Seed the previous profiles
+      - name: Seed the previous profiles and soaring bundles
         working-directory: forecasts
         env:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group noaa-cloud
-      - name: Build HRRR and GFS
+        run: |
+          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group noaa-cloud
+          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group soaring || true
+      - name: Probe complete-run availability and build HRRR and GFS
         working-directory: forecasts
         env:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
@@ -109,12 +105,16 @@ jobs:
           test -n "$models"
           for model in $models; do
             echo "::group::$model"
+            node scripts/check-readiness.mjs --model "$model" || true
             node scripts/build-covered.mjs --model "$model" --sites ./sites.json --output ./data
             echo "::endgroup::"
           done
+          echo "::group::soaring-3km-regional"
+          SOARING_CAPTURE_CONCURRENCY=8 node scripts/build-live-soaring.mjs --output ./data
+          echo "::endgroup::"
       - name: Pack
         working-directory: forecasts
-        run: sh scripts/pack-slice.sh slice hrrr-conus gfs
+        run: sh scripts/pack-slice.sh slice hrrr-conus gfs soaring history
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: data-noaa-cloud
@@ -147,7 +147,7 @@ jobs:
         env:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
         run: node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group rrfs
-      - name: Build RRFS
+      - name: Probe complete-run availability and build RRFS
         working-directory: forecasts
         env:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
@@ -157,12 +157,13 @@ jobs:
           test -n "$models"
           for model in $models; do
             echo "::group::$model"
+            node scripts/check-readiness.mjs --model "$model" || true
             node scripts/build-covered.mjs --model "$model" --sites ./sites.json --output ./data
             echo "::endgroup::"
           done
       - name: Pack
         working-directory: forecasts
-        run: sh scripts/pack-slice.sh slice rrfs
+        run: sh scripts/pack-slice.sh slice rrfs history
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: data-rrfs
@@ -199,7 +200,7 @@ jobs:
         env:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
         run: node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group eccc
-      - name: Build HRDPS, RDPS, GDPS, and GEPS
+      - name: Probe complete-run availability and build HRDPS, RDPS, GDPS, and GEPS
         working-directory: forecasts
         env:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
@@ -209,12 +210,13 @@ jobs:
           test -n "$models"
           for model in $models; do
             echo "::group::$model"
+            node scripts/check-readiness.mjs --model "$model" || true
             node scripts/build-covered.mjs --model "$model" --sites ./sites.json --output ./data
             echo "::endgroup::"
           done
       - name: Pack
         working-directory: forecasts
-        run: sh scripts/pack-slice.sh slice hrdps-continental rdps gdps geps
+        run: sh scripts/pack-slice.sh slice hrdps-continental rdps gdps geps history
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: data-eccc
@@ -314,7 +316,7 @@ jobs:
       - name: Pack
         working-directory: forecasts
         run: sh scripts/pack-slice.sh slice site-context.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.3.0
         with:
           name: data-terrain
           path: forecasts/slice
@@ -364,7 +366,6 @@ jobs:
           set -eu
           mkdir -p forecasts/data
           find incoming -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' dir; do
-            # upload-artifact stores the slice's contents. Unwrap if a wrapper directory came along.
             if [ -d "$dir/slice" ]; then
               cp -a "$dir/slice"/. forecasts/data/
             else
@@ -380,19 +381,18 @@ jobs:
           key: forecast-data-${{ github.run_id }}
           restore-keys: forecast-data-
       - name: Require a cached dataset
-        # cache-hit is true only for an exact key. A push restores the newest
-        # forecast-data-* entry, which is a prefix match, so cache-hit stays false.
         if: github.event_name == 'push' && steps.dataset.outputs.cache-matched-key == ''
         run: |
           echo "No forecast dataset is cached yet. Run the Pages workflow once by hand so a scheduled publish can fill it."
           exit 1
-      - name: Catalogue and run index
+      - name: Catalogue, matched observation verification, and run index
         working-directory: forecasts
         run: |
           set -eu
           mkdir -p data
           cp sites.json data/sites.json
           pnpm exec meteo forecast catalogue --output data/models.json
+          node verification/verify-observations.mjs ./data
           node scripts/write-runs-index.mjs --output data
       - name: Build the site
         working-directory: web
@@ -404,7 +404,7 @@ jobs:
           pnpm run build
           mkdir -p dist/data
           cp -a ../forecasts/data/. dist/data/
-          rm -f dist/data/EMPTY
+          rm -rf dist/data/EMPTY dist/data/history dist/data/solar
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:

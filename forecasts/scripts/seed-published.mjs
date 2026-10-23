@@ -19,7 +19,7 @@ import { retryingFetch } from "./lib/http.mjs";
 import { paths as nwsPaths } from "./lib/nws.mjs";
 import { paths as raobPaths } from "./lib/raob.mjs";
 
-/** Model slugs for each runner. Observations and terrain publish no model. */
+/** Model slugs for each runner. Observations, soaring, and terrain publish no single model. */
 export const GROUPS = {
   "noaa-cloud": ["hrrr-conus", "gfs"],
   rrfs: ["rrfs"],
@@ -65,6 +65,26 @@ export async function collectGroup(group, { get, sites = [] }) {
     for (const slug of slugsOf(manifest)) await take(`${model}/sites/${slug}.json`);
   }
 
+  if (group === "soaring") {
+    const regions = await take("soaring/v1/regions.json");
+    const caseIds = new Set(["north-sound-20261021-00z"]);
+    for (const r of regions?.regions ?? []) {
+      if (r?.status === "active-verified-trial" && typeof r.caseId === "string") {
+        caseIds.add(r.caseId);
+      }
+    }
+    for (const caseId of caseIds) {
+      const pointer = await take(`soaring/v1/${caseId}/index.json`);
+      if (!pointer || typeof pointer.bundle !== "string") continue;
+      const bundleRoot = `soaring/v1/${caseId}/${pointer.bundle}`;
+      const manifest = await take(`${bundleRoot}/manifest.json`);
+      if (!manifest) continue;
+      for (const fileName of Object.keys(manifest.files ?? {})) {
+        await take(`${bundleRoot}/${fileName}`);
+      }
+    }
+  }
+
   if (group === "observations") {
     const nws = await take(nwsPaths.manifest());
     if (nws) {
@@ -84,6 +104,9 @@ export async function collectGroup(group, { get, sites = [] }) {
 export function groupHasLocal(output, group) {
   if (!Object.hasOwn(GROUPS, group)) return false;
   if (GROUPS[group].some((model) => existsSync(join(output, model, "manifest.json")))) return true;
+  if (group === "soaring") {
+    return existsSync(join(output, "soaring", "v1", "north-sound-20261021-00z", "index.json"));
+  }
   if (group === "observations") {
     return existsSync(join(output, nwsPaths.manifest())) || existsSync(join(output, ecmwfPaths.manifest())) || existsSync(join(output, "raob"));
   }

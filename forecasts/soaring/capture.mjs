@@ -95,7 +95,8 @@ export async function capture(c, root, { fetchImpl = fetch, log = console.error 
         selectRecords(parseIdx(text), c, hour);
       }, fetchImpl);
       const selected = selectRecords(parseIdx((await verifiedBytes(root, index)).toString()), c, hour);
-      const records = await concurrent(selected, 4, async selection => {
+      const captureConcurrency = Number(process.env.SOARING_CAPTURE_CONCURRENCY) || 4;
+      const records = await concurrent(selected, captureConcurrency, async selection => {
         if (!selection.record) return { key: selection.key, absent: true };
         let metadata;
         const asset = await captureAsset(root, `f${hour}-${selection.key}.grib2`, url, selection.record, bytes => {

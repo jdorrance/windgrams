@@ -1,6 +1,6 @@
 import { DEFAULT_STYLESHEET } from "@azohra/meteo.briefing/meteogram";
 import { barbPaths } from "./wind-barb.ts";
-import { heightToY, readWindgram, visibleHeightAnchors, yToHeight, type WindgramCloud, type WindgramView } from "./windgram-view.ts";
+import { heightToY, readWindgram, visibleHeightAnchors, visibleWindgramHourIndices, yToHeight, type WindgramBarb, type WindgramCloud, type WindgramView } from "./windgram-view.ts";
 
 const FT = 3.280839895;
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -50,6 +50,8 @@ const STYLES = `
 .windgram .wg-inspector { pointer-events: none; }
 .windgram .wg-inspector line { stroke: #14223f; stroke-width: 1; stroke-dasharray: 3 4; }
 .windgram .wg-inspector circle { fill: none; stroke: #17253e; stroke-width: 2; }
+.windgram-compact .wg-hour, .windgram-compact .wg-lift, .windgram-compact .wg-temperature { font-size: 12px; }
+.windgram-compact .wg-axis-feet, .windgram-compact .wg-surface-temp { font-size: 11px; }
 ${STABILITY.map(([name, color]) => `.windgram .meteo-gram-stab-${name} { fill: ${color}; }`).join("\n")}
 `;
 
@@ -67,9 +69,9 @@ interface LabelBox { x: number; y: number; width: number; height: number }
 const overlaps = (a: LabelBox, b: LabelBox, padding = 0) => a.x < b.x + b.width + padding && a.x + a.width > b.x - padding && a.y < b.y + b.height + padding && a.y + a.height > b.y - padding;
 
 /** Pick nearby spaces on the same isotherm; suppress a label when no space remains. */
-function temperatureLabels(view: WindgramView, cloudScale: number) {
-  const occupied: LabelBox[] = view.clouds.map((c) => ({ x: c.x - 29 * cloudScale, y: c.y - 25 * cloudScale, width: 58 * cloudScale, height: 27 * cloudScale }));
-  const winds: LabelBox[] = view.barbs.map((b) => {
+function temperatureLabels(view: WindgramView, cloudScale: number, clouds = view.clouds, barbs = view.barbs) {
+  const occupied: LabelBox[] = clouds.map((c) => ({ x: c.x - 29 * cloudScale, y: c.y - 25 * cloudScale, width: 58 * cloudScale, height: 27 * cloudScale }));
+  const winds: LabelBox[] = barbs.map((b) => {
     const direction = b.directionDeg * Math.PI / 180;
     const tipX = b.x + Math.sin(direction) * 22, tipY = b.y - Math.cos(direction) * 22;
     return { x: Math.min(b.x, tipX) - 7, y: Math.min(b.y, tipY) - 7, width: Math.abs(b.x - tipX) + 14, height: Math.abs(b.y - tipY) + 14 };
@@ -83,7 +85,8 @@ function temperatureLabels(view: WindgramView, cloudScale: number) {
     });
     for (const point of contour.labels) {
     const value = `${Math.round(contour.temperatureF)}°`;
-    const width = Math.max(28, value.length * 8 + 10), height = 22;
+    const width = view.compact ? Math.max(24, value.length * 7 + 6) : Math.max(28, value.length * 8 + 10);
+    const height = view.compact ? 19 : 22;
     // Follow the nearest branch of the actual contour when shifting sideways.
     // Altitude alone is insufficient: an isotherm can slope steeply over time.
     const offsets = [0, -view.columnWidth * .24, view.columnWidth * .24];
@@ -99,16 +102,16 @@ function temperatureLabels(view: WindgramView, cloudScale: number) {
     if (!boxes.length) continue;
     const box = boxes.find((candidate) => !winds.some((wind) => overlaps(candidate, wind, 1))) ?? boxes[0];
     occupied.push(box);
-    labels.push(`<g class="wg-temperature-label" data-temperature-f="${contour.temperatureF}"><rect x="${fmt(box.x)}" y="${fmt(box.y)}" width="${width}" height="${height}" rx="2" class="wg-temperature-back"/>${text(box.x + width / 2, box.y + 16, value, `text-anchor="middle" class="wg-temperature${contour.temperatureF === 32 ? " wg-temperature-freezing" : ""}"`)}</g>`);
+    labels.push(`<g class="wg-temperature-label" data-temperature-f="${contour.temperatureF}"><rect x="${fmt(box.x)}" y="${fmt(box.y)}" width="${width}" height="${height}" rx="2" class="wg-temperature-back"/>${text(box.x + width / 2, box.y + (view.compact ? 14 : 16), value, `text-anchor="middle" class="wg-temperature${contour.temperatureF === 32 ? " wg-temperature-freezing" : ""}"`)}</g>`);
     }
   }
   return labels.join("");
 }
 
 function heightAxisHeader(view: WindgramView) {
-  return text(view.left - (view.compact ? 10 : 12), view.compact ? 32 : 27, "Lift w*", 'text-anchor="end" class="wg-lift"')
-    + text(view.left - (view.compact ? 10 : 12), view.compact ? 47 : 43, "m/s", 'text-anchor="end" class="wg-axis-unit"')
-    + (view.compact ? text(view.left - 8, view.top - 12, "FEET MSL", 'text-anchor="end" class="wg-axis-unit"') : "");
+  return text(view.left - (view.compact ? 8 : 12), view.compact ? 31 : 27, "Lift w*", 'text-anchor="end" class="wg-lift"')
+    + text(view.left - (view.compact ? 8 : 12), view.compact ? 44 : 43, "m/s", 'text-anchor="end" class="wg-axis-unit"')
+    + (view.compact ? text(view.left - 8, view.top - 12, "ft MSL", 'text-anchor="end" class="wg-axis-unit"') : "");
 }
 
 function heightAxisLabels(view: WindgramView) {
@@ -121,16 +124,40 @@ function heightAxisLabels(view: WindgramView) {
   }).join("");
 }
 
-/** A stationary altitude scale for compact charts whose hours scroll sideways. */
+/** Optional stationary altitude scale for an independently zoomed chart. */
 export function renderWindgramHeightAxisSvg(view: WindgramView, options: { idPrefix?: string } = {}): string {
   const id = identifier(options.idPrefix ?? "windgram-height-axis");
-  return `<svg xmlns="${SVG_NS}" id="${id}" viewBox="0 0 ${view.left} ${fmt(view.height)}" width="${view.left}" height="${fmt(view.height)}" aria-hidden="true" focusable="false" class="windgram windgram-height-axis"><style>${STYLES}</style><rect width="${view.left}" height="${fmt(view.height)}" fill="#7977ce"/>${heightAxisHeader(view)}${heightAxisLabels(view)}<line x1="${view.left - .7}" x2="${view.left - .7}" y1="${view.top}" y2="${fmt(view.bottom)}" stroke="#eeebff" stroke-width="1.4"/>${text(view.left - 8, view.bottom + 53, "Surface °F", 'text-anchor="end" class="wg-axis-unit"')}</svg>`;
+  return `<svg xmlns="${SVG_NS}" id="${id}" viewBox="0 0 ${view.left} ${fmt(view.height)}" width="${view.left}" height="${fmt(view.height)}" aria-hidden="true" focusable="false" class="windgram${view.compact ? " windgram-compact" : ""} windgram-height-axis"><style>${STYLES}</style><rect width="${view.left}" height="${fmt(view.height)}" fill="#7977ce"/>${heightAxisHeader(view)}${heightAxisLabels(view)}<line x1="${view.left - .7}" x2="${view.left - .7}" y1="${view.top}" y2="${fmt(view.bottom)}" stroke="#eeebff" stroke-width="1.4"/>${text(view.left - 8, view.bottom + (view.compact ? 42 : 53), view.compact ? "Sfc °F" : "Surface °F", 'text-anchor="end" class="wg-axis-unit"')}</svg>`;
+}
+
+/** Avoid colliding wind feathers at small screen sizes without changing samples. */
+function displayedBarbs(view: WindgramView, hourIndices: Set<number>): WindgramBarb[] {
+  if (!view.compact) return view.barbs;
+  const visible: WindgramBarb[] = [];
+  for (const hourIndex of hourIndices) {
+    const native = view.barbs.filter((barb) => barb.hourIndex === hourIndex && !barb.interpolated && barb.y >= view.top + 20).sort((a, b) => b.y - a.y);
+    const selected: WindgramBarb[] = [];
+    for (const barb of native) if (!selected.length || selected.at(-1)!.y - barb.y >= 23) selected.push(barb);
+    const top = native.at(-1);
+    if (top && selected.length > 1 && selected.at(-1) !== top) selected[selected.length - 1] = top;
+    visible.push(...selected);
+  }
+  return visible;
 }
 
 export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: string } = {}): string {
   const id = identifier(options.idPrefix ?? "windgram");
   const right = view.left + view.plotWidth;
-  const cloudScale = Math.max(.64, Math.min(1, view.columnWidth / 64));
+  const visibleHours = new Set(visibleWindgramHourIndices(view));
+  const glyphHours = new Set<number>();
+  for (const [i, hour] of view.hours.entries()) {
+    if (!view.compact || (hour.x >= view.left + 20 && hour.x <= right - 20
+      && (!glyphHours.size || hour.x - view.hours[Array.from(glyphHours).at(-1)!].x >= 38))) glyphHours.add(i);
+  }
+  const barbs = displayedBarbs(view, glyphHours);
+  // A brief cloud event must remain visible even between displayed wind columns.
+  const clouds = view.clouds;
+  const cloudScale = view.compact ? Math.max(.2, Math.min(.58, view.columnWidth / 60)) : Math.max(.64, Math.min(1, view.columnWidth / 64));
   const parts: string[] = [
     `<style>${STYLES}</style>`,
     `<defs><clipPath id="${id}-plot"><rect x="${view.left}" y="${view.top}" width="${fmt(view.plotWidth)}" height="${fmt(view.plotHeight)}"/></clipPath><pattern id="${id}-missing" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#a7a4c0"/><path d="M0 0L8 8M-2 6L2 10M6-2L10 2" stroke="#77758f" stroke-width="1"/></pattern></defs>`,
@@ -149,19 +176,19 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
   }
   for (const contour of view.contours) parts.push(`<path d="${escape(contour.path)}" class="${contour.temperatureF === 32 ? "wg-isotherm-freezing" : "wg-isotherm"}" data-temperature-f="${contour.temperatureF}"/>`);
   if (view.launch) parts.push(`<line x1="${view.left}" x2="${fmt(right)}" y1="${fmt(view.launch.y)}" y2="${fmt(view.launch.y)}" stroke="#413b62" stroke-width="1.1" stroke-dasharray="3 4"/>`);
-  for (const barb of view.barbs) {
+  for (const barb of barbs) {
     const geometry = barbPaths(barb.speedKt, barb.directionDeg);
     const color = barb.speedKt < 6 ? "#c8ffc8" : barb.speedKt < 9 ? "#78ff78" : "#ffffff";
     const title = `${barb.speedKt.toFixed(1)} kt from ${degrees(barb.directionDeg)} · ${feet(barb.heightM)} ft · ${barb.interpolated ? "estimated between forecast levels" : "forecast level"}`;
     const shape = geometry.calm ? '<circle r="3" class="wg-barb"/>' : `<path d="${geometry.staff}" class="wg-barb-rim"/><path d="${geometry.staff}" class="wg-barb"/>${geometry.flags.map((flag) => `<path d="${flag}" class="wg-barb"${flag.endsWith("Z") ? ' style="fill:currentColor"' : ""}/>`).join("")}`;
-    parts.push(`<g transform="translate(${fmt(barb.x)} ${fmt(barb.y)})" style="color:${color}" class="${barb.interpolated ? "wg-barb-interpolated" : "wg-barb-native"}" data-wind-source="${barb.interpolated ? "interpolated" : "native"}"><title>${escape(title)}</title>${shape}</g>`);
+    parts.push(`<g transform="translate(${fmt(barb.x)} ${fmt(barb.y)})${view.compact ? " scale(.7)" : ""}" style="color:${color}" class="${barb.interpolated ? "wg-barb-interpolated" : "wg-barb-native"}" data-wind-source="${barb.interpolated ? "interpolated" : "native"}"><title>${escape(title)}</title>${shape}</g>`);
   }
-  parts.push(temperatureLabels(view, cloudScale));
+  parts.push(temperatureLabels(view, cloudScale, clouds, barbs));
   for (const freeze of view.freezing) parts.push(`<circle cx="${fmt(freeze.x)}" cy="${fmt(freeze.y)}" r="2.7" class="wg-freezing-mark"><title>Freezing level · 32°F</title></circle>`);
   for (const wing of view.wings) parts.push(`<path d="${WING_PATH}" transform="translate(${fmt(wing.x)} ${fmt(wing.y)})" class="wg-wing"><title>Usable lift top</title></path>`);
   if (view.launch) parts.push(text(view.left + 8, Math.max(view.top + 15, view.launch.y - 7), view.launch.label, 'class="wg-launch"'));
   // Actual clouds are opaque and render after every atmospheric mark.
-  for (const cloud of view.clouds) parts.push(cloudGlyph(cloud, cloudScale));
+  for (const cloud of clouds) parts.push(cloudGlyph(cloud, cloudScale));
   parts.push("</g>");
   parts.push(`<rect x="${view.left}" y="${view.top}" width="${fmt(view.plotWidth)}" height="${fmt(view.plotHeight)}" fill="none" stroke="#eeebff" stroke-width="1.4"/>`);
   parts.push(heightAxisLabels(view));
@@ -169,30 +196,35 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
     parts.push(`<path d="M${fmt(right)} ${fmt(anchor.y)}h5" stroke="#fff" stroke-width="1"/>`);
     parts.push(text(right + 10, anchor.y + 4, feet(anchor.heightM), 'class="wg-axis-feet"'));
   }
-  for (const hour of view.hours) {
-    if (view.compact) parts.push(text(hour.x, 19, hour.label, 'text-anchor="middle" class="wg-hour wg-hour-top"'));
-    parts.push(text(hour.x, view.compact ? 42 : 36, hour.thermalVelocityMps == null ? "—" : `${Math.round(hour.thermalVelocityMps * 10) / 10}`, 'text-anchor="middle" class="wg-lift"'));
+  for (const [hourIndex, hour] of view.hours.entries()) {
     parts.push(`<line x1="${fmt(hour.x)}" x2="${fmt(hour.x)}" y1="${fmt(view.bottom)}" y2="${fmt(view.bottom + 5)}" stroke="#fff"/>`);
     if (hour.inWindWindow !== null) parts.push(hour.inWindWindow
       ? `<path d="M${fmt(hour.x)} ${fmt(view.bottom + 9)}l4 7h-8Z" fill="#afffb1"><title>Surface wind direction is in the launch window</title></path>`
       : `<circle cx="${fmt(hour.x)}" cy="${fmt(view.bottom + 13)}" r="3" fill="none" stroke="#ffe1cf" stroke-width="1.3"><title>Surface wind direction is outside the launch window</title></circle>`);
-    parts.push(text(hour.x, view.bottom + 35, hour.label, 'text-anchor="middle" class="wg-hour"'));
-    parts.push(text(hour.x, view.bottom + 53, hour.temperatureF == null ? "—" : `${Math.round(hour.temperatureF)}°`, 'text-anchor="middle" class="wg-surface-temp"'));
+    if (!visibleHours.has(hourIndex)) continue;
+    if (view.compact) parts.push(text(hour.x, 17, hour.label, 'text-anchor="middle" class="wg-hour wg-hour-top"'));
+    parts.push(text(hour.x, view.compact ? 38 : 36, hour.thermalVelocityMps == null ? "—" : `${Math.round(hour.thermalVelocityMps * 10) / 10}`, 'text-anchor="middle" class="wg-lift"'));
+    parts.push(text(hour.x, view.bottom + (view.compact ? 27 : 35), hour.label, 'text-anchor="middle" class="wg-hour"'));
+    parts.push(text(hour.x, view.bottom + (view.compact ? 42 : 53), hour.temperatureF == null ? "—" : `${Math.round(hour.temperatureF)}°`, 'text-anchor="middle" class="wg-surface-temp"'));
   }
-  parts.push(text(view.left - 10, view.bottom + 53, "Surface °F", 'text-anchor="end" class="wg-axis-unit"'));
-  parts.push(text(view.left + view.plotWidth / 2, view.bottom + 75, `${view.timeZone} · wind in knots · temperatures °F${view.ensemble ? " · ensemble median" : ""}`, 'text-anchor="middle" class="wg-axis-unit"'));
+  parts.push(text(view.left - (view.compact ? 8 : 10), view.bottom + (view.compact ? 42 : 53), view.compact ? "Sfc °F" : "Surface °F", 'text-anchor="end" class="wg-axis-unit"'));
+  if (view.compact) {
+    parts.push(text(view.width / 2, view.bottom + 59, `Wind kt · temperature °F${view.ensemble ? " · median" : ""}`, 'text-anchor="middle" class="wg-axis-unit"'));
+    parts.push(text(view.width / 2, view.bottom + 73, view.timeZone, 'text-anchor="middle" class="wg-axis-unit"'));
+  } else parts.push(text(view.left + view.plotWidth / 2, view.bottom + 75, `${view.timeZone} · wind in knots · temperatures °F${view.ensemble ? " · ensemble median" : ""}`, 'text-anchor="middle" class="wg-axis-unit"'));
   parts.push(`<g class="wg-inspector" data-windgram-cursor="" visibility="hidden"><line data-cursor-vertical=""/><line data-cursor-horizontal=""/><circle data-cursor-point="" r="7"/></g>`);
   const first = view.hours[0], last = view.hours[view.hours.length - 1];
   const description = `Windgram${first ? ` from ${first.label} to ${last.label}` : ""}, ${view.timeZone}. ${view.compact ? "Feet above sea level at left." : "Pressure and height at left, feet above sea level at right."} Vertical spacing expands the lower atmosphere. Wind feathers use knots. Temperature contours use Fahrenheit. White clouds show model or humidity evidence; outlined clouds show potential cumulus. ${view.ensemble ? "Ensemble median with shaded uncertainty bands." : ""}`;
-  return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(view.width)} ${fmt(view.height)}" role="img" aria-labelledby="${id}-title ${id}-description" class="windgram"><title id="${id}-title">Wind, temperature and clouds by hour and altitude</title><desc id="${id}-description">${escape(description)}</desc>${parts.join("\n")}</svg>`;
+  return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(view.width)} ${fmt(view.height)}" role="img" aria-labelledby="${id}-title ${id}-description" class="windgram${view.compact ? " windgram-compact" : ""}"><title id="${id}-title">Wind, temperature and clouds by hour and altitude</title><desc id="${id}-description">${escape(description)}</desc>${parts.join("\n")}</svg>`;
 }
 
 /** Reuses the diagnostic data and path geometry, with a compact independent layout. */
 export function renderWindgramDiagnosticsSvg(view: WindgramView, options: { idPrefix?: string } = {}): string {
   const id = identifier(options.idPrefix ?? "windgram-diagnostics");
   const left = view.compact ? 102 : view.left;
-  const width = view.compact ? left + view.plotWidth + 88 : view.width;
-  const rowPitch = 45, firstTop = 26, plotRight = left + view.plotWidth;
+  const plotWidth = view.diagnosticColumnWidth * Math.max(1, view.hours.length);
+  const width = view.compact ? left + plotWidth + 88 : view.width;
+  const rowPitch = 45, firstTop = 26, plotRight = left + plotWidth;
   const footer = view.sourceNote ? 58 : 34;
   const height = firstTop + view.diagnostics.length * rowPitch + footer;
   const parts = [`<style>${DEFAULT_STYLESHEET}\n.wg-diagnostics text{font-family:ui-sans-serif,system-ui,sans-serif}.wg-diagnostics .wg-diagnostic-label{fill:#263f48;font-size:12px;font-weight:650}.wg-diagnostics .wg-diagnostic-unit{fill:#4a6068;font-size:10px}.wg-diagnostics .wg-diagnostic-scale{fill:#4a6068;font-size:10px}.wg-diagnostics .wg-diagnostic-note{fill:#4a6068;font-size:10px}</style>`, `<rect width="${fmt(width)}" height="${height}" fill="#fffdf8"/>`];
@@ -200,7 +232,7 @@ export function renderWindgramDiagnosticsSvg(view: WindgramView, options: { idPr
     const top = firstTop + index * rowPitch;
     const dx = left - view.diagnosticLeft, dy = top - strip.top;
     const bottom = top + strip.height;
-    parts.push(`<rect x="${left}" y="${top}" width="${fmt(view.plotWidth)}" height="${strip.height}" class="meteo-gram-strip-frame" stroke-width=".7"/>`);
+    parts.push(`<rect x="${left}" y="${top}" width="${fmt(plotWidth)}" height="${strip.height}" class="meteo-gram-strip-frame" stroke-width=".7"/>`);
     parts.push(`<line x1="${left}" x2="${fmt(plotRight)}" y1="${fmt(top + strip.height / 2)}" y2="${fmt(top + strip.height / 2)}" stroke="#73818a" stroke-dasharray="2 4" opacity=".22"/>`);
     parts.push(text(left - 10, top + 10, strip.label, 'text-anchor="end" class="wg-diagnostic-label"'));
     parts.push(text(left - 10, top + 23, strip.unit, 'text-anchor="end" class="wg-diagnostic-unit"'));
@@ -208,14 +240,14 @@ export function renderWindgramDiagnosticsSvg(view: WindgramView, options: { idPr
     if (strip.cells) for (const cell of strip.cells) if (cell) parts.push(`<rect x="${fmt(cell.x)}" y="${strip.top}" width="${fmt(cell.width)}" height="${strip.height}" class="${escape(cell.className)}"${cell.opacity === undefined ? "" : ` opacity="${cell.opacity}"`}/>`);
     if (strip.rows) for (const row of strip.rows) {
       for (const cell of row.cells) if (cell) parts.push(`<rect x="${fmt(cell.x)}" y="${fmt(row.top)}" width="${fmt(cell.width)}" height="${fmt(row.height)}" class="${escape(cell.className)}"${cell.opacity === undefined ? "" : ` opacity="${cell.opacity}"`}/>`);
-      parts.push(text(view.diagnosticLeft + view.plotWidth + 8, row.top + row.height - 1, row.label, 'class="wg-diagnostic-scale"'));
+      parts.push(text(view.diagnosticLeft + plotWidth + 8, row.top + row.height - 1, row.label, 'class="wg-diagnostic-scale"'));
     }
     if (strip.areaPath) parts.push(`<path d="${escape(strip.areaPath)}" class="${escape(strip.className)}-area" opacity=".18"/>`);
     if (strip.bandPath) parts.push(`<path d="${escape(strip.bandPath)}" class="${escape(strip.className)}-band" opacity=".2"/>`);
     if (strip.linePath) parts.push(`<path d="${escape(strip.linePath)}" class="${escape(strip.className)}" fill="none" stroke-width="1.7"/>`);
     for (const dot of strip.dots ?? []) parts.push(`<circle cx="${fmt(dot.x)}" cy="${fmt(dot.y)}" r="2" class="${escape(strip.className)}-dot"/>`);
     for (const dot of strip.degradedDots ?? []) parts.push(`<circle cx="${fmt(dot.x)}" cy="${fmt(dot.y)}" r="2" class="${escape(strip.className)}-degraded-dot"/>`);
-    if (strip.measuredToX != null) parts.push(`<rect x="${fmt(strip.measuredToX)}" y="${strip.top}" width="${fmt(Math.max(0, view.diagnosticLeft + view.plotWidth - strip.measuredToX))}" height="${strip.height}" class="meteo-gram-strip-pending"/>`);
+    if (strip.measuredToX != null) parts.push(`<rect x="${fmt(strip.measuredToX)}" y="${strip.top}" width="${fmt(Math.max(0, view.diagnosticLeft + plotWidth - strip.measuredToX))}" height="${strip.height}" class="meteo-gram-strip-pending"/>`);
     parts.push("</g>");
     if (!strip.rows) {
       parts.push(text(plotRight + 8, top + 5, `${Math.round(strip.maximum * 10) / 10}`, 'class="wg-diagnostic-scale"'));
@@ -224,7 +256,7 @@ export function renderWindgramDiagnosticsSvg(view: WindgramView, options: { idPr
     if (strip.sourceLabel) parts.push(text(left + 5, bottom + 12, strip.sourceLabel, 'class="wg-diagnostic-note"'));
   }
   const timeY = firstTop + view.diagnostics.length * rowPitch + 8;
-  for (const hour of view.hours) parts.push(text(hour.x + left - view.left, timeY, hour.label, 'text-anchor="middle" class="wg-diagnostic-label"'));
+  for (const [index, hour] of view.hours.entries()) parts.push(text(left + view.diagnosticColumnWidth * (index + .5), timeY, hour.label, 'text-anchor="middle" class="wg-diagnostic-label"'));
   if (view.sourceNote) parts.push(text(left, timeY + 24, view.sourceNote, 'class="wg-diagnostic-note"'));
   if (!view.diagnostics.length) parts.push(text(left, 25, "No supplemental forecast values are available.", 'class="wg-diagnostic-note"'));
   return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(width)} ${height}" role="img" aria-labelledby="${id}-title" class="meteo-gram wg-diagnostics"><title id="${id}-title">Supplemental weather diagnostics aligned to the windgram hours</title>${parts.join("\n")}</svg>`;

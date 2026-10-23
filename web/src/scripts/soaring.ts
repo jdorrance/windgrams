@@ -4,7 +4,7 @@ import { parseSiteForecast, type SiteForecast } from '@azohra/meteo.briefing/con
 import { baseMap, onMapReady } from './map.ts';
 import { DATA_BASE } from '../lib/site.ts';
 import { buildWindgramView } from '../lib/windgram-view.ts';
-import { renderWindgramSvg, renderWindgramKey, renderWindgramHeightAxisSvg } from '../lib/windgram-chart.ts';
+import { renderWindgramSvg, renderWindgramKey } from '../lib/windgram-chart.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
 import { SkewTChart } from '../lib/skewt-chart.ts';
 import { compassPoint } from '../lib/launches.ts';
@@ -433,7 +433,7 @@ async function main() {
   let cursor: SVGRectElement | null = null;
 
   function renderActiveCellWindgram(activeProfile: SiteForecast, cellIdx: number, index: number) {
-    const compact = window.matchMedia('(max-width: 640px)').matches;
+    const compact = window.matchMedia('(max-width: 640px), (max-width: 960px) and (max-height: 600px)').matches;
     const widthPx = compact ? Math.max(windgramHost.clientWidth || 320, 240) : 1100;
     const heightPx = window.innerHeight;
     const layout = compact ? `compact:${widthPx}:${heightPx}` : 'desktop';
@@ -456,13 +456,13 @@ async function main() {
         launch: launchMeta,
       });
       windgramHost.innerHTML = renderWindgramSvg(currentView, { idPrefix: 'soaring' });
-      windgramAxis.innerHTML = compact ? renderWindgramHeightAxisSvg(currentView, { idPrefix: 'soaring-height-axis' }) : '';
-      windgramAxis.hidden = !compact;
+      windgramAxis.replaceChildren();
+      windgramAxis.hidden = true;
       el('windgram-key').innerHTML = renderWindgramKey();
       const svg = windgramHost.querySelector('svg')!;
       const box = svg.viewBox.baseVal;
       if (box.width > 0) svg.style.width = `${box.width}px`;
-      windgramHost.dataset.axisWidth = String(compact ? currentView.left : 0);
+      windgramHost.dataset.axisWidth = '0';
       cursor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       for (const [key, value] of Object.entries({
         y: currentView.top,
@@ -491,7 +491,7 @@ async function main() {
     if (cursor && currentView.hours[index]) {
       const left = currentView.hours[index].x - currentView.columnWidth / 2;
       cursor.setAttribute('x', String(left));
-      if (compact && (rebuilt || currentWindgramHour !== index)) {
+      if (windgramHost.scrollWidth > windgramHost.clientWidth + 1 && (rebuilt || currentWindgramHour !== index)) {
         const right = left + currentView.columnWidth;
         if (left < windgramHost.scrollLeft + currentView.left + 16) {
           windgramHost.scrollLeft = Math.max(0, left - currentView.left - 16);

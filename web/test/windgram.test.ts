@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast, type SiteForecast } from "@azohra/meteo.briefing/contract";
-import { buildWindgramView, heightToY, readWindgram, visibleHeightAnchors, yToHeight } from "../src/lib/windgram-view.ts";
+import { buildWindgramView, heightToY, readWindgram, visibleHeightAnchors, visibleWindgramHourIndices, yToHeight } from "../src/lib/windgram-view.ts";
 import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramHeightAxisSvg, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
 
 const fixture = (name = "convective-cycle") => {
@@ -254,33 +254,46 @@ test("diagnostics keep their hour positions after an ensemble dropout", () => {
   assert.deepEqual(profile, before, "building the display never rewrites forecast measurements");
 });
 
-test("compact charts fit phone height while retaining readable hourly columns and dense-profile altitude labels", () => {
+test("compact charts fit a full forecast into portrait and landscape phones without discarding samples", () => {
   const profile = steadyProfile(14);
   for (const hour of profile.hours) hour.levels = Array.from({ length: 18 }, (_, i) => ({
     ...hour.levels[0], pressureHpa: 1000 - i * 25, heightM: profile.site.modelElevationM + 100 + i * 180,
   }));
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 390, heightPx: 640 });
-  assert.equal(view.left, 62);
-  assert.equal(view.columnWidth, 44);
-  assert.equal(view.plotHeight, 400);
+  assert.equal(view.left, 52);
+  assert.equal(view.plotHeight, 380);
   assert.ok(view.height < 640);
-  assert.ok(view.width > 390, "hours pan horizontally instead of shrinking every mark to phone width");
+  assert.equal(view.width, 390, "the whole forecast fits the available width");
   const labels = visibleHeightAnchors(view);
   assert.ok(labels.length >= 7, "dense native levels retain an evenly spaced subset of readable altitude labels");
   for (const [i, anchor] of labels.entries()) if (i) assert.ok(labels[i - 1].y - anchor.y >= 23);
   for (const anchor of view.anchors) close(yToHeight(view, anchor.y), anchor.heightM, 0.01);
   for (const heightPx of [300, 2000]) {
     const bounded = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 390, heightPx });
-    assert.ok(bounded.plotHeight >= 360 && bounded.plotHeight <= 500);
+    assert.ok(bounded.plotHeight >= 160 && bounded.plotHeight <= 440);
   }
   const desktop = viewOf(profile);
   assert.equal(desktop.compact, false);
   assert.equal(desktop.left, 102);
   assert.equal(desktop.top, 65);
   assert.ok(desktop.plotHeight >= 680);
+  for (const [widthPx, heightPx] of [[240, 667], [320, 667], [390, 844], [430, 932], [780, 390]]) {
+    const fitted = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx, heightPx });
+    close(fitted.width, widthPx);
+    assert.ok(fitted.height <= heightPx - 40, `${widthPx}×${heightPx} fits vertically`);
+    assert.deepEqual(fitted.hours.map((hour) => hour.validAt), desktop.hours.map((hour) => hour.validAt));
+    assert.deepEqual(fitted.sampling, desktop.sampling, "fitting changes display coordinates, never atmospheric measurements");
+    for (const [index, hour] of profile.hours.entries()) {
+      for (const level of hour.levels) assert.deepEqual(readWindgram(fitted, index, level.heightM), readWindgram(desktop, index, level.heightM));
+    }
+    const visibleHours = visibleWindgramHourIndices(fitted);
+    assert.equal(visibleHours[0], 0);
+    assert.equal(visibleHours.at(-1), fitted.hours.length - 1);
+    for (const [i, index] of visibleHours.entries()) if (i) assert.ok(fitted.hours[index].x - fitted.hours[visibleHours[i - 1]].x >= 34);
+  }
 });
 
-test("compact fixed altitude scale matches the full chart and hours are repeated above the plot", () => {
+test("compact charts thin display marks, retain first and last hours, and keep diagnostics independently readable", () => {
   const view = buildWindgramView(fixture(), { timeZone: "Etc/UTC", compact: true, widthPx: 375, heightPx: 667 });
   const svg = renderWindgramSvg(view);
   const axis = renderWindgramHeightAxisSvg(view);
@@ -290,12 +303,54 @@ test("compact fixed altitude scale matches the full chart and hours are repeated
   assert.match(axis, new RegExp(`viewBox="0 0 ${view.left} ${view.height}"`));
   assert.match(axis, /aria-hidden="true"/);
   assert.match(axis, /fill="#7977ce"/);
-  assert.match(svg, /FEET MSL/);
+  assert.match(svg, /ft MSL/);
   assert.doesNotMatch(svg, / hPa<\/text>/);
-  assert.equal([...svg.matchAll(/class="wg-hour wg-hour-top"/g)].length, view.hours.length);
+  const visibleHours = visibleWindgramHourIndices(view);
+  const hourLabels = [...svg.matchAll(/class="wg-hour wg-hour-top">([^<]+)</g)].map((match) => match[1]);
+  assert.equal(hourLabels.length, visibleHours.length);
+  assert.equal(hourLabels[0], view.hours[0].label);
+  assert.equal(hourLabels.at(-1), view.hours.at(-1)!.label);
+  assert.ok(hourLabels.length < view.hours.length);
+  assert.equal([...svg.matchAll(/class="wg-hourline"/g)].length, view.hours.length, "every forecast column remains in the chart");
+  assert.ok([...svg.matchAll(/data-wind-source=/g)].length < view.barbs.length, "wind feathers are thinned without deleting their source samples");
+  assert.ok(view.diagnosticColumnWidth >= 44);
   const diagnostics = renderWindgramDiagnosticsSvg(view);
-  assert.match(diagnostics, new RegExp(`viewBox="0 0 ${view.width + 116} `));
+  assert.match(diagnostics, new RegExp(`viewBox="0 0 ${190 + view.diagnosticColumnWidth * view.hours.length} `));
+  assert.ok(view.diagnosticColumnWidth > view.columnWidth);
   assert.doesNotMatch(svg + axis + diagnostics, /NaN|Infinity|undefined/);
+});
+
+test("compact chart height can fit the space below phone controls", () => {
+  for (const maxHeightPx of [264, 350]) {
+    const view = buildWindgramView(fixture(), { timeZone: "Etc/UTC", compact: true, widthPx: 320, heightPx: 667, maxHeightPx });
+    assert.equal(view.height, maxHeightPx);
+    assert.equal(view.plotHeight, maxHeightPx - 152);
+    assert.ok(visibleHeightAnchors(view).length > 3);
+    assert.equal(visibleWindgramHourIndices(view).at(-1), view.hours.length - 1);
+    assert.match(renderWindgramSvg(view), /Sfc °F/);
+  }
+});
+
+test("compact charts retain an isolated cloud between displayed time labels and wind columns", () => {
+  const profile = steadyProfile(14);
+  for (const hour of profile.hours) {
+    hour.derived.thermalVelocityMps = 0;
+    for (const level of hour.levels) {
+      level.dewPointC = Number(level.temperatureC) - 20;
+      level.cloudFractionPercent = 0;
+    }
+  }
+  profile.hours[3].levels[2].cloudFractionPercent = 100;
+  const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 320, heightPx: 667 });
+  assert.ok(!visibleWindgramHourIndices(view).includes(3));
+  assert.equal(view.clouds.length, 1);
+  assert.equal(view.clouds[0].hourIndex, 3);
+  const svg = renderWindgramSvg(view);
+  const windXs = [...svg.matchAll(/<g transform="translate\(([-\d.]+) [-\d.]+\) scale\(\.7\)"[^>]*data-wind-source=/g)].map((match) => Number(match[1]));
+  assert.ok(windXs.every((x) => Math.abs(x - view.hours[3].x) > .01), "the cloud occurs between sampled wind columns");
+  assert.match(svg, /data-cloud-kind="model"/);
+  assert.equal([...svg.matchAll(/data-cloud-kind=/g)].length, view.clouds.length);
+  assert.match(svg, /data-cloud-band="model"/);
 });
 
 test("keyboard hour selection and cleanup work without a visible inspector readout", () => {

@@ -645,6 +645,13 @@ details[open] > summary {
   opacity: .4;
 }
 
+#forecast-hour-peak,
+#skewt-best {
+  max-width: 100px;
+  line-height: 1.2;
+  white-space: normal;
+}
+
 .forecast-conditions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -769,8 +776,8 @@ details[open] > summary {
   height: auto;
 }
 
-/* Keep the chart's paper and text together in both site themes. Its SVG width
-   preserves readable hour columns; narrow screens scroll inside the frame. */
+/* Keep the chart's paper and text together in both site themes. The mobile
+   windgram fits its frame; detailed diagnostics can scroll independently. */
 .meteogram-frame,
 .meteogram-diagnostics,
 .windgram-key {
@@ -1209,6 +1216,7 @@ fieldset {
 .sun-slider {
   flex: 1;
   display: flex;
+  min-width: 0;
 }
 
 .sun-slider input {

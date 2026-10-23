@@ -34,7 +34,7 @@ export interface WindgramView {
   freezing: { x: number; y: number; hourIndex: number }[];
   wings: { x: number; y: number }[]; series: WindgramSeries[];
   launch: { y: number; heightM: number; label: string } | null;
-  diagnostics: readonly MetricStrip[]; diagnosticLeft: number;
+  diagnostics: readonly MetricStrip[]; diagnosticLeft: number; diagnosticColumnWidth: number;
   sampling: readonly HourSampling[]; selectedHourIndex: number;
   compact: boolean; ensemble: boolean; sourceNote: string | null;
   displayInterpolationNote: string;
@@ -43,6 +43,8 @@ export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "lau
   compact?: boolean;
   /** Available viewport height; compact charts reserve room for page controls. */
   heightPx?: number;
+  /** Total height available below page controls, including the chart's axes. */
+  maxHeightPx?: number;
 };
 export interface WindgramReading {
   hourIndex: number; validAt: string; heightM: number;
@@ -121,6 +123,18 @@ export function visibleHeightAnchors(view: Pick<WindgramView, "anchors" | "top" 
     const previous = selected.at(-1);
     if (!previous || (anchor.y - view.top > 20 && previous.y - anchor.y >= minimumGap)) selected.push(anchor);
   }
+  return selected;
+}
+
+/** Thin only display marks, keeping both ends of the complete forecast visible. */
+export function visibleWindgramHourIndices(view: Pick<WindgramView, "hours" | "compact">, minimumSpacingPx = 34): number[] {
+  if (!view.compact) return view.hours.map((_, i) => i);
+  const selected: number[] = [];
+  for (const [i, hour] of view.hours.entries()) {
+    if (!selected.length || hour.x - view.hours[selected.at(-1)!].x >= minimumSpacingPx) selected.push(i);
+  }
+  const lastIndex = view.hours.length - 1;
+  if (selected.length > 1 && selected.at(-1) !== lastIndex) selected[selected.length - 1] = lastIndex;
   return selected;
 }
 
@@ -317,10 +331,13 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const dayWindow = window && !Array.isArray(window) && "dateKey" in window ? window : null;
   const hours = profile.hours.filter((h) => (!selected || selected.has(h.validAt)) && (!dayWindow || localDateKey(h.validAt, dayWindow.timeZone) === dayWindow.dateKey));
   const compact = options.compact ?? false;
-  const left = compact ? 62 : 102, right = compact ? 12 : 88, top = compact ? 82 : 65;
-  const columnWidth = Math.max(compact ? 44 : 48, ((options.widthPx ?? 1000) - left - right) / Math.max(1, hours.length));
+  const left = compact ? 52 : 102, right = compact ? 8 : 88, top = compact ? 70 : 65;
+  const availableWidth = Math.max(1, (options.widthPx ?? 1000) - left - right);
+  const columnWidth = compact ? availableWidth / Math.max(1, hours.length) : Math.max(48, availableWidth / Math.max(1, hours.length));
   const plotWidth = columnWidth * Math.max(1, hours.length);
-  const plotHeight = compact ? clamp((options.heightPx ?? 720) - 240, 360, 500) : clamp(plotWidth * 0.8, 680, 1100);
+  const preferredPlotHeight = compact ? clamp((options.heightPx ?? 720) - 260, 160, 440) : clamp(plotWidth * 0.8, 680, 1100);
+  const plotHeight = compact && options.maxHeightPx !== undefined
+    ? Math.min(preferredPlotHeight, Math.max(80, options.maxHeightPx - top - 82)) : preferredPlotHeight;
   const bottom = top + plotHeight;
   const floorM = profile.site.modelElevationM;
   const grouped = new Map<number, number[]>();
@@ -339,12 +356,14 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   anchors.push({ pressureHpa: null, heightM: topM, y: top });
   const sampling = hours.map((h) => hourSampling(h, floorM));
   // The library remains the authority for diagnostic semantics and units.
-  const scene = buildMeteogramScene(profile, { ...options, hours, widthPx: plotWidth + 120, minColumnWidthPx: 1, plotHeightPx: 1,
+  const diagnosticColumnWidth = compact ? Math.max(44, columnWidth) : columnWidth;
+  const diagnosticPlotWidth = diagnosticColumnWidth * Math.max(1, hours.length);
+  const scene = buildMeteogramScene(profile, { ...options, hours, widthPx: diagnosticPlotWidth + 120, minColumnWidthPx: 1, plotHeightPx: 1,
     overlays: { stability: false, temperature: false, wind: false, cloudBase: false, usableLiftTop: false, boundaryLayerTop: false, selectedHour: false } });
   const labelTime = new Intl.DateTimeFormat("en-US", { timeZone: options.timeZone, hour: "numeric", hour12: true });
   const ensemble = (profile.run.members ?? 0) > 1 || hours.some((h) => typeof h.surface.temperatureC === "object" && h.surface.temperatureC !== null);
   const view: WindgramView = {
-    width: left + plotWidth + right, height: bottom + 86, left, top, plotWidth, plotHeight, bottom, columnWidth, floorM, topM,
+    width: left + plotWidth + right, height: bottom + (compact ? 82 : 86), left, top, plotWidth, plotHeight, bottom, columnWidth, floorM, topM,
     timeZone: options.timeZone, anchors, sampling, compact, ensemble, sourceNote: scene.smokeSource ? `Smoke: ${scene.smokeSource.model} · run ${scene.smokeSource.referenceTime}` : null,
     displayInterpolationNote: "Contours, lapse-rate bands, and intermediate wind barbs use linear display interpolation between captured model levels and do not add vertical resolution or resolve sub-grid inversions.",
     hours: hours.map((h, i) => {
@@ -355,7 +374,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
         temperatureF: temp === null ? null : fahrenheit(temp), thermalVelocityMps: scalar(publishedLift(h).thermalVelocityMps), gustKt: gust === null ? null : gust * KT, inWindWindow };
     }),
     fields: [], contours: [], barbs: [], clouds: [], cloudBands: [], freezing: [], wings: [], series: [], launch: null,
-    diagnostics: alignedDiagnostics(scene.strips.filter((s) => s.key !== "thermalStrength"), scene.hourValidAts, hours, scene.scales.plotLeft, columnWidth), diagnosticLeft: scene.scales.plotLeft,
+    diagnostics: alignedDiagnostics(scene.strips.filter((s) => s.key !== "thermalStrength"), scene.hourValidAts, hours, scene.scales.plotLeft, diagnosticColumnWidth), diagnosticLeft: scene.scales.plotLeft, diagnosticColumnWidth,
     selectedHourIndex: hours.reduce((best, h, i) => (scalar(publishedLift(h).thermalVelocityMps) ?? -1) > (scalar((hours[best] ? publishedLift(hours[best]).thermalVelocityMps : null)) ?? -1) ? i : best, 0),
   };
   if (!hours.length) return view;

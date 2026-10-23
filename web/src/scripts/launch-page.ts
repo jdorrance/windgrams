@@ -9,7 +9,7 @@ import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/met
 import { localDateKey, localHourOfDay, localInstantMs, runFreshness } from "@azohra/meteo.briefing/derive";
 import { loadDocument } from "@azohra/meteo.briefing/transport";
 import { buildWindgramView } from "../lib/windgram-view.ts";
-import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramHeightAxisSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
+import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
 import { windWindow, compassPoint, type Launch } from "../lib/launches.ts";
 import { EcmwfChart, type EcmwfSiteDocument } from "../lib/ecmwf-chart.ts";
 import { NwsChart, type NwsHour } from "../lib/nws-chart.ts";
@@ -291,8 +291,10 @@ function renderMeteogram() {
     return;
   }
 
-  const width = Math.max(frame.clientWidth || 640, 320);
-  const compact = window.matchMedia("(max-width: 640px)").matches;
+  const width = Math.max(frame.clientWidth || 640, 240);
+  const compact = window.matchMedia("(max-width: 640px), (max-width: 960px) and (max-height: 600px)").matches;
+  const portrait = window.innerHeight > window.innerWidth;
+  const chartTop = frame.getBoundingClientRect().top + window.scrollY;
   const view = buildWindgramView(loaded.profile, {
     timeZone: tz,
     hours,
@@ -302,13 +304,14 @@ function renderMeteogram() {
     widthPx: width,
     compact,
     heightPx: window.innerHeight,
+    maxHeightPx: compact && portrait ? window.innerHeight - chartTop - 16 : undefined,
   });
   frame.innerHTML = renderWindgramSvg(view, { idPrefix: `mg-${launch.slug}` });
   diagnostics.innerHTML = renderWindgramDiagnosticsSvg(view, { idPrefix: `mg-details-${launch.slug}` });
   key.innerHTML = renderWindgramKey();
   details.hidden = false;
-  axis.innerHTML = compact ? renderWindgramHeightAxisSvg(view) : "";
-  axis.hidden = !compact;
+  axis.replaceChildren();
+  axis.hidden = true;
   clearWindgramInspector = mountWindgramInspector(frame, null, view, validAt => {
     const i = skewtHours.findIndex(h => h.validAt === validAt);
     if (i >= 0) showSkewTHour(i);
@@ -318,10 +321,10 @@ function renderMeteogram() {
   frame.querySelector('svg')!.append(marker);
   frame.dataset.columnWidth = String(view.columnWidth);
   frame.dataset.plotLeft = String(view.left);
-  frame.dataset.axisWidth = String(compact ? view.left : 0);
+  frame.dataset.axisWidth = "0";
   diagnostics.dataset.plotLeft = String(compact ? 102 : view.left);
-  // The SVG has only a viewBox; pin it to the scene's pixel size so narrow
-  // screens scroll sideways instead of shrinking the chart.
+  // The main scene fits the mobile viewport. Detailed diagnostics retain
+  // their own wider geometry and can scroll independently.
   for (const svg of [frame.querySelector("svg"), diagnostics.querySelector("svg")]) {
     const box = svg?.viewBox.baseVal;
     if (svg && box && box.width > 0) svg.style.width = `${box.width}px`;
@@ -418,6 +421,7 @@ function renderConditions(hour: SiteForecast['hours'][number], index: number) {
   $<HTMLButtonElement>('forecast-hour-prev').disabled = index === 0;
   $<HTMLButtonElement>('forecast-hour-next').disabled = index === skewtHours.length - 1;
   $('forecast-hour-panel').hidden = false;
+  $('forecast-conditions-panel').hidden = false;
   $('forecast-hour-panel').dataset.validAt = hour.validAt;
   const conditions = launchConditions(hour, launch, launchElevationM);
   const host = $('forecast-conditions'); host.replaceChildren();
@@ -567,6 +571,7 @@ function renderSkewT() {
         : `${modelLabel(model)} has no upper-air levels for this day.`;
     skewtHours = [];
     $("forecast-hour-panel").hidden = true;
+    $("forecast-conditions-panel").hidden = true;
     updateHourMarker();
     return;
   }
@@ -590,8 +595,8 @@ $('forecast-hour-peak').addEventListener('click', () => showSkewTHour(peakLiftIn
 function render() {
   renderDayTabs();
   renderModelSelect(MODEL_ORDER.filter((slug) => manifests.has(slug)));
-  renderMeteogram();
   renderSkewT();
+  renderMeteogram();
   renderNws();
   renderEcmwf();
   sunlight.setDay(day, cloudsFor(model));
@@ -684,12 +689,13 @@ window.addEventListener("resize", () => {
   resizeTimer = window.setTimeout(renderMeteogram, 150);
 });
 
-// Compact charts use different label gutters. Preserve both full labels at the
-// start, then align their hours while panning without feeding clamped scrolls back.
+// Synchronize only when both charts scroll. A fitted mobile windgram keeps its
+// complete day visible while the wider diagnostics pan independently.
 const syncedScrollPositions = new WeakMap<HTMLElement, number>();
 function syncWindgramScroll(from: HTMLElement, to: HTMLElement) {
   const details = $<HTMLDetailsElement>("meteogram-details");
   if (details.hidden || !details.open || to.clientWidth === 0) return;
+  if (from.scrollWidth <= from.clientWidth + 1 || to.scrollWidth <= to.clientWidth + 1) return;
   const offset = Number(to.dataset.plotLeft ?? 0) - Number(from.dataset.plotLeft ?? 0);
   const wanted = from.scrollLeft === 0 ? 0 : from.scrollLeft + offset;
   const next = Math.max(0, Math.min(to.scrollWidth - to.clientWidth, wanted));

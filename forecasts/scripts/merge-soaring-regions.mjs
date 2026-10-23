@@ -23,23 +23,35 @@ export function isPublishedCase(root, caseId) {
 }
 
 export function mergeRegionIndexes(primary, rrfs, isPublished) {
+  const base = primary ?? rrfs ?? { regions: [] };
   const rrfsById = new Map((rrfs?.regions ?? []).map(region => [region.id, region]));
-  return { ...primary, regions: (primary.regions ?? []).map(region => {
+  const allRegions = new Map((base.regions ?? []).map(region => [region.id, region]));
+  for (const region of rrfs?.regions ?? []) if (!allRegions.has(region.id)) allRegions.set(region.id, region);
+  const regions = [...allRegions.values()].flatMap(region => {
     const native = new Map((region.nativeModels ?? []).filter(item => isPublished(item.caseId)).map(item => [item.model, item]));
-    if (isPublished(region.caseId)) native.set('hrrr-conus', { model: 'hrrr-conus', caseId: region.caseId });
+    if (isPublished(region.caseId)) {
+      const model = (region.nativeModels ?? []).find(item => item.caseId === region.caseId)?.model
+        ?? (region.caseId.endsWith('-rrfs-live') ? 'rrfs' : 'hrrr-conus');
+      native.set(model, { model, caseId: region.caseId });
+    }
     for (const item of rrfsById.get(region.id)?.nativeModels ?? []) {
       if (item.model === 'rrfs' && isPublished(item.caseId)) native.set('rrfs', item);
     }
-    return { ...region, nativeModels: [...native.values()] };
-  }) };
+    if (region.status === 'active-verified-trial' && !native.size) return [];
+    const preferred = native.get('hrrr-conus') ?? native.get('rrfs') ?? [...native.values()][0];
+    const merged = { ...region, ...(preferred ? { caseId: preferred.caseId } : {}), nativeModels: [...native.values()] };
+    if (merged.expandedCaseId && !isPublished(merged.expandedCaseId)) delete merged.expandedCaseId;
+    return [merged];
+  });
+  return { ...base, regions };
 }
 
 export function mergeSoaringRegionFiles(output) {
   const root = join(output, 'soaring', 'v1');
   const primaryPath = join(root, 'regions.json');
-  if (!existsSync(primaryPath)) return;
   const rrfsPath = join(root, 'regions-rrfs.json');
-  const primary = JSON.parse(readFileSync(primaryPath));
+  if (!existsSync(primaryPath) && !existsSync(rrfsPath)) return;
+  const primary = existsSync(primaryPath) ? JSON.parse(readFileSync(primaryPath)) : null;
   const rrfs = existsSync(rrfsPath) ? JSON.parse(readFileSync(rrfsPath)) : null;
   writeFileSync(primaryPath, `${JSON.stringify(mergeRegionIndexes(primary, rrfs, caseId => isPublishedCase(root, caseId)), null, 2)}\n`);
 }

@@ -11,9 +11,67 @@ import { capture } from '../soaring/capture.mjs';
 import { replay } from '../soaring/replay.mjs';
 import { modelFor } from '../soaring/common.mjs';
 import { greatCircleDistanceKm } from '@azohra/meteo.grib';
+import { isPublishedCase } from './merge-soaring-regions.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+
+export function loadRegionConfiguration(soaringV1Root) {
+  const defaults = JSON.parse(readFileSync(join(ROOT, 'soaring', 'regions.json'), 'utf8'));
+  const publishedPath = join(soaringV1Root, 'regions.json');
+  if (!existsSync(publishedPath)) return defaults;
+  const published = JSON.parse(readFileSync(publishedPath, 'utf8'));
+  const regions = new Map(defaults.regions.map(region => [region.id, region]));
+  for (const region of published.regions ?? []) regions.set(region.id, { ...regions.get(region.id), ...region });
+  return { ...defaults, ...published, regions: [...regions.values()] };
+}
+
+export function initialRegionSidecars(region) {
+  const source = JSON.parse(readFileSync(join(ROOT, 'soaring', 'regions', `${region.id}.json`), 'utf8'));
+  return { launches: source.launches, crossSection: source.crossSection, verification: null };
+}
+
+// A provider overlay must advertise only completed bundles it actually owns.
+// Unbuilt active regions remain in the tracked configuration for the next run.
+export function regionPublication(regionsDoc, model, soaringV1Root) {
+  const regions = [];
+  for (const region of regionsDoc.regions ?? []) {
+    const native = (region.nativeModels ?? []).filter(entry =>
+      (model !== 'rrfs' || entry.model === 'rrfs') && isPublishedCase(soaringV1Root, entry.caseId));
+    if (region.status === 'active-verified-trial' && !native.length) continue;
+    const preferred = native.find(entry => entry.model === model) ?? native[0];
+    const published = { ...region, ...(preferred ? { caseId: preferred.caseId } : {}), nativeModels: native };
+    if (published.expandedCaseId && !isPublishedCase(soaringV1Root, published.expandedCaseId)) delete published.expandedCaseId;
+    regions.push(published);
+  }
+  return { ...regionsDoc, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), regions };
+}
+
+export function validateNativeRegions(dataRoot, model, referenceTime) {
+  const root = join(dataRoot, 'soaring', 'v1');
+  const configured = loadRegionConfiguration(root).regions.filter(region => region.status === 'active-verified-trial');
+  if (!configured.length) throw new Error(`No active native ${model} regions configured`);
+  const path = join(root, model === 'rrfs' ? 'regions-rrfs.json' : 'regions.json');
+  if (!existsSync(path)) throw new Error(`Missing native ${model} region catalogue`);
+  const catalogue = JSON.parse(readFileSync(path, 'utf8'));
+  for (const region of configured) {
+    const entry = catalogue.regions?.find(item => item.id === region.id)?.nativeModels?.find(item => item.model === model);
+    if (!entry || !isRegionBundleCurrent(root, entry.caseId, referenceTime)) throw new Error(`Incomplete native ${model} forecast: ${region.id} @ ${referenceTime}`);
+    const pointer = JSON.parse(readFileSync(join(root, entry.caseId, 'index.json'), 'utf8'));
+    const bundle = join(root, entry.caseId, pointer.bundle);
+    const manifest = JSON.parse(readFileSync(join(bundle, 'manifest.json'), 'utf8'));
+    if ((manifest.model ?? manifest.case?.model ?? 'hrrr-conus') !== model
+      || manifest.hours?.length !== manifest.case?.forecastHours?.length
+      || manifest.case.forecastHours.some(hour => !manifest.hours.some(item => item.forecastHour === hour
+        && Date.parse(item.validAt) === Date.parse(referenceTime) + hour * 3600000))) throw new Error(`Incomplete native ${model} hours: ${region.id}`);
+    for (const name of ['launches.json', 'cross-section.json']) if (!manifest.files[name]) throw new Error(`Missing ${region.id} ${name}`);
+    const launches = JSON.parse(readFileSync(join(bundle, 'launches.json'), 'utf8'));
+    const section = JSON.parse(readFileSync(join(bundle, 'cross-section.json'), 'utf8'));
+    if (launches.caseId !== entry.caseId || section.caseId !== entry.caseId || (section.nodes ?? []).length < 2
+      || (region.launches ?? []).some(slug => !launches.launches?.some(launch => launch.slug === slug))) throw new Error(`Incomplete native ${model} geography: ${region.id}`);
+  }
+  return { model, referenceTime, regions: configured.length };
+}
 
 function writeAtomic(path, value) {
   const temp = `${path}.${randomUUID()}.tmp`;
@@ -281,24 +339,11 @@ function readPreviousSidecars(soaringV1Root, caseId) {
   }
 }
 
-async function main() {
-  const { values } = parseArgs({
-    options: {
-      output: { type: 'string', default: 'data' },
-      'reference-time': { type: 'string' },
-      'cache-root': { type: 'string' },
-      model: { type: 'string', default: 'hrrr-conus' },
-    },
-  });
-
-  const dataRoot = resolve(values.output);
-  const model = modelFor({ model: values.model });
+export async function buildLiveSoaring(values, { captureImpl = capture, replayImpl = replay, log = console.log } = {}) {
+  const dataRoot = resolve(values.output ?? 'data');
+  const model = modelFor({ model: values.model ?? 'hrrr-conus' });
   const soaringV1Root = join(dataRoot, 'soaring', 'v1');
   const regionsPath = join(soaringV1Root, 'regions.json');
-  if (!existsSync(regionsPath)) {
-    console.log('No data/soaring/v1/regions.json found; skipping live regional soaring build.');
-    return;
-  }
 
   const modelManifestPath = join(dataRoot, model, 'manifest.json');
   const referenceTime = values['reference-time'] ?? (
@@ -307,11 +352,14 @@ async function main() {
       : null
   );
   if (!referenceTime) {
-    console.log(`No ${model} referenceTime available; keeping seeded soaring bundles.`);
+    if (model === 'rrfs') throw new Error('No RRFS referenceTime available for the required native regional build');
+    log(`No ${model} referenceTime available; keeping seeded soaring bundles.`);
     return;
   }
+  if (values['validate-only']) return validateNativeRegions(dataRoot, model, referenceTime);
 
-  const regionsDoc = JSON.parse(readFileSync(regionsPath, 'utf8'));
+  const regionsDoc = loadRegionConfiguration(soaringV1Root);
+  mkdirSync(soaringV1Root, { recursive: true });
   const modelRegionsPath = model === 'rrfs' ? join(soaringV1Root, 'regions-rrfs.json') : regionsPath;
   if (model === 'rrfs' && existsSync(modelRegionsPath)) {
     const prior = JSON.parse(readFileSync(modelRegionsPath, 'utf8'));
@@ -323,15 +371,23 @@ async function main() {
   for (const region of regionsDoc.regions ?? []) region.deterministicModels = [...new Set([...(region.deterministicModels ?? []), 'rrfs'])];
   const activeRegions = (regionsDoc.regions ?? []).filter(r => r.status === 'active-verified-trial' && typeof r.caseId === 'string');
   if (activeRegions.length === 0) {
-    console.log('No active-verified-trial regions configured; skipping.');
+    if (model === 'rrfs') throw new Error('No active RRFS regions configured');
+    log('No active-verified-trial regions configured; skipping.');
     return;
   }
 
   const templateId = r => r.templateCaseId ?? r.caseId.replace(/-live$/, '');
   const liveId = r => `${templateId(r)}${model === 'rrfs' ? '-rrfs' : ''}-live`;
-  const pendingRegions = activeRegions.filter(r => !isRegionBundleCurrent(soaringV1Root, liveId(r), referenceTime));
+  const pendingRegions = activeRegions.filter(r => {
+    if (!isRegionBundleCurrent(soaringV1Root, liveId(r), referenceTime)) return true;
+    r.nativeModels = [...(r.nativeModels ?? []).filter(entry => entry.model !== model), { model, caseId: liveId(r) }];
+    return false;
+  });
+  const publishRegions = () => writeAtomic(modelRegionsPath, regionPublication(regionsDoc, model, soaringV1Root));
   if (pendingRegions.length === 0) {
-    console.log(`All ${activeRegions.length} active soaring region(s) already at ${referenceTime}; skipping rebuild.`);
+    publishRegions();
+    validateNativeRegions(dataRoot, model, referenceTime);
+    log(`All ${activeRegions.length} active soaring region(s) already at ${referenceTime}; skipping rebuild.`);
     return;
   }
 
@@ -343,38 +399,55 @@ async function main() {
     const template = JSON.parse(readFileSync(templatePath, 'utf8'));
     let previousSidecars = readPreviousSidecars(soaringV1Root, liveId(region));
     if (!previousSidecars.launches) previousSidecars = readPreviousSidecars(soaringV1Root, region.caseId);
+    if (!previousSidecars.launches || !previousSidecars.crossSection) {
+      const initial = initialRegionSidecars(region);
+      previousSidecars = { ...previousSidecars, launches: previousSidecars.launches ?? initial.launches, crossSection: previousSidecars.crossSection ?? initial.crossSection };
+    }
     return { region, caseSpec: buildLiveCaseSpec(template, referenceTime, model), previousSidecars };
   });
 
   try {
-    console.log(`Capturing shared CONUS ${model} records for ${referenceTime} into ${sharedCacheDir}...`);
+    log(`Capturing shared CONUS ${model} records for ${referenceTime} into ${sharedCacheDir}...`);
     const captures = new Set();
 
     for (const { region, caseSpec, previousSidecars } of liveCases) {
-      console.log(`Replaying 3 km regional grid for ${region.id} (${caseSpec.id} @ ${referenceTime})...`);
+      log(`Replaying 3 km regional grid for ${region.id} (${caseSpec.id} @ ${referenceTime})...`);
       const key = sha256(JSON.stringify([caseSpec.forecastHours, caseSpec.pressureLevels, caseSpec.includeExtendedFields]));
       const cache = join(sharedCacheDir, key);
-      if (!captures.has(key)) { await capture(caseSpec, cache); captures.add(key); }
+      if (!captures.has(key)) { await captureImpl(caseSpec, cache); captures.add(key); }
       const staging = mkdtempSync(join(soaringV1Root, '.live-'));
       try {
-        const res = await replay(caseSpec, cache, staging);
+        const res = await replayImpl(caseSpec, cache, staging);
         const enrichedPath = enrichBundleWithSidecars(dataRoot, soaringV1Root, caseSpec.id, res.path, previousSidecars);
         region.templateCaseId = templateId(region);
         region.nativeModels = [...(region.nativeModels ?? [{ model: 'hrrr-conus', caseId: region.caseId }]).filter(m => m.model !== model), { model, caseId: caseSpec.id }];
         if (model === 'hrrr-conus') region.caseId = caseSpec.id;
-        writeAtomic(modelRegionsPath, regionsDoc);
+        publishRegions();
         const pruned = pruneSupersededBundles(soaringV1Root, caseSpec.id);
-        console.log(`Built ${region.id} -> ${enrichedPath} (pruned ${pruned} old bundle(s))`);
+        log(`Built ${region.id} -> ${enrichedPath} (pruned ${pruned} old bundle(s))`);
       } finally { rmSync(staging, { recursive: true, force: true }); }
     }
 
     regionsDoc.generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-    writeAtomic(modelRegionsPath, regionsDoc);
+    publishRegions();
+    validateNativeRegions(dataRoot, model, referenceTime);
   } finally {
     if (!values['cache-root']) {
       rmSync(sharedCacheDir, { recursive: true, force: true });
     }
   }
+}
+
+async function main() {
+  const { values } = parseArgs({ options: {
+    output: { type: 'string', default: 'data' },
+    'reference-time': { type: 'string' },
+    'cache-root': { type: 'string' },
+    model: { type: 'string', default: 'hrrr-conus' },
+    'validate-only': { type: 'boolean', default: false },
+  } });
+  const result = await buildLiveSoaring(values);
+  if (values['validate-only']) console.log(JSON.stringify(result));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

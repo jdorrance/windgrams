@@ -1,0 +1,617 @@
+{
+  "source": "Static launch locations and transect geography from the validated 2026-10-21 regional configuration; model cells and terrain are resolved anew for each forecast.",
+  "launches": {
+    "schemaVersion": 1,
+    "nwsOffice": {
+      "office": "LWX"
+    },
+    "launches": [
+      {
+        "slug": "va-woodstock",
+        "name": "Woodstock",
+        "latitude": 38.8706,
+        "longitude": -78.45,
+        "timeZone": "America/New_York",
+        "launchElevationM": 565
+      },
+      {
+        "slug": "va-dickey-s-ridge",
+        "name": "Dickey's Ridge",
+        "latitude": 38.8537,
+        "longitude": -78.2066,
+        "timeZone": "America/New_York",
+        "launchElevationM": 715.3
+      },
+      {
+        "slug": "va-edith-s-gap",
+        "name": "Edith's Gap",
+        "latitude": 38.7251,
+        "longitude": -78.5089,
+        "timeZone": "America/New_York",
+        "launchElevationM": 546.4
+      },
+      {
+        "slug": "va-daniels",
+        "name": "Daniels",
+        "latitude": 38.3105,
+        "longitude": -78.512,
+        "timeZone": "America/New_York",
+        "launchElevationM": 481.9
+      },
+      {
+        "slug": "va-raven-s-roost",
+        "name": "Raven's Roost",
+        "latitude": 37.9336,
+        "longitude": -78.9528,
+        "timeZone": "America/New_York",
+        "launchElevationM": 974.8
+      },
+      {
+        "slug": "va-eagle-rock",
+        "name": "Eagle Rock",
+        "latitude": 37.6314,
+        "longitude": -79.8317,
+        "timeZone": "America/New_York",
+        "launchElevationM": 673.4
+      }
+    ]
+  },
+  "crossSection": {
+    "title": "Shenandoah & Blue Ridge Transect (Eagle Rock \u2192 Raven's Roost \u2192 Woodstock \u2192 Dickey's Ridge)",
+    "totalDistanceKm": 238.3,
+    "nodes": [
+      {
+        "nodeIndex": 0,
+        "distanceKm": 0.0,
+        "latitude": 37.6314,
+        "longitude": -79.8317,
+        "waypointLabel": "Eagle Rock",
+        "launchElevationM": 673.4
+      },
+      {
+        "nodeIndex": 1,
+        "distanceKm": 3.5,
+        "latitude": 37.644,
+        "longitude": -79.7951,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 2,
+        "distanceKm": 7.0,
+        "latitude": 37.6566,
+        "longitude": -79.7585,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 3,
+        "distanceKm": 10.5,
+        "latitude": 37.6692,
+        "longitude": -79.7218,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 4,
+        "distanceKm": 14.0,
+        "latitude": 37.6818,
+        "longitude": -79.6852,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 5,
+        "distanceKm": 17.5,
+        "latitude": 37.6944,
+        "longitude": -79.6486,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 6,
+        "distanceKm": 21.1,
+        "latitude": 37.7069,
+        "longitude": -79.612,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 7,
+        "distanceKm": 24.6,
+        "latitude": 37.7195,
+        "longitude": -79.5754,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 8,
+        "distanceKm": 28.1,
+        "latitude": 37.7321,
+        "longitude": -79.5387,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 9,
+        "distanceKm": 31.6,
+        "latitude": 37.7447,
+        "longitude": -79.5021,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 10,
+        "distanceKm": 35.1,
+        "latitude": 37.7573,
+        "longitude": -79.4655,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 11,
+        "distanceKm": 38.6,
+        "latitude": 37.7699,
+        "longitude": -79.4289,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 12,
+        "distanceKm": 42.1,
+        "latitude": 37.7825,
+        "longitude": -79.3922,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 13,
+        "distanceKm": 45.6,
+        "latitude": 37.7951,
+        "longitude": -79.3556,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 14,
+        "distanceKm": 49.1,
+        "latitude": 37.8077,
+        "longitude": -79.319,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 15,
+        "distanceKm": 52.6,
+        "latitude": 37.8203,
+        "longitude": -79.2824,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 16,
+        "distanceKm": 56.2,
+        "latitude": 37.8329,
+        "longitude": -79.2458,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 17,
+        "distanceKm": 59.7,
+        "latitude": 37.8455,
+        "longitude": -79.2091,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 18,
+        "distanceKm": 63.2,
+        "latitude": 37.858,
+        "longitude": -79.1725,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 19,
+        "distanceKm": 66.7,
+        "latitude": 37.8706,
+        "longitude": -79.1359,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 20,
+        "distanceKm": 70.2,
+        "latitude": 37.8832,
+        "longitude": -79.0993,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 21,
+        "distanceKm": 73.7,
+        "latitude": 37.8958,
+        "longitude": -79.0627,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 22,
+        "distanceKm": 77.2,
+        "latitude": 37.9084,
+        "longitude": -79.026,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 23,
+        "distanceKm": 80.7,
+        "latitude": 37.921,
+        "longitude": -78.9894,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 24,
+        "distanceKm": 84.2,
+        "latitude": 37.9336,
+        "longitude": -78.9528,
+        "waypointLabel": "Raven's Roost",
+        "launchElevationM": 974.8
+      },
+      {
+        "nodeIndex": 25,
+        "distanceKm": 87.8,
+        "latitude": 37.9572,
+        "longitude": -78.9252,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 26,
+        "distanceKm": 91.4,
+        "latitude": 37.9807,
+        "longitude": -78.8977,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 27,
+        "distanceKm": 94.9,
+        "latitude": 38.0043,
+        "longitude": -78.8701,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 28,
+        "distanceKm": 98.5,
+        "latitude": 38.0278,
+        "longitude": -78.8426,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 29,
+        "distanceKm": 102.0,
+        "latitude": 38.0514,
+        "longitude": -78.815,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 30,
+        "distanceKm": 105.6,
+        "latitude": 38.0749,
+        "longitude": -78.7875,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 31,
+        "distanceKm": 109.1,
+        "latitude": 38.0985,
+        "longitude": -78.76,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 32,
+        "distanceKm": 112.7,
+        "latitude": 38.1221,
+        "longitude": -78.7324,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 33,
+        "distanceKm": 116.3,
+        "latitude": 38.1456,
+        "longitude": -78.7048,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 34,
+        "distanceKm": 119.8,
+        "latitude": 38.1692,
+        "longitude": -78.6773,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 35,
+        "distanceKm": 123.4,
+        "latitude": 38.1927,
+        "longitude": -78.6497,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 36,
+        "distanceKm": 126.9,
+        "latitude": 38.2163,
+        "longitude": -78.6222,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 37,
+        "distanceKm": 130.5,
+        "latitude": 38.2398,
+        "longitude": -78.5947,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 38,
+        "distanceKm": 134.1,
+        "latitude": 38.2634,
+        "longitude": -78.5671,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 39,
+        "distanceKm": 137.6,
+        "latitude": 38.2869,
+        "longitude": -78.5396,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 40,
+        "distanceKm": 141.2,
+        "latitude": 38.3105,
+        "longitude": -78.512,
+        "waypointLabel": "Daniels",
+        "launchElevationM": 481.9
+      },
+      {
+        "nodeIndex": 41,
+        "distanceKm": 144.7,
+        "latitude": 38.3424,
+        "longitude": -78.5118,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 42,
+        "distanceKm": 148.3,
+        "latitude": 38.3743,
+        "longitude": -78.5115,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 43,
+        "distanceKm": 151.8,
+        "latitude": 38.4062,
+        "longitude": -78.5113,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 44,
+        "distanceKm": 155.4,
+        "latitude": 38.4381,
+        "longitude": -78.511,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 45,
+        "distanceKm": 158.9,
+        "latitude": 38.47,
+        "longitude": -78.5108,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 46,
+        "distanceKm": 162.5,
+        "latitude": 38.5019,
+        "longitude": -78.5106,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 47,
+        "distanceKm": 166.0,
+        "latitude": 38.5337,
+        "longitude": -78.5103,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 48,
+        "distanceKm": 169.6,
+        "latitude": 38.5656,
+        "longitude": -78.5101,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 49,
+        "distanceKm": 173.1,
+        "latitude": 38.5975,
+        "longitude": -78.5099,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 50,
+        "distanceKm": 176.6,
+        "latitude": 38.6294,
+        "longitude": -78.5096,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 51,
+        "distanceKm": 180.2,
+        "latitude": 38.6613,
+        "longitude": -78.5094,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 52,
+        "distanceKm": 183.7,
+        "latitude": 38.6932,
+        "longitude": -78.5091,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 53,
+        "distanceKm": 187.3,
+        "latitude": 38.7251,
+        "longitude": -78.5089,
+        "waypointLabel": "Edith's Gap",
+        "launchElevationM": 546.4
+      },
+      {
+        "nodeIndex": 54,
+        "distanceKm": 190.6,
+        "latitude": 38.7394,
+        "longitude": -78.4753,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 55,
+        "distanceKm": 193.9,
+        "latitude": 38.7537,
+        "longitude": -78.4417,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 56,
+        "distanceKm": 197.2,
+        "latitude": 38.768,
+        "longitude": -78.4081,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 57,
+        "distanceKm": 200.5,
+        "latitude": 38.7823,
+        "longitude": -78.3745,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 58,
+        "distanceKm": 203.9,
+        "latitude": 38.7965,
+        "longitude": -78.341,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 59,
+        "distanceKm": 207.2,
+        "latitude": 38.8108,
+        "longitude": -78.3074,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 60,
+        "distanceKm": 210.5,
+        "latitude": 38.8251,
+        "longitude": -78.2738,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 61,
+        "distanceKm": 213.8,
+        "latitude": 38.8394,
+        "longitude": -78.2402,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 62,
+        "distanceKm": 217.1,
+        "latitude": 38.8537,
+        "longitude": -78.2066,
+        "waypointLabel": "Dickey's Ridge",
+        "launchElevationM": 715.3
+      },
+      {
+        "nodeIndex": 63,
+        "distanceKm": 220.7,
+        "latitude": 38.8565,
+        "longitude": -78.2472,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 64,
+        "distanceKm": 224.2,
+        "latitude": 38.8593,
+        "longitude": -78.2877,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 65,
+        "distanceKm": 227.7,
+        "latitude": 38.8621,
+        "longitude": -78.3283,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 66,
+        "distanceKm": 231.2,
+        "latitude": 38.865,
+        "longitude": -78.3689,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 67,
+        "distanceKm": 234.8,
+        "latitude": 38.8678,
+        "longitude": -78.4094,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 68,
+        "distanceKm": 238.3,
+        "latitude": 38.8706,
+        "longitude": -78.45,
+        "waypointLabel": "Woodstock",
+        "launchElevationM": 565
+      }
+    ]
+  }
+}

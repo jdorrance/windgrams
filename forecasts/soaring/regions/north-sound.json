@@ -1,0 +1,272 @@
+{
+  "source": "Static launch locations and transect geography from the validated 2026-10-21 regional configuration; model cells and terrain are resolved anew for each forecast.",
+  "launches": {
+    "schemaVersion": 1,
+    "nwsOffice": {
+      "office": "SEW"
+    },
+    "launches": [
+      {
+        "slug": "wa-big-j",
+        "name": "Big J",
+        "latitude": 48.8605,
+        "longitude": -122.126,
+        "timeZone": "America/Los_Angeles",
+        "launchElevationM": 534.7,
+        "facingDeg": null,
+        "windArcHalfWidthDeg": null,
+        "windMinMph": null,
+        "windMaxMph": null,
+        "gustMaxMph": null
+      },
+      {
+        "slug": "wa-black-mountain",
+        "name": "Black Mountain",
+        "latitude": 48.9745,
+        "longitude": -122.027,
+        "timeZone": "America/Los_Angeles",
+        "launchElevationM": 1386.7,
+        "facingDeg": null,
+        "windArcHalfWidthDeg": null,
+        "windMinMph": null,
+        "windMaxMph": null,
+        "gustMaxMph": null
+      },
+      {
+        "slug": "wa-blanchard",
+        "name": "Blanchard",
+        "latitude": 48.6097,
+        "longitude": -122.426,
+        "timeZone": "America/Los_Angeles",
+        "launchElevationM": 378.5,
+        "facingDeg": null,
+        "windArcHalfWidthDeg": null,
+        "windMinMph": null,
+        "windMaxMph": null,
+        "gustMaxMph": null
+      },
+      {
+        "slug": "wa-blyn",
+        "name": "Blyn",
+        "latitude": 48.006,
+        "longitude": -122.985,
+        "timeZone": "America/Los_Angeles",
+        "launchElevationM": 471,
+        "facingDeg": null,
+        "windArcHalfWidthDeg": null,
+        "windMinMph": null,
+        "windMaxMph": null,
+        "gustMaxMph": null
+      },
+      {
+        "slug": "wa-mt-baker-summit",
+        "name": "Mt. Baker Summit",
+        "latitude": 48.7752,
+        "longitude": -121.823,
+        "timeZone": "America/Los_Angeles",
+        "launchElevationM": 3217.3,
+        "facingDeg": null,
+        "windArcHalfWidthDeg": null,
+        "windMinMph": null,
+        "windMaxMph": null,
+        "gustMaxMph": null
+      },
+      {
+        "slug": "wa-sauk-mountain",
+        "name": "Sauk Mountain",
+        "latitude": 48.5186,
+        "longitude": -121.604,
+        "timeZone": "America/Los_Angeles",
+        "launchElevationM": 1326.9,
+        "facingDeg": null,
+        "windArcHalfWidthDeg": null,
+        "windMinMph": null,
+        "windMaxMph": null,
+        "gustMaxMph": null
+      }
+    ]
+  },
+  "crossSection": {
+    "schemaVersion": 1,
+    "title": "Olympic Strait to North Cascades Transect (Blyn \u2192 Blanchard \u2192 Big J \u2192 Black Mtn \u2192 Mt. Baker \u2192 Sauk Mtn)",
+    "totalDistanceKm": 188.4,
+    "nodes": [
+      {
+        "nodeIndex": 0,
+        "distanceKm": 0.0,
+        "latitude": 47.9963,
+        "longitude": -122.9845,
+        "waypointLabel": "Blyn",
+        "launchElevationM": 471
+      },
+      {
+        "nodeIndex": 1,
+        "distanceKm": 19.7,
+        "latitude": 48.1604,
+        "longitude": -122.8474,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 2,
+        "distanceKm": 39.4,
+        "latitude": 48.2988,
+        "longitude": -122.6986,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 3,
+        "distanceKm": 59.1,
+        "latitude": 48.4624,
+        "longitude": -122.56,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 4,
+        "distanceKm": 78.8,
+        "latitude": 48.6003,
+        "longitude": -122.4099,
+        "waypointLabel": "Blanchard",
+        "launchElevationM": 378.5
+      },
+      {
+        "nodeIndex": 5,
+        "distanceKm": 87.7,
+        "latitude": 48.6656,
+        "longitude": -122.354,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 6,
+        "distanceKm": 96.6,
+        "latitude": 48.738,
+        "longitude": -122.2592,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 7,
+        "distanceKm": 105.5,
+        "latitude": 48.8032,
+        "longitude": -122.2029,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 8,
+        "distanceKm": 114.4,
+        "latitude": 48.8684,
+        "longitude": -122.1466,
+        "waypointLabel": "Big J",
+        "launchElevationM": 534.7
+      },
+      {
+        "nodeIndex": 9,
+        "distanceKm": 118.0,
+        "latitude": 48.8754,
+        "longitude": -122.1077,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 10,
+        "distanceKm": 121.7,
+        "latitude": 48.908,
+        "longitude": -122.0795,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 11,
+        "distanceKm": 125.3,
+        "latitude": 48.9405,
+        "longitude": -122.0512,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 12,
+        "distanceKm": 129.0,
+        "latitude": 48.9731,
+        "longitude": -122.0229,
+        "waypointLabel": "Black Mountain",
+        "launchElevationM": 1386.7
+      },
+      {
+        "nodeIndex": 13,
+        "distanceKm": 135.6,
+        "latitude": 48.9289,
+        "longitude": -121.9627,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 14,
+        "distanceKm": 142.3,
+        "latitude": 48.8777,
+        "longitude": -121.9415,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 15,
+        "distanceKm": 149.0,
+        "latitude": 48.8335,
+        "longitude": -121.8815,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 16,
+        "distanceKm": 155.7,
+        "latitude": 48.7637,
+        "longitude": -121.8111,
+        "waypointLabel": "Mt. Baker Summit",
+        "launchElevationM": 3217.3
+      },
+      {
+        "nodeIndex": 17,
+        "distanceKm": 162.2,
+        "latitude": 48.7124,
+        "longitude": -121.7901,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 18,
+        "distanceKm": 168.8,
+        "latitude": 48.6681,
+        "longitude": -121.7303,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 19,
+        "distanceKm": 175.3,
+        "latitude": 48.6169,
+        "longitude": -121.7094,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 20,
+        "distanceKm": 181.9,
+        "latitude": 48.5725,
+        "longitude": -121.6498,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 21,
+        "distanceKm": 188.4,
+        "latitude": 48.5281,
+        "longitude": -121.5903,
+        "waypointLabel": "Sauk Mountain",
+        "launchElevationM": 1326.9
+      }
+    ]
+  }
+}

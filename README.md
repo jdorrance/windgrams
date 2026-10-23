@@ -67,6 +67,17 @@ vertical velocities are converted explicitly into the forecast contract.
 Scheduled RRFS refreshes run at 03:55/09:55/15:55/21:55 UTC, independently of
 the earlier HRRR schedule. Failed RRFS refreshes remain visible in Actions,
 retain the last complete RRFS run, and allow other refreshed models to publish.
+Code pushes republish the cached dataset; they do not fetch new model data.
+To build and publish RRFS immediately, including its native regional maps:
+
+```sh
+gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=rrfs
+```
+
+Regional geography is tracked under `forecasts/soaring/regions/`, so a clean
+runner can bootstrap both maps without an existing published bundle. A requested
+RRFS refresh must pass point-profile and native-region validation before deployment.
+
 NOAA's October 15 notice schedules the production transition for November 3,
 2026; the replacement bucket currently carries parallel forecasts. These
 forecasts are labelled experimental in the model catalogue until that transition

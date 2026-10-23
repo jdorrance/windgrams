@@ -4,7 +4,9 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { daytimeForecastHoursForCycle, buildLiveCaseSpec, enrichBundleWithSidecars, isRegionBundleCurrent, pruneSupersededBundles } from './build-live-soaring.mjs';
+import { daytimeForecastHoursForCycle, buildLiveCaseSpec, buildLiveSoaring, initialRegionSidecars, loadRegionConfiguration, validateNativeRegions, enrichBundleWithSidecars, isRegionBundleCurrent, pruneSupersededBundles } from './build-live-soaring.mjs';
+import { mergeSoaringRegionFiles } from './merge-soaring-regions.mjs';
+import { collectGroup } from './seed-published.mjs';
 const sha = value => createHash('sha256').update(value).digest('hex');
 
 test('live daylight follows region, DST, and remaining hours rather than skipping today', () => {
@@ -96,4 +98,72 @@ test('publication validates before replacing a pointer, preserves old clients, a
   assert.equal(pruneSupersededBundles(out,id),0);assert.ok(existsSync(first));
   writeFileSync(join(second,'profile.json'),'bad');
   assert.equal(isRegionBundleCurrent(out,id,'2026-10-23T06:00:00Z'),false);
+});
+
+test('a clean CI output builds both native RRFS regions from tracked geography and publishes a reusable catalogue', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'rrfs-clean-build-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const output = join(root, 'data'), soaringRoot = join(output, 'soaring', 'v1');
+  const regions = loadRegionConfiguration(soaringRoot).regions.filter(region => region.status === 'active-verified-trial');
+  assert.deepEqual(regions.map(region => region.id), ['north-sound', 'shenandoah-blue-ridge']);
+  assert.equal(existsSync(soaringRoot), false);
+  const captured = [], replayed = [], ref = '2026-10-23T06:00:00Z';
+  const dependencies = {
+    log() {},
+    async captureImpl(c) { captured.push(c.id); },
+    async replayImpl(c, cache, staging) {
+      replayed.push(c.id);
+      const region = regions.find(region => c.id === `${region.templateCaseId}-rrfs-live`);
+      assert.ok(region);
+      const geography = initialRegionSidecars(region);
+      assert.equal(geography.verification, null);
+      const points = [...geography.launches.launches, ...geography.crossSection.nodes];
+      const grid = { type: 'FeatureCollection', features: points.map((point, i) => ({ properties: {
+        latitude: point.latitude, longitude: point.longitude, cellIndex: i, gridIndex: i + 100, modelElevationM: 350,
+      } })) };
+      const files = {};
+      const hours = c.forecastHours.map(forecastHour => ({ forecastHour, file: `f${forecastHour}.json`, validAt: new Date(Date.parse(c.referenceTime) + forecastHour * 3600000).toISOString().replace('.000Z', 'Z') }));
+      for (const [name, value] of Object.entries({ 'grid.geojson': grid, 'profile.json': {}, 'audit.json': {}, ...Object.fromEntries(hours.map(hour => [hour.file, {}])) })) {
+        const bytes = JSON.stringify(value); writeFileSync(join(staging, name), bytes); files[name] = sha(bytes);
+      }
+      writeFileSync(join(staging, 'manifest.json'), JSON.stringify({ model: 'rrfs', case: c, files, hours }));
+      return { path: staging };
+    },
+  };
+  await assert.rejects(() => buildLiveSoaring({ output, model: 'rrfs' }, dependencies), /No RRFS referenceTime/);
+  await buildLiveSoaring({ output, model: 'rrfs', 'reference-time': ref, 'cache-root': join(root, 'cache') }, dependencies);
+  assert.equal(captured.length, 2); assert.equal(replayed.length, 2);
+  assert.equal(existsSync(join(soaringRoot, 'regions.json')), false);
+  const overlay = JSON.parse(readFileSync(join(soaringRoot, 'regions-rrfs.json')));
+  for (const region of overlay.regions.filter(region => region.status === 'active-verified-trial')) {
+    assert.ok(region.caseId.endsWith('-rrfs-live'));
+    assert.deepEqual(region.nativeModels, [{ model: 'rrfs', caseId: region.caseId }]);
+    assert.equal(region.expandedCaseId, undefined);
+    const pointer = JSON.parse(readFileSync(join(soaringRoot, region.caseId, 'index.json')));
+    const launches = JSON.parse(readFileSync(join(soaringRoot, region.caseId, pointer.bundle, 'launches.json')));
+    assert.equal(launches.launches.length, 6);
+    assert.ok(launches.launches.every(launch => launch.modelElevationM === 350 && launch.cellIndex >= 0));
+    assert.equal(launches.raob, undefined);
+  }
+  assert.deepEqual(validateNativeRegions(output, 'rrfs', ref), { model: 'rrfs', referenceTime: ref, regions: 2 });
+  mergeSoaringRegionFiles(output);
+  const primary = JSON.parse(readFileSync(join(soaringRoot, 'regions.json')));
+  assert.equal(primary.regions.filter(region => region.status === 'active-verified-trial').length, 2);
+  const seeded = await collectGroup('soaring', { getBytes: async key => {
+    const file = join(output, key); return existsSync(file) ? readFileSync(file) : null;
+  } });
+  assert.equal([...seeded.keys()].filter(key => key.endsWith('/index.json')).length, 2, 'next-run seeding accepts RRFS-only publication without archived HRRR');
+  await buildLiveSoaring({ output, model: 'rrfs', 'reference-time': ref }, dependencies);
+  assert.equal(replayed.length, 2, 'a second run reuses both complete bundles and original template ids');
+  await assert.rejects(() => buildLiveSoaring({ output, model: 'rrfs', 'reference-time': '2026-10-23T12:00:00Z', 'validate-only': true }, dependencies), /Incomplete native rrfs/);
+});
+
+test('tracked region defaults fill a missing region without overwriting published customizations', t => {
+  const root = mkdtempSync(join(tmpdir(), 'rrfs-region-config-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, 'regions.json'), JSON.stringify({ regions: [{ id: 'north-sound', name: 'Preserved name', caseId: 'north-sound-20261021-00z-rrfs-live' }] }));
+  const loaded = loadRegionConfiguration(root);
+  assert.equal(loaded.regions.find(region => region.id === 'north-sound').name, 'Preserved name');
+  assert.equal(loaded.regions.find(region => region.id === 'north-sound').templateCaseId, 'north-sound-20261021-00z');
+  assert.ok(loaded.regions.some(region => region.id === 'shenandoah-blue-ridge'));
 });

@@ -101,6 +101,7 @@ export interface ReplayManifest {
   soaringContractVersion?: string;
   capturedAt: string;
   cellCount: number;
+  files?: Record<string, string>;
   siteCell: number;
   case: {
     id: string;
@@ -417,7 +418,7 @@ export const SUPPORTED_CASES = new Set([
 
 export function replayLocation(search: string, dataBase: string) {
   const query = new URLSearchParams(search), caseId = query.get('case') ?? DEFAULT_CASE;
-  if (!SUPPORTED_CASES.has(caseId)) throw new Error(`Unknown replay case: ${caseId}`);
+  if (!SUPPORTED_CASES.has(caseId.replace(/-live$/, ''))) throw new Error(`Unknown replay case: ${caseId}`);
   const hour = Number(query.get('hour') ?? 20);
   return {
     caseId,
@@ -432,8 +433,8 @@ export function hourIndex(hours: { forecastHour: number }[], requested: number) 
   return hours.length > 6 ? 6 : 0;
 }
 
-export function historicalLabel(referenceTime: string) {
-  return `Historical forecast · HRRR ${referenceTime.slice(0, 10)} · ${referenceTime.slice(11, 16)} UTC`;
+export function historicalLabel(referenceTime: string, rolling = false) {
+  return `${rolling ? 'Forecast run' : 'Historical forecast'} · HRRR ${referenceTime.slice(0, 10)} · ${referenceTime.slice(11, 16)} UTC`;
 }
 
 export function localTime(validAt: string, timeZone: string) {
@@ -478,9 +479,8 @@ export function selectedState(manifest: ReplayManifest, hours: ReplayHour[], req
 }
 
 /**
- * Reconstructs a complete 14-hour SiteForecast for any of the 2,259 grid cells
- * from the per-hour numerical arrays so clicking any cell on the map updates
- * both the Windgram and the Skew-T sounding immediately.
+ * Reconstructs a profile from published cell arrays, without deriving new physics.
+ * An incomplete column is unavailable; never substitute another location or invented weather.
  */
 export function buildCellSiteForecast(
   manifest: ReplayManifest,
@@ -517,17 +517,16 @@ export function buildCellSiteForecast(
       }
       levels.sort((a, b) => a.heightM - b.heightM);
     }
-    const surface: SiteForecast['hours'][number]['surface'] = {
-      seaLevelPressureHpa: h.mslp?.[cellIndex] ?? 1015,
-      temperatureC: h.sfcT?.[cellIndex] ?? 15,
-      dewPointC: h.sfcTd?.[cellIndex] ?? 10,
-      windSpeedMps: h.wind10mSpeedMps?.[cellIndex] ?? 0,
-      windDirectionDeg: h.wind10mDirDeg?.[cellIndex] ?? 0,
-      cloudCoverPercent: h.cloudCoverPercent?.[cellIndex] ?? 0,
-      precipitationMmHr: h.precipitationMmHr?.[cellIndex] ?? 0,
-      sensibleHeatFluxWm2: h.sensibleHeatFluxWm2?.[cellIndex] ?? 0,
-      latentHeatFluxWm2: h.latentHeatFluxWm2?.[cellIndex] ?? 0,
-    };
+    const surfaceKeys = {
+      seaLevelPressureHpa: 'mslp', temperatureC: 'sfcT', dewPointC: 'sfcTd',
+      windSpeedMps: 'wind10mSpeedMps', windDirectionDeg: 'wind10mDirDeg',
+      cloudCoverPercent: 'cloudCoverPercent', precipitationMmHr: 'precipitationMmHr',
+      sensibleHeatFluxWm2: 'sensibleHeatFluxWm2', latentHeatFluxWm2: 'latentHeatFluxWm2',
+    } as const;
+    const entries = Object.entries(surfaceKeys).map(([key, source]) => [key, h[source]?.[cellIndex]] as const);
+    if (entries.some(([, value]) => value == null || !Number.isFinite(value)) || levels.length < 2
+        || h.thermalVelocityMps[cellIndex] == null || h.cloudBaseM[cellIndex] == null) return null;
+    const surface = Object.fromEntries(entries) as SiteForecast['hours'][number]['surface'];
     if (h.windGustMps?.[cellIndex] != null) surface.windGustMps = h.windGustMps[cellIndex]!;
     if (h.capeJkg?.[cellIndex] != null) surface.capeJkg = h.capeJkg[cellIndex]!;
     if (h.cinJkg?.[cellIndex] != null) surface.cinJkg = h.cinJkg[cellIndex]!;
@@ -536,14 +535,21 @@ export function buildCellSiteForecast(
     if (h.midCloudPercent?.[cellIndex] != null) surface.midCloudPercent = h.midCloudPercent[cellIndex]!;
     if (h.highCloudPercent?.[cellIndex] != null) surface.highCloudPercent = h.highCloudPercent[cellIndex]!;
 
+    const soaring = h.thermalVelocityV2Mps ? {
+      thermalVelocityV2Mps: h.thermalVelocityV2Mps[cellIndex],
+      usableLiftTopV2M: h.usableLiftTopV2M?.[cellIndex] ?? null,
+      resolvedThermalTopM: h.resolvedThermalTopM?.[cellIndex] ?? null,
+      surfaceLclM: h.surfaceLclM?.[cellIndex] ?? null,
+    } : undefined;
     siteHours.push({
+      ...(soaring ? { soaring } : {}),
       validAt: h.validAt,
       surface,
       levels,
       derived: {
         boundaryLayerTopM: h.boundaryLayerTopM[cellIndex],
-        thermalVelocityMps: h.thermalVelocityMps[cellIndex] ?? 0,
-        cloudBaseM: h.cloudBaseM[cellIndex] ?? elev,
+        thermalVelocityMps: h.thermalVelocityMps[cellIndex]!,
+        cloudBaseM: h.cloudBaseM[cellIndex]!,
         usableLiftTopM: h.usableLiftTopM[cellIndex],
       },
     });

@@ -1,3 +1,4 @@
+import { publishedLift } from "./published-lift.ts";
 // One hour of a model profile as a sounding, and what it means for a pilot.
 //
 // The thermodynamics come from @azohra/meteo.briefing (the same lifted
@@ -63,7 +64,7 @@ export interface Sounding {
   parcel: ParcelSample[];
   lclM: number | null;
   boundaryLayerTopM: number | null;
-  thermalVelocityMps: number;
+  thermalVelocityMps: number | null;
   cloudBaseM: number | null;
   usableLiftTopM: number | null;
   /** Surface-based CAPE the model published, J/kg. */
@@ -125,12 +126,12 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
 
   const { parcel, lclM } = liftParcel(points, ts, surface.dewPointC);
 
-  const d = hour.derived;
-  const w = scalar(d.thermalVelocityMps) ?? 0;
+  const d = publishedLift(hour);
+  const w = scalar(d.thermalVelocityMps);
   const bl = scalar(d.boundaryLayerTopM);
   const usable = scalar(d.usableLiftTopM);
   const base = scalar(d.cloudBaseM);
-  const thermals = w >= 0.1 && bl !== null;
+  const thermals = w !== null && w >= 0.1 && bl !== null;
   const zoneTop = thermals ? (usable ?? bl) : null;
   return {
     validAt: hour.validAt,
@@ -327,8 +328,9 @@ const mphText = (mps: number) => `${Math.round(mps * MPH)} mph`;
 const windText = (w: { speedMps: number; directionDeg: number }) => (w.speedMps * MPH < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${mphText(w.speedMps)}`);
 
 /** Thermal strength words for Deardorff's w* (m/s). */
-export function strengthWords(wStar: number): { word: string; tone: Tone } {
-  if (wStar < 1) return { word: "too weak to climb in", tone: "neutral" };
+export function strengthWords(wStar: number | null): { word: string; tone: Tone } {
+  if (wStar === null) return { word: "unavailable", tone: "neutral" };
+  if (wStar < 1) return { word: "weak", tone: "neutral" };
   if (wStar < 1.5) return { word: "weak", tone: "neutral" };
   if (wStar < 2.5) return { word: "moderate", tone: "good" };
   if (wStar < 3.5) return { word: "strong", tone: "good" };
@@ -353,18 +355,19 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   const w = sounding.thermalVelocityMps;
   const bl = sounding.boundaryLayerTopM;
   const top = sounding.usableLiftTopM;
-  const hasThermals = bl !== null && w >= 0.1;
+  const hasThermals = bl !== null && w !== null && w >= 0.1;
 
   // Thermals
-  if (!hasThermals) {
-    findings.push({ key: "thermals", title: "Thermals", text: "No thermals this hour: the sun is not heating the ground enough to lift the air.", tone: "neutral" });
+  if (w === null) {
+    findings.push({ key: "thermals", title: "Thermals", text: "Thermal strength is unavailable for this hour.", tone: "neutral" });
+  } else if (!hasThermals) {
+    findings.push({ key: "thermals", title: "Thermals", text: "No usable thermal lift is predicted this hour.", tone: "neutral" });
   } else {
     const { word, tone } = strengthWords(w);
-    const fpm = Math.round((w * 196.85) / 10) * 10;
     findings.push({
       key: "thermals",
       title: "Thermals",
-      text: `Thermals are ${word}: about ${fpm} ft/min (w* ${w.toFixed(1)} m/s). Your climb will be a bit less once your glider's sink is taken off.`,
+      text: `Thermal strength is ${word} (W* ${w!.toFixed(2)} m/s). This describes convective strength; actual climb rates vary within thermals.`,
       tone,
     });
   }
@@ -482,7 +485,8 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
 }
 
 function headline(sounding: Sounding, findings: Finding[], hasThermals: boolean) {
-  if (!hasThermals) return "No thermals this hour.";
+  if (sounding.thermalVelocityMps === null) return "Thermal forecast unavailable.";
+  if (!hasThermals) return "No usable thermal lift predicted.";
   const parts: string[] = [];
   const { word } = strengthWords(sounding.thermalVelocityMps);
   const top = sounding.usableLiftTopM;

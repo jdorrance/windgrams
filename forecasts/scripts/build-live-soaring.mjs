@@ -1,16 +1,9 @@
-// Captures and replays live 3 km HRRR regional soaring bundles for all active regions
-// in `data/soaring/v1/regions.json` whenever a newer HRRR cycle is published.
-//
-// - Reads the latest `referenceTime` from `data/hrrr-conus/manifest.json` (or `--reference-time`).
-// - Maps any 00Z / 06Z / 12Z / 18Z cycle to the 14-hour daytime soaring window (14:00..03:00 UTC).
-// - Skips capture/replay immediately if all active regions already match `referenceTime`.
-// - Downloads CONUS HRRR byte-ranged records ONCE into a shared cache directory, then replays
-//   every active region (`north-sound`, `shenandoah-blue-ridge`, etc.) from that shared cache.
-// - Refreshes regional `launches.json`, `cross-section.json`, and `verification.json` inside each
-//   newly built bundle and prunes superseded `bundles/<oldSha>` directories.
+// Build regional HRRR daylight forecasts. Historical case namespaces are immutable;
+// rolling updates use a separate -live namespace. Regions with the same field/hour
+// selection share a capture. Replay and enrichment stay private until validated.
 
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -20,15 +13,41 @@ import { replay } from '../soaring/replay.mjs';
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
+function writeAtomic(path, value) {
+  const temp = `${path}.${randomUUID()}.tmp`;
+  try { writeFileSync(temp, `${JSON.stringify(value)}\n`); renameSync(temp, path); }
+  finally { rmSync(temp, { force: true }); }
+}
+
+function verifyBundle(dir, manifest) {
+  for (const name of ['grid.geojson', 'profile.json', 'audit.json', ...(manifest.hours ?? []).map(h => h.file)]) {
+    if (!manifest.files?.[name]) throw new Error(`Incomplete bundle: ${name}`);
+  }
+  for (const [name, hash] of Object.entries(manifest.files ?? {})) {
+    if (!/^[a-zA-Z0-9.-]+$/.test(name) || sha256(readFileSync(join(dir, name))) !== hash) throw new Error(`Corrupt bundle: ${name}`);
+  }
+}
+
 /**
- * Computes the 14 forecast steps covering the primary daytime soaring window (14:00..03:00 UTC)
- * for any 00Z, 06Z, 12Z, or 18Z HRRR cycle.
+ * Remaining 07:00–20:00 hours in the first available local day, respecting DST.
+ * Start at f02 because the capture reserves f01 for terrain.
  */
-export function daytimeForecastHoursForCycle(referenceTimeIso) {
-  const cycleHour = new Date(referenceTimeIso).getUTCHours();
-  // Offset from cycleHour to 14:00 UTC on the same or next day (always >= 2 so f01 terrain is separate)
-  const startStep = ((14 - cycleHour + 24) % 24) || 24;
-  return Array.from({ length: 14 }, (_, i) => startStep + i);
+export function daytimeForecastHoursForCycle(referenceTimeIso, timeZone = 'America/Los_Angeles') {
+  const run = Date.parse(referenceTimeIso);
+  if (!Number.isFinite(run)) throw new Error('Invalid reference time');
+  const format = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', hourCycle: 'h23' });
+  let day;
+  const hours = [];
+  for (let h = 2; h <= 48; h++) {
+    const p = Object.fromEntries(format.formatToParts(new Date(run + h * 3600000)).map(x => [x.type, x.value]));
+    const date = `${p.year}-${p.month}-${p.day}`;
+    if (+p.hour < 7 || +p.hour > 20) continue;
+    day ??= date;
+    if (date !== day) break;
+    hours.push(h);
+  }
+  if (!hours.length) throw new Error('No daylight hours in forecast horizon');
+  return hours;
 }
 
 /**
@@ -37,8 +56,9 @@ export function daytimeForecastHoursForCycle(referenceTimeIso) {
 export function buildLiveCaseSpec(templateCase, referenceTimeIso) {
   return {
     ...templateCase,
+    id: `${templateCase.id}-live`,
     referenceTime: referenceTimeIso,
-    forecastHours: daytimeForecastHoursForCycle(referenceTimeIso),
+    forecastHours: daytimeForecastHoursForCycle(referenceTimeIso, templateCase.site.timeZone),
   };
 }
 
@@ -50,11 +70,14 @@ export function isRegionBundleCurrent(soaringV1Root, caseId, referenceTimeIso) {
     const indexPath = join(soaringV1Root, caseId, 'index.json');
     if (!existsSync(indexPath)) return false;
     const pointer = JSON.parse(readFileSync(indexPath, 'utf8'));
-    if (typeof pointer?.bundle !== 'string') return false;
+    if (!/^bundles\/[a-f0-9]{64}$/.test(pointer?.bundle)) return false;
     const manifestPath = join(soaringV1Root, caseId, pointer.bundle, 'manifest.json');
     if (!existsSync(manifestPath)) return false;
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    return manifest?.case?.referenceTime === referenceTimeIso;
+    if (manifest?.case?.referenceTime !== referenceTimeIso || manifest.case.id !== caseId) return false;
+    if (sha256(readFileSync(manifestPath)) !== pointer.manifestSha256) return false;
+    verifyBundle(join(soaringV1Root, caseId, pointer.bundle), manifest);
+    return true;
   } catch {
     return false;
   }
@@ -69,21 +92,27 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const validSet = new Set((manifest.hours ?? []).map(h => h.validAt));
 
-  if (previousSidecars.crossSection) {
+  const sameGeometry = previousSidecars.gridSha256 === manifest.files['grid.geojson'];
+  if (sameGeometry && previousSidecars.crossSection) {
     const bytes = Buffer.from(`${JSON.stringify(previousSidecars.crossSection)}\n`);
     writeFileSync(join(newBundleDir, 'cross-section.json'), bytes);
     manifest.files['cross-section.json'] = sha256(bytes);
   }
 
-  if (previousSidecars.verification) {
+  if (previousSidecars.referenceTime === manifest.case.referenceTime && previousSidecars.verification) {
     const bytes = Buffer.from(`${JSON.stringify(previousSidecars.verification)}\n`);
     writeFileSync(join(newBundleDir, 'verification.json'), bytes);
     manifest.files['verification.json'] = sha256(bytes);
   }
 
-  if (previousSidecars.launches) {
+  if (sameGeometry && previousSidecars.launches) {
     const launchesDoc = structuredClone(previousSidecars.launches);
+    delete launchesDoc.raob;
+    const office = launchesDoc.nwsOffice?.office;
+    const officePath = office && join(dataRoot, 'nws', 'offices', `${office}.json`);
+    launchesDoc.nwsOffice = officePath && existsSync(officePath) ? JSON.parse(readFileSync(officePath, 'utf8')) : null;
     for (const launch of launchesDoc.launches ?? []) {
+      launch.models = {};
       const slug = launch.slug;
       for (const mslug of ['hrrr-conus', 'hrdps-continental', 'rdps', 'gdps', 'gfs', 'geps', 'ecmwf', 'nws']) {
         const mp = join(dataRoot, mslug, 'sites', `${slug}.json`);
@@ -143,10 +172,8 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
               sensibleHeatWm2: mh.surface?.sensibleHeatFluxWm2 ?? null,
               wstarMps: mh.derived?.thermalVelocityMps ?? null,
               usableLiftTopM: mh.derived?.usableLiftTopM ?? null,
-              wstarV2Mps: s.thermalVelocityV2Mps ?? null,
-              usableLiftTopV2M: s.usableLiftTopV2M ?? null,
+              ...(Object.hasOwn(s, 'thermalVelocityV2Mps') ? { wstarV2Mps: s.thermalVelocityV2Mps ?? null, usableLiftTopV2M: s.usableLiftTopV2M ?? null, resolvedThermalTopM: s.resolvedThermalTopM ?? null } : {}),
               hcritWxtoflyM: s.hcritWxtoflyM ?? null,
-              resolvedThermalTopM: s.resolvedThermalTopM ?? null,
               mixedLayerLclM: s.mixedLayerLclM ?? null,
               experimentalTerrain: s.experimental?.terrainAdjustment ?? null,
               blTopM: mh.derived?.boundaryLayerTopM ?? null,
@@ -161,14 +188,18 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
     manifest.files['launches.json'] = sha256(bytes);
   }
 
+  verifyBundle(newBundleDir, manifest);
   const manifestBytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
   const finalBundleHash = sha256(manifestBytes);
   writeFileSync(manifestPath, manifestBytes);
   const caseDir = join(soaringV1Root, caseId);
   const finalDest = join(caseDir, 'bundles', finalBundleHash);
+  mkdirSync(join(caseDir, 'bundles'), { recursive: true });
   if (newBundleDir !== finalDest) {
-    rmSync(finalDest, { recursive: true, force: true });
-    renameSync(newBundleDir, finalDest);
+    if (existsSync(finalDest)) {
+      verifyBundle(finalDest, manifest);
+      if (sha256(readFileSync(join(finalDest, 'manifest.json'))) !== finalBundleHash) throw new Error('Corrupt existing manifest');
+    } else renameSync(newBundleDir, finalDest);
   }
   const indexDoc = {
     schemaVersion: 1,
@@ -176,7 +207,7 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
     bundle: `bundles/${finalBundleHash}`,
     manifestSha256: finalBundleHash,
   };
-  writeFileSync(join(caseDir, 'index.json'), `${JSON.stringify(indexDoc)}\n`);
+  writeAtomic(join(caseDir, 'index.json'), indexDoc);
   return finalDest;
 }
 
@@ -192,7 +223,8 @@ export function pruneSupersededBundles(soaringV1Root, caseId) {
   const activeId = String(pointer.bundle ?? '').replace(/^bundles\//, '');
   let removed = 0;
   for (const entry of readdirSync(bundlesDir)) {
-    if (entry !== activeId) {
+    // Keep recent bundles for clients still loading through an older pointer.
+    if (/^[a-f0-9]{64}$/.test(entry) && entry !== activeId && Date.now() - statSync(join(bundlesDir, entry)).mtimeMs > 48 * 3600000) {
       rmSync(join(bundlesDir, entry), { recursive: true, force: true });
       removed += 1;
     }
@@ -204,12 +236,16 @@ function readPreviousSidecars(soaringV1Root, caseId) {
   try {
     const caseDir = join(soaringV1Root, caseId);
     const pointer = JSON.parse(readFileSync(join(caseDir, 'index.json'), 'utf8'));
+    if (!/^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)) throw new Error('Invalid pointer');
     const bundleDir = join(caseDir, pointer.bundle);
     const readOpt = name => {
       const p = join(bundleDir, name);
       return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : null;
     };
+    const manifest = readOpt('manifest.json');
     return {
+      referenceTime: manifest?.case?.referenceTime,
+      gridSha256: manifest?.files?.['grid.geojson'],
       launches: readOpt('launches.json'),
       crossSection: readOpt('cross-section.json'),
       verification: readOpt('verification.json'),
@@ -254,7 +290,8 @@ async function main() {
     return;
   }
 
-  const pendingRegions = activeRegions.filter(r => !isRegionBundleCurrent(soaringV1Root, r.caseId, referenceTime));
+  const templateId = r => r.templateCaseId ?? r.caseId.replace(/-live$/, '');
+  const pendingRegions = activeRegions.filter(r => !isRegionBundleCurrent(soaringV1Root, `${templateId(r)}-live`, referenceTime));
   if (pendingRegions.length === 0) {
     console.log(`All ${activeRegions.length} active soaring region(s) already at ${referenceTime}; skipping rebuild.`);
     return;
@@ -263,8 +300,8 @@ async function main() {
   const runKey = referenceTime.replace(/[-:]/g, '').replace('.000Z', 'Z');
   const sharedCacheDir = resolve(values['cache-root'] ?? join(ROOT, '.soaring-cache', `live-${runKey}`));
 
-  const liveCases = activeRegions.map(region => {
-    const templatePath = join(ROOT, 'soaring', 'cases', `${region.caseId}.json`);
+  const liveCases = pendingRegions.map(region => {
+    const templatePath = join(ROOT, 'soaring', 'cases', `${templateId(region)}.json`);
     const template = JSON.parse(readFileSync(templatePath, 'utf8'));
     const previousSidecars = readPreviousSidecars(soaringV1Root, region.caseId);
     return { region, caseSpec: buildLiveCaseSpec(template, referenceTime), previousSidecars };
@@ -272,18 +309,27 @@ async function main() {
 
   try {
     console.log(`Capturing shared CONUS HRRR records for ${referenceTime} into ${sharedCacheDir}...`);
-    await capture(liveCases[0].caseSpec, sharedCacheDir);
+    const captures = new Set();
 
     for (const { region, caseSpec, previousSidecars } of liveCases) {
       console.log(`Replaying 3 km regional grid for ${region.id} (${caseSpec.id} @ ${referenceTime})...`);
-      const res = await replay(caseSpec, sharedCacheDir, soaringV1Root);
-      const enrichedPath = enrichBundleWithSidecars(dataRoot, soaringV1Root, caseSpec.id, res.path, previousSidecars);
-      const pruned = pruneSupersededBundles(soaringV1Root, caseSpec.id);
-      console.log(`Built ${region.id} -> ${enrichedPath} (pruned ${pruned} old bundle(s))`);
+      const key = sha256(JSON.stringify([caseSpec.forecastHours, caseSpec.pressureLevels, caseSpec.includeExtendedFields]));
+      const cache = join(sharedCacheDir, key);
+      if (!captures.has(key)) { await capture(caseSpec, cache); captures.add(key); }
+      const staging = mkdtempSync(join(soaringV1Root, '.live-'));
+      try {
+        const res = await replay(caseSpec, cache, staging);
+        const enrichedPath = enrichBundleWithSidecars(dataRoot, soaringV1Root, caseSpec.id, res.path, previousSidecars);
+        region.templateCaseId = templateId(region);
+        region.caseId = caseSpec.id;
+        writeAtomic(regionsPath, regionsDoc);
+        const pruned = pruneSupersededBundles(soaringV1Root, caseSpec.id);
+        console.log(`Built ${region.id} -> ${enrichedPath} (pruned ${pruned} old bundle(s))`);
+      } finally { rmSync(staging, { recursive: true, force: true }); }
     }
 
     regionsDoc.generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-    writeFileSync(regionsPath, `${JSON.stringify(regionsDoc, null, 2)}\n`);
+    writeAtomic(regionsPath, regionsDoc);
   } finally {
     if (!values['cache-root']) {
       rmSync(sharedCacheDir, { recursive: true, force: true });
@@ -293,7 +339,7 @@ async function main() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch(error => {
-    console.error(`WARN live soaring bundle build failed (keeping seeded bundle): ${error.message}`);
-    process.exit(0);
+    console.error(`Live soaring build failed; previous bundles remain available: ${error.message}`);
+    process.exitCode = 1;
   });
 }

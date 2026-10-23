@@ -3,6 +3,7 @@
  * comes from; pennant = 50 kt, full barb = 10 kt, half barb = 5 kt.
  */
 export function barbPaths(speedKt: number, directionDeg: number): { staff: string; flags: string[]; calm: boolean } {
+  if (!Number.isFinite(speedKt) || speedKt < 0 || !Number.isFinite(directionDeg)) return { staff: "", flags: [], calm: false };
   if (speedKt < 2.5) return { staff: "", flags: [], calm: true };
   const len = 22;
   const rad = (directionDeg * Math.PI) / 180;

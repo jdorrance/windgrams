@@ -49,3 +49,14 @@ test("fetchWithRetry retries a dropped connection", async () => {
   assert.equal(response.status, 200);
   assert.equal(calls, 2);
 });
+
+test('a stalled request times out once and releases the launch loading state', async () => {
+  let calls = 0;
+  const fetchImpl: typeof fetch = async (_url, init) => new Promise((_resolve, reject) => {
+    calls++;
+    const timer = setTimeout(() => reject(new Error('unexpected long wait')), 1000);
+    init!.signal!.addEventListener('abort', () => { clearTimeout(timer); reject(init!.signal!.reason); }, { once: true });
+  });
+  await assert.rejects(fetchWithRetry('https://example.test/stalled', undefined, { fetchImpl, timeoutMs: 5 }), { name: 'TimeoutError' });
+  assert.equal(calls, 1);
+});

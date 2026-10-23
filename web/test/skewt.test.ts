@@ -61,7 +61,7 @@ test("a cumulus day capped by an inversion reads as it should", () => {
 
   const r = readSounding(s, 1268);
   const byKey = (k: string) => r.findings.filter((f) => f.key === k);
-  assert.match(byKey("thermals")[0].text, /moderate: about 430 ft\/min \(w\* 2\.2 m\/s\)/);
+  assert.match(byKey("thermals")[0].text, /moderate \(W\* 2\.20 m\/s\)/);
   assert.match(byKey("top")[0].text, /climb to about 10,800 ft, 6,700 ft above launch/);
   assert.match(byKey("clouds")[0].text, /cumulus with a base around 11,000 ft/);
   assert.match(byKey("lid")[0].text, /An inversion from 11,200 ft to 12,100 ft acts as a lid/);
@@ -90,7 +90,7 @@ test("a cold morning has a ground inversion and no thermals", () => {
   const grounded = s.inversions.find((l) => l.grounded)!;
   assert.equal(grounded.topM, 1520);
   const r = readSounding(s, 1268);
-  assert.equal(r.headline, "No thermals this hour.");
+  assert.equal(r.headline, "No usable thermal lift predicted.");
   assert.ok(r.findings.some((f) => f.title === "Ground inversion"));
   assert.ok(!r.findings.some((f) => f.key === "top"));
   assert.ok(Math.abs(s.freezingLevelM! - (2020 + (7 / 8) * 1070)) < 1);

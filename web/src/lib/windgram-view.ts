@@ -1,3 +1,4 @@
+import { publishedLift } from "./published-lift.ts";
 import type { SiteForecast } from "@azohra/meteo.briefing/contract";
 import { componentsToWind, lapseRateCPer1000Ft, localDateKey, relativeHumidityPercent, STABILITY_CLASSES, windToComponents } from "@azohra/meteo.briefing/derive";
 import { buildMeteogramScene, sampledFieldPaths, type FieldNode, type HourSampling, type MeteogramOptions, type MetricStrip } from "@azohra/meteo.briefing/meteogram";
@@ -126,7 +127,7 @@ function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
     return { altitudeM: p.altitudeM, value: a && b && Number.isFinite(a.value) && Number.isFinite(b.value)
       ? lapseRateCPer1000Ft({ heightM: a.altitudeM, temperatureC: a.value }, { heightM: b.altitudeM, temperatureC: b.value }) ?? NaN : NaN };
   });
-  const usable = scalar(hour.derived.usableLiftTopM), base = scalar(hour.derived.cloudBaseM);
+  const usable = scalar(publishedLift(hour).usableLiftTopM), base = scalar(publishedLift(hour).cloudBaseM);
   return {
     validAt: hour.validAt, temperatureC, dewPointC, lapseCPer1000Ft,
     relativeHumidityPercent: temperatureC.map((p, i) => ({ altitudeM: p.altitudeM, value: Number.isFinite(p.value) && Number.isFinite(dewPointC[i].value) ? relativeHumidityPercent(p.value, dewPointC[i].value) : NaN })),
@@ -234,7 +235,7 @@ function alignedDiagnostics(strips: readonly MetricStrip[], sourceTimes: readonl
       case "cloudCover": return h.surface.cloudCoverPercent;
       case "cape": return h.surface.capeJkg;
       case "smoke": return h.smoke?.surfaceUgm3;
-      case "thermalStrength": return h.derived.thermalVelocityMps;
+      case "thermalStrength": return publishedLift(h).thermalVelocityMps;
       default: return null;
     }
   };
@@ -334,11 +335,11 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
       const arcs = options.launchWindows;
       const inWindWindow = direction === null || !arcs?.length ? null : arcs.some((arc) => arc.fromDeg <= arc.toDeg ? direction >= arc.fromDeg && direction <= arc.toDeg : direction >= arc.fromDeg || direction <= arc.toDeg);
       return { validAt: h.validAt, label: labelTime.format(new Date(h.validAt)).replace(/\s/g, "").replace("AM", "a").replace("PM", "p"), x: left + columnWidth * (i + 0.5),
-        temperatureF: temp === null ? null : fahrenheit(temp), thermalVelocityMps: scalar(h.derived.thermalVelocityMps), gustKt: gust === null ? null : gust * KT, inWindWindow };
+        temperatureF: temp === null ? null : fahrenheit(temp), thermalVelocityMps: scalar(publishedLift(h).thermalVelocityMps), gustKt: gust === null ? null : gust * KT, inWindWindow };
     }),
     fields: [], contours: [], barbs: [], clouds: [], cloudBands: [], freezing: [], wings: [], series: [], launch: null,
     diagnostics: alignedDiagnostics(scene.strips.filter((s) => s.key !== "thermalStrength"), scene.hourValidAts, hours, scene.scales.plotLeft, columnWidth), diagnosticLeft: scene.scales.plotLeft,
-    selectedHourIndex: hours.reduce((best, h, i) => (scalar(h.derived.thermalVelocityMps) ?? -1) > (scalar(hours[best]?.derived.thermalVelocityMps) ?? -1) ? i : best, 0),
+    selectedHourIndex: hours.reduce((best, h, i) => (scalar(publishedLift(h).thermalVelocityMps) ?? -1) > (scalar((hours[best] ? publishedLift(hours[best]).thermalVelocityMps : null)) ?? -1) ? i : best, 0),
   };
   if (!hours.length) return view;
   const y = (z: number) => heightToY(view, z);
@@ -393,7 +394,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
       view.clouds.push({ ...layer, hourIndex: i, x, y: y(layer.baseM), kind, coverPercent: hasModelCloud ? layer.coverPercent : null });
       view.cloudBands.push({ x: x - columnWidth / 2, width: columnWidth, y: y(layer.topM), height: y(layer.baseM) - y(layer.topM), kind, coverPercent: hasModelCloud ? layer.coverPercent : null });
     }
-    const base = scalar(h.derived.cloudBaseM), usable = scalar(h.derived.usableLiftTopM), wstar = scalar(h.derived.thermalVelocityMps);
+    const base = scalar(publishedLift(h).cloudBaseM), usable = scalar(publishedLift(h).usableLiftTopM), wstar = scalar(publishedLift(h).thermalVelocityMps);
     if (sample.cloudCapped && base !== null && base >= floorM && base <= topM && wstar !== null && wstar >= 0.1
       && !layers.some((l) => base >= l.baseM - 100 && base <= l.topM + 100)) {
       view.clouds.push({ hourIndex: i, x, y: y(base), baseM: base, topM: base, kind: "potential", coverPercent: null });
@@ -406,7 +407,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     ["usableLiftTopM", "Usable lift", "#134ac4", null],
     ["cloudBaseM", "Potential cloud base", "#426173", "2 5"],
   ] as const) {
-    const value = (h: ProfileHour) => scalar(h.derived[key]);
+    const value = (h: ProfileHour) => scalar(publishedLift(h)[key]);
     const points = hours.flatMap((h, i): (Point | null)[] => {
       const z = value(h);
       const point = z === null || z < floorM || z > topM ? null : { x: view.hours[i].x, y: y(z) };
@@ -416,7 +417,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     let run: typeof bandRuns[number] | null = null;
     for (let i = 0; i < hours.length; i++) {
       if (gaps.has(i)) run = null;
-      const val = hours[i].derived[key];
+      const val = publishedLift(hours[i])[key];
       const lo = val && typeof val === "object" ? scalar(val.p25) : null;
       const hi = val && typeof val === "object" ? scalar(val.p75) : null;
       if (lo === null || hi === null) { run = null; continue; }

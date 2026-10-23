@@ -11,7 +11,7 @@ import {
   windToComponents,
 } from '@azohra/meteo.briefing/derive';
 import { deriveSiteForecast } from './vendor/derive-0.6.0.mjs';
-import { wind } from './grid.mjs';
+import { wind, storageCoordinates } from './grid.mjs';
 import { semantics, validAt } from './common.mjs';
 
 export const SOARING_CONTRACT_VERSION = '2.0.0';
@@ -417,6 +417,7 @@ export function deriveDiagnosticsV2(terrain, source, v1Hour, options = {}) {
   let minDownwardVelocityMps = null;
   const wByPressure = {};
   for (const l of source.levels) {
+    if (l.heightM <= terrain + 20) continue;
     const w = geometricWFromOmegaMps(l.verticalVelocityPaS, l.pressureHpa, l.temperatureC);
     if (w != null) {
       wByPressure[l.pressureHpa] = w;
@@ -427,8 +428,8 @@ export function deriveDiagnosticsV2(terrain, source, v1Hour, options = {}) {
     }
   }
 
-  const l925 = source.levels.find(l => l.pressureHpa === 925);
-  const l850 = source.levels.find(l => l.pressureHpa === 850);
+  const l925 = levels.find(l => l.pressureHpa === 925);
+  const l850 = levels.find(l => l.pressureHpa === 850);
   const hasSub925 = source.levels.some(l => l.pressureHpa > 925);
   const hasAbove600 = source.levels.some(l => l.pressureHpa < 600);
 
@@ -498,19 +499,14 @@ export function deriveDiagnosticsV2(terrain, source, v1Hour, options = {}) {
  */
 export function computeNativeGridConvergence(grid, cells, uGridArray, vGridArray) {
   const byGridIJ = new Map();
-  const ni = grid.ni;
   for (let idx = 0; idx < cells.length; idx++) {
-    const gIdx = cells[idx].index;
-    const i = gIdx % ni;
-    const j = Math.floor(gIdx / ni);
+    const [i, j] = storageCoordinates(grid, cells[idx].index);
     byGridIJ.set(`${i},${j}`, idx);
   }
-  const dx = grid.dxM || 3000;
-  const dy = grid.dyM || 3000;
+  const dx = grid.dxM * (grid.iScansNegatively ? -1 : 1);
+  const dy = grid.dyM * (grid.jScansPositively ? 1 : -1);
   return cells.map(cell => {
-    const gIdx = cell.index;
-    const i = gIdx % ni;
-    const j = Math.floor(gIdx / ni);
+    const [i, j] = storageCoordinates(grid, cell.index);
     const cIdx = byGridIJ.get(`${i},${j}`);
     const eIdx = byGridIJ.get(`${i + 1},${j}`) ?? cIdx;
     const wIdx = byGridIJ.get(`${i - 1},${j}`) ?? cIdx;
@@ -525,7 +521,8 @@ export function computeNativeGridConvergence(grid, cells, uGridArray, vGridArray
     const dudx = (uE - uW) / (spanX * dx);
     const dvdy = (vN - vS) / (spanY * dy);
     const convergencePerSec = -(dudx + dvdy);
-    return round2(convergencePerSec * 1e5);
+    const rounded = round2(convergencePerSec * 1e5);
+    return rounded === 0 ? 0 : rounded;
   });
 }
 
@@ -608,8 +605,11 @@ export function assertAgreement(profile, hourly, siteCell) {
   for (let i = 0; i < hourly.length; i++) {
     if (profile.hours[i].validAt !== hourly[i].validAt) throw new Error('Map/profile time mismatch');
     for (const key of metrics) if (metric(profile.hours[i], key) !== hourly[i][key][siteCell]) throw new Error(`Map/profile mismatch: ${i} ${key}`);
+    if (profile.hours[i].soaring) for (const key of v2LayerMetrics) {
+      if ((profile.hours[i].soaring[key] ?? null) !== hourly[i][key][siteCell]) throw new Error(`Map/profile v2 mismatch: ${i} ${key}`);
+    }
   }
-  return { exact: true, hours: hourly.length, valuesChecked: hourly.length * metrics.length };
+  return { exact: true, hours: hourly.length, valuesChecked: hourly.length * metrics.length + profile.hours.filter(h => h.soaring).length * v2LayerMetrics.length };
 }
 export function differences(actual, expected, path = '') {
   if (path === 'run.generatedAt') return [];

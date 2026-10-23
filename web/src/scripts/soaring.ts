@@ -1,3 +1,4 @@
+import { fetchWithRetry } from "../lib/http.ts";
 import { Marker, type GeoJSONSource, type ExpressionSpecification } from 'maplibre-gl';
 import { parseSiteForecast, type SiteForecast } from '@azohra/meteo.briefing/contract';
 import { baseMap, onMapReady } from './map.ts';
@@ -7,7 +8,7 @@ import { renderWindgramSvg, renderWindgramKey } from '../lib/windgram-chart.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
 import { SkewTChart } from '../lib/skewt-chart.ts';
 import { compassPoint } from '../lib/launches.ts';
-import { windArrows } from '../lib/map-wind.ts';
+import { windBarbs, windBarbImage } from '../lib/map-wind.ts';
 import {
   LAYER_SPECS,
   PRIMARY_LAYERS,
@@ -26,14 +27,14 @@ const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElem
 const set = (id: string, text: string) => { const node = el(id); if (node) node.textContent = text; };
 
 async function read<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+  const response = await fetchWithRetry(url);
   if (!response.ok) throw new Error(`Forecast data unavailable (${response.status}).`);
   return response.json();
 }
 
 async function readOptional<T>(url: string): Promise<T | null> {
   try {
-    const response = await fetch(url);
+    const response = await fetchWithRetry(url);
     return response.ok ? (await response.json() as T) : null;
   } catch {
     return null;
@@ -45,7 +46,7 @@ interface Grid { type: 'FeatureCollection'; features: { type: 'Feature'; id: str
 interface Audit {
   sampledCell: { distanceKm: number }; terrain: { modelElevationM: number; launch: { elevationM: number }; differenceM: number; rawMslHeightsPreserved?: boolean };
   mapProfileAgreement: { exact: boolean; hours: number; valuesChecked: number };
-  publishedProfileComparison: { exact: boolean; differences: unknown[] }; limitations: string[];
+  publishedProfileComparison: { applicable?: boolean; exact: boolean | null; differences: unknown[] }; limitations: string[];
 }
 interface ExperimentalTerrain {
   experimental: boolean;
@@ -156,8 +157,8 @@ function renderCrossSectionSvg(
     const nextX = idx === nodes.length - 1 ? width - right : (x + xOf(nodes[idx + 1].distanceKm)) / 2;
     const colW = Math.max(6, nextX - prevX);
     const terrM = n.modelElevationM ?? 0;
-    const resTop = hour.resolvedThermalTopM?.[ci] ?? hour.boundaryLayerTopM[ci];
-    const wstar = hour.thermalVelocityV2Mps?.[ci] ?? hour.thermalVelocityMps[ci] ?? 0;
+    const resTop = (hour.resolvedThermalTopM ?? hour.boundaryLayerTopM)[ci];
+    const wstar = (hour.thermalVelocityV2Mps ?? hour.thermalVelocityMps)[ci] ?? 0;
 
     if (resTop != null && resTop > terrM && wstar > 0) {
       const rect = document.createElementNS(ns, 'rect');
@@ -186,24 +187,24 @@ function renderCrossSectionSvg(
   });
 
   const drawLine = (vals: (number | null | undefined)[], color: string, dash = '', widthPx = 2) => {
-    const pts: string[] = [];
+    let d = '', connected = false;
     nodes.forEach(n => {
       const v = vals[n.nodeIndex];
-      if (v != null && Number.isFinite(v)) pts.push(`${xOf(n.distanceKm).toFixed(1)},${yOf(v).toFixed(1)}`);
+      if (v == null || !Number.isFinite(v)) { connected = false; return; }
+      d += `${connected ? 'L' : 'M'}${xOf(n.distanceKm).toFixed(1)},${yOf(v).toFixed(1)}`;
+      connected = true;
     });
-    if (pts.length < 2) return;
-    const pl = document.createElementNS(ns, 'polyline');
-    pl.setAttribute('fill', 'none'); pl.setAttribute('stroke', color);
-    pl.setAttribute('stroke-width', String(widthPx));
-    if (dash) pl.setAttribute('stroke-dasharray', dash);
-    pl.setAttribute('points', pts.join(' '));
-    pl.setAttribute('pointer-events', 'none');
-    svg.append(pl);
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('fill', 'none'); path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', String(widthPx));
+    if (dash) path.setAttribute('stroke-dasharray', dash);
+    path.setAttribute('d', d); path.setAttribute('pointer-events', 'none');
+    svg.append(path);
   };
 
-  drawLine(nodes.map(n => hour.surfaceLclM?.[n.cellIndex] ?? hour.cloudBaseM[n.cellIndex]), '#7c689c', '5,3', 1.8);
+  drawLine(nodes.map(n => (hour.surfaceLclM ?? hour.cloudBaseM)[n.cellIndex]), '#7c689c', '5,3', 1.8);
   drawLine(nodes.map(n => hour.resolvedThermalTopM?.[n.cellIndex]), '#237e81', '', 2.4);
-  drawLine(nodes.map(n => hour.usableLiftTopV2M?.[n.cellIndex] ?? hour.usableLiftTopM[n.cellIndex]), '#d99b26', '', 2.2);
+  drawLine(nodes.map(n => (hour.usableLiftTopV2M ?? hour.usableLiftTopM)[n.cellIndex]), '#d99b26', '', 2.2);
 
   const terrPts = [
     `${left},${top + plotH}`,
@@ -245,13 +246,19 @@ function renderCrossSectionSvg(
 }
 
 async function main() {
-  const location = replayLocation(window.location.search, DATA_BASE);
+  const regionsCatalogue = await readOptional<RegionCatalogue>(`${DATA_BASE.replace(/\/$/, '')}/soaring/v1/regions.json`);
+  const query = new URLSearchParams(window.location.search);
+  if (!query.has('case')) {
+    const region = regionsCatalogue?.regions.find(r => r.caseId.startsWith('north-sound-') && r.caseId.endsWith('-live'));
+    if (region) query.set('case', region.caseId);
+  }
+  const location = replayLocation(query.toString(), DATA_BASE);
   const pointer = await read<{ bundle: string }>(`${location.root}/index.json`);
   if (!/^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)) throw new Error('Invalid replay bundle pointer');
   const root = `${location.root}/${pointer.bundle}`;
   const manifest = await read<ReplayManifest>(`${root}/manifest.json`);
   if (manifest.schemaVersion !== 1 || manifest.case.id !== location.caseId) throw new Error('Replay manifest mismatch');
-  const [grid, profileData, audit, hours, launchesDoc, crossSectionDoc, verificationDoc, regionsCatalogue] = await Promise.all([
+  const [grid, profileData, audit, hours, launchesDoc, crossSectionDoc, verificationDoc] = await Promise.all([
     read<Grid>(`${root}/grid.geojson`),
     read<unknown>(`${root}/profile.json`),
     read<Audit>(`${root}/audit.json`),
@@ -259,7 +266,6 @@ async function main() {
     readOptional<LaunchesDoc>(`${root}/launches.json`),
     readOptional<CrossSectionDoc>(`${root}/cross-section.json`),
     readOptional<VerificationDoc>(`${root}/verification.json`),
-    readOptional<RegionCatalogue>(`${DATA_BASE.replace(/\/$/, '')}/soaring/v1/regions.json`),
   ]);
   const blanchardProfile = parseSiteForecast(profileData);
   if (!blanchardProfile || blanchardProfile.hours.length !== hours.length || blanchardProfile.hours.some((h, i) => h.validAt !== hours[i].validAt)) {
@@ -267,6 +273,9 @@ async function main() {
   }
 
   let requested = location.hour;
+  if (!query.has('hour') && location.caseId.endsWith('-live')) {
+    requested = hours.reduce((best, h) => Math.abs(Date.parse(h.validAt) - Date.now()) < Math.abs(Date.parse(best.validAt) - Date.now()) ? h : best).forecastHour;
+  }
   let layer: Layer = 'thermalVelocityV2Mps';
   let selectedCell = manifest.siteCell;
   let showBarbs = true;
@@ -302,7 +311,7 @@ async function main() {
   el('replay-content').hidden = false;
   set('replay-status', '');
   el('replay-status').hidden = true;
-  set('replay-run', historicalLabel(manifest.case.referenceTime));
+  set('replay-run', historicalLabel(manifest.case.referenceTime, location.caseId.endsWith('-live')));
   set('select-blanchard', `Back to ${manifest.case.site.name}`);
   const activeRegionMeta = regionsCatalogue?.regions?.find(r => r.caseId === location.caseId);
   if (activeRegionMeta) {
@@ -353,7 +362,8 @@ async function main() {
     new Marker({ element: marker }).setLngLat([launch.longitude, launch.latitude]).addTo(map);
   }
 
-  let soundingChart = new SkewTChart(el('replay-sounding'), { name: manifest.case.site.name, elevationM: manifest.case.launchElevation.elevationM });
+  const soundingChart = new SkewTChart(el('replay-sounding'), { name: manifest.case.site.name, elevationM: manifest.case.launchElevation.elevationM });
+  const profileCache = new Map<number, SiteForecast | null>();
   let currentWindgramCell = -1;
   let currentView = buildWindgramView(blanchardProfile, {
     timeZone: manifest.case.site.timeZone,
@@ -413,7 +423,7 @@ async function main() {
   set(
     'audit-results',
     `${audit.mapProfileAgreement.valuesChecked} identical published values across ${audit.mapProfileAgreement.hours} hours. ` +
-    `${audit.publishedProfileComparison.exact ? 'The saved October 21 profile matches exactly, excluding generation time.' : `${audit.publishedProfileComparison.differences.length} differences from the saved October 21 profile.`} ` +
+    `${audit.publishedProfileComparison.applicable === false ? 'The saved October 21 comparison does not apply to this run.' : audit.publishedProfileComparison.exact ? 'The saved October 21 profile matches exactly, excluding generation time.' : `${audit.publishedProfileComparison.differences.length} differences from the saved October 21 profile.`} ` +
     `Sample distance: ${audit.sampledCell.distanceKm.toFixed(2)} km. Model terrain: ${audit.terrain.modelElevationM} m; launch terrain: ${audit.terrain.launch.elevationM} m (raw MSL heights preserved). ` +
     (inv ? `HRRR wrfprs index inventory: ${inv.totalGribRecordsPerHour} records/hour (${inv.availablePressureLevelsCount} pressure levels available, including sub-925 hPa levels ${inv.availableSub925PressureLevelsHpa.join(', ')} hPa, 80 m AGL wind, and explicit cloud base/ceiling/LCL fields).` : ''),
   );
@@ -430,7 +440,7 @@ async function main() {
     const rejectedText = obsSkill.rejectedMismatchedComparisons?.map(r => `${r.stationId} vs ${r.siteSlug} (${r.matchStatus}: ${r.distanceKm} km, Δt=${r.timeDeltaMinutes} min)`).join(' · ') ?? '';
     set(
       'raob-meta',
-      `${obsSkill.matchedCount} matched RAOB pairs (distance ≤ 60 km, valid time 2026-10-21 00:00Z). ` +
+      `${obsSkill.matchedCount} matched observation pairs. See each observation time in the downloadable report. ` +
       (rejectedText ? `Excluded from site skill: ${rejectedText}.` : ''),
     );
     const tbody = el('raob-table-body');
@@ -460,6 +470,7 @@ async function main() {
   }
 
   let ready = false;
+  let drawnHour: ReplayHour | undefined, drawnLayer: Layer | undefined, drawnBarbs: boolean | undefined;
   function update() {
     const state = selectedState(manifest, hours, requested), { hour, index } = state;
     requested = hour.forecastHour;
@@ -482,31 +493,40 @@ async function main() {
       launchSelect.value = matchedLaunch?.slug ?? '';
     }
 
-    const cellForecast = selectedCell === manifest.siteCell
-      ? blanchardProfile!
-      : buildCellSiteForecast(manifest, hours, selectedCell, properties, matchedLaunch?.name ?? `Cell ${properties.gridIndex}`) ?? blanchardProfile!;
+    if (!profileCache.has(selectedCell)) {
+      if (profileCache.size >= 32) profileCache.delete(profileCache.keys().next().value!);
+      profileCache.set(selectedCell, buildCellSiteForecast(manifest, hours, selectedCell, properties, activeLabel));
+    }
+    const cellForecast = profileCache.get(selectedCell);
     set('windgram-heading', `${activeLabel} · Windgram`);
     set('sounding-heading', `${activeLabel} · Sounding`);
     set('sounding-valid', state.validLabel);
-
-    renderActiveCellWindgram(cellForecast, selectedCell, index);
+    if (cellForecast) {
+      renderActiveCellWindgram(cellForecast, selectedCell, index);
+    } else {
+      currentWindgramCell = -1;
+      set('replay-windgram', 'A complete profile is unavailable at this location.');
+      set('windgram-key', '');
+    }
     el('replay-windgram').dataset.validAt = hour.validAt;
     el('replay-sounding').dataset.validAt = hour.validAt;
     el('soaring-map').dataset.validAt = hour.validAt;
 
     const elevForSounding = matchedLaunch?.launchElevationM ?? (selectedCell === manifest.siteCell ? manifest.case.launchElevation.elevationM : properties.modelElevationM);
-    soundingChart = new SkewTChart(el('replay-sounding'), { name: cellForecast.site.name, elevationM: elevForSounding });
-    const builtSounding = buildSounding(cellForecast, cellForecast.hours[index]);
-    soundingChart.set(builtSounding);
-    if (builtSounding && el('sounding-findings')) {
+    const builtSounding = cellForecast ? buildSounding(cellForecast, cellForecast.hours[index]) : null;
+    soundingChart.set(builtSounding, { name: activeLabel, elevationM: elevForSounding });
+    const findings = el('sounding-findings');
+    findings.replaceChildren();
+    set('sounding-headline', 'Sounding unavailable at this location.');
+    if (builtSounding) {
       const reading = readSounding(builtSounding, elevForSounding);
       set('sounding-headline', reading.headline);
-      const flist = el('sounding-findings');
-      flist.replaceChildren();
       for (const f of reading.findings) {
         const li = document.createElement('li');
-        li.innerHTML = `<strong>${f.title}:</strong> ${f.text}`;
-        flist.append(li);
+        const title = document.createElement('strong');
+        title.textContent = `${f.title}: `;
+        li.append(title, f.text);
+        findings.append(li);
       }
     }
 
@@ -531,7 +551,7 @@ async function main() {
       ['+1 °C thermal top sensitivity', fmtM(hour.thermalTopPlus1CM?.[selectedCell], 'MSL')],
       ['Baseline parcel top (v1)', fmtM(hour.boundaryLayerTopM[selectedCell], 'MSL')],
       ['HRRR model PBL (HPBL)', fmtM(hour.pblHeightM[selectedCell], 'AGL')],
-      ['Surface LCL (Cu base)', fmtM(hour.surfaceLclM?.[selectedCell] ?? hour.cloudBaseM[selectedCell], 'MSL')],
+      ['Surface LCL (Cu base)', fmtM((hour.surfaceLclM ?? hour.cloudBaseM)[selectedCell], 'MSL')],
       ['Mixed-layer LCL (zblcl, physical)', fmtM(hour.mixedLayerLclM?.[selectedCell], 'MSL')],
       ['Cu / OD potential', `${hour.cuPotentialM?.[selectedCell] != null ? `${hour.cuPotentialM[selectedCell]! >= 0 ? '+' : ''}${hour.cuPotentialM[selectedCell]!.toFixed(0)} m` : '–'} / ${hour.odPotentialM?.[selectedCell] != null ? `${hour.odPotentialM[selectedCell]! >= 0 ? '+' : ''}${hour.odPotentialM[selectedCell]!.toFixed(0)} m` : '–'}`],
       ['10 m wind (gust)', w10s != null && w10d != null ? `${compassPoint(w10d)} (${w10d.toFixed(0)}°) @ ${(w10s * MPS_TO_MPH).toFixed(1)} mph${w10g != null ? ` (gust ${(w10g * MPS_TO_MPH).toFixed(1)} mph)` : ''}` : 'Unavailable'],
@@ -567,7 +587,7 @@ async function main() {
     el('cell-notice').hidden = !notice;
     set(
       'cell-quality',
-      `${hour.levelCount[selectedCell]} usable above-ground levels (sparse 9-level profile preserved; 0 synthetic levels). ` +
+      `${hour.levelCount[selectedCell]} usable above-ground levels. ` +
       (hour.ceilingReached[selectedCell]
         ? 'Thermal calculation reaches the sampled-column ceiling.'
         : hour.status[selectedCell] === 'valid'
@@ -605,13 +625,13 @@ async function main() {
         const ci = l.cellIndex;
         const tr = document.createElement('tr');
         if (ci === selectedCell) tr.className = 'is-selected';
-        const wstar = hour.thermalVelocityV2Mps?.[ci] ?? hour.thermalVelocityMps[ci];
-        const uTop = hour.usableLiftTopV2M?.[ci] ?? hour.usableLiftTopM[ci];
+        const wstar = (hour.thermalVelocityV2Mps ?? hour.thermalVelocityMps)[ci];
+        const uTop = (hour.usableLiftTopV2M ?? hour.usableLiftTopM)[ci];
         const wxTop = hour.hcritWxtoflyM?.[ci];
         const rTop = hour.resolvedThermalTopM?.[ci];
         const v1Top = hour.boundaryLayerTopM[ci];
         const hpbl = hour.pblHeightM[ci];
-        const lcl = hour.surfaceLclM?.[ci] ?? hour.cloudBaseM[ci];
+        const lcl = (hour.surfaceLclM ?? hour.cloudBaseM)[ci];
         const cu = hour.cuPotentialM?.[ci];
         const od = hour.odPotentialM?.[ci];
         const ws = hour.wind10mSpeedMps?.[ci];
@@ -673,7 +693,8 @@ async function main() {
       );
     }
 
-    const activeLaunch = matchedLaunch ?? launches.find(l => l.slug === manifest.case.site.slug) ?? launches[0];
+    const activeLaunch = matchedLaunch;
+    el('multimodel-table-body')?.replaceChildren();
     if (activeLaunch && el('multimodel-table-body')) {
       const tbody = el('multimodel-table-body');
       tbody.replaceChildren();
@@ -689,12 +710,12 @@ async function main() {
       for (const [mslug, mlabel] of modelLabels) {
         const mdata = activeLaunch.models[mslug];
         if (!mdata) continue;
-        const mh = mdata.hours.find(h => h.validAt === hour.validAt) ?? mdata.hours[0];
+        const mh = mdata.hours.find(h => h.validAt === hour.validAt);
         if (!mh) continue;
         const isSparseAdapter = mslug === 'ecmwf' || mslug === 'nws';
-        const wstarVal = isSparseAdapter ? null : (mh.wstarV2Mps ?? mh.wstarMps);
-        const uTopVal = isSparseAdapter ? null : (mh.usableLiftTopV2M ?? mh.usableLiftTopM);
-        const blTopVal = isSparseAdapter ? mh.blTopM : (mh.resolvedThermalTopM ?? mh.blTopM);
+        const wstarVal = isSparseAdapter ? null : (Object.hasOwn(mh, 'wstarV2Mps') ? mh.wstarV2Mps : mh.wstarMps);
+        const uTopVal = isSparseAdapter ? null : (Object.hasOwn(mh, 'usableLiftTopV2M') ? mh.usableLiftTopV2M : mh.usableLiftTopM);
+        const blTopVal = isSparseAdapter ? mh.blTopM : (Object.hasOwn(mh, 'resolvedThermalTopM') ? mh.resolvedThermalTopM : mh.blTopM);
         const tr = document.createElement('tr');
         tr.innerHTML =
           `<td><strong>${mlabel}</strong></td>` +
@@ -710,15 +731,17 @@ async function main() {
       }
     }
 
-    if (ready) {
-      const arr = (hour[layer] as (number | null)[] | undefined) ?? hour.thermalVelocityV2Mps ?? hour.thermalVelocityMps;
+    if (ready) map.setFilter('selected-outline', ['==', ['get', 'cellIndex'], selectedCell]);
+    if (ready && (hour !== drawnHour || layer !== drawnLayer || showBarbs !== drawnBarbs)) {
+      drawnHour = hour; drawnLayer = layer; drawnBarbs = showBarbs;
+      const arr = (hour[layer] as (number | null)[] | undefined) ?? [];
       const data = {
         ...grid,
         features: grid.features.map((f, i) => ({
           ...f,
           properties: {
             ...f.properties,
-            quality: hour.status[i],
+            quality: ['thermalVelocityV2Mps', 'thermalVelocityMps', 'usableLiftTopV2M', 'usableLiftTopM', 'resolvedThermalTopM', 'boundaryLayerTopM', 'hcritWxtoflyM', 'dryHcritM'].includes(layer) ? hour.status[i] : (arr[i] == null ? 'missing' : 'valid'),
             value: arr[i] === null || arr[i] === undefined ? null : arr[i]! * spec.scale,
           },
         })),
@@ -739,7 +762,11 @@ async function main() {
         const useBlWind = layer === 'blMeanWindSpeedMps';
         const wsArr = (useBlWind ? hour.blMeanWindSpeedMps : hour.wind10mSpeedMps) ?? [];
         const wdArr = (useBlWind ? hour.blMeanWindDirDeg : hour.wind10mDirDeg) ?? [];
-        windSource.setData(windArrows(showBarbs ? grid.features.map(f => f.properties) : [], wsArr, wdArr));
+        const barbs = windBarbs(showBarbs ? grid.features.map(f => f.properties) : [], wsArr, wdArr);
+        for (const { properties: { icon, speedKt } } of barbs.features) {
+          if (!map.hasImage(icon)) map.addImage(icon, windBarbImage(speedKt), { pixelRatio: 2 });
+        }
+        windSource.setData(barbs);
       }
     }
 
@@ -776,30 +803,17 @@ async function main() {
       });
     }
 
-    // A north-pointing arrow with a white outline stays legible over terrain.
-    // Symbol rotation follows geographic bearing, with a fixed on-screen size.
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 64;
-    const ctx = canvas.getContext('2d')!;
-    ctx.scale(2, 2);
-    ctx.beginPath();
-    ctx.moveTo(16, 27); ctx.lineTo(16, 5);
-    ctx.moveTo(9, 13); ctx.lineTo(16, 5); ctx.lineTo(23, 13);
-    ctx.lineJoin = ctx.lineCap = 'round';
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4.5; ctx.stroke();
-    ctx.strokeStyle = '#172b38'; ctx.lineWidth = 2.3; ctx.stroke();
-    map.addImage('wind-arrow', ctx.getImageData(0, 0, 64, 64), { pixelRatio: 2 });
     map.addSource('wind-vectors', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
-      id: 'wind-vectors-arrows',
+      id: 'wind-vectors-barbs',
       type: 'symbol',
       source: 'wind-vectors',
       layout: {
-        'icon-image': 'wind-arrow',
+        'icon-image': ['get', 'icon'],
         'icon-rotate': ['get', 'bearing'],
         'icon-rotation-alignment': 'map',
         'icon-size': 0.85,
-        'icon-padding': 7,
+        'icon-padding': 1,
         'icon-allow-overlap': false,
       },
     });

@@ -10,7 +10,7 @@ import { capture, captureAsset, inspectField } from './capture.mjs';
 import { replay, verifyCapture } from './replay.mjs';
 import { readJson, json } from './common.mjs';
 import { EXTENDED_HRRR_PRESSURE_LEVELS, fields, selectRecords } from './fields.mjs';
-import { projection, regionalGrid, storageIndex, wind } from './grid.mjs';
+import { projection, regionalGrid, storageIndex, storageCoordinates, wind } from './grid.mjs';
 import {
   SOARING_CONTRACT_VERSION,
   WXTOFLY_SINK_MPS,
@@ -105,7 +105,7 @@ test('real archived Blanchard columns reproduce every published hour exactly and
 
 test('Feedback 2: expanded 18-level HRRR field selection and 80 m wind match captured .idx inventory without synthetic levels', async () => {
   assert.equal(EXTENDED_HRRR_PRESSURE_LEVELS.length, 18);
-  const idxBytes = await readFile(new URL('../.soaring-cache/north-sound-20261021-00z/f20.idx', import.meta.url));
+  const idxBytes = await readFile(new URL('./fixtures/hrrr-20261021-00z-f20.idx', import.meta.url));
   const selected = selectRecords(parseIdx(idxBytes.toString()), expandedCase, 20);
   const byKey = Object.fromEntries(selected.map(s => [s.key, s]));
   assert.ok(byKey['u80m']?.record);
@@ -307,4 +307,30 @@ test('ignored ranges, wrong content ranges, partial responses leave no reusable 
     assert.equal((await readdir(root)).includes(`${name}.json`),false);
   }
   assert.deepEqual(await readdir(root),[]);
+});
+
+
+test('convergence honors every scan order and signed grid spacing', () => {
+  for (const jPointsAreConsecutive of [false,true]) for (const alternativeRowScanning of [false,true])
+  for (const iScansNegatively of [false,true]) for (const jScansPositively of [false,true]) {
+    const grid={ni:4,nj:3,dxM:3000,dyM:3000,jPointsAreConsecutive,alternativeRowScanning,iScansNegatively,jScansPositively};
+    const cells=[],u=[],v=[];
+    for(let j=0;j<3;j++) for(let i=0;i<4;i++) {
+      const index=storageIndex(grid,i,j);
+      assert.deepEqual(storageCoordinates(grid,index),[i,j]);
+      cells.push({index}); u.push(-i*3000*(iScansNegatively?-1:1)*1e-5);v.push(-j*3000*(jScansPositively?1:-1)*2e-5);
+    }
+    assert.deepEqual(computeNativeGridConvergence(grid,cells,u,v),Array(12).fill(3));
+  }
+});
+
+test('pressure-level wind and vertical motion below terrain are unavailable', () => {
+  const sample=real.hours[6];
+  const source=cellSource(c,real.grid,real.cell,sample.forecastHour,sample.raw);
+  const result=deriveCell(c,1000,source,golden.run.generatedAt);
+  assert.ok(result.v2);
+  assert.equal(result.v2.wind925SpeedMps,null);
+  assert.equal(result.v2.wind925DirDeg,null);
+  assert.equal(result.v2.w925Mps,null);
+  assert.ok(result.v2.wind850SpeedMps!==null);
 });

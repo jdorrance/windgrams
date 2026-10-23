@@ -17,19 +17,24 @@ function waitMs(response: Response | undefined, attempt: number): number {
 export async function fetchWithRetry(
   url: string,
   init?: RequestInit,
-  deps: { fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void> } = {},
+  deps: { fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void>; timeoutMs?: number } = {},
 ): Promise<Response> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const sleep = deps.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   let last: Response | undefined;
   let error: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    const timeout = AbortSignal.timeout(deps.timeoutMs ?? 15_000);
+    const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
     try {
-      const response = await fetchImpl(url, init);
+      signal.throwIfAborted();
+      const response = await fetchImpl(url, { ...init, signal });
       if (response.ok || response.status === 404 || !RETRYABLE.has(response.status)) return response;
       last = response;
       error = undefined;
     } catch (caught) {
+      // A stalled feed must not leave every launch chart waiting indefinitely.
+      if (signal.aborted) throw signal.reason;
       if (caught instanceof Error && caught.name === "AbortError") throw caught;
       last = undefined;
       error = caught;

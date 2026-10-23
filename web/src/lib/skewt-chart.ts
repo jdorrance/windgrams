@@ -103,7 +103,7 @@ export class SkewTChart {
   private width = 0;
   private readonly tooltip: HTMLDivElement;
   private readonly host: HTMLElement;
-  private readonly launch: SkewTLaunch;
+  private launch: SkewTLaunch;
 
   constructor(host: HTMLElement, launch: SkewTLaunch) {
     this.host = host;
@@ -118,7 +118,8 @@ export class SkewTChart {
     this.observer.observe(host);
   }
 
-  set(sounding: Sounding | null) {
+  set(sounding: Sounding | null, launch?: SkewTLaunch) {
+    if (launch) this.launch = launch;
     this.sounding = sounding;
     this.render();
   }

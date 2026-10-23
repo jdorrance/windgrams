@@ -1,3 +1,4 @@
+import { parsePublishedProfileJson, publishedLift } from "../lib/published-lift.ts";
 // Launch page: day tabs and a model switch scope the meteogram and the NWS
 // charts below them. All forecast data is read from /data at view time, so the
 // page is always as fresh as the dataset without rebuilding the site.
@@ -5,7 +6,7 @@
 import { parseForecastManifestJson, parseModelCatalogueJson, parseSiteContextJson } from "@azohra/meteo.briefing/contract";
 import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/meteo.briefing/contract";
 import { localDateKey, localHourOfDay, localInstantMs, runFreshness } from "@azohra/meteo.briefing/derive";
-import { loadForecast } from "@azohra/meteo.briefing/transport";
+import { loadDocument } from "@azohra/meteo.briefing/transport";
 import { buildWindgramView } from "../lib/windgram-view.ts";
 import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
 import { windWindow, compassPoint, type Launch } from "../lib/launches.ts";
@@ -126,11 +127,11 @@ const sunlight = new Sunlight(launch);
 
 async function profileFor(slug: string) {
   if (!profiles.has(slug)) {
-    const loaded = await loadForecast({ fetch: (url) => fetchWithRetry(url), baseUrl: DATA_BASE, modelSlug: slug, siteSlug: launch.slug }).catch(() => null);
+    const loaded = await loadDocument({ guard: parsePublishedProfileJson, supportedSchemaVersion: 2, fetch: (url) => fetchWithRetry(url), baseUrl: DATA_BASE, modelSlug: slug, siteSlug: launch.slug }).catch(() => null);
     profiles.set(
       slug,
       loaded && !("miss" in loaded)
-        ? { profile: loaded.profile, referenceTime: loaded.manifest.referenceTime, generatedAt: loaded.manifest.generatedAt, stale: loaded.stale }
+        ? { profile: loaded.document, referenceTime: loaded.manifest.referenceTime, generatedAt: loaded.manifest.generatedAt, stale: loaded.stale }
         : null,
     );
   }
@@ -361,7 +362,7 @@ function bestThermalHour(hours: SiteForecast["hours"]) {
   let best = -1;
   let bestW = 0;
   hours.forEach((h, i) => {
-    const w = scalar(h.derived.thermalVelocityMps) ?? 0;
+    const w = scalar(publishedLift(h).thermalVelocityMps) ?? 0;
     if (w > bestW) {
       best = i;
       bestW = w;

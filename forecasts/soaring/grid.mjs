@@ -25,6 +25,15 @@ export function storageIndex(grid, i, j) {
   if (grid.jPointsAreConsecutive) return i * grid.nj + (grid.alternativeRowScanning && i % 2 ? grid.nj - 1 - j : j);
   return j * grid.ni + (grid.alternativeRowScanning && j % 2 ? grid.ni - 1 - i : i);
 }
+/** Inverse of GRIB storage indexing, independent of scan direction. */
+export function storageCoordinates(grid, index) {
+  if (grid.jPointsAreConsecutive) {
+    const i = Math.floor(index / grid.nj), row = index % grid.nj;
+    return [i, grid.alternativeRowScanning && i % 2 ? grid.nj - 1 - row : row];
+  }
+  const j = Math.floor(index / grid.ni), col = index % grid.ni;
+  return [grid.alternativeRowScanning && j % 2 ? grid.ni - 1 - col : col, j];
+}
 export function regionalGrid(grid, c) {
   const p = projection(grid), [west, south, east, north] = c.bbox;
   // Bounding rectangle plus padding in projected space; sample each edge so

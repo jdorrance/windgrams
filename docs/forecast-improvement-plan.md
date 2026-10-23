@@ -1,6 +1,15 @@
 # Forecast Data & Science Improvement Plan (Revised v2.0)
 
-Status: **Implemented & Validated (v2.0 Contract)**
+Status: **Implemented diagnostics; numerical checks pass. Forecast skill remains unverified.**
+
+Publication notes: the legacy calculation remains reproducible. The newer thermal
+height can use model PBL depth when the pressure levels do not bracket a shallow
+mixed layer; it is an estimate, not an independently resolved parcel crossing.
+Mixed-layer averages currently include the first sampled level for shallow layers
+and use equal weights, so they may include air above the estimated layer. Those
+approximations need observational evaluation before claims of improved skill.
+The browser displays the published diagnostics and preserves missing values.
+
 
 This plan incorporates the scientific and architectural audit findings and reorders implementation into five sequential gates:
 1. **Track 1 — Capture Richer Real Inputs (No Synthetic Levels)**
@@ -14,9 +23,9 @@ This plan incorporates the scientific and architectural audit findings and reord
 ## Executive Summary of Audit Revisions
 
 1. **Audited & Fixed `v2` Soaring Science Before Rollout (`forecasts/soaring/science.mjs`):**
-   - **Root cause of Blanchard `f20` anomaly:** At Blanchard (`2026-10-21T20:00:00Z`), `v1` (`@azohra/meteo.forecast` 0.6.0) returned `boundaryLayerTopM = 778.9 m` MSL (`557.2 m` AGL) due to an `index === 0` fallback when the surface parcel (`17.0 °C`) was already cooler than the `925 hPa` environment (`14.46 °C` at `778.9 m` MSL). `v2` resolved the thermal top to the physical `HPBL` ceiling (`504.3 m` MSL / `282.6 m` AGL), but lines 158–169 previously passed `v1` `boundaryLayerTopM` (`778.9 m`) and `v1` `thermalVelocityMps` (`1.06 m/s`) into `usableLiftTopM()`, yielding `hcritWxtoflyM = 672.9 m` and `dryHcritM = 724.5 m` **above** the `504.3 m` thermal top.
-   - **Correction:** `deriveDiagnosticsV2` now computes `wstarV2Mps` (`thermalVelocityV2Mps`) directly from `resolvedDepthM` (`resolvedThermalTopM - terrainM`) and the surface virtual sensible + latent heat flux via Deardorff convective velocity scaling, then derives `usableLiftTopV2M` (`1.0 m/s` sink), `hcritWxtoflyM` (`1.143 m/s` / `225 fpm` sink), `dryHcritM` (`1.0 m/s` sink unclipped by cloud base), and `buoyancyShearRatio` strictly from `resolvedThermalTopM`, `wstarV2Mps`, and `cloudBaseM`. By mathematical construction, `usableLiftTopV2M <= dryHcritM <= resolvedThermalTopM` and `hcritWxtoflyM <= usableLiftTopV2M <= resolvedThermalTopM` for every hour and site (at Blanchard `f20`, `resolvedThermalTopM = 504.3 m`, `wstarV2Mps = 0.85 m/s`, and `usableLiftTopV2M = hcritWxtoflyM = dryHcritM = 221.7 m` terrain floor because peak `W* < 1.0 m/s`).
-   - **Removed unexplained `0.85` mixed-layer LCL multiplier:** `mixedLayerLclM` (`zblcl`) now averages dry potential temperature $\theta$ and water-vapor mixing ratio $r$ across the boundary layer (`heightM <= blTopForMixM`), recovers the mixed-layer parcel temperature and dewpoint at surface pressure via Tetens/Magnus inversion, and lifts from terrain via Bolton's LCL expression (`125 m/°C` depression) with no ad-hoc scaling factor.
+   - **Root cause of Blanchard `f20` anomaly:** At Blanchard (`2026-10-21T20:00:00Z`), `v1` (`@azohra/meteo.forecast` 0.6.0) returned `boundaryLayerTopM = 778.9 m` MSL (`557.2 m` AGL) due to an `index === 0` fallback when the surface parcel (`17.0 °C`) was already cooler than the `925 hPa` environment (`14.46 °C` at `778.9 m` MSL). `v2` resolved the thermal top to the model `HPBL` estimate (`504.3 m` MSL / `282.6 m` AGL), but lines 158–169 previously passed `v1` `boundaryLayerTopM` (`778.9 m`) and `v1` `thermalVelocityMps` (`1.06 m/s`) into `usableLiftTopM()`, yielding `hcritWxtoflyM = 672.9 m` and `dryHcritM = 724.5 m` **above** the `504.3 m` thermal top.
+   - **Correction:** `deriveDiagnosticsV2` now computes `wstarV2Mps` (`thermalVelocityV2Mps`) directly from `resolvedDepthM` (`resolvedThermalTopM - terrainM`) and the surface virtual sensible + latent heat flux via Deardorff convective velocity scaling, then derives `usableLiftTopV2M` (`1.0 m/s` sink), `hcritWxtoflyM` (`1.143 m/s` / `225 fpm` sink), `dryHcritM` (`1.0 m/s` sink unclipped by cloud base), and `buoyancyShearRatio` strictly from `resolvedThermalTopM`, `wstarV2Mps`, and `cloudBaseM`. By mathematical construction, `usableLiftTopV2M <= dryHcritM <= resolvedThermalTopM` and `hcritWxtoflyM <= usableLiftTopV2M <= resolvedThermalTopM` for every hour and site (at Blanchard `f20`, `resolvedThermalTopM = 504.3 m`, `wstarV2Mps = 0.85 m/s`, and `usableLiftTopV2M = dryHcritM = 465.5 m` and `hcritWxtoflyM = 446.8 m`. W* is a convective velocity scale, not the peak thermal-core speed or the glider climb rate).
+   - **Removed unexplained `0.85` mixed-layer LCL multiplier:** `mixedLayerLclM` (`zblcl`) now averages dry potential temperature $\theta$ and water-vapor mixing ratio $r$ across the boundary layer (`heightM <= blTopForMixM`), recovers the mixed-layer parcel temperature and dewpoint at surface pressure via Tetens/Magnus inversion, and lifts from terrain via the approximate `125 m/°C` dewpoint-depression rule with no ad-hoc scaling factor.
 
 2. **Removed Synthetic Atmospheric Levels; Harvested Real Levels & `80 m` Winds (`forecasts/soaring/fields.mjs`):**
    - Interpolation cannot recover an unresolved temperature inversion, and extrapolation above `600 hPa` cannot supply real mid/upper-tropospheric structure. No code path synthesizes or extrapolates missing pressure levels.
@@ -126,7 +135,7 @@ Our captured `.soaring-cache/north-sound-20261021-00z/f14.idx`..`f27.idx` invent
 
 - Before expanding to all regions, run and validate the corrected `v2.0.0` pipeline on the `north-sound` trial region (`wa-blanchard`, `wa-tiger-mountain`, `wa-black-mountain`, `wa-sumas-mountain`, `wa-blyn`, `wa-deer-park`) and deterministic models (`hrrr-conus`, `hrdps-continental`, `rdps`, `gfs`, `gdps`).
 - Verify all physical invariants on `north-sound-20261021-00z`:
-  - At Blanchard `f20`: `resolvedThermalTopM = 504.3 m`, `wstarV2Mps = 0.85 m/s`, `usableLiftTopV2M = 221.7 m`, `hcritWxtoflyM = 221.7 m`, `dryHcritM = 221.7 m` (all `<= 504.3 m`).
+  - At Blanchard `f20`: `resolvedThermalTopM = 504.3 m`, `wstarV2Mps = 0.85 m/s`, `usableLiftTopV2M = 465.5 m`, `hcritWxtoflyM = 446.8 m`, `dryHcritM = 465.5 m` (all `<= 504.3 m`).
   - Across all 14 hours (`f14..f27`) and all 6 launches (`84` site-hours): `usableLiftTopV2M <= dryHcritM <= resolvedThermalTopM` and `hcritWxtoflyM <= usableLiftTopV2M <= resolvedThermalTopM` hold with zero violations.
   - Baseline `v1` `profile.json` parity against `blanchard-published.json` passes with `0` diffs.
 

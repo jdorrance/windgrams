@@ -83,7 +83,8 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
     for (const source of capture.sources.slice(1)) {
       const decoded = Object.fromEntries(await concurrent(source.records.filter(r => !r.absent), 2, async record => [record.key, await decode(record, source.hour)]));
       const conv10m = computeNativeGridConvergence(grid, region.cells, decoded.u ?? [], decoded.v ?? []);
-      const conv925 = computeNativeGridConvergence(grid, region.cells, decoded['925.UGRD'] ?? [], decoded['925.VGRD'] ?? []);
+      const above925 = values => (values ?? []).map((v, i) => terrain[i] != null && decoded['925.HGT']?.[i] > terrain[i] + 20 ? v : null);
+      const conv925 = computeNativeGridConvergence(grid, region.cells, above925(decoded['925.UGRD']), above925(decoded['925.VGRD']));
       const levelsByPressure = Object.fromEntries(pLevels.map(p => [String(p), { h: [], t: [], td: [], ws: [], wd: [], vv: [] }]));
       const result = {
         forecastHour: source.hour,
@@ -104,7 +105,18 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
         const converted = cellSource(c, grid, region.cells[i], source.hour, raw);
         const derived = deriveCell(c, terrain[i], converted, capture.capturedAt);
         for (const key of metrics) result[key].push(metric(derived.hour, key));
-        const v2 = derived.v2 ? { ...derived.v2, convergence10mX1e5: conv10m[i], convergence925X1e5: conv925[i] } : null;
+        // Surface weather does not require a sufficiently deep thermal profile.
+        const v2 = {
+          ...(converted ? {
+            wind10mSpeedMps: round2(converted.windSpeedMps), wind10mDirDeg: round1(converted.windDirectionDeg),
+            windGustMps: round2(converted.windGustMps),
+            sensibleHeatFluxWm2: round1(converted.sensibleHeatFluxWm2), latentHeatFluxWm2: round1(converted.latentHeatFluxWm2),
+            cloudCoverPercent: round1(converted.cloudCoverPercent), lowCloudPercent: round1(converted.lowCloudPercent),
+            midCloudPercent: round1(converted.midCloudPercent), highCloudPercent: round1(converted.highCloudPercent),
+            precipitationMmHr: round2(converted.precipitationMm), capeJkg: round1(converted.capeJkg), cinJkg: round1(converted.cinJkg),
+          } : {}),
+          ...derived.v2, convergence10mX1e5: conv10m[i], convergence925X1e5: conv925[i],
+        };
         for (const key of v2LayerMetrics) result[key].push(v2 ? (v2[key] ?? null) : null);
         result.sfcT.push(converted ? round1(converted.temperatureC) : null);
         result.sfcTd.push(converted ? round1(converted.temperatureC - converted.dewPointDepressionC) : null);
@@ -123,7 +135,7 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
         result.status.push(derived.status); result.levelCount.push(derived.levelCount); result.ceilingReached.push(derived.ceilingReached);
         if (i === region.siteCell) {
           if (!derived.hour) throw new Error(`${c.site.name} f${source.hour} has ${derived.status}; refusing incomplete profile`);
-          profileHours.push(derived.hour); site = derived.site;
+          profileHours.push({ ...derived.hour, soaring: v2 }); site = derived.site;
           siteRaw.push({ forecastHour: source.hour, raw, source: converted });
         }
       }
@@ -165,7 +177,7 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
   const baselinePath = new URL('./fixtures/blanchard-published.json', import.meta.url);
   const baseline = await readJson(baselinePath);
   const isPinnedBaseline = c.site?.slug === 'wa-blanchard' && c.referenceTime === baseline.run?.referenceTime;
-  const comparison = isPinnedBaseline ? differences(profile, baseline) : [];
+  const comparison = isPinnedBaseline ? differences({ ...profile, hours: profile.hours.map(({ soaring, ...hour }) => hour) }, baseline) : [];
   const geojson = {
     type: 'FeatureCollection',
     features: region.cells.map((cell, i) => ({
@@ -201,14 +213,14 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
     },
     conversions: fields(c, c.forecastHours[0]).map(({ key, variable, level, required, conversion }) => ({ key, variable, level, required, conversion })),
     mapProfileAgreement: agreement,
-    publishedProfileComparison: { baselineSha256: sha256(await readFile(baselinePath)), excluded: ['run.generatedAt'], exact: comparison.length === 0, differences: comparison },
+    publishedProfileComparison: { baselineSha256: sha256(await readFile(baselinePath)), excluded: ['run.generatedAt', 'hours[].soaring'], applicable: isPinnedBaseline, exact: isPinnedBaseline ? comparison.length === 0 : null, differences: comparison },
     hours: audits,
     limitations: [
       'Historical replay. Numerical consistency is not verification against observations.',
-      'Nine pressure levels cannot resolve all inversions or terrain-driven flows. Legacy 9-level profiles are preserved as sparse; no synthetic pressure levels are interpolated or extrapolated.',
-      'Parcel-derived thermal top is not HRRR model PBL height. v1 retains baseline first-level crossings; v2 resolvedThermalTopM eliminates the index===0 jump to 925 hPa and derives thermalVelocityV2Mps, usableLiftTopV2M, hcritWxtoflyM, and dryHcritM consistently from resolvedDepthM.',
+      `${c.pressureLevels.length} sampled pressure levels cannot resolve all inversions or terrain-driven flows. No synthetic pressure levels are added.`,
+      'v1 preserves the pinned parcel calculation. v2 may use model PBL depth or a heat-flux estimate where a shallow layer is not bracketed by pressure levels; its thermal top is not always an independently resolved parcel crossing.',
       'Ceiling-reached profiles retain the baseline top at the last sampled level and are flagged; this is a lower bound, not a resolved thermal top.',
-      'v1 cloudBaseM combines surface LCL with first near-saturated layer; v2 separates surfaceLclM (zsfclcl), physical mixedLayerLclM (zblcl from BL mean potential temperature and mixing ratio without arbitrary scaling), cuPotentialM, and odPotentialM.',
+      'Mixed-layer averages use equal sample weights and include the first pressure level for shallow layers, which can include air above the estimated thermal top. LCL uses the approximate 125 m/degree dewpoint-depression rule.',
       'v1 usableLiftTopM uses 1.0 m/s sink; v2 computes usableLiftTopV2M (1.0 m/s), hcritWxtoflyM at 1.143 m/s (225 ft/min), and dryHcritM strictly bounded by resolvedThermalTopM.',
       'Model terrain differs from launch terrain. Raw MSL heights are preserved; launch-altitude wind interpolation is isolated in experimental.terrainAdjustment.',
     ],

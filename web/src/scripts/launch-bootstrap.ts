@@ -8,7 +8,7 @@ void import('./launch-page.ts').then(({ start }) => start()).catch(error => {
   errorNotice.hidden = false;
   for (const node of document.querySelectorAll<HTMLElement>('.is-loading')) node.classList.remove('is-loading');
   for (const node of document.querySelectorAll<HTMLElement>('.chart-status')) {
-    if (node.textContent?.startsWith('Loading')) node.textContent = 'Forecast unavailable. Please reload to try again.';
+    if (node.textContent?.startsWith('Loading')) node.textContent = 'Forecast unavailable.';
   }
   const select = document.getElementById('model-select') as HTMLSelectElement;
   if (select.options[0]?.textContent === 'Loading models…') {
@@ -19,5 +19,5 @@ void import('./launch-page.ts').then(({ start }) => start()).catch(error => {
 void import('./station.ts').catch(error => {
   console.error('Station could not start', error);
   const status = document.getElementById('station-status');
-  if (status) status.textContent = 'Station report unavailable. Please reload to try again.';
+  if (status) status.textContent = 'Station report unavailable.';
 });

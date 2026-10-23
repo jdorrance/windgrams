@@ -19,7 +19,7 @@ import { choices as balloonChoices, readChoice, type Choice, type RaobDocument }
 import { parseSrg, type Srg } from "../lib/srg.ts";
 import { fetchWithRetry } from "../lib/http.ts";
 import { DATA_BASE } from "../lib/site.ts";
-import { fmt, ft, relativeTime } from "../lib/units.ts";
+import { formatQuantity, relativeTime } from "../lib/units.ts";
 import { Sunlight, type CloudSeries } from "./sunlight.ts";
 
 // Short-range high-resolution models first, then regional, global, and the ensemble.
@@ -134,6 +134,16 @@ let ecmwfChart: EcmwfChart | null = null;
 let clearWindgramInspector: (() => void) | null = null;
 const sunlight = new Sunlight(launch);
 
+function persistSelection() {
+  const url = new URL(location.href);
+  url.searchParams.set('day', day);
+  if (model) url.searchParams.set('model', model);
+  else url.searchParams.delete('model');
+  if (selectedValidAt && Number.isFinite(Date.parse(selectedValidAt))) url.searchParams.set('time', selectedValidAt);
+  else url.searchParams.delete('time');
+  history.replaceState(null, '', url);
+}
+
 async function profileFor(slug: string) {
   if (!profiles.has(slug)) {
     if (!pendingProfiles.has(slug)) pendingProfiles.set(slug, (async () => {
@@ -219,7 +229,7 @@ function renderModelSelect(available: string[]) {
       const entry = modelEntry(slug);
       const option = document.createElement("option");
       option.value = slug;
-      option.textContent = `${modelLabel(slug)}${entry ? ` · ${entry.gridKm} km${entry.kind === "ensemble" ? " ens." : ""}` : ""}`;
+      option.textContent = `${modelLabel(slug)}${entry ? ` · ${formatQuantity(entry.gridKm, "resolution")}${entry.kind === "ensemble" ? " ens." : ""}` : ""}`;
       option.selected = slug === model;
       return option;
     }),
@@ -248,13 +258,13 @@ function renderMeteogram() {
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
   title.textContent = entry
-    ? `Soaring meteogram · ${entry.label}, ${entry.gridKm} km${entry.kind === "ensemble" ? " ensemble" : ""}`
+    ? `Soaring meteogram · ${entry.label}, ${formatQuantity(entry.gridKm, "resolution")}${entry.kind === "ensemble" ? " ensemble" : ""}`
     : "Soaring meteogram";
 
   if (!loaded) {
     meta.textContent = "";
     const loading = model !== null ? !profiles.has(model) : modelsLoading;
-    frame.innerHTML = `<p class="chart-status">${loading ? "Loading the model forecast…" : "Model forecasts for this launch are not published yet."}</p>`;
+    frame.innerHTML = `<p class="chart-status">${loading ? "Loading forecast…" : "Forecast pending."}</p>`;
     if (!loading && model) {
       const retry = document.createElement('button');
       retry.type = 'button'; retry.className = 'button secondary'; retry.textContent = 'Retry forecast';
@@ -278,7 +288,7 @@ function renderMeteogram() {
     frame.innerHTML = "";
     const p = document.createElement("p");
     p.className = "chart-status";
-    p.textContent = `${modelLabel(model ?? "")} does not reach this day. `;
+    p.textContent = `${modelLabel(model ?? "")} coverage ends before this day. `;
     if (other) {
       const b = document.createElement("button");
       b.type = "button";
@@ -339,11 +349,11 @@ function renderNws() {
   if (!nws) {
     meta.textContent = "";
     link.hidden = true;
-    $("nws-charts").innerHTML = `<p class="chart-status">The National Weather Service forecast is not published yet.</p>`;
+    $("nws-charts").innerHTML = `<p class="chart-status">NWS forecast pending.</p>`;
     return;
   }
   meta.textContent = `Grid ${nws.grid.office} ${nws.grid.x},${nws.grid.y}${
-    nws.grid.elevationM != null ? ` (grid elevation ${fmt(ft(nws.grid.elevationM))} ft)` : ""
+    nws.grid.elevationM != null ? ` (grid elevation ${formatQuantity(nws.grid.elevationM, "elevation")})` : ""
   } · updated ${nws.updateTime ? relativeTime(nws.updateTime) : "–"}`;
   link.href = nws.pageUrl;
   link.hidden = false;
@@ -364,7 +374,7 @@ function cloudsFor(slug: string | null): CloudSeries | null {
     const percent = typeof v === "number" ? v : v.p50;
     if (percent != null) points.push({ ms: Date.parse(hour.validAt), fraction: percent / 100 });
   }
-  return points.length ? { label: `${modelLabel(slug)}${entry ? ` ${entry.gridKm} km` : ""}`, points } : null;
+  return points.length ? { label: `${modelLabel(slug)}${entry ? ` ${formatQuantity(entry.gridKm, "resolution")}` : ""}`, points } : null;
 }
 
 const chartLaunch = () => ({
@@ -379,12 +389,12 @@ function renderEcmwf() {
   const meta = $("ecmwf-meta");
   if (!ecmwf) {
     meta.textContent = "";
-    $("ecmwf-charts").innerHTML = `<p class="chart-status">The ECMWF forecast is not published yet.</p>`;
+    $("ecmwf-charts").innerHTML = `<p class="chart-status">ECMWF forecast pending.</p>`;
     return;
   }
   const run = ecmwf.models.surface.run ? `Run ${String(new Date(ecmwf.models.surface.run).getUTCHours()).padStart(2, "0")}Z · ` : "";
-  const grid = ecmwf.site.gridElevationM != null ? ` · grid point at ${fmt(ft(ecmwf.site.gridElevationM))} ft` : "";
-  meta.textContent = `IFS 9 km · ${run}fetched ${relativeTime(ecmwf.generatedAt)}${grid}`;
+  const grid = ecmwf.site.gridElevationM != null ? ` · grid point at ${formatQuantity(ecmwf.site.gridElevationM, "elevation")}` : "";
+  meta.textContent = `IFS ${formatQuantity(9, "resolution")} · ${run}fetched ${relativeTime(ecmwf.generatedAt)}${grid}`;
   if (!ecmwfChart) ecmwfChart = new EcmwfChart($("ecmwf-charts"), chartLaunch(), tz);
   ecmwfChart.setHours(ecmwf.hours.filter((h) => inDay(h.validAt, day)));
 }
@@ -441,9 +451,7 @@ function showSkewTHour(index: number) {
   renderConditions(hour, index);
   updateHourMarker(true);
   $('skewt-chart').dataset.validAt = hour.validAt;
-  const url = new URL(location.href);
-  url.searchParams.set('day', day); url.searchParams.set('model', model!); url.searchParams.set('time', hour.validAt);
-  history.replaceState(null, '', url);
+  persistSelection();
   const slider = $<HTMLInputElement>("skewt-hour");
   slider.value = String(index);
   const label = hourFormat.format(new Date(hour.validAt));
@@ -455,7 +463,7 @@ function showSkewTHour(index: number) {
   const list = $("skewt-findings");
   list.replaceChildren();
   if (!sounding) {
-    $("skewt-headline").textContent = "The model has too few levels this hour to draw a sounding.";
+    $("skewt-headline").textContent = "Sounding unavailable · limited vertical data.";
     return;
   }
   const reading = readSounding(sounding, launchElevationM);
@@ -537,12 +545,9 @@ function renderBalloon(doc: RaobDocument | null, srgText: string | null) {
     const elevation = choice.sounding.modelElevationM;
     $("balloon-meta").textContent =
       choice.kind === "balloon" ? `Sounding valid ${when} · ${utc}` : `NWS model forecast for ${when}`;
-    $("balloon-note").textContent =
-      choice.kind === "balloon"
-        ? `The balloon station is ${station ? `${station.name}, ${station.distanceKm} km from ${launch.name},` : "at the airport"} at ${fmt(ft(elevation))} ft MSL${
-            choice.hasDewPoint ? "" : ". This is the Soaring Forecast's copy of the flight, without humidity"
-          }. Heights are above mean sea level, not above the launch. Times identify the nominal observation cycle, not the exact balloon release. ${choice.start.source === "forecast-high" ? "The dashed line estimates a thermal rising from the station at the forecast high. " : ""}Balloon data: NWS, via the Iowa Environmental Mesonet.`
-        : "A model hour for the station from the NWS Soaring Forecast: temperature and wind only, so no clouds are shown. Heights are above mean sea level.";
+    $("balloon-note").textContent = choice.kind === "balloon"
+      ? `${station ? `${station.name} · ${formatQuantity(station.distanceKm, "distance")} from ${launch.name} · ` : ""}${formatQuantity(elevation, "elevation")} MSL. Observation cycle shown.${choice.hasDewPoint ? "" : " Humidity unavailable."}${choice.start.source === "forecast-high" ? " Parcel starts at station forecast high." : ""} NWS / Iowa Environmental Mesonet.`
+      : "NWS station model · temperature and wind · heights MSL. Humidity unavailable.";
   };
 
   tabs.replaceChildren(
@@ -565,10 +570,10 @@ function renderSkewT() {
     body.hidden = true;
     status.hidden = false;
     status.textContent = !model
-      ? modelsLoading ? "Loading the sounding…" : "Model forecasts for this launch are not published yet."
+      ? modelsLoading ? "Loading the sounding…" : "Forecast pending."
       : !loaded
-        ? profiles.has(model) ? "The sounding is unavailable for this model. Try another model." : "Loading the sounding…"
-        : `${modelLabel(model)} has no upper-air levels for this day.`;
+        ? profiles.has(model) ? "Sounding unavailable · select another model." : "Loading the sounding…"
+        : `${modelLabel(model)} upper-air data unavailable for this day.`;
     skewtHours = [];
     $("forecast-hour-panel").hidden = true;
     $("forecast-conditions-panel").hidden = true;
@@ -578,7 +583,7 @@ function renderSkewT() {
   status.hidden = true;
   body.hidden = false;
   const run = new Date(loaded.referenceTime);
-  $("skewt-meta").textContent = `${entry ? `${entry.label}, ${entry.gridKm} km` : model} · run ${String(run.getUTCHours()).padStart(2, "0")}Z`;
+  $("skewt-meta").textContent = `${entry ? `${entry.label}, ${formatQuantity(entry.gridKm, "resolution")}` : model} · run ${String(run.getUTCHours()).padStart(2, "0")}Z`;
   skewtHours = hours;
   $<HTMLInputElement>('skewt-hour').max = String(hours.length - 1);
   showSkewTHour(matchingHourIndex(hours, selectedValidAt, tz));
@@ -593,6 +598,7 @@ $('forecast-hour-next').addEventListener('click', () => showSkewTHour(Number($<H
 $('forecast-hour-peak').addEventListener('click', () => showSkewTHour(peakLiftIndex(skewtHours, tz)));
 
 function render() {
+  persistSelection();
   renderDayTabs();
   renderModelSelect(MODEL_ORDER.filter((slug) => manifests.has(slug)));
   renderSkewT();
@@ -614,7 +620,7 @@ function renderText(office: NwsOfficeDocument | null) {
     li.append(h, p);
     list.appendChild(li);
   }
-  if (!nws?.periods.length) list.innerHTML = `<li class="muted">No text forecast available.</li>`;
+  if (!nws?.periods.length) list.innerHTML = `<li class="muted">Text forecast unavailable.</li>`;
 
   const products = $("nws-products");
   products.replaceChildren();
@@ -651,8 +657,8 @@ export async function start() {
       if (launchElevationM != null) {
         const sourceId = context?.sites[launch.slug]?.elevation.source;
         const source = context?.sources.find(source => source.id === sourceId);
-        $('launch-elevation').textContent = `${fmt(ft(launchElevationM))} ft MSL`;
-        $('launch-elevation-source').textContent = source ? `Terrain estimate from ${source.product}${source.kind === 'surfaceModel' ? '; includes vegetation' : ''}.` : 'Terrain estimate at the saved launch coordinates.';
+        $('launch-elevation').textContent = `${formatQuantity(launchElevationM, "elevation")} MSL`;
+        $('launch-elevation-source').textContent = source ? `Terrain · ${source.product}${source.kind === 'surfaceModel' ? ' · surface includes vegetation' : ''}.` : 'Terrain elevation at launch coordinates.';
         $('launch-elevation-item').hidden = false;
       }
       refreshBalloon?.();

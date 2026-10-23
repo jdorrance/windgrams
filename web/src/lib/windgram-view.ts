@@ -1,3 +1,4 @@
+import { convertQuantity, formatQuantity, getUnitSystem } from "./units.ts";
 import { publishedLift, publishedWxtoflyLiftTop } from "./published-lift.ts";
 import type { SiteForecast } from "@azohra/meteo.briefing/contract";
 import { componentsToWind, lapseRateCPer1000Ft, localDateKey, relativeHumidityPercent, windToComponents } from "@azohra/meteo.briefing/derive";
@@ -54,7 +55,6 @@ export interface WindgramReading {
 }
 
 const KT = 1.9438444924406;
-const FT = 3.280839895;
 const finite = (n: number | null): n is number => n !== null && Number.isFinite(n);
 const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(high, n));
 const fahrenheit = (c: number) => c * 9 / 5 + 32;
@@ -188,8 +188,10 @@ function crossings(nodes: readonly FieldNode[], target: number) {
 function temperatureContours(view: WindgramView): TemperatureContour[] {
   const temperatures = view.sampling.flatMap((s) => s.temperatureC.map((n) => n.value)).filter(Number.isFinite);
   if (!temperatures.length) return [];
-  const low = Math.floor(fahrenheit(Math.min(...temperatures)) / 8) * 8;
-  const high = Math.ceil(fahrenheit(Math.max(...temperatures)) / 8) * 8;
+  const metric = getUnitSystem() === "metric";
+  const step = metric ? 5 : 8;
+  const low = Math.floor(convertQuantity(Math.min(...temperatures), "temperature")! / step) * step;
+  const high = Math.ceil(convertQuantity(Math.max(...temperatures), "temperature")! / step) * step;
   const cols = Math.max(2, (view.hours.length - 1) * 8);
   const rows = Math.ceil(view.plotHeight / 4);
   const x0 = view.hours[0].x, x1 = view.hours[view.hours.length - 1].x;
@@ -212,8 +214,9 @@ function temperatureContours(view: WindgramView): TemperatureContour[] {
     if (time - lastLabelTime >= 3 * 3_600_000) { labelHours.add(i); lastLabelTime = time; }
   });
   const contours: TemperatureContour[] = [];
-  for (let f = low; f <= high; f += 8) {
-    const target = (f - 32) * 5 / 9;
+  for (let value = low; value <= high; value += step) {
+    const target = metric ? value : (value - 32) * 5 / 9;
+    const f = metric ? fahrenheit(target) : value;
     const segments: string[] = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const v = [grid[r][c], grid[r][c + 1], grid[r + 1][c + 1], grid[r + 1][c]];
@@ -366,7 +369,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const view: WindgramView = {
     width: left + plotWidth + right, height: bottom + (compact ? 82 : 86), left, top, plotWidth, plotHeight, bottom, columnWidth, floorM, topM,
     timeZone: options.timeZone, anchors, sampling, compact, ensemble, sourceNote: scene.smokeSource ? `Smoke: ${scene.smokeSource.model} · run ${scene.smokeSource.referenceTime}` : null,
-    displayInterpolationNote: "Contours, lapse-rate bands, and intermediate wind barbs use linear display interpolation between captured model levels and do not add vertical resolution or resolve sub-grid inversions.",
+    displayInterpolationNote: "Contours and faint barbs interpolate between model levels.",
     hours: hours.map((h, i) => {
       const temp = scalar(h.surface.temperatureC), gust = scalar(h.surface.windGustMps), direction = scalar(h.surface.windDirectionDeg);
       const arcs = options.launchWindows;
@@ -382,7 +385,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const y = (z: number) => heightToY(view, z);
   if (options.launch && options.launch.elevationM >= floorM && options.launch.elevationM <= topM) view.launch = {
     y: y(options.launch.elevationM), heightM: options.launch.elevationM,
-    label: `${options.launch.name ?? "Launch"} · ${Math.round(options.launch.elevationM * FT).toLocaleString("en-US")} ft`,
+    label: `${options.launch.name ?? "Launch"} · ${formatQuantity(options.launch.elevationM, "elevation")} MSL`,
   };
 
   // Sample in physical metres before moving nodes into display coordinates.
@@ -449,7 +452,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
 
   for (const [key, label, color, dash] of [
     ["boundaryLayerTopM", "Boundary layer", "#a56800", "7 5"],
-    ["usableLiftTopM", "Usable lift · 1 m/s sink", "#134ac4", null],
+    ["usableLiftTopM", `Usable lift · ${formatQuantity(1, "lift")} sink`, "#134ac4", null],
     ["cloudBaseM", "Potential cloud base", "#426173", "2 5"],
   ] as const) {
     const value = (h: ProfileHour) => scalar(publishedLift(h)[key]);

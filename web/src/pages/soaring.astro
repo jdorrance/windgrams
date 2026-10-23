@@ -1,11 +1,12 @@
 ---
+import Unit from '../components/Unit.astro';
 import Base from '../layouts/Base.astro';
 import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
 ---
 <Base title="Soaring forecast">
   <div class="soaring-page">
     <h1>Soaring forecast</h1>
-    <p id="replay-run" class="run-label">Historical forecast · October 21, 2026</p>
+    <p id="replay-run" class="run-label">Loading forecast run…</p>
     <p id="replay-status" role="status">Loading forecast…</p>
     <div id="replay-content" hidden>
       <div class="replay-controls">
@@ -42,10 +43,10 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
       <details class="map-options">
         <summary>Map options</summary>
         <div class="control-row">
-          <label class="checkbox-label"><input type="checkbox" id="toggle-barbs" checked /> Wind barbs · 5 / 10 / 50 knots</label>
+          <label class="checkbox-label"><input type="checkbox" id="toggle-barbs" checked /> Wind barbs <span id="map-barb-units"></span></label>
           <label class="checkbox-label"><input type="checkbox" id="additional-layers" /> Show additional map layers</label>
         </div>
-        <p class="muted">Heights are above sea level unless marked AGL (above ground). Usable lift assumes a 1.0 m/s sink rate.</p>
+        <p class="muted">Heights MSL · AGL: height above model terrain. Lift threshold: <Unit kind="lift" value={1} /> sink.</p>
       </details>
 
       <div class="replay-layout">
@@ -65,13 +66,13 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
             <p id="cell-quality" class="muted"></p>
           </details>
           <button id="select-blanchard" type="button">Back to Blanchard</button>
-          <p class="muted">Select a location on the map to see its forecast.</p>
+          <p class="muted">Tap a location for its forecast.</p>
         </aside>
       </div>
 
       <section aria-labelledby="launches-heading">
         <h2 id="launches-heading">Compare launches</h2>
-        <p class="muted">Select a launch to see its charts. Heights are above sea level.</p>
+        <p class="muted">Select a launch · heights MSL.</p>
         <div class="table-scroll">
           <table class="soaring-table" id="launches-table">
             <thead><tr><th>Launch</th><th>Thermal strength</th><th>Usable lift top</th><th>Potential cloud base</th><th>Surface wind</th></tr></thead>
@@ -82,7 +83,7 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
           <summary>More launch details</summary>
           <div class="table-scroll">
             <table class="soaring-table">
-              <thead><tr><th>Launch / model elevation</th><th>Thermal strength</th><th>Usable lift top · 1.0 m/s</th><th>Lift top · 225 ft/min</th><th>Thermal top</th><th>Earlier parcel estimate</th><th>Model boundary-layer depth</th><th>Potential cloud base</th><th>Cumulus / overcast potential</th><th>Surface wind</th><th>Average wind / shear</th><th>Convergence</th></tr></thead>
+              <thead><tr><th>Launch / model elevation</th><th>Thermal strength</th><th>Usable lift top · <Unit kind="lift" value={1} /></th><th>Lift top · <Unit kind="lift" value={1.143} /></th><th>Thermal top</th><th>Earlier parcel estimate</th><th>Model boundary-layer depth</th><th>Potential cloud base</th><th>Cumulus / overcast potential</th><th>Surface wind</th><th>Average wind / shear</th><th>Convergence</th></tr></thead>
               <tbody id="launch-details-body"></tbody>
             </table>
           </div>
@@ -91,7 +92,8 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
 
       <section aria-labelledby="nws-afd-summary" class="forecast-discussion">
         <h2 id="nws-afd-summary">Area Forecast Discussion</h2>
-        <pre id="nws-afd-text" class="afd-pre">Discussion unavailable for this forecast.</pre>
+        <p class="muted">NWS bulletin · original wording and units.</p>
+        <pre id="nws-afd-text" class="afd-pre">Discussion unavailable.</pre>
       </section>
 
       <section aria-labelledby="cross-section-heading">
@@ -119,7 +121,7 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
         <details class="section-details">
           <summary>Sounding details</summary>
           <ul id="sounding-findings" class="findings-list"></ul>
-          <p class="muted">Temperature, dew point, and winds are sampled at the available pressure levels. Changes between those levels may be missed.</p>
+          <p class="muted">Model-level temperature, dew point and wind. Vertical detail follows model resolution.</p>
         </details>
       </section>
 

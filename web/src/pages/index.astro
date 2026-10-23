@@ -1,4 +1,5 @@
 ---
+import Unit from "../components/Unit.astro";
 import Base from "../layouts/Base.astro";
 import { launches } from "../lib/catalog.ts";
 import { compassPoint } from "../lib/launches.ts";
@@ -16,7 +17,7 @@ const groups = regions.map((region) => ({
 
 <Base current="launches">
   <h1>Launches</h1>
-  <p class="muted" style="margin-top:6px">Model meteograms and the National Weather Service forecast for each launch.</p>
+  <p class="muted" style="margin-top:6px">Windgrams, soundings, and NWS forecasts.</p>
 
   <div id="launch-map" class="map" style="margin-top:20px" role="region" aria-label="Map of launches"></div>
   <script type="application/json" id="launch-markers" set:html={JSON.stringify(markers)} />
@@ -36,7 +37,7 @@ const groups = regions.map((region) => ({
                     Faces <strong>{compassPoint(launch.facingDeg)}</strong>
                   </li>
                   <li>
-                    {launch.windMinMph}–{launch.windMaxMph} mph
+                    <Unit kind="wind" value={launch.windMinMph * .44704} numberOnly />–<Unit kind="wind" value={launch.windMaxMph * .44704} />
                   </li>
                 </ul>
               </a>

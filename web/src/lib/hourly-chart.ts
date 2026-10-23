@@ -80,12 +80,18 @@ export class HourlyChart<T extends { validAt: string }> {
   private tooltip!: HTMLDivElement;
   private geometry = { left: MARGIN.left, step: 1, width: 0 };
   private readonly observer: ResizeObserver;
+  private readonly root: HTMLElement;
+  private readonly spec: ChartSpec<T>;
+  private readonly timeZone: string;
 
   constructor(
-    private readonly root: HTMLElement,
-    private readonly spec: ChartSpec<T>,
-    private readonly timeZone: string,
+    root: HTMLElement,
+    spec: ChartSpec<T>,
+    timeZone: string,
   ) {
+    this.root = root;
+    this.spec = spec;
+    this.timeZone = timeZone;
     this.observer = new ResizeObserver(() => {
       if (this.hours.length > 0 && Math.abs(this.root.clientWidth - this.geometry.width) > 4) this.render();
     });
@@ -134,7 +140,7 @@ export class HourlyChart<T extends { validAt: string }> {
       class: "nws-panels",
       tabindex: "0",
       role: "group",
-      "aria-label": this.spec.label ?? "Hourly forecast charts. Use the left and right arrow keys to step through hours.",
+      "aria-label": this.spec.label ?? "Hourly forecast · Left/right keys select an hour.",
     });
     root.appendChild(group);
     for (const panel of this.spec.panels(hours)) this.renderPanel(group, panel, width, right);
@@ -346,7 +352,7 @@ export class HourlyChart<T extends { validAt: string }> {
     const { table: spec } = this.spec;
     const details = html("details", { class: "table-view" }, undefined, parent);
     details.style.marginTop = "16px";
-    html("summary", {}, "Show as table", details);
+    html("summary", {}, "Table", details);
     const scroll = html("div", { class: "chart-scroll" }, undefined, details);
     const table = html("table", { class: "data" }, undefined, scroll);
     const head = html("tr", {}, undefined, html("thead", {}, undefined, table));

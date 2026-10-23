@@ -1,3 +1,4 @@
+import { formatQuantity } from '../lib/units.ts';
 // Sunlight on the terrain: a map of the sunlight (W/m²) reaching the ground
 // around the launch, for the day picked in the page's day tabs, with a time
 // slider and a curve for one point (the launch, or wherever the user taps).
@@ -160,7 +161,7 @@ export class Sunlight {
       this.index = null;
     }
     if (!this.index) {
-      status.textContent = "The sunlight map for this launch is not published yet.";
+      status.textContent = "Sunlight map pending.";
       return;
     }
     status.hidden = true;
@@ -169,14 +170,14 @@ export class Sunlight {
     const threeButton = $("sun-view").querySelector<HTMLButtonElement>('[data-view="3d"]')!;
     if (!this.index.relief) {
       threeButton.disabled = true;
-      threeButton.title = "The 3D terrain for this launch is not published yet.";
+      threeButton.title = "3D terrain pending.";
     }
     const surface = this.index.sources.surface;
     const { area, radiusKm } = this.index.inputs;
-    const covers = area ? `the ${area.name}` : `${radiusKm ?? 15} km around the launch`;
-    $("sun-terrain").textContent = `The map covers ${covers}. Terrain: ${surface?.name ?? "elevation model"}, ${surface?.resolutionM ?? "?"} m`;
+    const covers = area ? `the ${area.name}` : `${formatQuantity(radiusKm ?? 15, "distance")} radius`;
+    $("sun-terrain").textContent = `Coverage: ${covers}. Terrain: ${surface?.name ?? "elevation model"}, ${formatQuantity(surface?.resolutionM, "elevation")}`;
     const relief = this.index.relief;
-    if (relief) $("sun-relief-spacing").textContent = `~${Math.round(metresPerPixel(this.launch.latitude, relief.zoom) / 5) * 5} m`;
+    if (relief) $("sun-relief-spacing").textContent = `~${formatQuantity(metresPerPixel(this.launch.latitude, relief.zoom), "elevation")}`;
     // The launch's own curve decides the starting time (now, or the day's peak).
     await this.selectPoint({ lat: this.launch.latitude, lng: this.launch.longitude }, true);
     if (this.dateKey) this.rebuildFrames(true);
@@ -303,7 +304,7 @@ export class Sunlight {
     try {
       const module = await import("./sunlight3d.ts");
       if (!module.webglAvailable()) {
-        status.textContent = "This browser cannot draw 3D (WebGL is off or not supported). The 2D map shows the same sunlight.";
+        status.textContent = "3D unavailable · use 2D view.";
         return;
       }
       const meta = index.relief;
@@ -321,7 +322,7 @@ export class Sunlight {
       if (this.selected && !this.selected.isLaunch) this.three.setSelected({ lat: this.selected.latlng.lat, lon: this.selected.latlng.lng });
       status.hidden = true;
     } catch {
-      status.textContent = "The 3D terrain could not be loaded. The 2D map shows the same sunlight.";
+      status.textContent = "3D terrain unavailable · use 2D view.";
       this.threeLoading = null;
     }
   }
@@ -410,7 +411,7 @@ export class Sunlight {
     if (!daylight) {
       this.steps = [];
       this.frames = [];
-      $("sun-readout").textContent = "The sun does not rise on this day.";
+      $("sun-readout").textContent = "Polar night.";
       return;
     }
     const first = Math.ceil(daylight.sunrise / STEP_MS) * STEP_MS;
@@ -428,7 +429,7 @@ export class Sunlight {
       ? "Clear sky"
       : covered
         ? `Clouds from ${this.clouds?.label}`
-        : "Clear sky: no model forecast covers this day";
+        : "Clear-sky estimate · cloud forecast unavailable";
 
     this.computeValues();
     if (newDay || previous === undefined) {
@@ -498,7 +499,7 @@ export class Sunlight {
     const tile = await this.loadTile({ z: index.tiles.maxZoom, x: X >> 8, y: Y >> 8 });
     const terrain = tile ? pointTerrain(tile, X & 255, Y & 255) : null;
     if (!terrain) {
-      $("sun-readout").textContent = "No terrain data at that spot: pick a point inside the coloured area.";
+      $("sun-readout").textContent = "Select terrain inside the coloured area.";
       return;
     }
     this.selected = { latlng, terrain, isLaunch };

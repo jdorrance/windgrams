@@ -1,9 +1,10 @@
+import { convertQuantity, formatQuantity, fromDisplayQuantity, getUnitSystem, unitLabel } from "./units.ts";
 // A Skew-T log-P diagram of one sounding, annotated for pilots: the thermal
 // zone, the top of the lift, cloud base, inversions ("lids"), cloud layers
 // and the launch are drawn and named inside the diagram, and hovering reads
 // out the air at any height in plain words.
 //
-// Geometry: height runs up on a log-pressure scale (labelled in feet), and
+// Geometry: height runs up on a log-pressure scale, and
 // lines of equal temperature lean to the right by about 7 °C per km of
 // height, so a normal atmosphere stands near-vertical and a dry thermal's
 // path leans left, at any chart width. The model's
@@ -13,7 +14,7 @@
 import { solveVerticalLabels } from "@azohra/meteo.briefing/sounding";
 import { compassPoint } from "./launches.ts";
 import { barbPaths } from "./wind-barb.ts";
-import { environmentAtHeight, feet, heightAtPressure, pressureAtHeight, windAtHeight, type Sounding } from "./skewt.ts";
+import { environmentAtHeight, heightAtPressure, pressureAtHeight, windAtHeight, type Sounding } from "./skewt.ts";
 export { barbPaths } from "./wind-barb.ts";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -34,8 +35,7 @@ function text(parent: Element, x: number, y: number, value: string, attrs: Recor
   return t;
 }
 
-const fToC = (c: number) => Math.round((c * 9) / 5 + 32);
-const ftLabel = (m: number) => `${feet(m).toLocaleString("en-US")} ft`;
+const heightLabel = (m: number) => formatQuantity(m, "elevation");
 
 export interface Geometry {
   left: number;
@@ -145,7 +145,7 @@ export class SkewTChart {
       width: W,
       height: H,
       role: "img",
-      "aria-label": "Skew-T diagram of temperature, dew point and a rising thermal against height in feet above mean sea level, with the thermal zone, top of lift, cloud base, inversions and wind marked.",
+      "aria-label": `Skew-T · Temperature ${unitLabel("temperature")} · Height ${unitLabel("elevation")} MSL · Wind ${unitLabel("wind")} · Thermals, clouds and inversions.`,
     });
     const defs = el("defs", {}, svg);
     const clip = el("clipPath", { id: "skewt-clip" }, defs);
@@ -168,10 +168,13 @@ export class SkewTChart {
     for (const layer of s.inversions) band(layer.baseM, layer.topM, layer.kind === "inversion" ? "skewt-lid" : "skewt-lid skewt-lid-soft");
     for (const layer of s.cloudLayers) band(layer.baseM, layer.topM, "skewt-cloud-layer", box.right - Math.min(150, (box.right - box.left) * 0.3), box.right);
 
-    // Guide lines: isotherms every 10 °C (0 °C stronger) and dry adiabats.
+    // Guide lines use round display-unit temperatures; freezing stays physical 0 °C.
     const tMin = g.t0 - SKEW_C_PER_LNP * (Math.log(g.pBottom) - Math.log(g.pTop)) - 10;
     const tMax = g.t0 + (box.right - box.left) / g.k + 10;
-    for (let t = Math.ceil(tMin / 10) * 10; t <= tMax; t += 10) {
+    const temperatureStep = getUnitSystem() === "metric" ? 10 : 20;
+    const temperatureTicks: number[] = [];
+    for (let value = Math.ceil(convertQuantity(tMin, "temperature")! / temperatureStep) * temperatureStep; value <= convertQuantity(tMax, "temperature")!; value += temperatureStep) temperatureTicks.push(fromDisplayQuantity(value, "temperature")!);
+    for (const t of [...new Set([...temperatureTicks, 0])]) {
       el("line", { x1: x(t, g.pBottom), y1: box.bottom, x2: x(t, g.pTop), y2: box.top, class: t === 0 ? "skewt-isotherm skewt-zero" : "skewt-isotherm" }, plot);
     }
     for (let theta = -20; theta <= 90; theta += 10) {
@@ -184,16 +187,17 @@ export class SkewTChart {
       el("path", { d: d.join(""), class: "skewt-adiabat" }, plot);
     }
 
-    // Height grid in feet.
+    // Height ticks use the chosen display units on the same log-pressure geometry.
     const zTop = heightAtPressure(s.points, g.pTop);
-    const stepFt = (zTop - s.modelElevationM) * FT > 14000 ? 2000 : 1000;
-    for (let f = Math.ceil((s.modelElevationM * FT) / stepFt) * stepFt; f / FT <= zTop; f += stepFt) {
-      const yy = y(pAt(f / FT));
+    const metric = getUnitSystem() === "metric";
+    const step = metric ? (zTop - s.modelElevationM > 4500 ? 1000 : 500) : ((zTop - s.modelElevationM) * FT > 14000 ? 2000 : 1000);
+    for (let value = Math.ceil(convertQuantity(s.modelElevationM, "elevation")! / step) * step; value <= convertQuantity(zTop, "elevation")!; value += step) {
+      const yy = y(pAt(fromDisplayQuantity(value, "elevation")!));
       if (yy > box.bottom - 6) continue;
       el("line", { x1: box.left, x2: box.right, y1: yy, y2: yy, class: "skewt-grid" }, svg);
-      text(svg, box.left - 6, yy + 4, `${(f / 1000).toLocaleString("en-US")}k`, { class: "tick", "text-anchor": "end" });
+      text(svg, box.left - 6, yy + 4, metric ? value.toLocaleString("en-US") : `${(value / 1000).toLocaleString("en-US")}k`, { class: "tick", "text-anchor": "end" });
     }
-    text(svg, box.left - 6, box.top - 8, "ft MSL", { class: "tick", "text-anchor": "end" });
+    text(svg, box.left - 6, box.top - 8, `${unitLabel("elevation")} MSL`, { class: "tick", "text-anchor": "end" });
 
     // Where a thermal is warmer than the air around it (it keeps rising).
     const lcl = s.lclM;
@@ -247,10 +251,10 @@ export class SkewTChart {
 
     // Horizontal marks, named on the right; labels solved so they never overlap.
     const marks: { id: string; z: number; label: string; cls: string }[] = [];
-    if (this.launch.elevationM !== null && inside(this.launch.elevationM)) marks.push({ id: "launch", z: this.launch.elevationM, label: `Launch ${Math.round(this.launch.elevationM * FT).toLocaleString("en-US")} ft MSL`, cls: "skewt-mark-launch" });
-    if (s.marks.top && inside(s.marks.top.heightM)) marks.push({ id: "top", z: s.marks.top.heightM, label: s.marks.top.label, cls: "skewt-mark-top" });
-    if (inside(s.marks.cloudBaseM)) marks.push({ id: "base", z: s.marks.cloudBaseM, label: `☁ Cloud base ≈ ${ftLabel(s.marks.cloudBaseM)}`, cls: "skewt-mark-base" });
-    if (inside(s.freezingLevelM) && s.freezingLevelM > s.modelElevationM + 50) marks.push({ id: "freezing", z: s.freezingLevelM, label: `Freezing level ${ftLabel(s.freezingLevelM)}`, cls: "skewt-mark-freezing" });
+    if (this.launch.elevationM !== null && inside(this.launch.elevationM)) marks.push({ id: "launch", z: this.launch.elevationM, label: `Launch ${heightLabel(this.launch.elevationM)} MSL`, cls: "skewt-mark-launch" });
+    if (s.marks.top && inside(s.marks.top.heightM)) marks.push({ id: "top", z: s.marks.top.heightM, label: `Top of lift ${heightLabel(s.marks.top.heightM)}`, cls: "skewt-mark-top" });
+    if (inside(s.marks.cloudBaseM)) marks.push({ id: "base", z: s.marks.cloudBaseM, label: `☁ Cloud base ${heightLabel(s.marks.cloudBaseM)}`, cls: "skewt-mark-base" });
+    if (inside(s.freezingLevelM) && s.freezingLevelM > s.modelElevationM + 50) marks.push({ id: "freezing", z: s.freezingLevelM, label: `Freezing level ${heightLabel(s.freezingLevelM)}`, cls: "skewt-mark-freezing" });
     for (const m of marks) el("line", { x1: box.left, x2: box.right, y1: y(pAt(m.z)), y2: y(pAt(m.z)), class: m.cls }, svg);
 
     const zoneLabels: { id: string; z: number; label: string; cls: string }[] = [];
@@ -259,7 +263,7 @@ export class SkewTChart {
     }
     for (const layer of s.inversions) {
       if (layer.topM - layer.baseM < 60 || !inside(layer.baseM)) continue;
-      zoneLabels.push({ id: `lid-${layer.baseM}`, z: (layer.baseM + Math.min(layer.topM, zTop)) / 2, label: layer.grounded ? "Ground inversion" : layer.kind === "inversion" ? "Inversion: lid on thermals" : "Stable layer: soft lid", cls: "skewt-lid-label" });
+      zoneLabels.push({ id: `lid-${layer.baseM}`, z: (layer.baseM + Math.min(layer.topM, zTop)) / 2, label: layer.grounded ? "Ground inversion" : layer.kind === "inversion" ? "Inversion" : "Stable layer", cls: "skewt-lid-label" });
     }
     for (const layer of s.cloudLayers) {
       if (!inside(layer.baseM)) continue;
@@ -284,9 +288,9 @@ export class SkewTChart {
     const markLabelY = place(marks, box.right - 6, "end", true);
     place(zoneLabels, box.left + 6, "start", false, markLabelY);
 
-    // Wind: barbs (knots, the standard) with the speed in mph beside them.
+    // Full barb feathers represent 10 kt or 5 m/s; speed labels use mph or km/h.
     const windX = box.right + (narrow ? 16 : 20);
-    text(svg, box.right + (narrow ? 26 : 34), box.top - 8, "mph", { class: "tick", "text-anchor": "middle" });
+    text(svg, box.right + (narrow ? 26 : 34), box.top - 8, unitLabel("wind"), { class: "tick", "text-anchor": "middle" });
     // A balloon reports many levels: draw a barb only where it has room.
     let lastBarbY = Infinity;
     for (const p of s.points) {
@@ -294,17 +298,17 @@ export class SkewTChart {
       const yy = y(p.windHeightM === undefined ? p.pressureHpa : pAt(p.windHeightM));
       if (yy < box.top + 12 || lastBarbY - yy < 15) continue;
       lastBarbY = yy;
-      drawBarb(svg, windX, yy, p.windSpeedMps * KT, p.windDirectionDeg);
-      text(svg, windX + (narrow ? 20 : 28), yy + 4, String(Math.round(p.windSpeedMps * MPH)), { class: "tick", "text-anchor": "end" });
+      drawBarb(svg, windX, yy, p.windSpeedMps * (metric ? 2 : KT), p.windDirectionDeg);
+      text(svg, windX + (narrow ? 20 : 28), yy + 4, String(Math.round(convertQuantity(p.windSpeedMps, "wind")!)), { class: "tick", "text-anchor": "end" });
     }
 
     // Temperature scale along the bottom.
-    for (let t = Math.ceil(tMin / 10) * 10; t <= tMax; t += 10) {
+    for (const t of temperatureTicks) {
       const xx = x(t, g.pBottom);
       if (xx < box.left + 8 || xx > box.right - 8) continue;
-      text(svg, xx, box.bottom + 16, `${t}°`, { class: "tick", "text-anchor": "middle" });
+      text(svg, xx, box.bottom + 16, `${Math.round(convertQuantity(t, "temperature")!)}°`, { class: "tick", "text-anchor": "middle" });
     }
-    text(svg, (box.left + box.right) / 2, H - 4, narrow ? "Temperature °C (leaning lines)" : "Temperature (°C) · lines of equal temperature lean right", { class: "tick", "text-anchor": "middle" });
+    text(svg, (box.left + box.right) / 2, H - 4, `Temperature ${unitLabel("temperature")} · Barbs ${metric ? "2.5/5/25 m/s" : "5/10/50 kt"}`, { class: "tick", "text-anchor": "middle" });
 
     // Hover: the air at any height in plain words.
     const cross = el("line", { x1: box.left, x2: box.right, class: "crosshair", visibility: "hidden" }, svg);
@@ -333,22 +337,22 @@ export class SkewTChart {
     const wind = windAtHeight(s.points, z);
     const parcel = [...s.parcel].sort((a, b) => Math.abs(a.heightM - z) - Math.abs(b.heightM - z))[0];
     const spread = env.temperatureC - env.dewPointC;
-    const rows: [string, string][] = [["Temperature", `${env.temperatureC.toFixed(1)} °C (${fToC(env.temperatureC)} °F)`]];
-    if (Number.isFinite(env.dewPointC)) rows.push(["Dew point", `${env.dewPointC.toFixed(1)} °C · ${spread <= 1 ? "saturated: cloud" : spread <= 3 ? "moist" : "dry"}`]);
-    if (wind) rows.push(["Wind", wind.speedMps * MPH < 2 ? "calm" : `${compassPoint(wind.directionDeg)} ${Math.round(wind.speedMps * MPH)} mph`]);
+    const rows: [string, string][] = [["Temperature", formatQuantity(env.temperatureC, "temperature", 1)]];
+    if (Number.isFinite(env.dewPointC)) rows.push(["Dew point", `${formatQuantity(env.dewPointC, "temperature", 1)} · ${spread <= 1 ? "saturated: cloud" : spread <= 3 ? "moist" : "dry"}`]);
+    if (wind) rows.push(["Wind", wind.speedMps * MPH < 2 ? "calm" : `${compassPoint(wind.directionDeg)} ${formatQuantity(wind.speedMps, "wind")}`]);
     let note = "";
     if (s.marks.zoneTopM !== null && parcel) {
       note = parcel.buoyancyC > 0.2
-        ? `A thermal here is ${parcel.buoyancyC.toFixed(1)} °C warmer than the air: it keeps rising.`
+        ? `Parcel +${convertQuantity(parcel.buoyancyC, "temperatureDelta")!.toFixed(1)} ${unitLabel("temperature")} · Rising`
         : parcel.buoyancyC < -0.2
-          ? `A thermal here is ${Math.abs(parcel.buoyancyC).toFixed(1)} °C colder than the air: it stops.`
-          : "A thermal here is about as warm as the air: this is where it stops.";
+          ? `Parcel −${convertQuantity(Math.abs(parcel.buoyancyC), "temperatureDelta")!.toFixed(1)} ${unitLabel("temperature")} · Capped`
+          : "Neutral parcel · Thermal ceiling";
     }
     const tip = this.tooltip;
     tip.replaceChildren();
     const head = document.createElement("div");
     head.className = "tt-time";
-    head.textContent = `${ftLabel(z)} MSL · ${Math.round(p)} hPa`;
+    head.textContent = `${heightLabel(z)} MSL · ${formatQuantity(p, "pressure")}`;
     tip.appendChild(head);
     for (const [label, value] of rows) {
       const r = document.createElement("div");

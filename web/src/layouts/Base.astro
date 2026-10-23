@@ -41,6 +41,13 @@ const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
           <a href={href("soaring")}>Soaring</a>
           <a href={href("about")} aria-current={current === "about" ? "page" : undefined}>About</a>
         </nav>
+        <label class="unit-control">
+          <span class="sr-only">Display units</span>
+          <select id="unit-system" aria-label="Display units">
+            <option value="imperial">Imperial</option>
+            <option value="metric">Metric</option>
+          </select>
+        </label>
       </div>
     </header>
     <main id="main">
@@ -54,14 +61,18 @@ const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
           Model data: NOAA (HRRR, RRFS, GFS) and Environment and Climate Change Canada (HRDPS, RDPS, GDPS, GEPS, under the
           <a href="https://eccc-msc.github.io/open-data/licence/readme_en/">Data Server End-use Licence</a>), processed with
           <a href="https://meteo.azohra.com/">meteo by Azohra</a>. Terrain:
-          <a href="https://www.usgs.gov/3d-elevation-program">USGS 3DEP</a>. Official
+          <a href="https://www.usgs.gov/3d-elevation-program">USGS 3DEP</a> and
+          <a href="https://registry.opendata.aws/copernicus-dem/">Copernicus DEM</a>. Official
           forecasts: <a href="https://www.weather.gov/">National Weather Service</a>. ECMWF IFS forecasts: ©
           <a href="https://www.ecmwf.int/">ECMWF</a>, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, via
           <a href="https://open-meteo.com/">Open-Meteo.com</a>. Weather stations:
           <a href="https://www.wunderground.com/">Weather Underground</a>.
         </p>
-        <p>These are forecasts, not observations. Always check conditions at launch and fly within your own limits.</p>
+        <p>Check conditions at launch and fly within your limits.</p>
       </div>
     </footer>
+    <script>
+      import "../scripts/units.ts";
+    </script>
   </body>
 </html>

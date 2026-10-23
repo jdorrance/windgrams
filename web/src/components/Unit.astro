@@ -1,0 +1,7 @@
+---
+import { convertQuantity, defaultQuantityDigits, fmt, formatQuantity, type QuantityKind } from '../lib/units.ts';
+interface Props { value: number; kind: QuantityKind; digits?: number; suffix?: string; numberOnly?: boolean }
+const { value, kind, digits, suffix = '', numberOnly = false } = Astro.props;
+const shown = numberOnly ? fmt(convertQuantity(value, kind), digits ?? defaultQuantityDigits(kind)) : formatQuantity(value, kind, digits);
+---
+<span data-unit={kind} data-value={value} data-digits={digits} data-unit-suffix={suffix || undefined} data-unit-number={numberOnly || undefined}>{shown}{suffix}</span>

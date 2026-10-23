@@ -1,51 +1,51 @@
 # Windgrams
 
-Soaring forecasts for paragliding launches.
+Soaring forecasts for paragliding launches: hourly windgrams, model and balloon soundings, and regional HRRR/RRFS maps.
 
-The forecast engine is [`@azohra/meteo.forecast`](https://meteo.azohra.com/) (MIT). Launches come from the adjacent `flyingsites` catalog (`data/us.geojson.json`).
+The forecast engine is [`@azohra/meteo.forecast`](https://meteo.azohra.com/) 0.6.0; browser contracts and shared calculations use `@azohra/meteo.briefing` 0.6.2. Both are MIT licensed. Launch coordinates and facing directions come from the adjacent `flyingsites` catalogue (`data/us.geojson.json`).
 
-The [soaring forecast plan](docs/soaring-forecast-plan.md) describes the path to regional lift and convergence maps, richer diagnostics, and a validated 1 km WRF pilot.
+## Forecasts and charts
 
-Published documents go through `forecasts/scripts/lib/store.mjs`. The built-in provider writes a directory (`WINDGRAMS_STORE=file` and `WINDGRAMS_DATA_DIR`). Another provider registers itself with `registerStoreProvider` and is selected with `WINDGRAMS_STORE`.
+The launch picker offers HRRR, HRDPS, RRFS, RDPS, GFS, GDPS and GEPS where a published profile covers the site. Native regional grids cover North Sound and Shenandoah–Blue Ridge. Model changes preserve the selected location and matching forecast time.
 
-## Run it locally
+Windgrams use the [WxToFly lapse-rate palette](http://wxtofly.net/windgramexplain.html). The full day fits on a phone. Temperature contours carry one label per connected line, where space permits. Outlined clouds mark potential LCL; white crosshatching marks relative humidity above 94%. Paraglider symbols use the published 225 ft/min sink ceiling; the blue usable-lift line uses 1 m/s. Chart heights are MSL. Balloon labels include local time zone and UTC observation cycle.
 
-Use Node 24 and pnpm 10.28.0 (the version pinned in both packages).
+The header's Imperial/Metric setting is saved in the browser. Forecast files and diagnostic calculations retain their published physical units. [Display conventions](web/README.md#display-conventions) cover barbs, saved launch limits and scientific-unit exceptions. Strongest thermals selects the highest published w* for the selected day; cloud base and usable height can peak at another hour.
+
+## Local development
+
+Use Node 24 and pnpm 10.28.0, pinned in both packages.
 
 ```sh
 cd web
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open http://localhost:4321. The dev server serves `forecasts/data` at `/data`. That directory is not in git. Build it before expecting a live chart.
+Open http://localhost:4321. Astro serves the ignored `forecasts/data` directory at `/data`.
 
-## Build the local forecast
-
-From `forecasts/`, with the dev server already running. The model build reads `/data` so it can see what is already published; a missing manifest means that model still needs a build.
+With the web server running, build a local dataset from `forecasts/`:
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
 node scripts/nws.mjs --output data
 node scripts/ecmwf.mjs --output data
 node scripts/raob.mjs --output data
 node scripts/terrain.mjs --sites sites.json --output data/site-context.json
-node scripts/solar.mjs --output data
 pnpm exec meteo forecast catalogue --output data/models.json
 cp sites.json data/sites.json
 pnpm run build:model -- hrrr-conus
 ```
 
-`build:model` also takes `hrdps-continental`, `rrfs`, `rdps`, `gfs`, `gdps`, and `geps`. Set `METEO_DATA_BASE` to build against a published dataset instead of the dev server. The build wrapper omits launches outside a model's grid, postprocesses soaring diagnostics, and preserves the last complete forecast if a refresh fails. The balloon script skips a launch with no upper-air station within 300 km, and exits non-zero if a station it did reach has no sounding in the last 48 hours. Sunlight tiles are the slow step: one elevation mosaic per launch.
+`build:model` also accepts `hrdps-continental`, `rrfs`, `rdps`, `gfs`, `gdps` and `geps`. `METEO_DATA_BASE` selects the published dataset used for run discovery; its local default is `http://127.0.0.1:4321/data`. The wrapper filters sites by grid coverage, adds soaring diagnostics and stages complete outputs before replacing the prior run.
 
-### RRFS
+Optional sunlight tiles: `node scripts/solar.mjs --output data`. These larger terrain products are available in local development and preview; the Pages artifact omits `data/solar` and forecast history.
 
-RRFS uses NOAA's `noaa-rrfs-ops-pds` feed, with hourly CONUS forecasts through
-84 hours from 00/06/12/18 UTC runs. Both the pressure and surface products must
-be complete before building. `METEO_RRFS_BASE` can override the source root for
-a compatible mirror. The old `noaa-rrfs-pds/rrfs_public` feed is retired.
+## RRFS
 
-From `forecasts/`, with the local web server running:
+RRFS reads NOAA's `noaa-rrfs-ops-pds` bucket. Synoptic 00/06/12/18 UTC runs provide hourly CONUS forecasts through f084. Readiness checks cover both `prslev` and `2dfld` products. `METEO_RRFS_BASE` selects a compatible mirror.
+
+From `forecasts/`:
 
 ```sh
 pnpm run build:model -- rrfs
@@ -55,62 +55,38 @@ node scripts/merge-soaring-regions.mjs --output data
 node scripts/write-runs-index.mjs --output data
 ```
 
-The launch model picker discovers RRFS once its manifest is published. The
-regional soaring page offers HRRR and RRFS where their native grid bundles
-exist; changing model preserves the selected location and matching valid time.
-Regional maps cover the first available local day's 07:00–20:00 window, matching
-the HRRR regional view. Historical case links
-retain their original model. RRFS regional bundles and caches have separate
-namespaces, and their one-hour precipitation accumulations and geometric
-vertical velocities are converted explicitly into the forecast contract.
+The regional window is the first available local day, 07:00–20:00, within f002–f048. Each model uses its own grid, terrain and cache namespace. RRFS precipitation is the one-hour accumulation ending at valid time; geometric vertical velocity is converted to pressure velocity for the shared diagnostics.
 
-Scheduled RRFS refreshes run at 03:55/09:55/15:55/21:55 UTC, independently of
-the earlier HRRR schedule. Failed RRFS refreshes remain visible in Actions,
-retain the last complete RRFS run, and allow other refreshed models to publish.
-Code pushes republish the cached dataset; they do not fetch new model data.
-To build and publish RRFS immediately, including its native regional maps:
+As reviewed on October 23, 2026, the catalogue labels RRFS experimental. NOAA's [October 15 implementation notice](https://www.weather.gov/media/notification/pdf_2026/scn26-048_Updated_RRFS_and_REFS_Implementation.aaf.pdf) schedules the production transition for November 3; the replacement bucket carries parallel forecasts.
+
+## Publication
+
+[Pages](.github/workflows/pages.yml) starts general refreshes at 01:55/07:55/13:55/19:55 UTC and separate RRFS refreshes at 03:55/09:55/15:55/21:55 UTC. Completion time depends on upstream availability and build duration. Failed RRFS refreshes retain the last complete run while other providers can publish. Code pushes publish the cached dataset.
+
+To refresh RRFS immediately, including its native maps:
 
 ```sh
 gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=rrfs
 ```
 
-Regional geography is tracked under `forecasts/soaring/regions/`, so a clean
-runner can bootstrap both maps without an existing published bundle. A requested
-RRFS refresh must pass point-profile and native-region validation before deployment.
+Tracked region definitions and geography bootstrap clean runners. Requested RRFS deployments validate point profiles and both native regions. Regional bundles publish through immutable content hashes and an atomic case pointer.
 
-NOAA's October 15 notice schedules the production transition for November 3,
-2026; the replacement bucket currently carries parallel forecasts. These
-forecasts are labelled experimental in the model catalogue until that transition
-is confirmed. [NWS implementation notice](https://www.weather.gov/media/notification/pdf_2026/scn26-048_Updated_RRFS_and_REFS_Implementation.aaf.pdf)
+The dataset-store abstraction lives in `forecasts/scripts/lib/store.mjs`. Its file provider uses `WINDGRAMS_STORE=file` and `WINDGRAMS_DATA_DIR`; additional providers register with `registerStoreProvider`.
 
-The Check workflow still builds a synthetic dataset (`pnpm run dev-data` in `web/`) and checks it against the meteo contract. `pnpm dev` does not serve that dataset.
+## Checks and replay
 
-## Replay North Sound soaring conditions
+Run `pnpm test` in `forecasts/`. In `web/`, run `pnpm test`, `pnpm check` and `pnpm build`. `pnpm preview` builds the site and links the complete local dataset. CI's `pnpm run dev-data` creates labelled synthetic contract fixtures in `web/dev-data`; normal development reads `forecasts/data`.
 
-Use **Node 24** and **pnpm 10.28.0** (the version pinned in both packages). From the repository root:
+The [North Sound replay](docs/soaring-replay.md) preserves the October 21, 2026 00Z HRRR case and its source records. [Regional operations](forecasts/soaring/README.md) covers live captures and publication. [Diagnostic notes](docs/forecast-improvement-plan.md) describe the implemented science and its approximations. [Project status](docs/soaring-forecast-plan.md) separates delivered work from the WRF experiment and observational evaluation.
 
-```sh
-cd forecasts
-pnpm install --frozen-lockfile
-pnpm run soaring:capture --case north-sound-20261021-00z
-pnpm run soaring:replay --case north-sound-20261021-00z
-cd ../web
-pnpm install --frozen-lockfile
-pnpm dev
-```
+## Launch catalogue
 
-Open [the North Sound replay](http://localhost:4321/soaring?case=north-sound-20261021-00z&hour=20). It shows the October 21, 2026 00 UTC HRRR run, forecast hours 14–27 (07:00–20:00 PDT), with native-cell thermal strength and usable-lift top, a synchronized Blanchard windgram, and the selected-hour sounding. Click a cell to inspect it; click a windgram column to change the hour. The expandable audit links to the machine-readable report.
-
-Capture downloads about **820 MB** of original NOAA byte ranges into the ignored `forecasts/.soaring-cache/` directory. Verified downloads are resumable. Replay is entirely offline and publishes immutable, hashed bundles beneath `forecasts/data/soaring/v1/`, then atomically updates the case pointer. Replaying the same cache with the same code produces identical file hashes. Both commands accept `--cache DIR`; replay also accepts `--output DIR` (the `v1` directory). Keep the raw cache outside `forecasts/data`.
-
-This is a historical baseline audit, not a forecast-skill assessment. It preserves meteo.forecast 0.6.0 physics, nine pressure levels, and the 1.0 m/s usable-lift threshold. The [replay implementation notes](docs/soaring-replay.md) describe the file contract, checks, limitations, and fixture provenance. Operational forecasts and schedules are unchanged.
-
-## Refresh the launch list
-
-From `forecasts/`, after `pnpm install`:
+From `forecasts/`:
 
 ```sh
 node scripts/import-flyingsites.mjs
 ```
 
-That rewrites `forecasts/sites.json` and `web/src/data/launches.json` from `../flyingsites/data/us.geojson.json`. Set `FLYINGSITES_US` to point at a different file.
+This updates `forecasts/sites.json` and `web/src/data/launches.json` from `../flyingsites/data/us.geojson.json`. Set `FLYINGSITES_US` for another catalogue path.
+
+Import replaces launch notes and wind limits; review the generated diff before committing.

@@ -1,3 +1,4 @@
+import { convertQuantity, formatQuantity, getUnitSystem } from "./units.ts";
 import { publishedLift } from "./published-lift.ts";
 // One hour of a model profile as a sounding, and what it means for a pilot.
 //
@@ -155,7 +156,7 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
     hasDewPoint: true,
     marks: {
       zoneTopM: zoneTop !== null && zoneTop > zs ? zoneTop : null,
-      top: thermals && usable !== null ? { heightM: usable, label: `Top of lift ≈ ${feet(usable).toLocaleString("en-US")} ft` } : null,
+      top: thermals && usable !== null ? { heightM: usable, label: `Top of lift ${formatQuantity(usable, "elevation")}` } : null,
       cloudBaseM: thermals && base !== null && base <= bl! + 100 ? base : null,
     },
   };
@@ -332,10 +333,14 @@ export interface Reading {
 }
 
 export const feet = (m: number) => Math.round((m * FT) / 100) * 100;
-const ftText = (m: number) => `${feet(m).toLocaleString("en-US")} ft`;
-const referenceFtText = (m: number) => `${Math.round(m * FT).toLocaleString("en-US")} ft`;
-const mphText = (mps: number) => `${Math.round(mps * MPH)} mph`;
-const windText = (w: { speedMps: number; directionDeg: number }) => (w.speedMps * MPH < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${mphText(w.speedMps)}`);
+const heightText = (m: number) => {
+  const step = getUnitSystem() === "metric" ? 50 : 100;
+  const height = convertQuantity(m, "elevation")!;
+  return `${(Math.round(height / step) * step).toLocaleString("en-US")} ${getUnitSystem() === "metric" ? "m" : "ft"}`;
+};
+const referenceHeightText = (m: number) => formatQuantity(m, "elevation");
+const speedText = (mps: number) => formatQuantity(mps, "wind");
+const windText = (w: { speedMps: number; directionDeg: number }) => (w.speedMps * MPH < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${speedText(w.speedMps)}`);
 
 /** Thermal strength words for Deardorff's w* (m/s). */
 export function strengthWords(wStar: number | null): { word: string; tone: Tone } {
@@ -344,18 +349,18 @@ export function strengthWords(wStar: number | null): { word: string; tone: Tone 
   if (wStar < 1.5) return { word: "weak", tone: "neutral" };
   if (wStar < 2.5) return { word: "moderate", tone: "good" };
   if (wStar < 3.5) return { word: "strong", tone: "good" };
-  return { word: "very strong, likely rough", tone: "caution" };
+  return { word: "very strong", tone: "caution" };
 }
 
 const STABILITY_WORDS: Record<string, string> = {
-  "very-unstable": "very unstable: thermals are punchy and can be rough",
-  unstable: "unstable: good, lively thermals",
-  "conditional-strong": "unstable enough for solid thermals",
-  conditional: "moderately unstable: workable thermals",
-  "near-neutral": "only slightly unstable: soft, patchy thermals",
-  stable: "stable: thermals struggle",
-  inverted: "stable with an inversion: little or no thermal activity",
-  "strong-inversion": "strongly stable: no thermals",
+  "very-unstable": "Very unstable",
+  unstable: "Unstable",
+  "conditional-strong": "Conditionally unstable",
+  conditional: "Moderately unstable",
+  "near-neutral": "Near neutral",
+  stable: "Stable",
+  inverted: "Inversion",
+  "strong-inversion": "Strong inversion",
 };
 
 /** What the sounding means for a pilot launching at `launchM` (m MSL). */
@@ -369,15 +374,15 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
 
   // Thermals
   if (w === null) {
-    findings.push({ key: "thermals", title: "Thermals", text: "Thermal strength is unavailable for this hour.", tone: "neutral" });
+    findings.push({ key: "thermals", title: "Thermals", text: "Unavailable", tone: "neutral" });
   } else if (!hasThermals) {
-    findings.push({ key: "thermals", title: "Thermals", text: "No usable thermal lift is predicted this hour.", tone: "neutral" });
+    findings.push({ key: "thermals", title: "Thermals", text: "Minimal thermal lift", tone: "neutral" });
   } else {
     const { word, tone } = strengthWords(w);
     findings.push({
       key: "thermals",
       title: "Thermals",
-      text: `Thermal strength is ${word} (W* ${w!.toFixed(2)} m/s). This describes convective strength; actual climb rates vary within thermals.`,
+      text: `${word[0].toUpperCase()}${word.slice(1)} · w* ${formatQuantity(w, "lift")}`,
       tone,
     });
   }
@@ -385,11 +390,11 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   // Top of lift
   if (hasThermals) {
     if (top === null) {
-      findings.push({ key: "top", title: "Top of lift", text: `The air mixes up to about ${ftText(bl!)}, but thermals are too weak to out-climb a glider's sink.`, tone: "neutral" });
+      findings.push({ key: "top", title: "Top of lift", text: `Mixing top ${heightText(bl!)} MSL · Climb ceiling unavailable`, tone: "neutral" });
     } else if (top <= launch + 150) {
-      findings.push({ key: "top", title: "Top of lift", text: `Usable lift tops out around ${ftText(top)}, at or below launch: expect a sled ride unless the wind gives ridge lift.`, tone: "caution" });
+      findings.push({ key: "top", title: "Top of lift", text: `Lift ${heightText(top)} MSL · Near launch`, tone: "caution" });
     } else {
-      findings.push({ key: "top", title: "Top of lift", text: `You can expect to climb to about ${ftText(top)}, ${feet(top - launch).toLocaleString("en-US")} ft above launch.`, tone: "good" });
+      findings.push({ key: "top", title: "Top of lift", text: `Lift ${heightText(top)} MSL · ${heightText(top - launch)} above launch`, tone: "good" });
     }
   }
 
@@ -401,15 +406,15 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
       key: "clouds",
       title: "Clouds",
       text: low
-        ? `Cloud base is low, about ${ftText(base)}, close to launch height: watch visibility and don't get sucked in.`
-        : `Thermals reach condensation: expect cumulus with a base around ${ftText(base)}. They mark where the thermals are.`,
+        ? `Cloud base ${heightText(base)} MSL · Near launch`
+        : `Cumulus base ${heightText(base)} MSL`,
       tone: low ? "caution" : "good",
     });
   } else if (hasThermals) {
     findings.push({
       key: "clouds",
       title: "Clouds",
-      text: `Blue day: thermals stop before the air condenses${sounding.lclM !== null ? ` (it would need about ${ftText(sounding.lclM)})` : ""}, so no cumulus will mark them.`,
+      text: `Blue thermals${sounding.lclM !== null ? ` · LCL ${heightText(sounding.lclM)} MSL` : ""}`,
       tone: "neutral",
     });
   }
@@ -417,7 +422,7 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   const cumulus = hasThermals && base !== null && base <= bl! + 100;
   const deck = sounding.cloudLayers.find((l) => !l.grounded && !(cumulus && l.baseM <= base! + 300));
   if (deck) {
-    findings.push({ key: "clouds", title: "Cloud layer", text: `The air is nearly saturated between ${ftText(deck.baseM)} and ${ftText(deck.topM)}: a cloud layer there can shade the ground and weaken thermals.`, tone: "caution" });
+    findings.push({ key: "clouds", title: "Cloud layer", text: `Cloud layer ${heightText(deck.baseM)}–${heightText(deck.topM)} MSL · Shading`, tone: "caution" });
   }
 
   // Lids
@@ -426,7 +431,7 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
     findings.push({
       key: "lid",
       title: "Ground inversion",
-      text: `The air near the ground is colder than the air above it (up to about ${ftText(grounded.topM)}). Thermals only start once the sun has warmed through it.`,
+      text: `Surface inversion to ${heightText(grounded.topM)} MSL`,
       tone: "neutral",
     });
   }
@@ -436,7 +441,7 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
     findings.push({
       key: "lid",
       title: lid.kind === "inversion" ? "Inversion" : "Stable layer",
-      text: `${lid.kind === "inversion" ? "An inversion" : "A stable layer"} from ${ftText(lid.baseM)} to ${ftText(lid.topM)} acts as a lid: thermals slow down and stop there${lid.kind === "inversion" ? ", and haze often collects under it" : ""}.`,
+      text: `${lid.kind === "inversion" ? "Inversion" : "Stable layer"} ${heightText(lid.baseM)}–${heightText(lid.topM)} MSL · Thermal cap`,
       tone: "neutral",
     });
   }
@@ -450,18 +455,18 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   const atTop = windAtHeight(sounding.points, topHeight);
   const windParts: string[] = [];
   if (launchM !== null) {
-    if (atLaunch) windParts.push(`Model wind at launch elevation (${referenceFtText(launchM)} MSL): ${windText(atLaunch)}.`);
-    else if (launchM < sounding.modelElevationM) windParts.push(`Launch elevation (${referenceFtText(launchM)} MSL) is below model terrain (${referenceFtText(sounding.modelElevationM)} MSL); wind at launch elevation is unavailable.`);
-    else windParts.push(`Model wind at launch elevation (${referenceFtText(launchM)} MSL) is outside the available wind profile.`);
+    if (atLaunch) windParts.push(`Launch (${referenceHeightText(launchM)} MSL): ${windText(atLaunch)}.`);
+    else if (launchM < sounding.modelElevationM) windParts.push(`Launch ${referenceHeightText(launchM)} MSL · Model terrain ${referenceHeightText(sounding.modelElevationM)} MSL · Launch wind unavailable.`);
+    else windParts.push(`Launch ${referenceHeightText(launchM)} MSL · Wind unavailable.`);
   }
   if (launchM === null || !atLaunch) {
     const surfaceWind = windAtHeight(sounding.points, surfaceWindHeight);
-    if (surfaceWind) windParts.push(`Model surface wind (${Math.round(surfaceWindHeight - sounding.modelElevationM)} m above model terrain): ${windText(surfaceWind)}.`);
+    if (surfaceWind) windParts.push(`Model surface (${formatQuantity(surfaceWindHeight - sounding.modelElevationM, "elevation")} AGL): ${windText(surfaceWind)}.`);
   }
   if (topHeight !== windReference) {
-    windParts.push(atTop ? `At ${ftText(topHeight)} MSL: ${windText(atTop)}.` : `Wind at ${ftText(topHeight)} MSL is outside the available wind profile.`);
+    windParts.push(atTop ? `Aloft (${heightText(topHeight)} MSL): ${windText(atTop)}.` : `Aloft (${heightText(topHeight)} MSL): Unavailable.`);
   }
-  windParts.push(`Model terrain is ${referenceFtText(sounding.modelElevationM)} MSL. These are model column winds; local launch exposure and terrain effects are unresolved.`);
+  windParts.push(`Model column · Terrain ${referenceHeightText(sounding.modelElevationM)} MSL.`);
   findings.push({ key: "wind", title: "Wind", text: windParts.join(" "), tone: "neutral" });
 
   // Storms: the model's CAPE counts energy for air lifted to condensation. On a
@@ -475,15 +480,15 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
         key: "storms",
         title: high ? "Storm risk" : "Cloud growth",
         text: high
-          ? `Lots of storm energy (CAPE ${Math.round(cape)} J/kg): the cumulus can grow into thunderstorms. Watch for towering clouds and gust fronts, and land early.`
-          : `Some instability above cloud base (CAPE ${Math.round(cape)} J/kg): cumulus can build. Keep an eye on them growing tall.`,
+          ? `CAPE ${Math.round(cape)} J/kg · Thunderstorm growth potential`
+          : `CAPE ${Math.round(cape)} J/kg · Cumulus growth potential`,
         tone: high ? "warning" : "caution",
       });
     } else if (high) {
       findings.push({
         key: "storms",
         title: "Unstable air aloft",
-        text: `The air above the thermals is unstable (CAPE ${Math.round(cape)} J/kg). Thermals here stay blue, but if clouds pop over higher terrain they can grow fast into storms: watch the horizon.`,
+        text: `CAPE ${Math.round(cape)} J/kg · Storm potential with terrain or convergence lift`,
         tone: "caution",
       });
     }
@@ -495,7 +500,7 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
     const lapse = lapseRateCPer1000Ft({ heightM: sounding.modelElevationM, temperatureC: sounding.points[0].temperatureC }, { heightM: bl!, temperatureC: env.temperatureC });
     if (lapse !== null) {
       const words = STABILITY_WORDS[stabilityClass(lapse)] ?? "";
-      findings.push({ key: "stability", title: "Air", text: `Between the ground and the top of the thermals the air is ${words} (it cools ${Math.abs(lapse).toFixed(1)} °C per 1000 ft).`, tone: "neutral" });
+      findings.push({ key: "stability", title: "Air", text: `${words} · ${formatQuantity(lapse, "lapseRate")}`, tone: "neutral" });
     }
   }
 
@@ -503,16 +508,16 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
 }
 
 function headline(sounding: Sounding, findings: Finding[], hasThermals: boolean) {
-  if (sounding.thermalVelocityMps === null) return "Thermal forecast unavailable.";
-  if (!hasThermals) return "No usable thermal lift predicted.";
+  if (sounding.thermalVelocityMps === null) return "Thermals: Unavailable";
+  if (!hasThermals) return "Minimal thermal lift";
   const parts: string[] = [];
   const { word } = strengthWords(sounding.thermalVelocityMps);
   const top = sounding.usableLiftTopM;
-  parts.push(top !== null ? `${word[0].toUpperCase()}${word.slice(1)} thermals to about ${ftText(top)}` : `Thermals ${word}`);
+  parts.push(top !== null ? `${word[0].toUpperCase()}${word.slice(1)} thermals · ${heightText(top)}` : `Thermals ${word}`);
   const clouds = findings.find((f) => f.key === "clouds");
-  if (clouds?.title === "Clouds") parts.push(clouds.text.startsWith("Blue") ? "blue (no cumulus)" : `cumulus base about ${ftText(sounding.cloudBaseM!)}`);
+  if (clouds?.title === "Clouds") parts.push(clouds.text.startsWith("Blue") ? "Blue thermals" : `Cumulus base ${heightText(sounding.cloudBaseM!)}`);
   const warn = findings.find((f) => f.tone === "warning");
   let text = parts.join(", ");
-  if (warn) text += `. ${warn.title}: see below`;
+  if (warn) text += ` · ${warn.title}`;
   return `${text}.`;
 }

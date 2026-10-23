@@ -86,5 +86,5 @@ test('point loading retains published diagnostics and nulls without resurrecting
   const missing = parsePublishedProfileJson(JSON.stringify(rawProfile))!;
   const sounding = buildSounding(missing, missing.hours[6])!;
   assert.equal(sounding.thermalVelocityMps, null);
-  assert.match(readSounding(sounding, 378.5).headline, /unavailable/);
+  assert.match(readSounding(sounding, 378.5).headline, /Unavailable/);
 });

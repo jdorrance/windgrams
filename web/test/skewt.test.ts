@@ -1,7 +1,9 @@
-import { test } from "node:test";
+import { setUnitSystem } from "../src/lib/units.ts";
+afterEach(() => setUnitSystem("imperial"));
+import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { parcelAscent } from "@azohra/meteo.briefing/derive";
-import { buildSounding, feet, findCloudLayers, freezingLevel, heightAtPressure, pressureAtHeight, readSounding, surfacePressureHpa, windAtHeight, type SoundingPoint } from "../src/lib/skewt.ts";
+import { buildSounding, feet, findCloudLayers, freezingLevel, heightAtPressure, pressureAtHeight, readSounding, strengthWords, surfacePressureHpa, windAtHeight, type SoundingPoint } from "../src/lib/skewt.ts";
 
 const Z0 = 1300;
 
@@ -61,43 +63,43 @@ test("a cumulus day capped by an inversion reads as it should", () => {
 
   const r = readSounding(s, 1268);
   const byKey = (k: string) => r.findings.filter((f) => f.key === k);
-  assert.match(byKey("thermals")[0].text, /moderate \(W\* 2\.20 m\/s\)/);
-  assert.match(byKey("top")[0].text, /climb to about 10,800 ft, 6,700 ft above launch/);
-  assert.match(byKey("clouds")[0].text, /cumulus with a base around 11,000 ft/);
-  assert.match(byKey("lid")[0].text, /An inversion from 11,200 ft to 12,100 ft acts as a lid/);
-  assert.equal(r.headline, "Moderate thermals to about 10,800 ft, cumulus base about 11,000 ft.");
+  assert.match(byKey("thermals")[0].text, /Moderate · w\* 433 ft\/min/);
+  assert.match(byKey("top")[0].text, /Lift 10,800 ft MSL · 6,700 ft above launch/);
+  assert.match(byKey("clouds")[0].text, /Cumulus base 11,000 ft MSL/);
+  assert.match(byKey("lid")[0].text, /Inversion 11,200 ft–12,100 ft MSL · Thermal cap/);
+  assert.equal(r.headline, "Moderate thermals · 10,800 ft, Cumulus base 11,000 ft.");
 });
 
 test("a dry day reports wind aloft without inferring turbulence from a speed threshold", () => {
   const levels = CUMULUS_LEVELS.map((l) => ({ ...l, td: l.td - 18, ws: l.z > 2500 ? 12 : 5 }));
   const s = buildSounding(site, hour({ t: 25, td: -10 }, levels, { bl: 3000, w: 1.8, base: 5200, top: 2800 }))!;
   const r = readSounding(s, 1268);
-  assert.match(r.findings.find((f) => f.key === "clouds")!.text, /^Blue day/);
+  assert.match(r.findings.find((f) => f.key === "clouds")!.text, /^Blue thermals/);
   const wind = r.findings.find((f) => f.key === "wind")!;
   assert.equal(wind.tone, "neutral");
-  assert.match(wind.text, /At 9,200 ft MSL: WNW 2\d mph\./);
+  assert.match(wind.text, /Aloft \(9,200 ft MSL\): WNW 2\d mph\./);
   assert.doesNotMatch(wind.text, /turbulent|Strong wind|too strong/);
-  assert.match(r.headline, /blue \(no cumulus\)\.$/);
+  assert.match(r.headline, /Blue thermals\.$/);
 });
 
 test("launch altitude is compared in MSL and is not substituted with model surface wind", () => {
   const s = buildSounding(site, hour({ t: 25, td: 8, ws: 3 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 }))!;
   const belowTerrain = readSounding(s, 1268).findings.find((finding) => finding.key === "wind")!;
-  assert.match(belowTerrain.text, /Launch elevation \(4,160 ft MSL\) is below model terrain \(4,265 ft MSL\); wind at launch elevation is unavailable/);
-  assert.match(belowTerrain.text, /Model surface wind \(10 m above model terrain\): NW 7 mph/);
-  assert.doesNotMatch(belowTerrain.text, /wind at launch elevation \(.*\): NW 7 mph/);
+  assert.match(belowTerrain.text, /Launch 4,160 ft MSL · Model terrain 4,265 ft MSL · Launch wind unavailable/);
+  assert.match(belowTerrain.text, /Model surface \(33 ft AGL\): NW 7 mph/);
+  assert.doesNotMatch(belowTerrain.text, /Launch \(.*\): NW 7 mph/);
 
   const inColumn = readSounding(s, 1520).findings.find((finding) => finding.key === "wind")!;
-  assert.match(inColumn.text, /Model wind at launch elevation \(4,987 ft MSL\): WNW 11 mph/);
+  assert.match(inColumn.text, /Launch \(4,987 ft MSL\): WNW 11 mph/);
   const aboveColumn = readSounding(s, 5000).findings.find((finding) => finding.key === "wind")!;
-  assert.match(aboveColumn.text, /Model wind at launch elevation \(16,404 ft MSL\) is outside the available wind profile/);
+  assert.match(aboveColumn.text, /Launch 16,404 ft MSL · Wind unavailable/);
 
   const unknownLaunch = readSounding(s, null).findings.find((finding) => finding.key === "wind")!;
   assert.doesNotMatch(unknownLaunch.text, /at launch elevation/);
-  assert.match(unknownLaunch.text, /Model surface wind \(10 m above model terrain\)/);
+  assert.match(unknownLaunch.text, /Model surface \(33 ft AGL\)/);
 
   const woodstock = readSounding(s, 565).findings.find((finding) => finding.key === "wind")!;
-  assert.match(woodstock.text, /Launch elevation \(1,854 ft MSL\)/);
+  assert.match(woodstock.text, /Launch 1,854 ft MSL/);
   assert.doesNotMatch(woodstock.text, /1,900 ft/);
 });
 
@@ -121,7 +123,7 @@ test("a cold morning has a ground inversion and no thermals", () => {
   const grounded = s.inversions.find((l) => l.grounded)!;
   assert.equal(grounded.topM, 1520);
   const r = readSounding(s, 1268);
-  assert.equal(r.headline, "No usable thermal lift predicted.");
+  assert.equal(r.headline, "Minimal thermal lift");
   assert.ok(r.findings.some((f) => f.title === "Ground inversion"));
   assert.ok(!r.findings.some((f) => f.key === "top"));
   assert.ok(Math.abs(s.freezingLevelM! - (2020 + (7 / 8) * 1070)) < 1);
@@ -134,7 +136,7 @@ test("storm energy and a low cloud base are called out", () => {
   assert.equal(storm.tone, "warning");
   assert.match(storm.text, /CAPE 950 J\/kg/);
   assert.equal(r.findings.find((f) => f.key === "clouds")!.tone, "caution");
-  assert.match(r.findings.find((f) => f.key === "clouds")!.text, /Cloud base is low/);
+  assert.match(r.findings.find((f) => f.key === "clouds")!.text, /Cloud base 4,900 ft MSL · Near launch/);
 });
 
 test("ensemble medians are used, and too few levels give no sounding", () => {
@@ -193,4 +195,36 @@ test("Skew-T geometry: isotherms lean right, dry thermals lean left, and a phone
   }
   assert.ok(Math.abs(pOf(g, yOf(g, 700)) - 700) < 1e-9);
   assert.equal(yOf(g, pb), box.bottom);
+});
+
+
+test("metric sounding copy converts SI values while retaining altitude references and parcel physics", async () => {
+  const source = hour({ t: 25, td: 8 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 });
+  const imperial = buildSounding(site, source)!;
+  const { fitGeometry } = await import("../src/lib/skewt-chart.ts");
+  const box = { left: 44, right: 340, top: 24, bottom: 466 };
+  const geometry = fitGeometry(imperial, box);
+  setUnitSystem("metric");
+  const metric = buildSounding(site, source)!;
+  assert.deepEqual(metric.points, imperial.points);
+  assert.deepEqual(metric.parcel, imperial.parcel);
+  assert.deepEqual(fitGeometry(metric, box), geometry);
+  const reading = readSounding(metric, 1268);
+  const words = reading.findings.map((finding) => finding.text).join(" ");
+  assert.match(words, /w\* 2\.20 m\/s/);
+  assert.match(words, /Lift 3,300 m MSL · 2,050 m above launch/);
+  assert.match(words, /Launch 1,268 m MSL · Model terrain 1,300 m MSL/);
+  assert.match(words, /Model surface \(10 m AGL\): NW 11 km\/h/);
+  assert.match(words, /°C\/km/);
+  assert.doesNotMatch(words, /\bft\b|mph|°F|\bno\b|\bnot\b|cannot/i);
+});
+
+
+test("thermal strength and lapse descriptions avoid inferring ride quality", () => {
+  assert.equal(strengthWords(3.5).word, "very strong");
+  const sounding = buildSounding(site, hour({ t: 25, td: 8 }, CUMULUS_LEVELS, { bl: 3380, w: 3.5, base: 3340, top: 3300 }))!;
+  const reading = readSounding(sounding, 1268);
+  assert.match(reading.findings.find(finding => finding.key === "stability")!.text, /^Unstable · -/);
+  assert.match(reading.findings.find(finding => finding.key === "thermals")!.text, /^Very strong · w\*/);
+  assert.doesNotMatch(JSON.stringify(reading), /rough|punchy|lively|solid|workable|patchy/i);
 });

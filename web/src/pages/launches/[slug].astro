@@ -1,4 +1,6 @@
 ---
+import Unit from "../../components/Unit.astro";
+import { launchNoteParts } from "../../lib/launch-notes.ts";
 import Base from "../../layouts/Base.astro";
 import { launches } from "../../lib/catalog.ts";
 import { compassPoint, type Launch } from "../../lib/launches.ts";
@@ -23,8 +25,7 @@ const station = stationEntry && (() => {
   const dx = (s.longitude - launch.longitude) * 111_320 * Math.cos(launch.latitude * r);
   const distanceM = Math.hypot(dx, dy);
   const bearing = compassPoint((Math.atan2(dx, dy) / r + 360) % 360);
-  const where = distanceM < 150 ? "at the launch" : `${distanceM < 1000 ? `${Math.round(distanceM / 50) * 50} m` : `${(distanceM / 1000).toFixed(1)} km`} ${bearing} of the launch`;
-  return { id, name: s.name, url: dashboardUrl(id), elevationFt: s.elevationFt, where };
+  return { id, name: s.name, url: dashboardUrl(id), elevationFt: s.elevationFt, distanceM, bearing };
 })();
 ---
 
@@ -57,15 +58,15 @@ const station = stationEntry && (() => {
         <label for="forecast-hour">Hour <output id="forecast-hour-label" for="forecast-hour"></output></label>
         <input id="forecast-hour" type="range" min="0" max="0" value="0" step="1" />
         <button id="forecast-hour-next" type="button" aria-label="Next forecast hour">→</button>
-        <button id="forecast-hour-peak" type="button" title="Select the hour with the highest forecast thermal strength (w*) for this day.">Strongest thermals</button>
+        <button id="forecast-hour-peak" type="button" title="Peak forecast w*">Strongest thermals</button>
       </div>
     </div>
     <h2 class="sr-only" id="meteogram-title">Soaring meteogram</h2>
     <p id="sample-notice" class="notice sample" hidden>
-      Sample data for local development. This is not a forecast.
+      Demo data · local development.
     </p>
     <p id="forecast-error" class="notice" role="alert" hidden>
-      The forecast could not load. <button id="forecast-reload" type="button" class="button secondary">Reload</button>
+      Forecast unavailable. <button id="forecast-reload" type="button" class="button secondary">Reload</button>
     </p>
     <div class="windgram-viewport">
       <div class="chart-scroll meteogram-frame" id="meteogram">
@@ -84,37 +85,12 @@ const station = stationEntry && (() => {
     </details>
     <details class="windgram-guide">
       <summary>Chart details</summary>
-      <p>
-        Time runs left to right; height above sea level runs up. The lower atmosphere is expanded so launch-level winds,
-        inversions and thermal tops are easier to read. Equal vertical distances on the page do not mean equal height
-        differences: use the height labels. Pressure ticks on wider screens use the median model heights for the displayed day.
-        The launch line and the model's ground elevation can differ.
-      </p>
-      <p>
-        Background colours show how quickly air temperature changes with height: warm red and orange bands cool rapidly
-        upward, pink and purple bands cool more slowly, and grey bands indicate inversions. Temperature contours are in
-        °F. Colours describe atmospheric stability, not flight suitability. The emphasized 32°F contour shows every
-        freezing crossing; cyan snowflakes mark the lowest crossing each hour. Neither predicts snowfall.
-      </p>
-      <p>
-        Wind barbs point toward the direction the wind comes from. A half feather means 5 knots, a full feather 10 knots,
-        and a pennant 50 knots; add them together. Green marks indicate speeds below 9 knots; white marks indicate 9 knots or more. These are wind speeds, not flight ratings.
-        Rows between model levels are interpolated to show the changing flow; they do not add forecast resolution.
-        Tap an hour or focus the chart and use the left and right arrow keys to select it.
-      </p>
-      <p>
-        White crosshatching marks relative humidity above 94%; pale white bands mark model cloud fractions of at least
-        30%. These estimates can miss thin layers. Outlined clouds and the potential cloud-base line mark where a rising
-        surface parcel would condense, even when thermals cannot reach that height. They do not imply actual clouds.
-        High cloud cover can also lie above this chart.
-      </p>
-      <p>
-        The colours, lapse-rate thresholds and units follow <a href="http://wxtofly.net/windgramexplain.html">WxToFly’s guide</a>.
-        Thermal strength (w*) is in m/s. Paraglider symbols use a 225 ft/min (1.143 m/s) sink rate. The separate blue
-        usable-lift line assumes 1 m/s sink. Weather details contains rain and other surface diagnostics; cloud, smoke and convection data depend on
-        the selected model. Ensemble temperatures and winds show the median forecast. Shaded ribbons span the middle
-        50% of ensemble members (the 25th to 75th percentiles).
-      </p>
+      <p>Time left to right · height MSL. Launch elevation uses terrain at the saved coordinates.</p>
+      <p>Colours: local lapse rate. Red/orange: rapid cooling aloft. Grey: inversion. Cyan line: freezing; snowflakes: lowest freezing level.</p>
+      <p>Wind barbs point toward the wind source. Feather values follow the selected units. Faint barbs: interpolated levels. Tap a column or use arrow keys to select an hour.</p>
+      <p>White hatching: RH &gt;94%. Pale bands: model cloud ≥30%. Cloud outlines: potential condensation level. Compare with thermal reach.</p>
+      <p>Paraglider ceiling: <Unit kind="lift" value={1.143} /> sink. Blue lift line: <Unit kind="lift" value={1} /> sink. Ensemble: median and middle 50% range.</p>
+      <p>Palette and physical thresholds: <a href="http://wxtofly.net/windgramexplain.html">WxToFly</a>. Values follow Imperial / Metric. Rain and surface forecasts: Weather details.</p>
     </details>
   </section>
 
@@ -126,11 +102,11 @@ const station = stationEntry && (() => {
     {launch.region && <p class="eyebrow">{launch.region}</p>}
     <ul class="facts">
       <li>Faces <strong>{facing}</strong> ({launch.facingDeg}°)</li>
-      <li>Launch range <strong>{launch.windMinMph}–{launch.windMaxMph} mph</strong>, gusts under {launch.gustMaxMph} mph</li>
+      <li>Launch range <strong><Unit kind="wind" value={launch.windMinMph * .44704} numberOnly />–<Unit kind="wind" value={launch.windMaxMph * .44704} /></strong>, gusts under <Unit kind="wind" value={launch.gustMaxMph * .44704} /></li>
       <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong> <span class="muted" id="launch-elevation-source"></span></li>
       <li>Times in {zoneName}</li>
     </ul>
-    {launch.notes && <p class="notice">{launch.notes}</p>}
+    {launch.notes && <div class="notice"><p class="muted">Site notes · launch catalogue</p><p>{launchNoteParts(launch.notes).map(part => 'text' in part ? part.text : <Unit kind={part.kind} value={part.value} />)}</p></div>}
     <a href={href()}>Browse launches →</a>
   </div>
 
@@ -138,14 +114,14 @@ const station = stationEntry && (() => {
     <section class="card station" id="station" aria-labelledby="station-title">
       <script type="application/json" id="station-config" set:html={JSON.stringify({ id: station.id, name: station.name, url: station.url })} />
       <div class="card-head">
-        <h2 id="station-title">Live at the launch</h2>
-        <span class="card-sub">{station.name} station ({station.id}) · {station.where} · {station.elevationFt.toLocaleString("en-US")} ft</span>
+        <h2 id="station-title">Weather station</h2>
+        <span class="card-sub">{station.name} ({station.id}) · {station.distanceM < 150 ? "At launch" : <><Unit kind="distance" value={station.distanceM / 1000} /> {station.bearing} of launch</>} · <Unit kind="elevation" value={station.elevationFt * .3048} suffix=" MSL" /></span>
       </div>
-      <p class="chart-status" id="station-status">Loading the station's latest report…</p>
+      <p class="chart-status" id="station-status">Loading station…</p>
       <div id="station-body" hidden>
         <div class="station-now">
           <div class="station-wind">
-            <svg id="station-compass" class="station-compass" viewBox="0 0 112 112" width="112" height="112" role="img" aria-label="Wind direction: the arrow comes in from where the wind blows from; the green sector is the launch's wind window"></svg>
+            <svg id="station-compass" class="station-compass" viewBox="0 0 112 112" width="112" height="112" role="img" aria-label="Wind source bearing · green sector: launch window"></svg>
             <div>
               <p class="station-hero" id="station-wind" aria-live="polite"></p>
               <p class="station-gust" id="station-gust"></p>
@@ -164,10 +140,8 @@ const station = stationEntry && (() => {
         </details>
       </div>
       <p class="muted station-note">
-        What the station measured, not a forecast, and it sits {station.where === "at the launch" ? "at" : "near"} the launch, not on it:
-        always check the wind on launch. The limits are this launch's
-        ({launch.windMinMph}–{launch.windMaxMph} mph from {facing} ±{launch.windArcHalfWidthDeg}°, gusts under {launch.gustMaxMph} mph).
-        Refreshes every 2 minutes. Data: <a href={station.url}>Weather Underground</a>.
+        Station observations · refresh 2 min. Launch sector {facing} ±{launch.windArcHalfWidthDeg}°.
+        Verify wind at launch. <a href={station.url}>Weather Underground</a>.
       </p>
     </section>
   )}
@@ -185,7 +159,7 @@ const station = stationEntry && (() => {
           <input type="range" id="skewt-hour" min="0" max="0" step="1" value="0" />
         </label>
         <output id="skewt-hour-label" for="skewt-hour" class="sun-time">–</output>
-        <button type="button" class="button secondary" id="skewt-best" title="Select the hour with the highest forecast thermal strength (w*) for this day.">Strongest thermals</button>
+        <button type="button" class="button secondary" id="skewt-best" title="Peak forecast w*">Strongest thermals</button>
       </div>
       <p class="skewt-headline" id="skewt-headline" role="status" aria-live="polite"></p>
       <div class="skewt-layout">
@@ -196,37 +170,22 @@ const station = stationEntry && (() => {
             <li><span class="key-line key-dash"></span>Rising thermal</li>
             <li><span class="key-swatch skewt-key-zone"></span>Thermal zone</li>
             <li><span class="key-swatch skewt-key-buoyant"></span>Thermal warmer than the air</li>
-            <li><span class="key-swatch skewt-key-lid"></span>Inversion (lid)</li>
+            <li><span class="key-swatch skewt-key-lid"></span>Inversion</li>
             <li><span class="key-swatch skewt-key-cloud"></span>Cloud layer</li>
           </ul>
           <div id="skewt-chart"></div>
         </div>
         <div class="skewt-reading">
-          <h3>What this sounding says</h3>
+          <h3>Sounding summary</h3>
           <ul class="findings" id="skewt-findings"></ul>
         </div>
       </div>
       <details style="margin-top:14px">
         <summary>How to read a Skew-T</summary>
         <div class="muted skewt-howto">
-          <p>
-            Height goes up the left side in feet above mean sea level (MSL). The launch line is the terrain estimate at the saved launch coordinates.
-            The <strong>orange line</strong> is the air temperature at each height and the
-            <strong>green line</strong> is the dew point: where the two lines touch, the air is saturated and cloud forms. The faint grid
-            lines leaning to the right are lines of equal temperature. The more the orange line leans left of them, the faster the air
-            cools with height: unstable air, good for thermals. Where it runs parallel to them or leans further right, the air is
-            stable or inverted, and thermals stop.
-          </p>
-          <p>
-            The <strong>dashed line</strong> is a thermal: a bubble of air warmed at the ground, rising and cooling about 3 °C per
-            1000 ft. While it is warmer than the air around it (right of the orange line, shaded) it keeps rising; where it meets the
-            orange line it stops. That is the top of the thermals. If it reaches the dew point before it stops, it makes a cumulus
-            cloud.
-          </p>
-          <p>
-            An <strong>inversion</strong> is a layer where the air gets warmer with height (the orange line bends right). Thermals
-            cannot push through it, so it caps the lift. Wind barbs on the right show the wind at each level, with the speed in mph.
-          </p>
+          <p>Height MSL. Orange: temperature. Green: dew point. Close lines: near saturation, cloud possible. Slanted grid: equal temperature.</p>
+          <p>Dashed line: rising parcel. Shading: positive buoyancy. Parcel/environment crossing: thermal-top estimate. Condensation within the thermal layer: Cu potential.</p>
+          <p>Temperature increasing with height: inversion. Stable layers can cap lift. Wind barbs: source direction and speed at each level.</p>
         </div>
       </details>
     </div>
@@ -286,20 +245,9 @@ const station = stationEntry && (() => {
       </details>
       <details style="margin-top:10px">
         <summary>How this is calculated</summary>
-        <p class="muted">
-          Darker orange means more sunlight reaching the ground, and more heating to set off thermals. For every spot the map
-          uses the slope and the direction the ground faces (from a 10 m elevation model), whether a ridge up to 20 km away
-          hides the sun, and how much open sky the spot sees. The sun's position is computed for every 15 minutes from sunrise
-          to sunset. <span id="sun-terrain"></span>.
-        </p>
-        <p class="muted">
-          A clear sky is dimmed by the cloud cover of the model selected above, at the launch, so a cloud over one ridge but
-          not the next does not show. Haze and smoke are not included. Tap or click anywhere on the map to see that spot's day.
-        </p>
-        <p class="muted">
-          The 3D view drapes the same colours over the terrain (heights every <span id="sun-relief-spacing">~55 m</span>, true scale unless exaggerated), with the
-          sun shown in its direction for the chosen time: the slopes turned toward it are the ones heating fastest.
-        </p>
+        <p class="muted">Orange intensity: sunlight reaching the slope. Calculation uses terrain slope, aspect, horizon and sky view at 15-minute intervals. <span id="sun-terrain"></span>.</p>
+        <p class="muted">Clear-atmosphere estimate. Selected model cloud cover applies uniformly across the map. Tap a slope for its daylight curve.</p>
+        <p class="muted">3D terrain spacing: <span id="sun-relief-spacing">—</span>. True vertical scale; optional ×2 relief.</p>
       </details>
     </div>
   </section>
@@ -324,11 +272,7 @@ const station = stationEntry && (() => {
     </div>
     <details style="margin-top:14px">
       <summary>About this forecast</summary>
-      <p class="muted">
-        The European Centre for Medium-Range Weather Forecasts' IFS model, at 9 km, for the grid point nearest the launch.
-        Winds at 850 and 700 hPa come from its 0.25° run. The boundary-layer height is roughly how deep the air near the
-        ground is mixing, a rough ceiling for thermals like the NWS mixing height. ECMWF's open data has no surface heat
-        flux, so it cannot drive the soaring meteogram's thermal strength.
+      <p class="muted">IFS · <Unit kind="resolution" value={9} /> surface grid. Upper winds: <Unit kind="pressure" value={850} /> and <Unit kind="pressure" value={700} />, from the 0.25° product. Mixing depth: model boundary layer. Thermal strength unavailable in this feed.
       </p>
     </details>
   </section>
@@ -336,7 +280,7 @@ const station = stationEntry && (() => {
   <section class="card" aria-labelledby="text-title">
     <div class="card-head">
       <h2 id="text-title">Forecast discussion</h2>
-      <span class="card-sub">National Weather Service text products</span>
+      <span class="card-sub">NWS bulletins · original wording and units</span>
     </div>
     <ul class="periods" id="nws-periods"></ul>
     <div class="balloon" id="balloon" hidden>
@@ -352,7 +296,7 @@ const station = stationEntry && (() => {
           <div id="balloon-chart"></div>
         </div>
         <div class="skewt-reading">
-          <h3>What this sounding says</h3>
+          <h3>Sounding summary</h3>
           <ul class="findings" id="balloon-findings"></ul>
         </div>
       </div>

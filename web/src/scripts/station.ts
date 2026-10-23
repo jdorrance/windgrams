@@ -6,7 +6,7 @@
 import { compassPoint, inArc, windWindow, type Launch } from "../lib/launches.ts";
 import { StationChart } from "../lib/station-chart.ts";
 import { historyGrid, isStale, readWind, recentGust, type StationDocument, type Tone } from "../lib/station.ts";
-import { fahrenheit, fmt, mph, relativeTime } from "../lib/units.ts";
+import { formatQuantity, fmt, relativeTime } from "../lib/units.ts";
 
 interface StationPageConfig {
   id: string;
@@ -42,15 +42,15 @@ function start() {
     try {
       response = await fetch(`/api/stations/${encodeURIComponent(config.id)}`, { cache: "no-store" });
     } catch {
-      if (!doc) showStatus("Could not reach the station feed. It will try again in a couple of minutes.");
+      if (!doc) showStatus("Station feed unavailable · retry in 2 min.");
       return;
     }
     if (response.status === 503) {
-      showStatus("Live readings from this station are not connected to the site yet.", true);
+      showStatus("Station feed pending.", true);
       return;
     }
     if (!response.ok) {
-      if (!doc) showStatus("The station's readings are not available right now. The site will try again in a couple of minutes.", true);
+      if (!doc) showStatus("Station feed unavailable · retry in 2 min.", true);
       return;
     }
     doc = (await response.json()) as StationDocument;
@@ -62,7 +62,7 @@ function start() {
     if (withLink) {
       const a = document.createElement("a");
       a.href = config.url;
-      a.textContent = "See it on Weather Underground";
+      a.textContent = "Weather Underground";
       status.appendChild(a);
       status.appendChild(document.createTextNode("."));
     }
@@ -87,20 +87,20 @@ function start() {
     const gust = recentGust(doc, now);
     if (current && current.windSpeedMps !== null) {
       const deg = current.windDirectionDeg;
-      wind.textContent = `${deg === null ? "Calm" : compassPoint(deg)} ${fmt(mph(current.windSpeedMps))} mph`;
-      gustLine.textContent = gust === null ? "" : `Gusts to ${fmt(mph(gust))} mph in the last 15 min`;
+      wind.textContent = `${deg === null ? "Calm" : compassPoint(deg)} ${formatQuantity(current.windSpeedMps, "wind")}`;
+      gustLine.textContent = gust === null ? "" : `Gusts to ${formatQuantity(gust, "wind")} · 15 min peak`;
       drawArrow(byId<SVGSVGElement>("station-compass"), deg, deg !== null && inArc(deg, arc), current.windSpeedMps);
     } else {
-      wind.textContent = "No wind reading";
+      wind.textContent = "Wind unavailable";
       gustLine.textContent = "";
       drawArrow(byId<SVGSVGElement>("station-compass"), null, false, 0);
     }
     byId<HTMLElement>("station-compass").classList.toggle("stale", stale);
 
     if (!current) {
-      setHeadline(headline, "caution", "The station has not reported recently");
+      setHeadline(headline, "caution", "Station report stale");
     } else if (stale) {
-      setHeadline(headline, "caution", `No report since ${time.format(new Date(current.observedAt))}: the station may be offline`);
+      setHeadline(headline, "caution", `Last report ${time.format(new Date(current.observedAt))} · stale`);
     } else {
       const reading = readWind(current, gust, limits, compassPoint, windowLabel);
       if (reading) {
@@ -122,7 +122,7 @@ function start() {
           checks.appendChild(li);
         }
       } else {
-        setHeadline(headline, "neutral", "No wind reading in the latest report");
+        setHeadline(headline, "neutral", "Wind unavailable");
       }
     }
     updateAge();
@@ -139,12 +139,12 @@ function start() {
       stats.appendChild(div);
     };
     if (current) {
-      stat("Temperature", `${fmt(fahrenheit(current.temperatureC))}°F`);
-      stat("Dew point", `${fmt(fahrenheit(current.dewPointC))}°F`);
+      stat("Temperature", formatQuantity(current.temperatureC, "temperature"));
+      stat("Dew point", formatQuantity(current.dewPointC, "temperature"));
       stat("Humidity", `${fmt(current.humidityPct)}%`);
-      stat("Pressure", `${fmt(current.pressureHpa == null ? null : current.pressureHpa / 33.8639, 2)} inHg`);
+      stat("Pressure", formatQuantity(current.pressureHpa, "pressure"));
       stat("Sunshine", `${fmt(current.solarRadiationWm2)} W/m²`);
-      if (current.precipTodayMm) stat("Rain today", `${fmt(current.precipTodayMm / 25.4, 2)} in`);
+      if (current.precipTodayMm) stat("Rain today", formatQuantity(current.precipTodayMm, "rainAmount"));
     }
 
     if (!chart) {

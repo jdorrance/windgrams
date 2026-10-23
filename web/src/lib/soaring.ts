@@ -1,3 +1,4 @@
+import { convertQuantity, formatQuantity, unitLabel, type QuantityKind } from './units.ts';
 import type { SiteForecast } from '@azohra/meteo.briefing/contract';
 
 export const DEFAULT_CASE = 'north-sound-20261021-00z';
@@ -156,252 +157,60 @@ export interface LayerSpec {
   format: (v: number) => string;
 }
 
-const M_TO_FT = 3.280839895;
-const MPS_TO_MPH = 2.23693629;
-const MPS_TO_FPM = 196.850394;
-
-export const LAYER_SPECS: Record<Layer, LayerSpec> = {
-  thermalVelocityV2Mps: {
-    id: 'thermalVelocityV2Mps',
-    label: 'Thermal strength · m/s',
-    group: 'Thermal Opportunity',
-    scale: 1,
-    stops: [0, 0.5, 1, 2, 3],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'v2 W* (resolved depth) m/s: 0 ◻ · 0.5 pale blue (100 fpm) · 1.0 teal (200 fpm) · 2.0 gold (400 fpm) · 3.0+ red',
-    format: v => `${v.toFixed(2)} m/s (${Math.round(v * MPS_TO_FPM)} ft/min)`,
-  },
-  usableLiftTopV2M: {
-    id: 'usableLiftTopV2M',
-    label: 'Usable lift top · ft MSL',
-    group: 'Thermal Opportunity',
-    scale: M_TO_FT,
-    stops: [0, 1000, 2000, 5000, 10000],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'v2 Usable top (1.0 m/s sink, bounded by resolved top) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
-    format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
-  },
-  hcritWxtoflyM: {
-    id: 'hcritWxtoflyM',
-    label: 'Lift top at 225 ft/min · ft MSL',
-    group: 'Thermal Opportunity',
-    scale: M_TO_FT,
-    stops: [0, 1000, 2000, 5000, 10000],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'WxToFly Hcrit (225 ft/min sink, bounded by resolved top) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
-    format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
-  },
-  dryHcritM: {
-    id: 'dryHcritM',
-    label: 'Dry thermal lift top · ft MSL',
-    group: 'Thermal Opportunity',
-    scale: M_TO_FT,
-    stops: [0, 1000, 2000, 5000, 10000],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'Dry Hcrit (v2) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
-    format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
-  },
-  resolvedThermalTopM: {
-    id: 'resolvedThermalTopM',
-    label: 'Thermal top · ft MSL',
-    group: 'Thermal Opportunity',
-    scale: M_TO_FT,
-    stops: [0, 1500, 3000, 6000, 10000],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'Resolved thermal top (v2) ft MSL: 0 pale blue · 3,000 teal · 6,000 gold · 10,000+ red',
-    format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
-  },
-  thermalVelocityMps: {
-    id: 'thermalVelocityMps',
-    label: 'Earlier thermal strength estimate · m/s',
-    group: 'Thermal Opportunity',
-    scale: 1,
-    stops: [0, 0.5, 1, 2, 3],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'Baseline v1 W* m/s: 0 ◻ · 0.5 pale blue (100 fpm) · 1.0 teal (200 fpm) · 2.0 gold (400 fpm) · 3.0+ red',
-    format: v => `${v.toFixed(2)} m/s (${Math.round(v * MPS_TO_FPM)} ft/min)`,
-  },
-  usableLiftTopM: {
-    id: 'usableLiftTopM',
-    label: 'Earlier lift top estimate · ft MSL',
-    group: 'Thermal Opportunity',
-    scale: M_TO_FT,
-    stops: [0, 1000, 2000, 5000, 10000],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'Baseline v1 usable top (1.0 m/s sink) ft MSL: 0 pale blue · 2,000 teal · 5,000 gold · 10,000+ red',
-    format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
-  },
-  boundaryLayerTopM: {
-    id: 'boundaryLayerTopM',
-    label: 'Earlier parcel top estimate · ft MSL',
-    group: 'Thermal Opportunity',
-    scale: M_TO_FT,
-    stops: [0, 1500, 3000, 6000, 10000],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'Baseline v1 parcel top ft MSL: 0 pale blue · 3,000 teal · 6,000 gold · 10,000+ red',
-    format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
-  },
-  pblHeightM: {
-    id: 'pblHeightM',
-    label: 'Mixing depth · m AGL',
-    group: 'Thermal Opportunity',
-    scale: 1,
-    stops: [0, 250, 500, 1000, 2000],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'HRRR HPBL depth m AGL: 0 pale · 250 blue · 500 teal · 1,000 gold · 2,000+ red',
-    format: v => `${v.toFixed(0)} m AGL (${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft AGL)`,
-  },
-  sensibleHeatFluxWm2: {
-    id: 'sensibleHeatFluxWm2',
-    label: 'Surface heating · W/m²',
-    group: 'Thermal Opportunity',
-    scale: 1,
-    stops: [-30, 0, 50, 150, 300],
-    colors: ['#6b8ea4', '#f4f8fa', '#c3e1e9', '#e8bc52', '#c44935'],
-    legend: 'Sensible heat flux W/m²: <0 cooling (slate) · 50 pale blue · 150 gold · 300+ red',
-    format: v => `${v.toFixed(0)} W/m²`,
-  },
-  surfaceLclM: {
-    id: 'surfaceLclM',
-    label: 'Potential cloud base · ft MSL',
-    group: 'Clouds & Precipitation',
-    scale: M_TO_FT,
-    stops: [500, 2000, 4000, 7000, 11000],
-    colors: ['#7c689c', '#6999b3', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'Surface LCL ft MSL: 500 purple · 2,000 blue · 4,000 teal · 7,000 gold · 11,000+ red',
-    format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
-  },
-  mixedLayerLclM: {
-    id: 'mixedLayerLclM',
-    label: 'Mixed-layer cloud base · ft MSL',
-    group: 'Clouds & Precipitation',
-    scale: M_TO_FT,
-    stops: [500, 2000, 4000, 7000, 11000],
-    colors: ['#7c689c', '#6999b3', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'Mixed-layer LCL ft MSL: 500 purple · 2,000 blue · 4,000 teal · 7,000 gold · 11,000+ red',
-    format: v => `${Math.round(v * M_TO_FT).toLocaleString('en-US')} ft MSL (${v.toFixed(0)} m)`,
-  },
-  cuPotentialM: {
-    id: 'cuPotentialM',
-    label: 'Cumulus potential · m',
-    group: 'Clouds & Precipitation',
-    scale: 1,
-    stops: [-1500, -500, 0, 300, 1000],
-    colors: ['#e5d9bd', '#c3e1e9', '#f4f8fa', '#289b9c', '#1a5f7a'],
-    legend: 'Cu potential (BL top − sfc LCL): <0 blue thermals (beige/light blue) · >0 cumulus likely (teal/deep blue)',
-    format: v => `${v >= 0 ? '+' : ''}${v.toFixed(0)} m (${Math.round(v * M_TO_FT)} ft)`,
-  },
-  odPotentialM: {
-    id: 'odPotentialM',
-    label: 'Overcast potential · m',
-    group: 'Clouds & Precipitation',
-    scale: 1,
-    stops: [-1500, -500, 0, 300, 1000],
-    colors: ['#e5d9bd', '#c3e1e9', '#f4f8fa', '#7c689c', '#4a356b'],
-    legend: 'OD potential (BL top − mixed LCL): <0 no spreadout · >0 stratocumulus / overcast spreadout (purple)',
-    format: v => `${v >= 0 ? '+' : ''}${v.toFixed(0)} m (${Math.round(v * M_TO_FT)} ft)`,
-  },
-  cloudCoverPercent: {
-    id: 'cloudCoverPercent',
-    label: 'Cloud cover · %',
-    group: 'Clouds & Precipitation',
-    scale: 1,
-    stops: [0, 25, 50, 75, 100],
-    colors: ['#f4f8fa', '#d1dde6', '#9fb4c7', '#6c849c', '#3c4f66'],
-    legend: 'Total cloud cover %: 0 clear · 50 scattered · 100 overcast slate',
-    format: v => `${v.toFixed(0)}%`,
-  },
-  lowCloudPercent: {
-    id: 'lowCloudPercent',
-    label: 'Low cloud cover · %',
-    group: 'Clouds & Precipitation',
-    scale: 1,
-    stops: [0, 25, 50, 75, 100],
-    colors: ['#f4f8fa', '#d1dde6', '#9fb4c7', '#6c849c', '#3c4f66'],
-    legend: 'Low cloud cover %: 0 clear · 50 scattered · 100 low overcast',
-    format: v => `${v.toFixed(0)}%`,
-  },
-  precipitationMmHr: {
-    id: 'precipitationMmHr',
-    label: 'Rain · mm/hr',
-    group: 'Clouds & Precipitation',
-    scale: 1,
-    stops: [0, 0.2, 1, 3, 8],
-    colors: ['#f4f8fa', '#b3cde3', '#6497b1', '#005b96', '#03396c'],
-    legend: 'Precipitation rate mm/hr: 0 dry · 0.2 trace · 1 light · 3+ moderate/heavy rain',
-    format: v => `${v.toFixed(2)} mm/hr`,
-  },
-  capeJkg: {
-    id: 'capeJkg',
-    label: 'Convective energy (CAPE) · J/kg',
-    group: 'Clouds & Precipitation',
-    scale: 1,
-    stops: [0, 50, 200, 500, 1000],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'CAPE J/kg: 0 none · 50 weak · 200 moderate · 500+ strong convective instability',
-    format: v => `${v.toFixed(0)} J/kg`,
-  },
-  wind10mSpeedMps: {
-    id: 'wind10mSpeedMps',
-    label: 'Surface wind · mph',
-    group: 'Winds & Shear',
-    scale: MPS_TO_MPH,
-    stops: [0, 5, 12, 20, 30],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: '10 m wind mph: 0 calm · 5 light · 12 moderate (teal) · 20 strong (gold) · 30+ gale (red)',
-    format: v => `${(v * MPS_TO_MPH).toFixed(1)} mph (${v.toFixed(1)} m/s)`,
-  },
-  blMeanWindSpeedMps: {
-    id: 'blMeanWindSpeedMps',
-    label: 'Average boundary-layer wind · mph',
-    group: 'Winds & Shear',
-    scale: MPS_TO_MPH,
-    stops: [0, 5, 12, 20, 30],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'BL mean wind mph: 0 calm · 5 light · 12 moderate (teal) · 20 strong (gold) · 30+ gale (red)',
-    format: v => `${(v * MPS_TO_MPH).toFixed(1)} mph (${v.toFixed(1)} m/s)`,
-  },
-  blWindShearMps: {
-    id: 'blWindShearMps',
-    label: 'Wind shear · m/s',
-    group: 'Winds & Shear',
-    scale: 1,
-    stops: [0, 2, 4, 7, 12],
-    colors: ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'],
-    legend: 'BL vector wind shear m/s: 0–2 low · 4 moderate · 7 sheared thermals · 12+ severe shear',
-    format: v => `${v.toFixed(1)} m/s (${(v * MPS_TO_MPH).toFixed(1)} mph)`,
-  },
-  buoyancyShearRatio: {
-    id: 'buoyancyShearRatio',
-    label: 'Thermal strength / wind shear',
-    group: 'Winds & Shear',
-    scale: 1,
-    stops: [0, 0.15, 0.35, 0.7, 1.2],
-    colors: ['#c44935', '#e8bc52', '#c3e1e9', '#289b9c', '#1b6d6e'],
-    legend: 'Buoyancy/Shear ratio: <0.2 sheared/broken (red/gold) · >0.35 workable · >0.7 well-organized thermals (teal)',
-    format: v => `${v.toFixed(2)}`,
-  },
-  w925Mps: {
-    id: 'w925Mps',
-    label: 'Rising air at 925 hPa · m/s',
-    group: 'Lift & Convergence',
-    scale: 1,
-    stops: [-0.3, -0.1, 0, 0.1, 0.3],
-    colors: ['#3b6998', '#a8c6df', '#f4f8fa', '#e8bc52', '#c44935'],
-    legend: 'Geometric vertical velocity w (m/s at 925 hPa): blue = sink (<0) · white = 0 · gold/red = rising air (>0)',
-    format: v => `${v >= 0 ? '+' : ''}${v.toFixed(2)} m/s (${Math.round(v * MPS_TO_FPM)} ft/min)`,
-  },
-  convergence10mX1e5: {
-    id: 'convergence10mX1e5',
-    label: 'Surface convergence · ×10⁻⁵ s⁻¹',
-    group: 'Lift & Convergence',
-    scale: 1,
-    stops: [-100, -30, 0, 30, 100],
-    colors: ['#3b6998', '#a8c6df', '#f4f8fa', '#e8bc52', '#c44935'],
-    legend: 'Horizontal convergence (×10⁻⁵ s⁻¹ on native 3 km Lambert grid): blue = divergence (<0) · gold/red = convergence (>0)',
-    format: v => `${v >= 0 ? '+' : ''}${v.toFixed(1)} ×10⁻⁵ s⁻¹`,
-  },
+type LayerDefinition = {
+  id: Layer; name: string; group: string; stops: number[]; colors: string[];
+  kind?: QuantityKind; datum?: string; unit?: string; note: string;
 };
+const thermalColors = ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'];
+const cloudColors = ['#f4f8fa', '#d1dde6', '#9fb4c7', '#6c849c', '#3c4f66'];
+const verticalColors = ['#3b6998', '#a8c6df', '#f4f8fa', '#e8bc52', '#c44935'];
+const cloudBaseColors = ['#7c689c', '#6999b3', '#289b9c', '#e8bc52', '#c44935'];
+const topStops = [0, 1000, 2000, 5000, 10000].map(ft => ft * .3048);
+const depthStops = [0, 1500, 3000, 6000, 10000].map(ft => ft * .3048);
+const cloudStops = [500, 2000, 4000, 7000, 11000].map(ft => ft * .3048);
+const windStops = [0, 5, 12, 20, 30].map(mph => mph * .44704);
+const definitions: LayerDefinition[] = [
+  { id: 'thermalVelocityV2Mps', name: 'Thermal strength', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Convective velocity w* · resolved thermal depth.' },
+  { id: 'usableLiftTopV2M', name: 'Usable lift top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Sink threshold: ' },
+  { id: 'hcritWxtoflyM', name: 'Paraglider ceiling', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'WxToFly sink threshold: ' },
+  { id: 'dryHcritM', name: 'Dry thermal lift top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Dry parcel estimate.' },
+  { id: 'resolvedThermalTopM', name: 'Thermal top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: depthStops, colors: thermalColors, note: 'Resolved thermal depth.' },
+  { id: 'thermalVelocityMps', name: 'Thermal strength · legacy', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Earlier parcel method.' },
+  { id: 'usableLiftTopM', name: 'Usable lift top · legacy', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Sink threshold: ' },
+  { id: 'boundaryLayerTopM', name: 'Parcel top · legacy', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: depthStops, colors: thermalColors, note: 'Earlier parcel method.' },
+  { id: 'pblHeightM', name: 'Mixing depth', group: 'Thermals', kind: 'elevation', datum: 'AGL', stops: [0,250,500,1000,2000], colors: thermalColors, note: 'Model boundary-layer depth.' },
+  { id: 'sensibleHeatFluxWm2', name: 'Surface heating', group: 'Thermals', unit: 'W/m²', stops: [-30,0,50,150,300], colors: ['#6b8ea4','#f4f8fa','#c3e1e9','#e8bc52','#c44935'], note: 'Negative: cooling · positive: heating.' },
+  { id: 'surfaceLclM', name: 'Potential cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Surface-parcel condensation level.' },
+  { id: 'mixedLayerLclM', name: 'Mixed-layer cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Mixed-parcel condensation level.' },
+  { id: 'cuPotentialM', name: 'Cumulus potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#289b9c','#1a5f7a'], note: 'Thermal top minus surface LCL · positive: Cu potential.' },
+  { id: 'odPotentialM', name: 'Spreadout potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#7c689c','#4a356b'], note: 'Thermal top minus mixed LCL · positive: spreadout potential.' },
+  { id: 'cloudCoverPercent', name: 'Cloud cover', group: 'Clouds / rain', unit: '%', stops: [0,25,50,75,100], colors: cloudColors, note: 'Total cloud fraction.' },
+  { id: 'lowCloudPercent', name: 'Low cloud', group: 'Clouds / rain', unit: '%', stops: [0,25,50,75,100], colors: cloudColors, note: 'Low-level cloud fraction.' },
+  { id: 'precipitationMmHr', name: 'Rain', group: 'Clouds / rain', kind: 'rainRate', stops: [0,.2,1,3,8], colors: ['#f4f8fa','#b3cde3','#6497b1','#005b96','#03396c'], note: 'Precipitation rate.' },
+  { id: 'capeJkg', name: 'CAPE', group: 'Clouds / rain', unit: 'J/kg', stops: [0,50,200,500,1000], colors: thermalColors, note: 'Convective energy.' },
+  { id: 'wind10mSpeedMps', name: 'Surface wind', group: 'Wind', kind: 'wind', stops: windStops, colors: thermalColors, note: 'Wind at model surface.' },
+  { id: 'blMeanWindSpeedMps', name: 'Average boundary-layer wind', group: 'Wind', kind: 'wind', stops: windStops, colors: thermalColors, note: 'Boundary-layer mean wind.' },
+  { id: 'blWindShearMps', name: 'Wind shear', group: 'Wind', kind: 'wind', stops: [0,2,4,7,12], colors: thermalColors, note: 'Vector wind change across the boundary layer.' },
+  { id: 'buoyancyShearRatio', name: 'Thermal strength / shear', group: 'Wind', stops: [0,.15,.35,.7,1.2], colors: ['#c44935','#e8bc52','#c3e1e9','#289b9c','#1b6d6e'], note: 'w* divided by vector shear.' },
+  { id: 'w925Mps', name: 'Vertical air motion', group: 'Lift / convergence', kind: 'lift', stops: [-.3,-.1,0,.1,.3], colors: verticalColors, note: 'Pressure level: ' },
+  { id: 'convergence10mX1e5', name: 'Surface convergence', group: 'Lift / convergence', unit: '×10⁻⁵ s⁻¹', stops: [-100,-30,0,30,100], colors: verticalColors, note: 'Blue: divergence · gold/red: convergence.' },
+];
+
+/** Display scales convert together; their physical color thresholds stay fixed. */
+export const LAYER_SPECS = Object.defineProperties({}, Object.fromEntries(definitions.map(def => [def.id, {
+  enumerable: true,
+  get(): LayerSpec {
+    const scale = def.kind ? convertQuantity(1, def.kind)! : 1;
+    const unit = def.kind ? unitLabel(def.kind) : def.unit;
+    const suffix = def.datum ? ` ${def.datum}` : '';
+    const note = ['usableLiftTopV2M', 'usableLiftTopM'].includes(def.id) ? formatQuantity(1, 'lift')
+      : def.id === 'hcritWxtoflyM' ? formatQuantity(1.143, 'lift')
+      : def.id === 'w925Mps' ? formatQuantity(925, 'pressure') : '';
+    return { id: def.id, label: `${def.name}${unit ? ` · ${unit}${suffix}` : ''}`, group: def.group,
+      scale, stops: def.stops.map(value => value * scale), colors: def.colors, legend: def.note + note,
+      format: value => (def.kind ? formatQuantity(value, def.kind) : `${value.toLocaleString('en-US', {maximumFractionDigits: 2})}${unit ? ` ${unit}` : ''}`) + suffix };
+  },
+}]))) as Record<Layer, LayerSpec>;
 
 export const PRIMARY_LAYERS: Layer[] = [
   'thermalVelocityV2Mps', 'usableLiftTopV2M', 'surfaceLclM',
@@ -552,14 +361,13 @@ export function localTime(validAt: string, timeZone: string) {
 export function displayMetric(value: number | null | undefined, layer: Layer, status: Quality = 'valid') {
   if (status === 'missing') return 'Unavailable';
   if (status === 'insufficient-levels') return 'Insufficient vertical coverage';
-  if (value === null || value === undefined) {
-    if (layer === 'usableLiftTopM' || layer === 'usableLiftTopV2M') return 'No lift above 1.0 m/s threshold';
-    if (layer === 'hcritWxtoflyM') return 'No lift above 225 ft/min (1.14 m/s)';
-    if (layer === 'resolvedThermalTopM') return 'Stable / no convective thermal top';
+  if (value === undefined) return 'Unavailable';
+  if (value === null) {
+    if (layer === 'usableLiftTopM' || layer === 'usableLiftTopV2M') return `Below ${formatQuantity(1, 'lift')} sink threshold`;
+    if (layer === 'hcritWxtoflyM') return `Below ${formatQuantity(1.143, 'lift')} sink threshold`;
+    if (layer === 'resolvedThermalTopM') return 'Stable';
     return 'Unavailable';
   }
-  if (layer === 'thermalVelocityMps' || layer === 'thermalVelocityV2Mps') return `${value.toFixed(2)} m/s`;
-  if (layer === 'usableLiftTopM' || layer === 'usableLiftTopV2M') return `${Math.round(value * M_TO_FT).toLocaleString('en-US')} ft MSL`;
   return LAYER_SPECS[layer]?.format(value) ?? String(value);
 }
 

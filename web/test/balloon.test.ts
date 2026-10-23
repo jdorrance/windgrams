@@ -1,8 +1,11 @@
-import { test } from "node:test";
+import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { balloonSounding, choices, readChoice, srgSounding, type RaobDocument } from "../src/lib/balloon.ts";
 import { parseSrg } from "../src/lib/srg.ts";
+import { setUnitSystem } from "../src/lib/units.ts";
+
+afterEach(() => setUnitSystem("imperial"));
 
 const TZ = "America/Boise";
 const SRG = parseSrg(readFileSync(new URL("./fixtures/srg-boi.txt", import.meta.url), "utf8"));
@@ -37,13 +40,13 @@ test("without a balloon file, the Soaring Forecast's own table and model hours a
 test("the morning reading uses the NWS numbers and says it plainly", () => {
   const [morning] = choices(null, SRG, TZ);
   const r = readChoice(morning, SRG, 1268, TZ);
-  assert.match(r.headline, /^If it reaches 77 °F: thermals to about 9,[3-5]00 ft\.$/);
+  assert.match(r.headline, /^At forecast high 77 °F · thermals to 9,[3-5]\d{2} ft MSL\.$/);
   const title = (t: string) => r.findings.find((f) => f.title === t)!;
-  assert.match(title("Thermals: Fair").text, /forecast high of 77 °F.*The NWS puts it at 9,264 ft, with lift up to 382 ft\/min\./);
-  assert.equal(title("When they start").text, "Usable thermals start once it reaches 70 °F, around 1:30 PM (NWS).");
-  assert.match(title("Launch reference").text, /station-derived thermal top is about 5,[1-3]00 ft above the launch reference \(4,160 ft MSL\)/);
-  assert.equal(title("Storms").text, "Lifted index +8.1: very stable aloft: no storm risk.");
-  assert.equal(title("Clouds").text, "This table has no humidity, so it cannot show clouds.");
+  assert.match(title("Thermals: Fair").text, /Forecast high 77 °F.*NWS top 9,264 ft · lift 382 ft\/min\./);
+  assert.equal(title("When they start").text, "NWS trigger 70 °F · 1:30 PM.");
+  assert.match(title("Launch reference").text, /Station parcel top 5,[1-3]\d{2} ft above launch elevation 4,160 ft MSL/);
+  assert.equal(title("Storms").text, "Lifted index +8.1: Very stable aloft.");
+  assert.equal(title("Clouds").text, "Humidity unavailable · cloud estimate unavailable.");
   assert.ok(r.findings.some((f) => f.title === "Valley inversion"));
 });
 
@@ -51,8 +54,8 @@ test("a model hour reads as that hour's thermals", () => {
   const list = choices(null, SRG, TZ);
   const three = list.find((c) => c.validAt === "2026-09-29T21:00:00Z")!;
   const r = readChoice(three, SRG, 1268, TZ);
-  assert.match(r.headline, /^Thermals to about [\d,]+ ft at 3:00 PM\.$/);
-  assert.match(r.findings[0].text, /At 3:00 PM the NWS model has thermals from 72 °F at the ground/);
+  assert.match(r.headline, /^Thermals to [\d,]+ ft MSL · 3:00 PM\.$/);
+  assert.match(r.findings[0].text, /NWS 3:00 PM · surface 72 °F · parcel top [\d,]+ ft MSL/);
   assert.match(r.findings.find((f) => f.key === "storms")!.text, /Lifted index \+6\.2/);
 });
 
@@ -73,7 +76,7 @@ test("a real balloon file comes first and shows clouds from its dew point", () =
   assert.equal(list[0].srgProfile, SRG.observed);
   assert.equal(list.filter((c) => c.kind === "balloon").length, 1, "the table is not repeated when the balloon file has that flight");
   const r = readChoice(list[0], SRG, 1268, TZ);
-  assert.match(r.findings.find((f) => f.key === "clouds")!.text, /^(Thermals reach condensation|Blue)/);
+  assert.match(r.findings.find((f) => f.key === "clouds")!.text, /^(Cu possible · base|Blue thermals · LCL) [\d,]+ ft MSL/);
   assert.ok(balloonSounding(doc.soundings[0], null)!.points.every((p) => p.pressureHpa >= 450));
 });
 
@@ -91,7 +94,7 @@ test("a flight the archive missed comes from the Soaring Forecast's table, in ti
   assert.deepEqual(balloons.map((c) => [c.validAt, c.hasDewPoint]), [["2026-09-29T12:00:00Z", false], ["2026-09-30T00:00:00Z", true]]);
   assert.equal(balloons[0].start.source, "forecast-high");
   const r = readChoice(balloons[1], SRG, 1268, TZ);
-  assert.match(r.findings[0].text, /^At 6:00 PM, with 75 °F at the ground, a thermal would reach about [\d,]+ ft\. Earlier, in the warmer afternoon, thermals went higher/);
+  assert.match(r.findings[0].text, /^6:00 PM station parcel: 75 °F surface · top [\d,]+ ft MSL\.$/);
 });
 
 test("Thursday morning precedes Thursday evening regardless of source order, with model hours between them", () => {
@@ -138,12 +141,46 @@ test("balloon winds retain MSL heights and do not turn remote winds into launch 
   assert.equal(choice.sounding.modelElevationM, 93);
   assert.equal(choice.sounding.points[0].heightM, 93, "the station elevation is not added to MSL profile heights");
   const wind = readChoice(choice, null, 565, "America/New_York").findings.find(f => f.key === "wind")!;
-  assert.match(wind.text, /launch's elevation \(1,854 ft MSL\): WNW 34 mph/);
-  assert.match(wind.text, /do not measure wind at the launch/);
+  assert.equal(wind.title, "Station profile wind");
+  assert.match(wind.text, /^1,854 ft MSL: WNW 34 mph/);
   assert.doesNotMatch(wind.text, /Strong wind|broken thermals|expect drift/);
   assert.equal(wind.tone, "neutral");
   const below = readChoice(choice, null, 10, "America/New_York").findings.find(f => f.key === "wind")!;
-  assert.match(below.text, /wind unavailable at this height/);
+  assert.match(below.text, /^33 ft MSL: unavailable/);
   const unknown = readChoice(choice, null, null, "America/New_York").findings.find(f => f.key === "wind")!;
-  assert.doesNotMatch(unknown.text, /at the launch's elevation/);
+  assert.match(unknown.text, /^2,274 ft MSL:/);
+});
+
+test("metric balloon readings convert displayed values while preserving sounding physics and findings", () => {
+  const original = structuredClone(SRG);
+  const imperial = choices(null, SRG, TZ);
+  const imperialReading = readChoice(imperial[0], SRG, 1268, TZ);
+  setUnitSystem("metric");
+  const metric = choices(null, SRG, TZ);
+  assert.deepEqual(metric.map(({ id, kind, validAt, start }) => ({ id, kind, validAt, start })), imperial.map(({ id, kind, validAt, start }) => ({ id, kind, validAt, start })));
+  for (let i = 0; i < imperial.length; i++) {
+    const physical = (sounding: typeof imperial[number]["sounding"]) => ({
+      ...sounding, marks: { ...sounding.marks, top: sounding.marks.top && { heightM: sounding.marks.top.heightM } },
+    });
+    assert.deepEqual(physical(metric[i].sounding), physical(imperial[i].sounding));
+  }
+  const metricReading = readChoice(metric[0], SRG, 1268, TZ);
+  assert.equal(metricReading.headline, "At forecast high 25 °C · thermals to 2,897 m MSL.");
+  assert.match(metricReading.findings[0].text, /NWS top 2,824 m · lift 1\.94 m\/s/);
+  assert.match(metricReading.findings.find(finding => finding.key === "wind")!.text, /^1,268 m MSL: NNW 23 km\/h/);
+  assert.match(metric[0].sounding.marks.top!.label, /2,897 m/);
+  const categories = (reading: typeof metricReading) => reading.findings.map(({ key, title, tone }) => ({ key, title, tone }));
+  assert.deepEqual(categories(metricReading), categories(imperialReading));
+  assert.doesNotMatch(JSON.stringify(metricReading), /mph|ft\/min|ft MSL|°F/);
+  assert.deepEqual(SRG, original);
+});
+
+test("balloon readings retain uncertainty without instructions or storm guarantees", () => {
+  const morning = choices(null, SRG, TZ)[0];
+  const unstable = { ...morning, srgProfile: { ...morning.srgProfile!, liftedIndex: -1 } };
+  const storm = readChoice(unstable, SRG, 1268, TZ).findings.find(finding => finding.key === "storms")!;
+  assert.equal(storm.text, "Lifted index -1: Slightly unstable · Cu growth possible.");
+  assert.equal(storm.tone, "caution");
+  const unheated = { ...morning, start: { temperatureC: 10, source: "observed" as const }, sounding: { ...morning.sounding, marks: { ...morning.sounding.marks, zoneTopM: null } } };
+  assert.equal(readChoice(unheated, null, 1268, TZ).findings[0].text, "Stable morning parcel · forecast-high estimate unavailable.");
 });

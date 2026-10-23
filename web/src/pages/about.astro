@@ -2,105 +2,78 @@
 import Base from "../layouts/Base.astro";
 ---
 
-<Base title="About" current="about" description="What the forecasts on this site show and where they come from.">
-  <h1>About these forecasts</h1>
-
+<Base title="About" current="about" description="Models, chart symbols, heights and forecast updates.">
+  <h1>About Windgrams</h1>
   <div class="stack" style="margin-top:20px">
     <section class="card">
-      <h2>This catalog</h2>
+      <h2>Choose a forecast</h2>
       <p style="margin-top:8px">
-        Windgrams lists paragliding launches. Coordinates and the direction each launch faces come from the flyingsites
-        catalog. A local <code>pnpm dev</code> serves whatever forecast documents are in <code>forecasts/data</code>.
+        Pick a launch, model, day and hour. Strongest thermals selects the hour with the highest forecast thermal strength.
+        The windgram fits the full day on a phone; tap a column for that hour's conditions and sounding.
+        Choose Imperial or Metric in the header. Your selection is saved in this browser.
+      </p>
+      <p style="margin-top:8px">
+        HRRR and HRDPS cover the next two days. RRFS extends to 84 hours; RDPS adds another regional forecast.
+        GFS and GDPS show the longer trend. GEPS shows the median and spread of 21 ensemble members.
+        The Soaring map offers native HRRR and RRFS grids for North Sound and Shenandoah–Blue Ridge.
       </p>
     </section>
-
     <section class="card">
-      <h2>Live at the launch</h2>
-      <p style="margin-top:8px">
-        Where a personal weather station stands at or next to a launch, the top of the launch page can show what it measures
-        now: wind direction, speed and gusts compared with the launch's own limits, temperature, humidity, pressure and
-        sunshine, and the last 12 hours as a chart. This published site does not poll stations, so that panel is not filled in.
-        A station reading is a measurement near the launch, not on it: always check the wind on launch. Station data:
-        <a href="https://www.wunderground.com/">Weather Underground</a>.
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>Soaring meteogram</h2>
-      <p style="margin-top:8px">
-        Weather models forecast the whole atmosphere above each launch. The meteogram shows, hour by hour, how high thermals
-        should reach, where the cloud base is, how stable the air is, and the wind at every height. It is built with
-        <a href="https://meteo.azohra.com/">meteo by Azohra</a> from two national weather services. The site is published
-        twice a day, about 06:15 and 18:15 UTC, from the latest 00 and 12 UTC runs. A 06 or 18 UTC run waits for the next publish.
-      </p>
+      <h2>Read the windgram</h2>
       <ul style="margin-top:8px">
-        <li><strong>Today and tomorrow</strong>: NOAA's HRRR (3 km) and Canada's HRDPS (2.5 km). When they agree, trust the day more.</li>
-        <li><strong>Out to day 3</strong>: NOAA's RRFS (3 km) and Canada's RDPS (10 km).</li>
-        <li><strong>Long range</strong>: NOAA's GFS (25 km, 16 days) and Canada's GDPS (15 km, 10 days) for the trend.</li>
-        <li>
-          <strong>Ensemble (GEPS)</strong>: Canada's model run 21 times with slightly different starts. The shaded bands show the
-          spread: wide bands mean the long range is uncertain.
-        </li>
+        <li><strong>Background:</strong> temperature change with height, using <a href="http://wxtofly.net/windgramexplain.html">WxToFly's color scale</a>. Red and orange show rapid cooling; gray shows an inversion.</li>
+        <li><strong>Lift w*:</strong> forecast convective strength. Stronger values suggest stronger thermals; climb rates vary within them.</li>
+        <li><strong>Wind barbs:</strong> wind direction and speed. Feathers point toward the source of the wind.</li>
+        <li><strong>Paraglider:</strong> the ceiling for a <span data-unit="lift" data-value="1.143">225 ft/min</span> sink rate. The blue line uses <span data-unit="lift" data-value="1">197 ft/min</span>.</li>
+        <li><strong>Outlined cloud:</strong> potential condensation height. White crosshatching marks humidity above 94%; pale bands show model cloud.</li>
+        <li><strong>Temperature lines:</strong> equal temperature across the day. Snowflakes mark the lowest freezing level.</li>
       </ul>
+      <p style="margin-top:8px">A higher potential cloud base can occur as thermals weaken. Compare thermal strength, usable height and wind for the same hour.</p>
+    </section>
+    <section class="card">
+      <h2>Heights and soundings</h2>
       <p style="margin-top:8px">
-        A 3 km model sees a smoothed mountain, so its ground is often lower than the real launch. The launch elevation line
-        on the chart is measured from terrain data, not taken from the model.
-        <a href="https://meteo.azohra.com/docs/briefing/reading-a-meteogram/">Learn to read every mark on the chart</a>.
+        Chart heights are above mean sea level (MSL). The launch line comes from a terrain elevation estimate at the
+        catalogued coordinates. Model terrain is smoother and can sit above or below the launch. Vegetation and buildings
+        can affect surface-model elevations.
+      </p>
+      <p style="margin-top:8px">
+        The model sounding shows temperature, moisture and wind through the selected forecast column. Balloon soundings
+        describe the nearby upper-air station; its name and distance appear with the chart. Times show the local time zone
+        and the nominal UTC observation cycle. Morning thermal estimates use the day's NWS forecast high when available.
       </p>
     </section>
-
     <section class="card">
-      <h2>Sounding (Skew-T)</h2>
+      <h2>Updates and other guidance</h2>
       <p style="margin-top:8px">
-        A Skew-T is the chart forecasters use to judge the air above a place: temperature and moisture at every height, and how a
-        thermal would rise through them. This one is drawn from the selected model for any hour of the day and marked up for
-        pilots: the thermal zone, the top of the lift, cloud base, inversions that cap the thermals, cloud layers and the wind. The
-        panel beside it says the same in plain words. Its numbers are the same ones the soaring meteogram uses.
+        Forecast refreshes start at 01:55, 07:55, 13:55 and 19:55 UTC. RRFS refreshes start two hours later.
+        Run labels show the forecast currently published; delayed feeds retain their last complete run.
+        NWS forecasts and discussions, ECMWF guidance and nearby balloon observations add context.
+        Connected station panels show timestamped measurements. Local terrain, exposure and changing weather also shape launch conditions.
       </p>
     </section>
-
     <section class="card">
-      <h2>Weather balloon</h2>
+      <h2>Sources</h2>
       <p style="margin-top:8px">
-        Twice a day the National Weather Service launches weather balloons (00 and 12 UTC). The forecast-discussion section
-        draws the latest flights from the upper-air station nearest the launch as a Skew-T. The morning flight is read the way the NWS Soaring
-        Forecast is made: a thermal leaves the ground at the afternoon forecast high and rises until it is no warmer than the
-        morning air, which gives the day's thermal top. The Soaring Forecast's own numbers (trigger temperature, lift, soaring
-        index) are shown alongside, and its model hours can be viewed as Skew-Ts too. The twice-daily publish picks up
-        whichever of those flights is out. Balloon data: NWS, via the
-        <a href="https://mesonet.agron.iastate.edu/archive/raob/">Iowa Environmental Mesonet</a>.
+        Models: <a href="https://www.noaa.gov/">NOAA</a> and
+        <a href="https://eccc-msc.github.io/open-data/licence/readme_en/">Environment and Climate Change Canada</a>,
+        processed with <a href="https://meteo.azohra.com/">meteo by Azohra</a>.
+        Official forecasts: <a href="https://www.weather.gov/">National Weather Service</a>.
+        ECMWF IFS: © <a href="https://www.ecmwf.int/">ECMWF</a>,
+        <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, via <a href="https://open-meteo.com/">Open-Meteo</a>.
+        Balloons: NWS via the <a href="https://mesonet.agron.iastate.edu/archive/raob/">Iowa Environmental Mesonet</a>.
+        Station feeds: <a href="https://www.wunderground.com/">Weather Underground</a>. Launch catalogue: flyingsites.
       </p>
-    </section>
-
-    <section class="card">
-      <h2>National Weather Service forecast</h2>
       <p style="margin-top:8px">
-        The official forecast issued by the National Weather Service for the launch's 2.5 km grid cell — the same data as the
-        hourly graph on <a href="https://www.weather.gov/">weather.gov</a>. It is refreshed twice a day, with the rest of the site.
-      </p>
-      <ul style="margin-top:8px">
-        <li><strong>Mixing height</strong>: how deep the air near the ground is being stirred; a rough ceiling for thermals.</li>
-        <li><strong>Transport wind</strong>: the average wind through that mixed layer; what you will feel once you climb out.</li>
-        <li><strong>Launch window arrows</strong>: green when the surface wind blows from the directions the launch works in.</li>
-      </ul>
-    </section>
-
-    <section class="card">
-      <h2>ECMWF forecast</h2>
-      <p style="margin-top:8px">
-        The European Centre for Medium-Range Weather Forecasts' IFS model, often the best global model, at 9 km: surface wind
-        and gusts at the launch, winds at about 5,000 and 10,000 ft, how deep the boundary layer mixes, and low, mid and high
-        cloud, hour by hour for a week. It is a second opinion next to the National Weather Service forecast. Its open data has
-        no surface heat flux, so it cannot drive the soaring meteogram. Data © ECMWF (CC BY 4.0), served by
-        <a href="https://open-meteo.com/">Open-Meteo.com</a>.
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>Fly safe</h2>
-      <p style="margin-top:8px">
-        Forecasts are model output and forecaster judgment, not observations. They can be wrong about timing, wind and
-        storms. Always check real conditions at launch, respect local site rules, and fly within your own limits.
+        Terrain uses Copernicus GLO-30 and available regional elevation data; sunlight terrain uses
+        <a href="https://www.usgs.gov/3d-elevation-program">USGS 3DEP</a> with a Copernicus fallback.
+        Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018,
+        provided under COPERNICUS by the European Union and ESA; all rights reserved.
+        Land cover: © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021),
+        processed by ESA WorldCover consortium, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
+        Regional elevation products contain information licensed under the
+        <a href="https://open.canada.ca/en/open-government-licence-canada">Open Government Licence – Canada</a>
+        and the <a href="https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc">Open Government Licence – British Columbia</a>.
       </p>
     </section>
   </div>

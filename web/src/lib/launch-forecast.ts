@@ -1,3 +1,4 @@
+import { formatQuantity } from './units.ts';
 import type { SiteForecast } from '@azohra/meteo.briefing/contract';
 import { localHourOfDay } from '@azohra/meteo.briefing/derive';
 import { publishedLift } from './published-lift.ts';
@@ -34,8 +35,7 @@ export function launchConditions(hour: Hour, settings: LaunchDetails, launchElev
   const speed = scalar(hour.surface.windSpeedMps), direction = scalar(hour.surface.windDirectionDeg);
   const gust = scalar(hour.surface.windGustMps), lift = publishedLift(hour);
   const strength = scalar(lift.thermalVelocityMps), top = scalar(lift.usableLiftTopM), base = scalar(lift.cloudBaseM);
-  const mph = (v: number) => Math.round(v * 2.23693629);
-  const feet = (v: number) => `${Math.round(v * 3.280839895).toLocaleString('en-US')} ft MSL`;
+  const feet = (v: number) => `${formatQuantity(v, 'elevation')} MSL`;
   const issues: string[] = [];
   if (speed !== null && speed > 0.5 && direction !== null && !inArc(direction, windWindow(settings))) issues.push('Wind outside launch direction');
   if (speed !== null && speed * 2.23693629 > settings.windMaxMph) issues.push('Wind above saved limit');
@@ -43,11 +43,11 @@ export function launchConditions(hour: Hour, settings: LaunchDetails, launchElev
   if (top !== null && launchElevationM !== null && top <= launchElevationM) issues.push('Usable lift below launch');
   return {
     values: [
-      ['Surface wind', speed === null ? 'Unavailable' : speed < 0.5 ? 'Light / calm' : `${direction === null ? '' : compassPoint(direction) + ' '}${mph(speed)} mph`],
-      ['Gusts', gust === null ? 'Unavailable' : `${mph(gust)} mph`],
-      ['Usable lift top', strength === null ? 'Unavailable' : top === null ? 'No usable lift' : feet(top)],
+      ['Surface wind', speed === null ? 'Unavailable' : speed < 0.5 ? 'Light / calm' : `${direction === null ? '' : compassPoint(direction) + ' '}${formatQuantity(speed, 'wind')}`],
+      ['Gusts', gust === null ? 'Unavailable' : `${formatQuantity(gust, 'wind')}`],
+      ['Usable lift top', strength === null ? 'Unavailable' : top === null ? 'Below sink threshold' : feet(top)],
       ['Potential cloud base', base === null ? 'Unavailable' : feet(base)],
-      ['Thermal strength', strength === null ? 'Unavailable' : `${strength.toFixed(2)} m/s`],
+      ['Thermal strength', strength === null ? 'Unavailable' : formatQuantity(strength, 'lift')],
     ],
     issues,
   };

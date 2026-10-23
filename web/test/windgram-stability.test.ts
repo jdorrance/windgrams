@@ -1,10 +1,12 @@
-import test from "node:test";
+import test, { afterEach } from "node:test";
+import { setUnitSystem } from "../src/lib/units.ts";
+afterEach(() => setUnitSystem("imperial"));
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast } from "@azohra/meteo.briefing/contract";
 import { buildWindgramView } from "../src/lib/windgram-view.ts";
 import { renderWindgramKey, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
-import { WINDGRAM_STABILITY } from "../src/lib/windgram-stability.ts";
+import { WINDGRAM_STABILITY, stabilityRange } from "../src/lib/windgram-stability.ts";
 
 function uniformLapseView(lapseCPer1000Ft: number) {
   const profile = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")))!;
@@ -39,11 +41,11 @@ test("lapse colors and boundaries match the published WxToFly legend", () => {
   assert.deepEqual(WINDGRAM_STABILITY.map((band) => band.maxLapse), [-3, -2.5, -2, -1.5, -1.2, 0, .5, Infinity]);
   const svg = renderWindgramSvg(uniformLapseView(-.5));
   const key = renderWindgramKey();
-  for (const band of WINDGRAM_STABILITY) {
+  for (const [i, band] of WINDGRAM_STABILITY.entries()) {
     assert.ok(svg.includes(`.meteo-gram-stab-${band.className} { fill: ${band.color}; }`));
-    assert.ok(key.includes(`style="--chip:${band.color}">${band.range}</span>`));
+    assert.ok(key.includes(`style="--chip:${band.color}">${stabilityRange(i)}</span>`));
   }
-  assert.match(key, /°C \/ 1,000 ft/);
+  assert.match(key, /°F\/1,000 ft/);
 });
 
 test("filled bands use signed degrees Celsius per 1,000 feet on both sides of each guide threshold", () => {
@@ -61,4 +63,21 @@ test("filled bands use signed degrees Celsius per 1,000 feet on both sides of ea
       }
     }
   }
+});
+
+
+test("lapse legend converts display boundaries without changing WxToFly physics", () => {
+  const imperial = uniformLapseView(-2.7);
+  assert.equal(stabilityRange(0), "≤ −5.4");
+  assert.equal(stabilityRange(5), "−2.16 to 0");
+  assert.match(renderWindgramKey(), /half 5 \/ full 10 \/ flag 50 kt/);
+  setUnitSystem("metric");
+  assert.equal(stabilityRange(0), "≤ −9.84");
+  assert.equal(stabilityRange(5), "−3.94 to 0");
+  const key = renderWindgramKey();
+  assert.match(key, /°C\/km/);
+  assert.match(key, /half 2.5 \/ full 5 \/ flag 25 m\/s/);
+  assert.match(key, /&lt;4.63 m\/s/);
+  assert.match(key, /0 °C freezing level/);
+  assert.deepEqual(uniformLapseView(-2.7).fields, imperial.fields);
 });

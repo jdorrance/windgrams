@@ -2,7 +2,8 @@
 // creates or updates one launch per save. The Worker commits the change; the
 // forecasts and the site rebuild follow automatically.
 
-import { compassPoint, slugify, TIME_ZONES, validateLaunchInput, type Launch } from "../lib/launches.ts";
+import { compassPoint, slugify, TIME_ZONES, validateLaunchInput, windLimitDisplayInput, windLimitFromDisplayInput, type Launch } from "../lib/launches.ts";
+import { getUnitSystem } from "../lib/units.ts";
 import { mountPicker } from "./map.ts";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -12,6 +13,9 @@ const errors = $("form-errors");
 const saveStatus = $("save-status");
 let launches: Launch[] = [];
 let editing: Launch | null = null;
+const units = getUnitSystem();
+const windFields = ["windMinMph", "windMaxMph", "gustMaxMph"] as const;
+let originalWinds = { windMinMph: 5, windMaxMph: 15, gustMaxMph: 20 };
 
 interface ApiError {
   error?: string;
@@ -57,13 +61,16 @@ function openForm(launch: Launch | null) {
   field("longitude").value = launch ? String(launch.longitude) : "";
   field("timeZone").value = launch?.timeZone ?? TIME_ZONES[0];
   field("windArcHalfWidthDeg").value = String(launch?.windArcHalfWidthDeg ?? 45);
-  field("windMinMph").value = String(launch?.windMinMph ?? 5);
-  field("windMaxMph").value = String(launch?.windMaxMph ?? 15);
-  field("gustMaxMph").value = String(launch?.gustMaxMph ?? 20);
+  originalWinds = { windMinMph: launch?.windMinMph ?? 5, windMaxMph: launch?.windMaxMph ?? 15, gustMaxMph: launch?.gustMaxMph ?? 20 };
+  for (const name of windFields) {
+    const input = field(name) as HTMLInputElement;
+    input.value = windLimitDisplayInput(originalWinds[name], units);
+    input.max = String({ windMinMph: 40, windMaxMph: 50, gustMaxMph: 60 }[name] * (units === "metric" ? 1.609344 : 1));
+  }
   field("notes").value = launch?.notes ?? "";
   if (launch) setFacing(launch.facingDeg);
   else for (const input of form.querySelectorAll<HTMLInputElement>('input[name="facing"]')) input.checked = false;
-  $("slug-hint").textContent = launch ? `Address: /launches/${launch.slug} (cannot change)` : "";
+  $("slug-hint").textContent = launch ? `Address: /launches/${launch.slug}` : "";
   picker.invalidate();
   if (launch) picker.set(launch.latitude, launch.longitude);
   else picker.clear();
@@ -81,7 +88,7 @@ function renderList() {
       launch.slug,
       `${launch.latitude.toFixed(4)}, ${launch.longitude.toFixed(4)}`,
       `${compassPoint(launch.facingDeg)} ±${launch.windArcHalfWidthDeg}°`,
-      `${launch.windMinMph}–${launch.windMaxMph}, gust ${launch.gustMaxMph}`,
+      `${windLimitDisplayInput(launch.windMinMph, units)}–${windLimitDisplayInput(launch.windMaxMph, units)}, gust ${windLimitDisplayInput(launch.gustMaxMph, units)}`,
     ];
     cells.forEach((text, i) => {
       const td = document.createElement("td");
@@ -106,16 +113,16 @@ async function load() {
   try {
     response = await fetch("/api/admin/launches", { headers: { accept: "application/json" } });
   } catch {
-    status.textContent = "Could not reach the admin API.";
+    status.textContent = "Admin API unavailable.";
     return;
   }
   const body = (await response.json().catch(() => ({}))) as ListResponse;
   if (response.status === 401 || response.status === 403) {
-    status.textContent = "You need to sign in with an admin account. Login is not configured yet.";
+    status.textContent = "Admin sign-in required.";
     return;
   }
   if (!response.ok) {
-    status.textContent = `The admin API is not ready: ${body.error ?? response.status}.`;
+    status.textContent = `Admin API: ${body.error ?? response.status}.`;
     return;
   }
   launches = body.launches;
@@ -137,12 +144,12 @@ form.addEventListener("submit", async (event) => {
     timeZone: field("timeZone").value,
     facingDeg: facing ? facing.value : "",
     windArcHalfWidthDeg: field("windArcHalfWidthDeg").value,
-    windMinMph: field("windMinMph").value,
-    windMaxMph: field("windMaxMph").value,
-    gustMaxMph: field("gustMaxMph").value,
+    windMinMph: windLimitFromDisplayInput(field("windMinMph").value, units, originalWinds.windMinMph),
+    windMaxMph: windLimitFromDisplayInput(field("windMaxMph").value, units, originalWinds.windMaxMph),
+    gustMaxMph: windLimitFromDisplayInput(field("gustMaxMph").value, units, originalWinds.gustMaxMph),
     notes: field("notes").value,
   };
-  const checked = validateLaunchInput(input);
+  const checked = validateLaunchInput(input, units);
   const showErrors = (list: string[]) => {
     for (const message of list) {
       const li = document.createElement("li");
@@ -175,15 +182,12 @@ form.addEventListener("submit", async (event) => {
     else launches.push(checked.launch);
     renderList();
     editing = checked.launch;
+    originalWinds = { windMinMph: editing.windMinMph, windMaxMph: editing.windMaxMph, gustMaxMph: editing.gustMaxMph };
     saveStatus.textContent = "";
     const link = document.createElement("a");
     link.href = body.commitUrl;
-    link.textContent = "commit";
-    saveStatus.append(
-      `Saved (`,
-      link,
-      `). The launch page appears after the site rebuilds (1–2 minutes). The NWS forecast follows within the hour; model meteograms start with the next model run (up to 6 hours).`,
-    );
+    link.textContent = "View change";
+    saveStatus.append("Saved · publishing… ", link);
   } finally {
     save.disabled = false;
   }

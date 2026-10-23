@@ -1,4 +1,7 @@
-import { test } from "node:test";
+import { setUnitSystem } from "../src/lib/units.ts";
+import { barbPaths } from "../src/lib/wind-barb.ts";
+afterEach(() => setUnitSystem("imperial"));
+import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast, type SiteForecast } from "@azohra/meteo.briefing/contract";
@@ -331,7 +334,7 @@ test("snowflakes mark the lowest freezing crossing when an inversion creates sev
   assert.equal(marks.length, profile.hours.length);
   for (const mark of marks) assert.equal([...mark[1].matchAll(/M/g)].length, 3, "snowflake has three crossing arms");
   assert.doesNotMatch(svg, /<circle[^>]*class="wg-freezing-mark"/);
-  assert.match(svg, /Lowest freezing level · 32°F/);
+  assert.match(svg, /Lowest freezing level · 32 °F/);
 });
 
 test("ensemble profiles retain median readings and uncertainty bands", () => {
@@ -556,13 +559,48 @@ test("keyboard hour selection and cleanup work without a visible inspector reado
   };
   key("End");
   assert.deepEqual(selected, [view.hours.at(-1)!.validAt]);
-  assert.match(attributes.get("aria-label")!, /ft \(/);
+  assert.match(attributes.get("aria-label")!, /ft MSL/);
   key("ArrowLeft");
   assert.equal(selected.at(-1), view.hours.at(-2)!.validAt);
   key("Escape");
-  assert.doesNotMatch(attributes.get("aria-label")!, /ft \(/);
+  assert.doesNotMatch(attributes.get("aria-label")!, /ft MSL/);
   cleanup();
   assert.equal(attributes.size, 0);
   key("End");
   assert.equal(selected.length, 2, "cleanup removes selection handlers");
+});
+
+
+test("metric windgram labels and feathers change while physical fields and coordinates stay fixed", () => {
+  const source = steadyProfile(3);
+  source.hours[0].surface.temperatureC = 20;
+  source.hours[0].derived.thermalVelocityMps = 2;
+  for (const hour of source.hours) for (const level of hour.levels) { level.windSpeedMps = 10; level.windDirectionDeg = 270; }
+  const options = { timeZone: "Etc/UTC", widthPx: 390, compact: true, heightPx: 844, launch: { elevationM: 1000, name: "Launch" } };
+  const imperial = buildWindgramView(source, options);
+  assert.match(renderWindgramSvg(imperial), /Sfc °F/);
+  assert.match(renderWindgramSvg(imperial), />394<\/text>/);
+  setUnitSystem("metric");
+  const metric = buildWindgramView(source, options);
+  assert.deepEqual(metric.fields, imperial.fields);
+  assert.deepEqual(metric.anchors, imperial.anchors);
+  assert.deepEqual(metric.barbs, imperial.barbs);
+  assert.deepEqual(metric.cloudBands, imperial.cloudBands);
+  assert.deepEqual(metric.wings, imperial.wings);
+  assert.equal(metric.width, imperial.width);
+  assert.equal(metric.height, imperial.height);
+  assert.ok(metric.contours.every((c) => Math.abs((c.temperatureF - 32) / 1.8 / 5 - Math.round((c.temperatureF - 32) / 1.8 / 5)) < 1e-10));
+  const svg = renderWindgramSvg(metric);
+  assert.match(svg, /Sfc °C/);
+  assert.match(svg, /Wind m\/s · temperature °C/);
+  assert.match(svg, /Launch · 1,000 m MSL/);
+  assert.match(svg, />2<\/text>/);
+  const geometry = barbPaths(20, 270); // 10 m/s, full feather = 5 m/s.
+  assert.ok(svg.includes(`d="${geometry.staff}"`));
+  for (const flag of geometry.flags) assert.ok(svg.includes(`d="${flag}"`));
+  assert.doesNotMatch(svg, /°F| ft | kt|inHg/);
+  const details = renderWindgramDiagnosticsSvg(metric);
+  assert.match(details, />hPa<\/text>/);
+  assert.match(details, />mm\/h<\/text>/);
+  assert.doesNotMatch(details, /inHg|in\/h/);
 });

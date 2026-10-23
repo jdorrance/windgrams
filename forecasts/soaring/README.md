@@ -1,53 +1,46 @@
 # Regional soaring forecasts
 
-Use Node 24 and the repository's pinned pnpm. From `forecasts/`:
+Native HRRR and RRFS grids serve North Sound and Shenandoah–Blue Ridge. Tracked region configuration lives in `regions.json`; `regions/` supplies launch and cross-section geometry for a clean build.
+
+## Live regions
+
+From `forecasts/`, using Node 24 and pnpm 10.28.0:
+
+```sh
+node scripts/build-live-soaring.mjs --output data
+node scripts/build-live-soaring.mjs --model rrfs --output data
+node scripts/merge-soaring-regions.mjs --output data
+```
+
+The builders follow each model's published initialization. The regional window is the first available local day between 07:00 and 20:00, selected within f002–f048. Model time zones include daylight-saving changes. Identical inputs share a capture.
+
+HRRR and RRFS have separate cache and `-live` / `-rrfs-live` case namespaces. RRFS reads `prslev` and `2dfld` from `noaa-rrfs-ops-pds`; `METEO_RRFS_BASE` selects a compatible mirror. Its one-hour precipitation accumulation ends at valid time. Its geometric vertical velocity is converted to pressure velocity for the shared calculations.
+
+Bundles are staged, hashed and checked before the case pointer changes. Recently superseded live bundles remain for 48 hours. Model comparisons and verification sidecars carry matching run metadata. Launches and transects are sampled on each model's own grid and terrain. The browser retains geographic selection and matching valid time across model changes.
+
+Validate the current RRFS regional set with:
+
+```sh
+node scripts/build-live-soaring.mjs --model rrfs --output data --validate-only
+```
+
+## Historical replay
 
 ```sh
 pnpm run soaring:capture --case north-sound-20261021-00z
 pnpm run soaring:replay --case north-sound-20261021-00z
 ```
 
-Capture saves original NOAA records in ignored `.soaring-cache/`. Replay makes
-no network requests; corrupt or incomplete inputs fail instead of changing runs.
-Use `--output /absolute/path` to replay privately without updating the local data
-pointer. The manifest records input and code hashes, and `audit.json` checks both
-the legacy profile and its published `hours[].soaring` diagnostics against the map.
+Capture stores original NOAA records in ignored `.soaring-cache/`. Replay runs offline from verified cache receipts. `--cache DIR` selects another archive; replay's `--output DIR` selects the destination `soaring/v1` directory. The manifest records inputs and implementation hashes; `audit.json` compares the published site profile with its regional cell.
 
-The browser uses the same published diagnostic family for maps, windgrams and
-soundings. Missing newer values never fall back to positive legacy lift. The
-legacy `derived` block remains unchanged for reproducibility. Numerical agreement
-does not establish forecast skill. See the audit for shallow-profile assumptions.
+The baseline `derived` block preserves the original calculation. `hours[].soaring` carries the v2 diagnostics used by current charts. See [replay details](../../docs/soaring-replay.md) and [diagnostic definitions](../../docs/forecast-improvement-plan.md).
 
-`node scripts/build-live-soaring.mjs --output data` reads the published region
-catalogue and latest HRRR initialization. Add `--model rrfs` to build the same
-regions from the latest published RRFS run, then run
-`node scripts/merge-soaring-regions.mjs --output data` to combine the model indexes.
-Clean runners bootstrap from the tracked `soaring/regions.json` configuration,
-case templates, and static launch/transect geography under `soaring/regions/`.
-No previous publication or ignored local bundle is required. Published regional
-settings are preserved; missing regions and sidecars use these tracked defaults.
-Only completed native bundles are advertised, so a first RRFS-only publication
-can be opened and seeded again without an HRRR archive. Validate both complete
-RRFS regional bundles with
-`node scripts/build-live-soaring.mjs --model rrfs --output data --validate-only`.
-RRFS reads pressure levels from `prslev` and surface fields from `2dfld` in the
-`noaa-rrfs-ops-pds` bucket. `METEO_RRFS_BASE` can select an equivalent mirror.
-Its precipitation is the one-hour accumulation ending at the selected valid time;
-geometric vertical velocity is converted to pressure velocity before diagnostics.
+## Display and tests
 
-Rolling cases use separate `-live` and `-rrfs-live` namespaces; historical URLs
-retain their original case. Daylight hours follow each
-region's time zone, including DST and the remaining hours of today. Regions with
-identical inputs share a capture. New bundles are staged and checked before an
-atomic pointer update; recently superseded bundles remain for 48 hours. Stale
-model comparisons and verification results are not carried into a new run.
-Launches and cross-sections are remapped to each model's own grid and terrain.
-The browser keeps the selected launch or geographic location when changing
-models, and keeps the selected valid time where it is available in both runs.
+Published w*, lift top and condensation values feed the map, windgram and sounding. Paraglider symbols use the 225 ft/min ceiling; the blue line uses the separate 1 m/s ceiling. Heights are MSL; native model PBL depth is AGL. The browser converts visible units through its Imperial/Metric setting.
 
-Offline tests use checked-in compact numerical and inventory fixtures. Full
-archives stay outside Git. Run `pnpm test` here, and `pnpm test`, `pnpm check` and
-`pnpm build` in `web/`. Local production preview uses `pnpm preview` in `web/`.
-Map and chart barbs use [NWS aviation conventions](https://www.weather.gov/hfo/windbarbinfo):
-nearest 5 knots, half feather 5, full feather 10, pennant 50, calm circle, staff
-pointing toward the wind's source.
+Imperial barbs follow [NWS aviation conventions](https://www.weather.gov/hfo/windbarbinfo): nearest 5 knots, half feather 5, full feather 10 and pennant 50. Metric barbs round to 2.5 m/s, with half feather 2.5, full feather 5 and pennant 25 m/s. Both use a calm circle and a staff pointing toward the wind's source. Windgram colors follow [WxToFly](http://wxtofly.net/windgramexplain.html); RH above 94% uses white crosshatching and potential LCL uses an outlined cloud.
+
+Unit selection changes display values; source JSON, diagnostic contracts and physical thresholds stay unchanged. The [website conventions](../../web/README.md#display-conventions) describe the display units and exceptions.
+
+`pnpm test` exercises compact checked-in fixtures. Run `pnpm test`, `pnpm check` and `pnpm build` in `web/` for browser code; `pnpm preview` serves the complete local dataset. Numerical checks establish reproducibility and internal consistency. Forecast skill is assessed separately against matched observations.

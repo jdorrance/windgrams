@@ -1,3 +1,4 @@
+import { formatQuantity } from './units.ts';
 // Weather-balloon soundings as Skew-T soundings, read for pilots.
 //
 // Three sources, all for the upper-air station nearest the launch:
@@ -11,7 +12,7 @@
 // it is no warmer than the morning air. That height is the day's thermal top.
 
 import {
-  feet, findCloudLayers, findStableLayers, freezingLevel, liftParcel, thermalTop, windAtHeight,
+  findCloudLayers, findStableLayers, freezingLevel, liftParcel, thermalTop, windAtHeight,
   type Finding, type Reading, type Sounding, type SoundingPoint,
 } from "./skewt.ts";
 import type { Srg, SrgProfile } from "./srg.ts";
@@ -54,9 +55,9 @@ export interface Choice {
   hasDewPoint: boolean;
 }
 
-const f = (c: number) => Math.round((c * 9) / 5 + 32);
-const ftText = (m: number) => `${feet(m).toLocaleString("en-US")} ft`;
-const referenceHeight = (m: number) => `${Math.round(m * FT).toLocaleString("en-US")} ft MSL`;
+const f = (c: number) => formatQuantity(c, "temperature");
+const ftText = (m: number) => formatQuantity(m, "elevation");
+const referenceHeight = (m: number) => `${ftText(m)} MSL`;
 
 function finish(points: SoundingPoint[], validAt: string, startC: number, hasDewPoint: boolean, topLabel: string): Sounding {
   const surface = points[0];
@@ -187,19 +188,16 @@ export function choices(doc: RaobDocument | null, srg: Srg | null, timeZone: str
 }
 
 /** An evening flight: the ground has already cooled, so the afternoon's thermals went higher than a thermal now would. */
-function eveningText(s: Sounding, top: number, choice: Choice, time: Intl.DateTimeFormat) {
-  const lid = s.inversions.find((l) => !l.grounded && l.baseM > top && l.baseM < top + 1500);
-  return `At ${time.format(new Date(choice.validAt))}, with ${f(choice.start.temperatureC)} °F at the ground, a thermal would reach about ${ftText(top)}. Earlier, in the warmer afternoon, thermals went higher${
-    lid ? `, likely up to the inversion at ${ftText(lid.baseM)}` : ""
-  }.`;
+function eveningText(_s: Sounding, top: number, choice: Choice, time: Intl.DateTimeFormat) {
+  return `${time.format(new Date(choice.validAt))} station parcel: ${f(choice.start.temperatureC)} surface · top ${referenceHeight(top)}.`;
 }
 
 function liWords(li: number): { text: string; tone: Finding["tone"] } {
-  if (li >= 3) return { text: "very stable aloft: no storm risk", tone: "good" };
-  if (li >= 0) return { text: "stable aloft: storms unlikely", tone: "good" };
-  if (li >= -3) return { text: "slightly unstable: cumulus can build, watch them", tone: "caution" };
-  if (li >= -6) return { text: "unstable: thunderstorms possible", tone: "warning" };
-  return { text: "very unstable: thunderstorms likely", tone: "warning" };
+  if (li >= 3) return { text: "Very stable aloft", tone: "good" };
+  if (li >= 0) return { text: "Stable aloft", tone: "good" };
+  if (li >= -3) return { text: "Slightly unstable · Cu growth possible", tone: "caution" };
+  if (li >= -6) return { text: "Unstable · storm potential", tone: "warning" };
+  return { text: "Very unstable · strong storm potential", tone: "warning" };
 }
 
 const SOARING_TONE: Record<string, Finding["tone"]> = { excellent: "good", good: "good", fair: "neutral", poor: "caution", none: "caution" };
@@ -217,19 +215,19 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
   // Thermals
   if (top !== null) {
     const lead = fromHigh
-      ? `If it warms to the forecast high of ${f(choice.start.temperatureC)} °F, thermals should rise to about ${ftText(top)} (${feet(top - station).toLocaleString("en-US")} ft above the station).`
+      ? `Forecast high ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)} · ${ftText(top - station)} above station.`
       : choice.kind === "model"
-        ? `At ${time.format(new Date(choice.validAt))} the NWS model has thermals from ${f(choice.start.temperatureC)} °F at the ground reaching about ${ftText(top)}.`
+        ? `NWS ${time.format(new Date(choice.validAt))} · surface ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)}.`
         : eveningText(s, top, choice, time);
     let text = lead;
-    if (fromHigh && srg?.maxThermalHeightFt) text += ` The NWS puts it at ${srg.maxThermalHeightFt.toLocaleString("en-US")} ft${srg.maxLiftFpm ? `, with lift up to ${srg.maxLiftFpm} ft/min` : ""}.`;
+    if (fromHigh && srg?.maxThermalHeightFt) text += ` NWS top ${ftText(srg.maxThermalHeightFt / FT)}${srg.maxLiftFpm ? ` · lift ${formatQuantity(srg.maxLiftFpm / 196.850394, "lift")}` : ""}.`;
     const tone = fromHigh && srg?.soaringIndex ? SOARING_TONE[srg.soaringIndex.toLowerCase()] ?? "neutral" : "neutral";
     findings.push({ key: "thermals", title: fromHigh && srg?.soaringIndex ? `Thermals: ${srg.soaringIndex}` : "Thermals", text, tone });
   } else {
     findings.push({
       key: "thermals",
       title: "Thermals",
-      text: morning && !fromHigh ? "Morning air: a thermal from the ground's current temperature would not rise. The afternoon forecast high decides the day." : `A thermal from ${f(choice.start.temperatureC)} °F at the ground would not rise: no thermals at this hour.`,
+      text: morning && !fromHigh ? "Stable morning parcel · forecast-high estimate unavailable." : `Stable surface parcel at ${f(choice.start.temperatureC)}.`,
       tone: "neutral",
     });
   }
@@ -239,7 +237,7 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
     findings.push({
       key: "thermals",
       title: "When they start",
-      text: `Usable thermals start once it reaches ${f(srg.triggerTempC)} °F${srg.triggerTime ? `, around ${time.format(new Date(srg.triggerTime))}` : ""} (NWS).`,
+      text: `NWS trigger ${f(srg.triggerTempC)}${srg.triggerTime ? ` · ${time.format(new Date(srg.triggerTime))}` : ""}.`,
       tone: "neutral",
     });
   }
@@ -247,9 +245,9 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
   // Launch
   if (launchM !== null && top !== null) {
     if (top < launchM + 150) {
-      findings.push({ key: "top", title: "Launch reference", text: `The station-derived thermal top is near or below the launch reference (${referenceHeight(launchM)}). Local lift at the launch can differ.`, tone: "neutral" });
+      findings.push({ key: "top", title: "Launch reference", text: `Station parcel top near or below launch elevation ${referenceHeight(launchM)}.`, tone: "neutral" });
     } else {
-      findings.push({ key: "top", title: "Launch reference", text: `The station-derived thermal top is about ${feet(top - launchM).toLocaleString("en-US")} ft above the launch reference (${referenceHeight(launchM)}). This is a height comparison; local lift at the launch can differ.`, tone: "neutral" });
+      findings.push({ key: "top", title: "Launch reference", text: `Station parcel top ${ftText(top - launchM)} above launch elevation ${referenceHeight(launchM)}.`, tone: "neutral" });
     }
   }
 
@@ -257,14 +255,14 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
   if (choice.hasDewPoint && top !== null && s.lclM !== null) {
     findings.push(
       s.lclM <= top + 100
-        ? { key: "clouds", title: "Clouds", text: `Thermals reach condensation: cumulus with a base around ${ftText(s.lclM)}.`, tone: "good" }
-        : { key: "clouds", title: "Clouds", text: `Blue: the air would need to rise to about ${ftText(s.lclM)} to make cloud, above the thermals.`, tone: "neutral" },
+        ? { key: "clouds", title: "Clouds", text: `Cu possible · base ${referenceHeight(s.lclM)}.`, tone: "good" }
+        : { key: "clouds", title: "Clouds", text: `Blue thermals · LCL ${referenceHeight(s.lclM)} above parcel top.`, tone: "neutral" },
     );
   } else if (!choice.hasDewPoint) {
-    findings.push({ key: "clouds", title: "Clouds", text: "This table has no humidity, so it cannot show clouds.", tone: "neutral" });
+    findings.push({ key: "clouds", title: "Clouds", text: "Humidity unavailable · cloud estimate unavailable.", tone: "neutral" });
   }
   const deck = s.cloudLayers.find((l) => !l.grounded);
-  if (deck) findings.push({ key: "clouds", title: "Cloud layer", text: `The balloon found nearly saturated air between ${ftText(deck.baseM)} and ${ftText(deck.topM)}.`, tone: "caution" });
+  if (deck) findings.push({ key: "clouds", title: "Cloud layer", text: `Near-saturated layer ${ftText(deck.baseM)}–${referenceHeight(deck.topM)}.`, tone: "caution" });
 
   // Lids
   const grounded = s.inversions.find((l) => l.grounded);
@@ -272,24 +270,21 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
     findings.push({
       key: "lid",
       title: "Valley inversion",
-      text: `Cold air near the ground up to about ${ftText(grounded.topM)}${morning ? ": typical after a clear night. It has to warm through before thermals start" : ""}.`,
+      text: `Surface inversion to ${referenceHeight(grounded.topM)}${morning ? " · heating needed" : ""}.`,
       tone: "neutral",
     });
   }
   const lid = s.inversions.find((l) => !l.grounded && l.baseM <= (top ?? station) + (morning ? 600 : 1500));
-  if (lid) findings.push({ key: "lid", title: lid.kind === "inversion" ? "Inversion" : "Stable layer", text: `${lid.kind === "inversion" ? "An inversion" : "A stable layer"} from ${ftText(lid.baseM)} to ${ftText(lid.topM)} caps the thermals.`, tone: "neutral" });
+  if (lid) findings.push({ key: "lid", title: lid.kind === "inversion" ? "Inversion" : "Stable layer", text: `${ftText(lid.baseM)}–${referenceHeight(lid.topM)} · thermal cap.`, tone: "neutral" });
 
   // Wind
   const at = (z: number) => windAtHeight(s.points, z);
-  const words = (w: { speedMps: number; directionDeg: number } | null) => (!w ? "–" : w.speedMps * MPH < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${Math.round(w.speedMps * MPH)} mph`);
+  const words = (w: { speedMps: number; directionDeg: number } | null) => (!w ? "–" : w.speedMps * MPH < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${formatQuantity(w.speedMps, "wind")}`);
   const heights = [launchM ?? station + 600, top ?? station + 2000];
   const [low, high2] = heights.map(at);
-  const profileName = choice.kind === "balloon" ? "Balloon profile" : "NWS station model profile";
-  const lowLabel = launchM !== null ? `at the launch's elevation (${referenceHeight(heights[0])})` : `at ${referenceHeight(heights[0])}`;
-  const wind = [`${profileName} ${lowLabel}: ${low ? words(low) : "wind unavailable at this height"}.`];
-  if (Math.abs(heights[1] - heights[0]) > 1) wind.push(`At ${referenceHeight(heights[1])}: ${high2 ? words(high2) : "wind unavailable at this height"}.`);
-  wind.push("These winds describe the station profile; they do not measure wind at the launch or establish local turbulence.");
-  findings.push({ key: "wind", title: "Wind in the station profile", text: wind.join(" "), tone: "neutral" });
+  const wind = [`${referenceHeight(heights[0])}: ${low ? words(low) : "unavailable"}.`];
+  if (Math.abs(heights[1] - heights[0]) > 1) wind.push(`${referenceHeight(heights[1])}: ${high2 ? words(high2) : "unavailable"}.`);
+  findings.push({ key: "wind", title: "Station profile wind", text: wind.join(" "), tone: "neutral" });
 
   // Stability and storms
   const li = choice.srgProfile?.liftedIndex ?? null;
@@ -299,15 +294,15 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
     findings.push({ key: "storms", title: "Storms", text: `Lifted index ${li > 0 ? "+" : ""}${li}: ${w.text}.${cape != null && cape > 0 ? ` CAPE ${Math.round(cape)} J/kg.` : ""}`, tone: w.tone });
   }
   if (fromHigh && srg?.overdevelopment && srg.overdevelopment.toLowerCase() !== "none") {
-    findings.push({ key: "storms", title: "Overdevelopment", text: `The NWS expects cumulus to overdevelop around ${srg.overdevelopment}.`, tone: "warning" });
+    findings.push({ key: "storms", title: "Overdevelopment", text: `NWS Cu overdevelopment: ${srg.overdevelopment}.`, tone: "warning" });
   }
   if (s.freezingLevelM !== null && s.freezingLevelM > station + 100) {
-    findings.push({ key: "stability", title: "Freezing level", text: `The air is below freezing above about ${ftText(s.freezingLevelM)}.`, tone: "neutral" });
+    findings.push({ key: "stability", title: "Freezing level", text: `${referenceHeight(s.freezingLevelM)}.`, tone: "neutral" });
   }
 
   let headline: string;
-  if (top === null) headline = "No thermals in this sounding.";
-  else if (fromHigh) headline = `If it reaches ${f(choice.start.temperatureC)} °F: thermals to about ${ftText(top)}${choice.hasDewPoint && s.lclM !== null ? (s.lclM <= top + 100 ? `, cumulus base about ${ftText(s.lclM)}` : ", blue") : ""}.`;
-  else headline = `Thermals to about ${ftText(top)} at ${time.format(new Date(choice.validAt))}.`;
+  if (top === null) headline = "Stable surface parcel.";
+  else if (fromHigh) headline = `At forecast high ${f(choice.start.temperatureC)} · thermals to ${referenceHeight(top)}${choice.hasDewPoint && s.lclM !== null ? (s.lclM <= top + 100 ? ` · Cu base ${referenceHeight(s.lclM)}` : " · blue") : ""}.`;
+  else headline = `Thermals to ${referenceHeight(top)} · ${time.format(new Date(choice.validAt))}.`;
   return { headline, findings };
 }

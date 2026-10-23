@@ -1,9 +1,12 @@
-import { test } from "node:test";
+import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { compassPoint, windWindow } from "../src/lib/launches.ts";
 import { historyGrid, isStale, parseWuCurrent, parseWuHistory, readWind, recentGust, type StationDocument } from "../src/lib/station.ts";
 import { CURRENT_MAX_AGE_MS, serveStation, stationKey, type StationStore } from "../worker/stations.ts";
+import { setUnitSystem } from "../src/lib/units.ts";
+
+afterEach(() => setUnitSystem("imperial"));
 
 // Samples in the format the Weather Underground PWS API documents (units=m).
 const currentBody = JSON.parse(readFileSync(new URL("./fixtures/wu-current.json", import.meta.url), "utf-8"));
@@ -53,7 +56,7 @@ test("the 5-minute history is read oldest first and placed on a regular grid wit
   assert.equal(at("2026-09-30T08:00:00Z").windSpeedMps, null); // before the history starts
 });
 
-test("wind inside the window and limits reads as launchable; gusts use the last 15 minutes", () => {
+test("wind inside the window and saved limits uses the last 15 minutes of gusts", () => {
   const doc = { current: parseWuCurrent(currentBody), history: parseWuHistory(historyBody) };
   const now = Date.parse("2026-09-30T16:29:00Z");
   const gust = recentGust(doc, now)!;
@@ -61,8 +64,8 @@ test("wind inside the window and limits reads as launchable; gusts use the last 
   assert.ok(gust > doc.current!.windGustMps!);
   const reading = readWind(doc.current!, gust, limits, compassPoint, windowLabel)!;
   assert.equal(reading.tone, "good");
-  assert.equal(reading.headline, "Within this launch's limits");
-  assert.match(reading.checks[0].text, /From NW \(318°\), inside the window WNW–N/);
+  assert.equal(reading.headline, "Within saved limits");
+  assert.equal(reading.checks[0].text, "NW 318° · launch sector WNW–N");
 });
 
 test("crosswind, strong wind, gusts and calm each get their own call", () => {
@@ -70,7 +73,7 @@ test("crosswind, strong wind, gusts and calm each get their own call", () => {
   const cross = readWind({ ...base, windDirectionDeg: 203 }, 6, limits, compassPoint, windowLabel)!;
   assert.equal(cross.tone, "warning");
   assert.equal(cross.headline, "Outside limits: direction");
-  assert.match(cross.checks[0].text, /From SSW \(203°\), outside/);
+  assert.equal(cross.checks[0].text, "SSW 203° · outside launch sector WNW–N");
 
   const strong = readWind({ ...base, windSpeedMps: 8 }, 11, limits, compassPoint, windowLabel)!;
   assert.equal(strong.headline, "Outside limits: speed, gusts");
@@ -80,8 +83,40 @@ test("crosswind, strong wind, gusts and calm each get their own call", () => {
   assert.equal(light.headline, "Light wind");
 
   const calm = readWind({ ...base, windSpeedMps: 0, windDirectionDeg: null }, 0.5, limits, compassPoint, windowLabel)!;
-  assert.equal(calm.headline, "Calm or nearly calm");
+  assert.equal(calm.headline, "Calm");
   assert.equal(readWind({ ...base, windSpeedMps: null }, null, limits, compassPoint, windowLabel), null);
+});
+
+test("metric station display preserves SI observations and saved-limit classifications", () => {
+  const base = parseWuCurrent(currentBody)!;
+  const original = structuredClone(base);
+  const scenarios = [
+    { current: base, gust: 6, tone: "good" },
+    { current: { ...base, windSpeedMps: 15.001 / 2.23694 }, gust: 6, tone: "warning" },
+    { current: { ...base, windSpeedMps: 14.999 / 2.23694 }, gust: 6, tone: "good" },
+    { current: { ...base, windSpeedMps: 4.999 / 2.23694 }, gust: 6, tone: "caution" },
+    { current: base, gust: 20.001 / 2.23694, tone: "warning" },
+    { current: { ...base, windDirectionDeg: 203 }, gust: 6, tone: "warning" },
+    { current: { ...base, windSpeedMps: 0, windDirectionDeg: null }, gust: 0.5, tone: "caution" },
+  ];
+  for (const { current, gust, tone } of scenarios) {
+    setUnitSystem("imperial");
+    const imperial = readWind(current, gust, limits, compassPoint, windowLabel)!;
+    setUnitSystem("metric");
+    const metric = readWind(current, gust, limits, compassPoint, windowLabel)!;
+    assert.equal(metric.tone, tone);
+    assert.equal(metric.tone, imperial.tone);
+    assert.equal(metric.headline, imperial.headline);
+    assert.deepEqual(metric.checks.map(check => check.tone), imperial.checks.map(check => check.tone));
+    assert.equal(metric.gustMps, gust);
+    assert.match(metric.checks[1].text, /km\/h/);
+    assert.match(metric.checks[2].text, /km\/h/);
+    assert.doesNotMatch(JSON.stringify(metric), /mph/);
+  }
+  const metric = readWind(base, 6, limits, compassPoint, windowLabel)!;
+  assert.equal(metric.checks[1].text, "18 km/h: within 8 km/h–24 km/h");
+  assert.deepEqual(parseWuCurrent(currentBody), original);
+  assert.deepEqual(base, original);
 });
 
 test("a report older than 20 minutes is stale", () => {

@@ -20,7 +20,7 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
             <th scope="col" class="text">Slug</th>
             <th scope="col">Location</th>
             <th scope="col">Faces</th>
-            <th scope="col">Wind (mph)</th>
+            <th scope="col">Wind (<span data-unit-label="wind">mph</span>)</th>
             <th scope="col"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
@@ -32,7 +32,7 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
   <form class="card" id="launch-form" style="margin-top:20px" hidden novalidate>
     <div class="card-head">
       <h2 id="form-title">Add a launch</h2>
-      <span class="card-sub">Click the map to place the launch, or type its coordinates.</span>
+      <span class="card-sub">Place the launch on the map or enter coordinates.</span>
     </div>
 
     <div id="picker" class="map" role="region" aria-label="Launch location map"></div>
@@ -74,7 +74,7 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
             ))
           }
         </div>
-        <span class="hint">The wind window is centred on this direction.</span>
+        <span class="hint">Centre of the wind window.</span>
       </fieldset>
 
       <div class="field">
@@ -87,16 +87,16 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
         </select>
       </div>
       <div class="field">
-        <label for="f-min">Minimum wind (mph)</label>
-        <input type="number" id="f-min" name="windMinMph" min="0" max="40" value="5" required />
+        <label for="f-min">Minimum wind (<span data-unit-label="wind">mph</span>)</label>
+        <input type="number" id="f-min" name="windMinMph" min="0" max="40" step="any" value="5" required />
       </div>
       <div class="field">
-        <label for="f-max">Maximum wind (mph)</label>
-        <input type="number" id="f-max" name="windMaxMph" min="1" max="50" value="15" required />
+        <label for="f-max">Maximum wind (<span data-unit-label="wind">mph</span>)</label>
+        <input type="number" id="f-max" name="windMaxMph" min="0" max="50" step="any" value="15" required />
       </div>
       <div class="field">
-        <label for="f-gust">Maximum gust (mph)</label>
-        <input type="number" id="f-gust" name="gustMaxMph" min="1" max="60" value="20" required />
+        <label for="f-gust">Maximum gust (<span data-unit-label="wind">mph</span>)</label>
+        <input type="number" id="f-gust" name="gustMaxMph" min="0" max="60" step="any" value="20" required />
       </div>
       <div class="field wide">
         <label for="f-notes">Notes</label>

@@ -1,6 +1,8 @@
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
+import { setUnitSystem } from '../src/lib/units.ts';
+afterEach(() => setUnitSystem('imperial'));
 import assert from 'node:assert/strict';
-import { defaultReplayQuery, displayMetric, forecastHourAtValidTime, historicalLabel, nativeModels, regionForCase, replayLocation, replaySelection, selectedState, setReplaySelectionQuery, type RegionCatalogue, type ReplayManifest, type ReplayHour } from '../src/lib/soaring.ts';
+import { LAYER_SPECS, defaultReplayQuery, displayMetric, forecastHourAtValidTime, historicalLabel, nativeModels, regionForCase, replayLocation, replaySelection, selectedState, setReplaySelectionQuery, type RegionCatalogue, type ReplayManifest, type ReplayHour } from '../src/lib/soaring.ts';
 
 test('replay links preserve the project base and reject unknown cases', () => {
   assert.equal(replayLocation('?hour=27','/windgrams/data').root,'/windgrams/data/soaring/v1/north-sound-20261021-00z');
@@ -96,13 +98,13 @@ test('nearest grid selection uses physical distance at northern latitudes and ac
   ], [], 0).cellIndex, 1);
 });
 test('zero, unavailable, insufficient levels, and no usable lift have distinct labels for v1 and v2 layers', () => {
-  assert.equal(displayMetric(0,'thermalVelocityMps'),'0.00 m/s');
-  assert.equal(displayMetric(0.85,'thermalVelocityV2Mps'),'0.85 m/s');
+  assert.equal(displayMetric(0,'thermalVelocityMps'),'0 ft/min');
+  assert.equal(displayMetric(0.85,'thermalVelocityV2Mps'),'167 ft/min');
   assert.equal(displayMetric(null,'thermalVelocityMps'),'Unavailable');
   assert.equal(displayMetric(null,'thermalVelocityV2Mps'),'Unavailable');
   assert.equal(displayMetric(null,'thermalVelocityMps','insufficient-levels'),'Insufficient vertical coverage');
-  assert.match(displayMetric(null,'usableLiftTopM'),/No lift.*1.0/);
-  assert.match(displayMetric(null,'usableLiftTopV2M'),/No lift.*1.0/);
+  assert.match(displayMetric(null,'usableLiftTopM'),/Below 197 ft\/min sink threshold/);
+  assert.match(displayMetric(null,'usableLiftTopV2M'),/Below 197 ft\/min sink threshold/);
   assert.equal(displayMetric(724.5,'usableLiftTopM'),'2,377 ft MSL');
   assert.equal(displayMetric(465.5,'usableLiftTopV2M'),'1,527 ft MSL');
 });
@@ -120,10 +122,78 @@ test('one selected hour drives map, site cards, windgram, and sounding time with
   for(let i=0;i<hours.length;i++) {
     const state=selectedState(manifest,hours,hours[i].forecastHour);
     assert.equal(state.index,i);assert.equal(state.hour,hours[i]);
-    assert.equal(state.siteStrength,`${i.toFixed(2)} m/s`);
+    assert.equal(state.siteStrength,`${Math.round(i * 196.8503937007874)} ft/min`);
   }
-  assert.equal(selectedState(manifest,hours,20).siteStrengthV2,'0.85 m/s');
+  assert.equal(selectedState(manifest,hours,20).siteStrengthV2,'167 ft/min');
   assert.equal(selectedState(manifest,hours,20).siteTopV2,'1,527 ft MSL');
   assert.match(selectedState(manifest,hours,20).validLabel,/1:00 PM PDT/);
   assert.throws(()=>selectedState(manifest,[],20),/does not match/);
+});
+
+
+test('unit selection preserves every map layer physical breakpoint and interpolated color', () => {
+  const keys = Object.keys(LAYER_SPECS) as (keyof typeof LAYER_SPECS)[];
+  const imperial = Object.fromEntries(keys.map(key => [key, LAYER_SPECS[key]]));
+  setUnitSystem('metric');
+  const metric = Object.fromEntries(keys.map(key => [key, LAYER_SPECS[key]]));
+  const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-8, `${a} ≈ ${b}`);
+  // Color interpolation consumes value * scale and correspondingly scaled stops.
+  const colorAt = (value: number, spec: typeof LAYER_SPECS.thermalVelocityMps) => {
+    const displayed = value * spec.scale;
+    let high = spec.stops.findIndex(stop => stop >= displayed);
+    if (high < 0) high = spec.stops.length - 1;
+    const low = Math.max(0, high - 1);
+    const fraction = high === low ? 0 : Math.max(0, Math.min(1, (displayed - spec.stops[low]) / (spec.stops[high] - spec.stops[low])));
+    const rgb = (color: string) => [1, 3, 5].map(start => parseInt(color.slice(start, start + 2), 16));
+    const a = rgb(spec.colors[low]), b = rgb(spec.colors[high]);
+    return a.map((value, channel) => value + (b[channel] - value) * fraction);
+  };
+  for (const key of keys) {
+    const a = imperial[key], b = metric[key];
+    assert.deepEqual(a.colors, b.colors, key);
+    assert.ok(a.scale > 0 && b.scale > 0);
+    a.stops.forEach((stop, i) => close(stop / a.scale, b.stops[i] / b.scale));
+    const physical = a.stops.map(stop => stop / a.scale);
+    for (const value of [...physical, ...physical.slice(1).map((value, i) => (value + physical[i]) / 2)]) {
+      colorAt(value, a).forEach((channel, i) => close(channel, colorAt(value, b)[i]));
+    }
+  }
+  assert.deepEqual(metric.thermalVelocityV2Mps.stops, [0, .5, 1, 2, 3]);
+  metric.usableLiftTopV2M.stops.forEach((value, i) => close(value, [0, 304.8, 609.6, 1524, 3048][i]));
+  metric.wind10mSpeedMps.stops.forEach((value, i) => close(value, [0, 8.04672, 19.312128, 32.18688, 48.28032][i]));
+  assert.deepEqual(metric.precipitationMmHr.stops, [0, .2, 1, 3, 8]);
+  assert.deepEqual(metric.capeJkg.stops, imperial.capeJkg.stops);
+  assert.deepEqual(metric.sensibleHeatFluxWm2.stops, imperial.sensibleHeatFluxWm2.stops);
+});
+
+test('map values, units, references, and sink diagnostics switch together', () => {
+  assert.equal(displayMetric(2, 'thermalVelocityV2Mps'), '394 ft/min');
+  assert.equal(displayMetric(10, 'wind10mSpeedMps'), '22 mph');
+  assert.equal(displayMetric(25.4, 'precipitationMmHr'), '1.00 in/h');
+  assert.equal(LAYER_SPECS.w925Mps.legend, 'Pressure level: 27.32 inHg');
+  assert.equal(LAYER_SPECS.hcritWxtoflyM.legend, 'WxToFly sink threshold: 225 ft/min');
+  setUnitSystem('metric');
+  assert.equal(displayMetric(2, 'thermalVelocityV2Mps'), '2.00 m/s');
+  assert.equal(displayMetric(10, 'wind10mSpeedMps'), '36 km/h');
+  assert.equal(displayMetric(1000, 'usableLiftTopV2M'), '1,000 m MSL');
+  assert.equal(displayMetric(1000, 'pblHeightM'), '1,000 m AGL');
+  assert.equal(displayMetric(25.4, 'precipitationMmHr'), '25.4 mm/h');
+  assert.equal(displayMetric(null, 'usableLiftTopV2M'), 'Below 1.00 m/s sink threshold');
+  assert.equal(displayMetric(null, 'hcritWxtoflyM'), 'Below 1.14 m/s sink threshold');
+  assert.equal(LAYER_SPECS.w925Mps.legend, 'Pressure level: 925 hPa');
+  assert.equal(LAYER_SPECS.hcritWxtoflyM.legend, 'WxToFly sink threshold: 1.14 m/s');
+  assert.doesNotMatch(Object.values(LAYER_SPECS).map(spec => `${spec.label} ${spec.legend} ${spec.format(1)}`).join(' '), /\bft\b|mph|inHg|\bin\/h/);
+});
+
+test('omitted map ceiling diagnostics remain unavailable while supplied nulls retain their meaning', () => {
+  for (const system of ['imperial', 'metric'] as const) {
+    setUnitSystem(system);
+    for (const layer of ['usableLiftTopM', 'usableLiftTopV2M', 'hcritWxtoflyM', 'resolvedThermalTopM'] as const) {
+      assert.equal(displayMetric(undefined, layer), 'Unavailable', `${layer} omitted in ${system}`);
+      assert.equal(displayMetric(null, layer, 'missing'), 'Unavailable');
+      assert.equal(displayMetric(null, layer, 'insufficient-levels'), 'Insufficient vertical coverage');
+    }
+    assert.equal(displayMetric(null, 'resolvedThermalTopM'), 'Stable');
+    assert.match(displayMetric(null, 'hcritWxtoflyM'), /^Below /);
+  }
 });

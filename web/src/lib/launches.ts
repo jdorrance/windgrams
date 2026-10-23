@@ -8,6 +8,8 @@
 // This module is plain TypeScript with erasable syntax only, so the Worker,
 // the Astro build, the browser and `node --test` all run it unchanged.
 
+import { convertQuantity, formatQuantity, type UnitSystem } from "./units.ts";
+
 export interface SiteEntry {
   slug: string;
   name: string;
@@ -131,11 +133,24 @@ export function consistencyErrors(sites: SitesFile, launches: LaunchesFile): str
 const num = (value: unknown) => (typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN);
 const round5 = (value: number) => Math.round(value * 1e5) / 1e5;
 
+/** Compact form values; keep the original stored mph when this text is unchanged. */
+export function windLimitDisplayInput(valueMph: number, system: UnitSystem): string {
+  return String(Number((convertQuantity(valueMph * 0.44704, "wind", system) ?? NaN).toFixed(1)));
+}
+
+export function windLimitFromDisplayInput(raw: string, system: UnitSystem, originalMph?: number): number | null {
+  if (raw.trim() === "") return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return null;
+  if (originalMph !== undefined && value === Number(windLimitDisplayInput(originalMph, system))) return originalMph;
+  return system === "metric" ? value / 1.609344 : value;
+}
+
 /**
  * Validates and normalizes a launch submitted by the admin form.
  * Returns the cleaned launch, or a list of human-readable errors.
  */
-export function validateLaunchInput(input: Record<string, unknown>): { launch: Launch } | { errors: string[] } {
+export function validateLaunchInput(input: Record<string, unknown>, displayUnits: UnitSystem = "imperial"): { launch: Launch } | { errors: string[] } {
   const errors: string[] = [];
   const name = typeof input.name === "string" ? input.name.trim().replace(/\s+/g, " ") : "";
   const slug = typeof input.slug === "string" && input.slug.trim() !== "" ? input.slug.trim() : slugify(name);
@@ -150,22 +165,23 @@ export function validateLaunchInput(input: Record<string, unknown>): { launch: L
   const region = typeof input.region === "string" ? input.region.trim().slice(0, 80) : "";
   const notes = typeof input.notes === "string" ? input.notes.trim().slice(0, 2000) : "";
 
-  if (name.length < 2 || name.length > 80) errors.push("Name must be 2 to 80 characters.");
-  else if (!SLUG_PATTERN.test(slug)) errors.push("Slug must be lowercase letters, digits and hyphens.");
+  if (name.length < 2 || name.length > 80) errors.push("Name: 2–80 characters.");
+  else if (!SLUG_PATTERN.test(slug)) errors.push("Slug: lowercase letters, digits and hyphens.");
   const hasLat = typeof input.latitude === "number" || (typeof input.latitude === "string" && input.latitude.trim() !== "");
   const hasLon = typeof input.longitude === "number" || (typeof input.longitude === "string" && input.longitude.trim() !== "");
-  if (!hasLat || !hasLon) errors.push("Place the launch on the map, or type its latitude and longitude.");
+  if (!hasLat || !hasLon) errors.push("Launch coordinates required: place it on the map or enter latitude and longitude.");
   else {
-    if (!(latitude >= -90 && latitude <= 90)) errors.push("Latitude must be between -90 and 90.");
-    if (!(longitude >= -180 && longitude <= 180)) errors.push("Longitude must be between -180 and 180.");
+    if (!(latitude >= -90 && latitude <= 90)) errors.push("Latitude: −90° to 90°.");
+    if (!(longitude >= -180 && longitude <= 180)) errors.push("Longitude: −180° to 180°.");
   }
-  if (!isValidTimeZone(timeZone)) errors.push("Choose a valid time zone.");
-  if (!(facingDeg >= 0 && facingDeg < 360)) errors.push("Choose the direction the launch faces.");
-  if (!(windArcHalfWidthDeg >= 10 && windArcHalfWidthDeg <= 90)) errors.push("Wind arc half-width must be between 10° and 90°.");
-  if (!(windMinMph >= 0 && windMinMph <= 40)) errors.push("Minimum wind must be between 0 and 40 mph.");
-  if (!(windMaxMph > 0 && windMaxMph <= 50)) errors.push("Maximum wind must be between 1 and 50 mph.");
-  if (windMinMph >= windMaxMph) errors.push("Minimum wind must be lower than maximum wind.");
-  if (!(gustMaxMph >= windMaxMph && gustMaxMph <= 60)) errors.push("Maximum gust must be at least the maximum wind and at most 60 mph.");
+  if (!isValidTimeZone(timeZone)) errors.push("Valid time zone required.");
+  if (!(facingDeg >= 0 && facingDeg < 360)) errors.push("Launch direction required.");
+  if (!(windArcHalfWidthDeg >= 10 && windArcHalfWidthDeg <= 90)) errors.push("Wind arc half-width: 10°–90°.");
+  const windBound = (valueMph: number) => formatQuantity(valueMph * 0.44704, "wind", displayUnits === "metric" ? 5 : 0, displayUnits);
+  if (!(windMinMph >= 0 && windMinMph <= 40)) errors.push(`Minimum wind: 0–${windBound(40)}.`);
+  if (!(windMaxMph > 0 && windMaxMph <= 50)) errors.push(`Maximum wind: above 0, up to ${windBound(50)}.`);
+  if (windMinMph >= windMaxMph) errors.push("Minimum wind: below maximum wind.");
+  if (!(gustMaxMph >= windMaxMph && gustMaxMph <= 60)) errors.push(`Maximum gust: at least maximum wind, up to ${windBound(60)}.`);
   if (errors.length > 0) return { errors };
 
   return {
@@ -177,9 +193,9 @@ export function validateLaunchInput(input: Record<string, unknown>): { launch: L
       timeZone,
       facingDeg: Math.round(facingDeg),
       windArcHalfWidthDeg: Math.round(windArcHalfWidthDeg),
-      windMinMph: Math.round(windMinMph),
-      windMaxMph: Math.round(windMaxMph),
-      gustMaxMph: Math.round(gustMaxMph),
+      windMinMph,
+      windMaxMph,
+      gustMaxMph,
       region,
       notes,
     },

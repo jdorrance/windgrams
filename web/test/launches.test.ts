@@ -85,7 +85,7 @@ test("validateLaunchInput reports every problem", () => {
 test("validateLaunchInput asks for a map pick when coordinates are missing", () => {
   const result = validateLaunchInput({ ...input, latitude: "", longitude: "" });
   assert.ok("errors" in result);
-  assert.deepEqual(result.errors, ["Place the launch on the map, or type its latitude and longitude."]);
+  assert.deepEqual(result.errors, ["Launch coordinates required: place it on the map or enter latitude and longitude."]);
 });
 
 test("applyLaunch creates, updates, and refuses duplicates and unknown slugs", () => {

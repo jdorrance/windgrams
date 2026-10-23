@@ -1,3 +1,4 @@
+import { formatQuantity, getUnitSystem } from '../lib/units.ts';
 import { fetchWithRetry } from "../lib/http.ts";
 import { Marker, type GeoJSONSource, type ExpressionSpecification } from 'maplibre-gl';
 import { parseSiteForecast, type SiteForecast } from '@azohra/meteo.briefing/contract';
@@ -107,6 +108,7 @@ interface RejectedComparison {
   id: string; stationId: string; siteSlug: string; matchStatus: string; distanceKm: number; timeDeltaMinutes: number; reason: string;
 }
 interface VerificationDoc {
+  evaluatedAt?: string;
   hrrrWrfprsInventory?: { totalGribRecordsPerHour: number; availablePressureLevelsCount: number; availableSub925PressureLevelsHpa: number[]; explicitCloudAndStabilityFields: string[] };
   lifecycleAudit?: { slug: string; catalogueSunset: string; officialTransition: string; successor: string; status: string }[];
   observationVerificationSkill?: {
@@ -120,10 +122,8 @@ interface VerificationDoc {
 }
 
 const M_TO_FT = 3.280839895;
-const MPS_TO_MPH = 2.23693629;
-const MPS_TO_FPM = 196.850394;
-const fmtFt = (m: number | null | undefined) => m == null ? '–' : `${Math.round(m * M_TO_FT).toLocaleString('en-US')} ft`;
-const fmtM = (m: number | null | undefined, datum = 'MSL') => m == null ? 'Unavailable' : `${m.toFixed(1)} m ${datum} (${Math.round(m * M_TO_FT).toLocaleString('en-US')} ft)`;
+const fmtFt = (m: number | null | undefined) => formatQuantity(m, 'elevation');
+const fmtM = (m: number | null | undefined, datum = 'MSL') => m == null ? 'Unavailable' : `${formatQuantity(m, 'elevation')} ${datum}`;
 
 function renderCrossSectionSvg(
   doc: CrossSectionDoc,
@@ -142,8 +142,7 @@ function renderCrossSectionSvg(
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.style.cssText = 'width:100%;min-width:680px;height:auto;border:1px solid var(--rule);border-radius:6px;background:var(--surface)';
 
-  for (const ftVal of [0, 3000, 6000, 9000, 11500]) {
-    const mVal = ftVal / M_TO_FT;
+  for (const mVal of (getUnitSystem() === 'metric' ? [0, 1000, 2000, 3000, 3500] : [0, 3000, 6000, 9000, 11500].map(ft => ft / M_TO_FT))) {
     const y = yOf(mVal);
     const line = document.createElementNS(ns, 'line');
     line.setAttribute('x1', String(left)); line.setAttribute('x2', String(width - right));
@@ -153,7 +152,7 @@ function renderCrossSectionSvg(
     const lbl = document.createElementNS(ns, 'text');
     lbl.setAttribute('x', String(left - 6)); lbl.setAttribute('y', String(y + 4));
     lbl.setAttribute('text-anchor', 'end'); lbl.setAttribute('font-size', '10'); lbl.setAttribute('fill', 'currentColor');
-    lbl.textContent = `${(ftVal / 1000).toFixed(ftVal % 1000 ? 1 : 0)}k ft`;
+    lbl.textContent = formatQuantity(mVal, 'elevation');
     svg.append(lbl);
   }
 
@@ -240,20 +239,21 @@ function renderCrossSectionSvg(
     txt.setAttribute('x', String(x)); txt.setAttribute('y', String(height - 16));
     txt.setAttribute('text-anchor', 'middle'); txt.setAttribute('font-size', '10.5'); txt.setAttribute('font-weight', '600');
     txt.setAttribute('fill', 'currentColor');
-    txt.textContent = `${n.waypointLabel} (${n.distanceKm.toFixed(0)} km)`;
+    txt.textContent = `${n.waypointLabel} (${formatQuantity(n.distanceKm, 'distance')})`;
     svg.append(txt);
   });
 
   const leg = document.createElementNS(ns, 'text');
   leg.setAttribute('x', String(left + 6)); leg.setAttribute('y', '16');
   leg.setAttribute('font-size', '10.5'); leg.setAttribute('fill', 'currentColor');
-  leg.textContent = 'Teal: thermal top · Gold: usable lift top · Purple: potential cloud base · Dots: launches · Heights above sea level';
+  leg.textContent = 'Teal: thermal top · Gold: usable lift top · Purple: potential cloud base · Dots: launches · MSL';
   svg.append(leg);
 
   return svg;
 }
 
 async function main() {
+  set("map-barb-units", getUnitSystem() === "metric" ? "· 2.5 / 5 / 25 m/s" : "· 5 / 10 / 50 kt");
   const regionsCatalogue = await readOptional<RegionCatalogue>(`${DATA_BASE.replace(/\/$/, '')}/soaring/v1/regions.json`);
   const query = defaultReplayQuery(window.location.search, regionsCatalogue);
   const location = replayLocation(query.toString(), DATA_BASE);
@@ -403,7 +403,7 @@ async function main() {
       const m = document.createElement('div');
       const isPrimary = l.slug === manifest.case.site.slug || l.cellIndex === manifest.siteCell;
       m.style.cssText = `background:${isPrimary ? '#111' : '#237e81'};border:2.5px solid white;border-radius:50%;width:${isPrimary ? 17 : 13}px;height:${isPrimary ? 17 : 13}px;box-shadow:0 0 0 1.5px #111;cursor:pointer`;
-      m.title = `${l.name} launch (${l.launchElevationM ?? '–'} m MSL)`;
+      m.title = `${l.name} launch (${formatQuantity(l.launchElevationM, 'elevation')} MSL)`;
       m.addEventListener('click', e => {
         e.stopPropagation();
         selectCell(l.cellIndex, l.slug);
@@ -505,50 +505,43 @@ async function main() {
 
   const inv = activeModel === 'hrrr-conus' ? verificationDoc?.hrrrWrfprsInventory : undefined;
   set('audit-summary', 'About this forecast');
-  set(
-    'audit-results',
-    `${audit.mapProfileAgreement.valuesChecked} identical published values across ${audit.mapProfileAgreement.hours} hours. ` +
-    `${audit.publishedProfileComparison.applicable === false ? 'The saved October 21 comparison does not apply to this run.' : audit.publishedProfileComparison.exact ? 'The saved October 21 profile matches exactly, excluding generation time.' : `${audit.publishedProfileComparison.differences.length} differences from the saved October 21 profile.`} ` +
-    `Sample distance: ${audit.sampledCell.distanceKm.toFixed(2)} km. Model terrain: ${audit.terrain.modelElevationM} m; launch terrain: ${audit.terrain.launch.elevationM} m (raw MSL heights preserved). ` +
-    (inv ? `HRRR wrfprs index inventory: ${inv.totalGribRecordsPerHour} records/hour (${inv.availablePressureLevelsCount} pressure levels available, including sub-925 hPa levels ${inv.availableSub925PressureLevelsHpa.join(', ')} hPa, 80 m AGL wind, and explicit cloud base/ceiling/LCL fields).` : ''),
-  );
-  for (const limitation of audit.limitations) {
-    const li = document.createElement('li');
-    li.textContent = limitation;
-    el('audit-limitations').append(li);
-  }
+  set('audit-results', `${audit.mapProfileAgreement.valuesChecked.toLocaleString('en-US')} map/profile values checked · ${audit.mapProfileAgreement.hours} hours. Sample ${formatQuantity(audit.sampledCell.distanceKm, 'distance')}. Terrain: model ${formatQuantity(audit.terrain.modelElevationM, 'elevation')} / launch ${formatQuantity(audit.terrain.launch.elevationM, 'elevation')} MSL.${inv ? ` ${inv.availablePressureLevelsCount} pressure levels available.` : ''}`);
+  el('audit-limitations').replaceChildren();
   el<HTMLAnchorElement>('audit-download').href = `${root}/audit.json`;
 
-  // Populate Matched Observation Verification table & rejected KUIL notice
+  // Observation checks belong to the dated report, including on archived runs.
   const obsSkill = verificationDoc?.observationVerificationSkill;
   if (obsSkill && el('raob-table-body')) {
-    const rejectedText = obsSkill.rejectedMismatchedComparisons?.map(r => `${r.stationId} vs ${r.siteSlug} (${r.matchStatus}: ${r.distanceKm} km, Δt=${r.timeDeltaMinutes} min)`).join(' · ') ?? '';
+    const date = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+    const observationDays = [...new Set(obsSkill.matchedPairs.map(pair => pair.soundingValidAt.slice(0, 10)))].filter(day => Number.isFinite(Date.parse(day))).sort();
+    const firstDay = observationDays[0], lastDay = observationDays.at(-1);
+    const observationDates = firstDay ? `${date.format(new Date(firstDay))}${lastDay !== firstDay ? `–${date.format(new Date(lastDay!))}` : ''} UTC` : '';
+    const evaluatedAt = verificationDoc?.evaluatedAt;
+    const evaluated = evaluatedAt && Number.isFinite(Date.parse(evaluatedAt)) ? ` · evaluated ${date.format(new Date(evaluatedAt))} UTC` : '';
+    const rejectedText = obsSkill.rejectedMismatchedComparisons?.map(r => `${r.stationId}: ${formatQuantity(r.distanceKm, "distance")}, ${r.timeDeltaMinutes} min offset`).join(' · ') ?? '';
     set(
       'raob-meta',
-      `${obsSkill.matchedCount} matched observation pairs. See each observation time in the downloadable report. ` +
-      (rejectedText ? `Excluded from site skill: ${rejectedText}.` : ''),
+      `Historical observations${observationDates ? ` · ${observationDates}` : ''}${evaluated} · ${obsSkill.matchedCount} matched station pairs.` +
+      (rejectedText ? ` Excluded pairs: ${rejectedText}.` : ''),
     );
     const tbody = el('raob-table-body');
     tbody.replaceChildren();
     for (const pair of obsSkill.matchedPairs) {
       const tr = document.createElement('tr');
       tr.innerHTML =
-        `<td><strong>${pair.station.id} &rarr; ${pair.siteName}</strong> <span class="muted">(${pair.station.distanceKm} km)</span></td>` +
+        `<td><strong>${pair.station.id} &rarr; ${pair.siteName}</strong> <span class="muted">(${formatQuantity(pair.station.distanceKm, "distance")})</span></td>` +
         `<td><code>${pair.model}</code></td>` +
         `<td>${pair.regime} (${pair.leadTimeBucket})</td>` +
-        `<td>${pair.metrics.temperatureMaeC?.toFixed(2) ?? '–'}°C (${pair.metrics.temperatureBiasC != null && pair.metrics.temperatureBiasC >= 0 ? '+' : ''}${pair.metrics.temperatureBiasC?.toFixed(2) ?? '–'}°C)</td>` +
-        `<td>${pair.metrics.dewPointMaeC?.toFixed(2) ?? '–'}°C</td>` +
-        `<td>${pair.metrics.windVectorRmseMps?.toFixed(2) ?? '–'} m/s</td>`;
+        `<td>${formatQuantity(pair.metrics.temperatureMaeC, "temperatureDelta", 2)} (${pair.metrics.temperatureBiasC != null && pair.metrics.temperatureBiasC >= 0 ? '+' : ''}${formatQuantity(pair.metrics.temperatureBiasC, "temperatureDelta", 2)})</td>` +
+        `<td>${formatQuantity(pair.metrics.dewPointMaeC, "temperatureDelta", 2)}</td>` +
+        `<td>${formatQuantity(pair.metrics.windVectorRmseMps, "wind", 2)}</td>`;
       tbody.append(tr);
     }
   }
   if (verificationDoc?.wrfPilotDomain && el('wrf-lifecycle-summary')) {
     const w = verificationDoc.wrfPilotDomain;
-    const lc = verificationDoc.lifecycleAudit ?? [];
-    el('wrf-lifecycle-summary').innerHTML =
-      `<p><strong>${w.label} (<code>${w.modelSlug}</code>):</strong> Pinned WRF-ARW ${w.wrfRelease} 3:1 nested domain — ` +
-      `<code>d01</code> 3 km (${w.domains[0]?.eWe}×${w.domains[0]?.eSn}) &rarr; <code>d02</code> 1 km (${w.domains[1]?.eWe}×${w.domains[1]?.eSn}, ${w.domains[1]?.eVert} vertical levels, explicit convection <code>cu_physics=0</code>, ${w.physics.blPblPhysics}).</p>` +
-      `<ul style="margin:.4rem 0 0;padding-left:1.1rem">${lc.map(item => `<li><code>${item.slug}</code>: catalogue sunset ${item.catalogueSunset}, official transition <strong>${item.officialTransition}</strong> &rarr; <code>${item.successor}</code> (${item.status})</li>`).join('')}</ul>`;
+    const grids = w.domains.map(domain => formatQuantity(domain.dxM / 1000, 'resolution')).join(' → ');
+    set('wrf-lifecycle-summary', `WRF-ARW pilot configuration · planned North Sound grids: ${grids}.`);
   }
   if (launchesDoc?.nwsOffice?.products?.afd?.text && el('nws-afd-text')) {
     set('nws-afd-text', launchesDoc.nwsOffice.products.afd.text.trim());
@@ -570,8 +563,8 @@ async function main() {
     set('cell-title', activeLabel);
     set(
       'cell-location',
-      `${properties.latitude.toFixed(4)}°, ${properties.longitude.toFixed(4)}° · model terrain ${properties.modelElevationM ?? 'unavailable'} m MSL` +
-      (matchedLaunch?.launchElevationM != null ? ` · 3DEP launch ${matchedLaunch.launchElevationM} m MSL` : ''),
+      `${properties.latitude.toFixed(4)}°, ${properties.longitude.toFixed(4)}° · Model terrain ${fmtM(properties.modelElevationM)}` +
+      (matchedLaunch?.launchElevationM != null ? ` · Launch terrain ${fmtM(matchedLaunch.launchElevationM)}` : ''),
     );
 
     if (launchSelect) {
@@ -633,20 +626,20 @@ async function main() {
     const modelLaunchHour = matchedLaunch?.models?.[activeModel]?.hours?.find(mh => mh.validAt === hour.validAt);
     const expTerr = modelLaunchHour?.experimentalTerrain;
     const detailRows: [string, string][] = [
-      ['Thermal strength W* (v2 / v1)', `${displayMetric(hour.thermalVelocityV2Mps?.[selectedCell], 'thermalVelocityV2Mps', hour.status[selectedCell])} · v1: ${displayMetric(hour.thermalVelocityMps[selectedCell], 'thermalVelocityMps', hour.status[selectedCell])}`],
-      ['Usable-lift top (v2 / v1, 1.0 m/s)', `${displayMetric(hour.usableLiftTopV2M?.[selectedCell], 'usableLiftTopV2M', hour.status[selectedCell])} · v1: ${displayMetric(hour.usableLiftTopM[selectedCell], 'usableLiftTopM', hour.status[selectedCell])}`],
-      ['WxToFly Hcrit (v2, 225 ft/min)', displayMetric(hour.hcritWxtoflyM?.[selectedCell], 'hcritWxtoflyM', hour.status[selectedCell])],
-      ['Resolved thermal top (v2)', fmtM(hour.resolvedThermalTopM?.[selectedCell], 'MSL')],
-      ['+1 °C thermal top sensitivity', fmtM(hour.thermalTopPlus1CM?.[selectedCell], 'MSL')],
-      ['Baseline parcel top (v1)', fmtM(hour.boundaryLayerTopM[selectedCell], 'MSL')],
+      ['Thermal strength · current / legacy', `${displayMetric(hour.thermalVelocityV2Mps?.[selectedCell], 'thermalVelocityV2Mps', hour.status[selectedCell])} · v1: ${displayMetric(hour.thermalVelocityMps[selectedCell], 'thermalVelocityMps', hour.status[selectedCell])}`],
+      [`Usable lift top · ${formatQuantity(1, 'lift')} sink`, `${displayMetric(hour.usableLiftTopV2M?.[selectedCell], 'usableLiftTopV2M', hour.status[selectedCell])} · v1: ${displayMetric(hour.usableLiftTopM[selectedCell], 'usableLiftTopM', hour.status[selectedCell])}`],
+      [`Paraglider ceiling · ${formatQuantity(1.143, 'lift')} sink`, displayMetric(hour.hcritWxtoflyM?.[selectedCell], 'hcritWxtoflyM', hour.status[selectedCell])],
+      ['Thermal top', fmtM(hour.resolvedThermalTopM?.[selectedCell], 'MSL')],
+      [`Thermal top · +${formatQuantity(1, 'temperatureDelta')} sensitivity`, fmtM(hour.thermalTopPlus1CM?.[selectedCell], 'MSL')],
+      ['Parcel top · legacy', fmtM(hour.boundaryLayerTopM[selectedCell], 'MSL')],
       [`${modelLabel(activeModel)} model boundary-layer depth`, fmtM(hour.pblHeightM[selectedCell], 'AGL')],
-      ['Surface LCL (Cu base)', fmtM((hour.surfaceLclM ?? hour.cloudBaseM)[selectedCell], 'MSL')],
-      ['Mixed-layer LCL (zblcl, physical)', fmtM(hour.mixedLayerLclM?.[selectedCell], 'MSL')],
-      ['Cu / OD potential', `${hour.cuPotentialM?.[selectedCell] != null ? `${hour.cuPotentialM[selectedCell]! >= 0 ? '+' : ''}${hour.cuPotentialM[selectedCell]!.toFixed(0)} m` : '–'} / ${hour.odPotentialM?.[selectedCell] != null ? `${hour.odPotentialM[selectedCell]! >= 0 ? '+' : ''}${hour.odPotentialM[selectedCell]!.toFixed(0)} m` : '–'}`],
-      ['10 m wind (gust)', w10s != null && w10d != null ? `${compassPoint(w10d)} (${w10d.toFixed(0)}°) @ ${(w10s * MPS_TO_MPH).toFixed(1)} mph${w10g != null ? ` (gust ${(w10g * MPS_TO_MPH).toFixed(1)} mph)` : ''}` : 'Unavailable'],
-      ['Experimental launch-alt wind', expTerr ? (expTerr.bracketsLaunchAltitude && expTerr.launchWindSpeedMps != null && expTerr.launchWindDirectionDeg != null ? `${compassPoint(expTerr.launchWindDirectionDeg)} (${expTerr.launchWindDirectionDeg.toFixed(0)}°) @ ${(expTerr.launchWindSpeedMps * MPS_TO_MPH).toFixed(1)} mph at ${expTerr.launchElevationM} m (raw MSL heights preserved)` : `Launch (${expTerr.launchElevationM} m) outside profile bracket`) : 'Select a named launch to inspect'],
-      ['BL mean wind & shear', blws != null && blwd != null ? `${compassPoint(blwd)} (${blwd.toFixed(0)}°) @ ${(blws * MPS_TO_MPH).toFixed(1)} mph · shear ${blsh?.toFixed(1) ?? '–'} m/s (B/S ${bsr?.toFixed(2) ?? '–'})` : 'Unavailable'],
-      ['925 hPa w & 10 m convergence', `${hour.w925Mps?.[selectedCell] != null ? `${hour.w925Mps[selectedCell]! >= 0 ? '+' : ''}${hour.w925Mps[selectedCell]!.toFixed(2)} m/s` : '–'} · ${hour.convergence10mX1e5?.[selectedCell] != null ? `${hour.convergence10mX1e5[selectedCell]! >= 0 ? '+' : ''}${hour.convergence10mX1e5[selectedCell]!.toFixed(1)} ×10⁻⁵ s⁻¹` : '–'}`],
+      ['Potential cloud base (surface LCL)', fmtM((hour.surfaceLclM ?? hour.cloudBaseM)[selectedCell], 'MSL')],
+      ['Mixed-layer cloud base', fmtM(hour.mixedLayerLclM?.[selectedCell], 'MSL')],
+      ['Cu / OD potential', `${hour.cuPotentialM?.[selectedCell] != null ? `${hour.cuPotentialM[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.cuPotentialM[selectedCell], "elevation")}` : '–'} / ${hour.odPotentialM?.[selectedCell] != null ? `${hour.odPotentialM[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.odPotentialM[selectedCell], "elevation")}` : '–'}`],
+      [`Wind at ${formatQuantity(10, 'elevation')} AGL (gust)`, w10s != null && w10d != null ? `${compassPoint(w10d)} (${w10d.toFixed(0)}°) @ ${formatQuantity(w10s, "wind")}${w10g != null ? ` (gust ${formatQuantity(w10g, "wind")})` : ''}` : 'Unavailable'],
+      ['Launch-elevation wind · experimental', expTerr ? (expTerr.bracketsLaunchAltitude && expTerr.launchWindSpeedMps != null && expTerr.launchWindDirectionDeg != null ? `${compassPoint(expTerr.launchWindDirectionDeg)} (${expTerr.launchWindDirectionDeg.toFixed(0)}°) @ ${formatQuantity(expTerr.launchWindSpeedMps, "wind")} at ${formatQuantity(expTerr.launchElevationM, "elevation")} MSL` : `Launch (${formatQuantity(expTerr.launchElevationM, "elevation")}) outside profile bracket`) : 'Select a launch'],
+      ['BL mean wind & shear', blws != null && blwd != null ? `${compassPoint(blwd)} (${blwd.toFixed(0)}°) @ ${formatQuantity(blws, "wind")} · shear ${formatQuantity(blsh, "wind")} (B/S ${bsr?.toFixed(2) ?? '–'})` : 'Unavailable'],
+      [`Vertical motion at ${formatQuantity(925, 'pressure')} / convergence`, `${hour.w925Mps?.[selectedCell] != null ? `${hour.w925Mps[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.w925Mps[selectedCell], "lift")}` : '–'} · ${hour.convergence10mX1e5?.[selectedCell] != null ? `${hour.convergence10mX1e5[selectedCell]! >= 0 ? '+' : ''}${hour.convergence10mX1e5[selectedCell]!.toFixed(1)} ×10⁻⁵ s⁻¹` : '–'}`],
       ['Sensible / latent heat flux', `${hour.sensibleHeatFluxWm2?.[selectedCell]?.toFixed(0) ?? '–'} / ${hour.latentHeatFluxWm2?.[selectedCell]?.toFixed(0) ?? '–'} W/m²`],
       ['Clouds (total / low / mid / high)', `${hour.cloudCoverPercent?.[selectedCell]?.toFixed(0) ?? '–'}% (${hour.lowCloudPercent?.[selectedCell]?.toFixed(0) ?? '–'}% / ${hour.midCloudPercent?.[selectedCell]?.toFixed(0) ?? '–'}% / ${hour.highCloudPercent?.[selectedCell]?.toFixed(0) ?? '–'}%)`],
     ];
@@ -654,7 +647,7 @@ async function main() {
       ['Thermal strength', displayMetric((hour.thermalVelocityV2Mps ?? hour.thermalVelocityMps)[selectedCell], 'thermalVelocityV2Mps', hour.status[selectedCell])],
       ['Usable lift top', displayMetric((hour.usableLiftTopV2M ?? hour.usableLiftTopM)[selectedCell], 'usableLiftTopV2M', hour.status[selectedCell])],
       ['Potential cloud base', fmtFt((hour.surfaceLclM ?? hour.cloudBaseM)[selectedCell])],
-      ['Surface wind', w10s != null && w10d != null ? `${compassPoint(w10d)} ${(w10s * MPS_TO_MPH).toFixed(0)} mph${w10g != null ? ` · gusts ${(w10g * MPS_TO_MPH).toFixed(0)}` : ''}` : 'Unavailable'],
+      ['Surface wind', w10s != null && w10d != null ? `${compassPoint(w10d)} ${formatQuantity(w10s, "wind")}${w10g != null ? ` · gusts ${formatQuantity(w10g, "wind")}` : ''}` : 'Unavailable'],
       ['Cloud cover', displayMetric(hour.cloudCoverPercent?.[selectedCell], 'cloudCoverPercent')],
     ];
     if (!['thermalVelocityV2Mps', 'usableLiftTopV2M', 'surfaceLclM', 'wind10mSpeedMps', 'cloudCoverPercent'].includes(layer)) {
@@ -668,20 +661,20 @@ async function main() {
       }
     }
     const notice = hour.status[selectedCell] === 'insufficient-levels'
-      ? 'Too little height data to estimate lift.'
+      ? 'Lift unavailable · limited vertical data.'
       : hour.status[selectedCell] === 'missing'
-        ? 'Lift forecast unavailable here.'
-        : hour.ceilingReached[selectedCell] ? 'Thermal height may extend above the available data.' : '';
+        ? 'Lift unavailable.'
+        : hour.ceilingReached[selectedCell] ? 'Thermals extend beyond profile top.' : '';
     set('cell-notice', notice);
     el('cell-notice').hidden = !notice;
     set(
       'cell-quality',
-      `${hour.levelCount[selectedCell]} usable above-ground levels. ` +
+      `${hour.levelCount[selectedCell]} profile levels. ` +
       (hour.ceilingReached[selectedCell]
-        ? 'Thermal calculation reaches the sampled-column ceiling.'
+        ? 'Thermals reach profile ceiling.'
         : hour.status[selectedCell] === 'valid'
-          ? 'Thermal crossing lies within the sampled column.'
-          : 'Lift diagnostics are masked.'),
+          ? 'Thermal top inside profile.'
+          : 'Lift unavailable.'),
     );
 
     const spec = LAYER_SPECS[layer] ?? LAYER_SPECS.thermalVelocityV2Mps;
@@ -695,14 +688,14 @@ async function main() {
       const key = document.createElement('span'), swatch = document.createElement('span');
       key.className = 'legend-key'; swatch.className = 'legend-swatch';
       swatch.style.background = spec.colors[i];
-      key.append(swatch, stop.toLocaleString('en-US'));
+      key.append(swatch, stop.toLocaleString('en-US', {maximumFractionDigits: 2}));
       scale.append(key);
     }
     const explanation = document.createElement('span');
     explanation.className = 'muted';
     const liftTopLayer = ['usableLiftTopV2M', 'usableLiftTopM', 'hcritWxtoflyM', 'dryHcritM', 'resolvedThermalTopM'].includes(layer);
-    explanation.textContent = 'Gray: unavailable · Purple: limited height data' + (liftTopLayer ? ' · Beige: no usable lift' : '');
-    if (layer === 'usableLiftTopV2M' || layer === 'usableLiftTopM') legendTitle.textContent += ' · 1.0 m/s sink';
+    explanation.textContent = 'Gray: unavailable · Purple: limited height data' + (liftTopLayer ? ' · Beige: below sink threshold' : '');
+    if (layer === 'usableLiftTopV2M' || layer === 'usableLiftTopM') legendTitle.textContent += ` · ${formatQuantity(1, 'lift')} sink`;
     legend.append(legendTitle, scale, explanation);
 
     if (launches.length && el('launches-table-body')) {
@@ -730,17 +723,17 @@ async function main() {
         const conv = hour.convergence10mX1e5?.[ci];
 
         tr.innerHTML =
-          `<td><strong>${l.name}</strong> <span class="muted">(${l.launchElevationM != null ? `${Math.round(l.launchElevationM)}m` : '–'} / ${l.modelElevationM != null ? `${Math.round(l.modelElevationM)}m` : '–'})</span></td>` +
-          `<td>${wstar != null ? `${wstar.toFixed(2)} m/s (${Math.round(wstar * MPS_TO_FPM)})` : '–'}</td>` +
+          `<td><strong>${l.name}</strong> <span class="muted">(${l.launchElevationM != null ? `${formatQuantity(l.launchElevationM, "elevation")}` : '–'} / ${l.modelElevationM != null ? `${formatQuantity(l.modelElevationM, "elevation")}` : '–'})</span></td>` +
+          `<td>${wstar != null ? `${formatQuantity(wstar, "lift")}` : '–'}</td>` +
           `<td>${fmtFt(uTop)}</td>` +
           `<td>${fmtFt(wxTop)}</td>` +
           `<td>${rTop != null ? fmtFt(rTop) : '<span class="muted">Stable</span>'}</td>` +
           `<td>${fmtFt(v1Top)}</td>` +
-          `<td>${hpbl != null ? `${Math.round(hpbl)} m` : '–'}</td>` +
+          `<td>${hpbl != null ? formatQuantity(hpbl, "elevation") : '–'}</td>` +
           `<td>${fmtFt(lcl)}</td>` +
-          `<td>${cu != null ? `${cu >= 0 ? '+' : ''}${cu.toFixed(0)}` : '–'} / ${od != null ? `${od >= 0 ? '+' : ''}${od.toFixed(0)} m` : '–'}</td>` +
-          `<td>${ws != null && wd != null ? `${compassPoint(wd)} ${(ws * MPS_TO_MPH).toFixed(0)} mph` : '–'}</td>` +
-          `<td>${blw != null ? `${(blw * MPS_TO_MPH).toFixed(0)} mph` : '–'} / ${bls != null ? `${bls.toFixed(1)} m/s` : '–'}</td>` +
+          `<td>${cu != null ? `${cu >= 0 ? '+' : ''}${formatQuantity(cu, "elevation")}` : '–'} / ${od != null ? `${od >= 0 ? '+' : ''}${formatQuantity(od, "elevation")}` : '–'}</td>` +
+          `<td>${ws != null && wd != null ? `${compassPoint(wd)} ${formatQuantity(ws, "wind")}` : '–'}</td>` +
+          `<td>${blw != null ? `${formatQuantity(blw, "wind")}` : '–'} / ${bls != null ? formatQuantity(bls, "wind") : '–'}</td>` +
           `<td>${conv != null ? `${conv >= 0 ? '+' : ''}${conv.toFixed(0)}` : '–'}</td>`;
         tr.addEventListener('click', () => {
           selectCell(ci, l.slug);
@@ -759,7 +752,7 @@ async function main() {
           displayMetric((hour.thermalVelocityV2Mps ?? hour.thermalVelocityMps)[ci], 'thermalVelocityV2Mps', hour.status[ci]),
           displayMetric((hour.usableLiftTopV2M ?? hour.usableLiftTopM)[ci], 'usableLiftTopV2M', hour.status[ci]),
           fmtFt(lcl),
-          ws != null && wd != null ? `${compassPoint(wd)} ${(ws * MPS_TO_MPH).toFixed(0)} mph` : 'Unavailable',
+          ws != null && wd != null ? `${compassPoint(wd)} ${formatQuantity(ws, "wind")}` : 'Unavailable',
         ];
         for (const reading of readings) {
           const td = document.createElement('td'); td.textContent = reading; simpleRow.append(td);
@@ -808,12 +801,12 @@ async function main() {
         tr.innerHTML =
           `<td><strong>${mlabel}</strong></td>` +
           `<td>${mdata.referenceTime ? mdata.referenceTime.slice(5, 16).replace('T', ' ') + 'Z' : '–'}</td>` +
-          `<td>${mdata.modelElevationM != null ? `${Math.round(mdata.modelElevationM)} m` : '–'}</td>` +
-          `<td>${mh.tempC != null ? `${mh.tempC.toFixed(1)}°C` : '–'}${mh.dewPointC != null ? ` / ${mh.dewPointC.toFixed(1)}°C` : ''}</td>` +
-          `<td>${mh.windDirectionDeg != null ? `${compassPoint(mh.windDirectionDeg)} ` : ''}${mh.windSpeedMps != null ? `${(mh.windSpeedMps * MPS_TO_MPH).toFixed(1)} mph` : '–'}${mh.windGustMps != null ? ` (g ${(mh.windGustMps * MPS_TO_MPH).toFixed(0)})` : ''}</td>` +
-          `<td>${isSparseAdapter ? '<span class="muted" title="Unsupported: adapter lacks surface heat fluxes and dense vertical profile">Unavailable</span>' : (wstarVal != null ? `${wstarVal.toFixed(2)} m/s` : '–')}</td>` +
-          `<td>${isSparseAdapter ? '<span class="muted" title="Unsupported: adapter lacks surface heat fluxes and dense vertical profile">Unavailable</span>' : fmtFt(uTopVal)}</td>` +
-          `<td>${fmtFt(blTopVal)}${mh.pblHeightM != null ? ` (${Math.round(mh.pblHeightM)} m AGL)` : ''}</td>` +
+          `<td>${mdata.modelElevationM != null ? formatQuantity(mdata.modelElevationM, "elevation") : '–'}</td>` +
+          `<td>${mh.tempC != null ? formatQuantity(mh.tempC, "temperature", 1) : '–'}${mh.dewPointC != null ? ` / ${formatQuantity(mh.dewPointC, "temperature", 1)}` : ''}</td>` +
+          `<td>${mh.windDirectionDeg != null ? `${compassPoint(mh.windDirectionDeg)} ` : ''}${mh.windSpeedMps != null ? `${formatQuantity(mh.windSpeedMps, "wind")}` : '–'}${mh.windGustMps != null ? ` (g ${formatQuantity(mh.windGustMps, "wind")})` : ''}</td>` +
+          `<td>${isSparseAdapter ? '<span class="muted" title="Surface forecast · thermal profile unavailable">Unavailable</span>' : (wstarVal != null ? formatQuantity(wstarVal, "lift") : '–')}</td>` +
+          `<td>${isSparseAdapter ? '<span class="muted" title="Surface forecast · thermal profile unavailable">Unavailable</span>' : fmtFt(uTopVal)}</td>` +
+          `<td>${fmtFt(blTopVal)}${mh.pblHeightM != null ? ` (${formatQuantity(mh.pblHeightM, "elevation")} AGL)` : ''}</td>` +
           `<td>${fmtFt(mh.cloudBaseM)}${mh.cloudCoverPct != null ? ` (${Math.round(mh.cloudCoverPct)}%)` : ''}</td>`;
         tbody.append(tr);
       }
@@ -829,7 +822,7 @@ async function main() {
           ...f,
           properties: {
             ...f.properties,
-            quality: ['thermalVelocityV2Mps', 'thermalVelocityMps', 'usableLiftTopV2M', 'usableLiftTopM', 'resolvedThermalTopM', 'boundaryLayerTopM', 'hcritWxtoflyM', 'dryHcritM'].includes(layer) ? hour.status[i] : (arr[i] == null ? 'missing' : 'valid'),
+            quality: arr[i] === undefined ? 'missing' : ['thermalVelocityV2Mps', 'thermalVelocityMps', 'usableLiftTopV2M', 'usableLiftTopM', 'resolvedThermalTopM', 'boundaryLayerTopM', 'hcritWxtoflyM', 'dryHcritM'].includes(layer) ? hour.status[i] : (arr[i] === null ? 'missing' : 'valid'),
             value: arr[i] === null || arr[i] === undefined ? null : arr[i]! * spec.scale,
           },
         })),
@@ -851,8 +844,8 @@ async function main() {
         const wsArr = (useBlWind ? hour.blMeanWindSpeedMps : hour.wind10mSpeedMps) ?? [];
         const wdArr = (useBlWind ? hour.blMeanWindDirDeg : hour.wind10mDirDeg) ?? [];
         const barbs = windBarbs(showBarbs ? grid.features.map(f => f.properties) : [], wsArr, wdArr);
-        for (const { properties: { icon, speedKt } } of barbs.features) {
-          if (!map.hasImage(icon)) map.addImage(icon, windBarbImage(speedKt), { pixelRatio: 2 });
+        for (const { properties: { icon, barbSpeed } } of barbs.features) {
+          if (!map.hasImage(icon)) map.addImage(icon, windBarbImage(barbSpeed), { pixelRatio: 2 });
         }
         windSource.setData(barbs);
       }
@@ -1001,7 +994,7 @@ async function main() {
 }
 main().catch(error => {
   console.error(error);
-  set('replay-status', 'This forecast is unavailable. Please try again later.');
+  set('replay-status', 'Forecast unavailable.');
   el('replay-status').hidden = false;
   el('replay-status').setAttribute('role', 'alert');
 });

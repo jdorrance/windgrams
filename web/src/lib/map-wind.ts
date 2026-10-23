@@ -1,3 +1,4 @@
+import { getUnitSystem } from './units.ts';
 import { barbPaths } from './wind-barb.ts';
 
 interface CellCentre { longitude: number; latitude: number }
@@ -11,10 +12,11 @@ export function windBarbs(cells: CellCentre[], speeds: (number | null)[], direct
     const speed = speeds[i], direction = directions[i];
     if (speed == null || !Number.isFinite(speed) || speed < 0) return [];
     const speedKt = Math.round(speed * KNOTS_PER_MPS / 5) * 5;
-    if (speedKt && (direction == null || !Number.isFinite(direction))) return [];
+    const barbSpeed = getUnitSystem() === 'metric' ? Math.round(speed * 2 / 5) * 5 : speedKt;
+    if (barbSpeed && (direction == null || !Number.isFinite(direction))) return [];
     return [{
       type: 'Feature' as const,
-      properties: { speedMps: speed, speedKt, bearing: speedKt ? ((direction! % 360) + 360) % 360 : 0, icon: `wind-barb-${speedKt}` },
+      properties: { speedMps: speed, speedKt, barbSpeed, bearing: barbSpeed ? ((direction! % 360) + 360) % 360 : 0, icon: `wind-barb-${getUnitSystem()}-${barbSpeed}` },
       geometry: { type: 'Point' as const, coordinates: [cell.longitude, cell.latitude] as [number, number] },
     }];
   });

@@ -7,7 +7,12 @@
 
 import { HourlyChart, niceMax, type ChartSpec } from "./hourly-chart.ts";
 import { compassPoint, inArc, type DirectionArc } from "./launches.ts";
-import { fahrenheit, fmt, ft, mph } from "./units.ts";
+import { convertQuantity, fmt, formatQuantity, getUnitSystem, unitLabel } from "./units.ts";
+
+const windValue = (value: number | null) => convertQuantity(value, "wind");
+const heightValue = (value: number | null) => convertQuantity(value, "elevation");
+const temperatureValue = (value: number | null) => convertQuantity(value, "temperature");
+const launchWind = (valueMph: number) => convertQuantity(valueMph / 2.2369362920544025, "wind")!;
 
 export interface NwsHour {
   validAt: string;
@@ -37,39 +42,40 @@ const dir = (deg: number | null) => (deg == null ? "" : `${compassPoint(deg)} `)
 /** The launch's wind panel pieces shared by every hourly chart. */
 export function windExtras(launch: ChartLaunch, directions: (number | null)[]) {
   return {
-    band: { from: launch.windMinMph, to: launch.windMaxMph },
-    limit: launch.gustMaxMph,
+    band: { from: launchWind(launch.windMinMph), to: launchWind(launch.windMaxMph) },
+    limit: launchWind(launch.gustMaxMph),
     arrows: directions.map((deg) => ({ deg, inWindow: deg != null && inArc(deg, launch.window) })),
     legendTail: [
-      { label: `Launch range ${launch.windMinMph}–${launch.windMaxMph} mph`, kind: "band" as const, color: "var(--good)" },
-      { label: `Gust limit ${launch.gustMaxMph} mph`, kind: "limit" as const, color: "var(--critical)" },
+      { label: `Launch range ${fmt(launchWind(launch.windMinMph))}–${fmt(launchWind(launch.windMaxMph))} ${unitLabel("wind")}`, kind: "band" as const, color: "var(--good)" },
+      { label: `Gust limit ${fmt(launchWind(launch.gustMaxMph))} ${unitLabel("wind")}`, kind: "limit" as const, color: "var(--critical)" },
       { label: `Wind from ${launch.windowLabel}`, kind: "arrow-in" as const, color: "var(--good)" },
       { label: "Wind from other directions", kind: "arrow-out" as const, color: "var(--muted)" },
     ],
   };
 }
 
-/** Axis top and step for a height panel in feet: ticks must divide the top so it is labelled. */
+/** Height-axis bounds in the selected display units, with an exact top tick. */
 export function feetAxis(values: (number | null)[]) {
-  const peak = Math.max(2000, ...values.map((v) => v ?? 0));
-  const step = peak > 8000 ? 4000 : 2000;
+  const metric = getUnitSystem() === "metric";
+  const peak = Math.max(metric ? 500 : 2000, ...values.map((v) => v ?? 0));
+  const step = peak > (metric ? 2500 : 8000) ? (metric ? 1000 : 4000) : (metric ? 500 : 2000);
   return { yMax: niceMax(peak, step), yStep: step };
 }
 
 export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
   return {
-    emptyText: "The National Weather Service forecast does not cover this day yet.",
+    emptyText: "NWS forecast unavailable.",
     panels(hours) {
-      const wind = hours.map((h) => mph(h.windSpeedMps));
-      const gust = hours.map((h) => mph(h.windGustMps));
-      const transport = hours.map((h) => mph(h.transportWindSpeedMps));
-      const windTop = niceMax(Math.max(launch.gustMaxMph + 5, ...[...wind, ...gust, ...transport].map((v) => v ?? 0)), 5);
-      const mixing = hours.map((h) => ft(h.mixingHeightM));
+      const wind = hours.map((h) => windValue(h.windSpeedMps));
+      const gust = hours.map((h) => windValue(h.windGustMps));
+      const transport = hours.map((h) => windValue(h.transportWindSpeedMps));
+      const windTop = niceMax(Math.max(launchWind(launch.gustMaxMph) + 5, ...[...wind, ...gust, ...transport].map((v) => v ?? 0)), 5);
+      const mixing = hours.map((h) => heightValue(h.mixingHeightM));
       const extras = windExtras(launch, hours.map((h) => h.windDirectionDeg));
       return [
         {
           title: "Wind",
-          unit: "mph",
+          unit: unitLabel("wind"),
           height: 190,
           yMax: windTop,
           yStep: windTop > 40 ? 10 : 5,
@@ -82,7 +88,7 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
           limit: extras.limit,
           arrows: extras.arrows,
           legend: [
-            { label: "Wind (10 m)", kind: "line", color: "var(--series-1)" },
+            { label: `Wind (${formatQuantity(10, "elevation")} AGL)`, kind: "line", color: "var(--series-1)" },
             { label: "Gust", kind: "line", color: "var(--series-2)" },
             { label: "Transport wind (mixed layer)", kind: "line", color: "var(--series-3)" },
             ...extras.legendTail,
@@ -90,7 +96,7 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
         },
         {
           title: "Mixing height",
-          unit: "ft above ground",
+          unit: `${unitLabel("elevation")} AGL`,
           height: 130,
           ...feetAxis(mixing),
           series: [{ key: "mixing", label: "Mixing height", color: "var(--series-1)", values: mixing, area: true }],
@@ -117,34 +123,34 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
     tooltip(h) {
       const inWindow = h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
       return [
-        { label: "Wind", value: `${dir(h.windDirectionDeg)}${fmt(mph(h.windSpeedMps))} mph`, color: "var(--series-1)", extra: inWindow ? "✓" : undefined },
-        { label: "Gust", value: `${fmt(mph(h.windGustMps))} mph`, color: "var(--series-2)" },
-        { label: "Transport", value: `${dir(h.transportWindDirectionDeg)}${fmt(mph(h.transportWindSpeedMps))} mph`, color: "var(--series-3)" },
-        { label: "Mixing height", value: `${fmt(ft(h.mixingHeightM), 0)} ft` },
+        { label: "Wind", value: `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))} ${unitLabel("wind")}`, color: "var(--series-1)", extra: inWindow ? "✓" : undefined },
+        { label: "Gust", value: `${fmt(windValue(h.windGustMps))} ${unitLabel("wind")}`, color: "var(--series-2)" },
+        { label: "Transport", value: `${dir(h.transportWindDirectionDeg)}${fmt(windValue(h.transportWindSpeedMps))} ${unitLabel("wind")}`, color: "var(--series-3)" },
+        { label: "Mixing height", value: `${fmt(heightValue(h.mixingHeightM), 0)} ${unitLabel("elevation")}` },
         { label: "Sky cover", value: `${fmt(h.skyCoverPct)}%` },
         { label: "Precip / thunder", value: `${fmt(h.precipitationProbabilityPct)}% / ${fmt(h.thunderProbabilityPct)}%` },
-        { label: "Temperature", value: `${fmt(fahrenheit(h.temperatureC))}°F` },
+        { label: "Temperature", value: `${fmt(temperatureValue(h.temperatureC))} ${unitLabel("temperature")}` },
       ];
     },
     note: (h) => h.shortForecast,
     table: {
-      columns: ["Wind (mph)", "Gust", "Transport (mph)", "Mixing ht (ft)", "Sky", "Precip", "Thunder", "Temp", "Forecast"],
+      columns: [`Wind (${unitLabel("wind")})`, "Gust", `Transport (${unitLabel("wind")})`, `Mixing ht (${unitLabel("elevation")})`, "Sky", "Precip", "Thunder", "Temp", "Forecast"],
       cells(h) {
         const inWindow = h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
         return [
-          `${dir(h.windDirectionDeg)}${fmt(mph(h.windSpeedMps))}${inWindow ? " ✓" : ""}`,
-          fmt(mph(h.windGustMps)),
-          `${dir(h.transportWindDirectionDeg)}${fmt(mph(h.transportWindSpeedMps))}`,
-          fmt(ft(h.mixingHeightM)),
+          `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))}${inWindow ? " ✓" : ""}`,
+          fmt(windValue(h.windGustMps)),
+          `${dir(h.transportWindDirectionDeg)}${fmt(windValue(h.transportWindSpeedMps))}`,
+          fmt(heightValue(h.mixingHeightM)),
           `${fmt(h.skyCoverPct)}%`,
           `${fmt(h.precipitationProbabilityPct)}%`,
           `${fmt(h.thunderProbabilityPct)}%`,
-          `${fmt(fahrenheit(h.temperatureC))}°F`,
+          `${fmt(temperatureValue(h.temperatureC))} ${unitLabel("temperature")}`,
           h.shortForecast ?? "",
         ];
       },
       textColumns: [8],
-      footnote: `✓ = wind from the launch's window (${launch.windowLabel}).`,
+      footnote: `✓ Launch window (${launch.windowLabel}).`,
     },
   };
 }

@@ -1,14 +1,17 @@
-import type { FeatureCollection, Point } from 'geojson';
-
 interface CellCentre { longitude: number; latitude: number }
+interface WindArrow {
+  type: 'Feature';
+  properties: { speedMps: number; bearing: number };
+  geometry: { type: 'Point'; coordinates: [number, number] };
+}
 
 /** Meteorological directions name the source; arrowheads point downwind. */
 export function windArrows(
   cells: CellCentre[],
   speeds: (number | null)[],
   directions: (number | null)[],
-): FeatureCollection<Point, { speedMps: number; bearing: number }> {
-  const features: FeatureCollection<Point, { speedMps: number; bearing: number }>['features'] = [];
+) {
+  const features: WindArrow[] = [];
   for (let i = 0; i < cells.length; i++) {
     const speed = speeds[i], direction = directions[i], cell = cells[i];
     // Calm air has no meaningful arrow direction. MapLibre handles spacing.
@@ -19,5 +22,5 @@ export function windArrows(
       geometry: { type: 'Point', coordinates: [cell.longitude, cell.latitude] },
     });
   }
-  return { type: 'FeatureCollection', features };
+  return { type: 'FeatureCollection' as const, features };
 }

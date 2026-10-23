@@ -639,6 +639,7 @@ export function buildCellSiteForecast(
     const soaring = h.thermalVelocityV2Mps ? {
       thermalVelocityV2Mps: h.thermalVelocityV2Mps[cellIndex],
       usableLiftTopV2M: h.usableLiftTopV2M?.[cellIndex] ?? null,
+      hcritWxtoflyM: h.hcritWxtoflyM?.[cellIndex] ?? null,
       resolvedThermalTopM: h.resolvedThermalTopM?.[cellIndex] ?? null,
       surfaceLclM: h.surfaceLclM?.[cellIndex] ?? null,
     } : undefined;

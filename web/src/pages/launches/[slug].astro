@@ -94,23 +94,24 @@ const station = stationEntry && (() => {
         Background colours show how quickly air temperature changes with height: warm red and orange bands cool rapidly
         upward, pink and purple bands cool more slowly, and grey bands indicate inversions. Temperature contours are in
         °F. Colours describe atmospheric stability, not flight suitability. The emphasized 32°F contour shows every
-        freezing crossing; cyan dots mark the lowest crossing each hour. Neither predicts snowfall.
+        freezing crossing; cyan snowflakes mark the lowest crossing each hour. Neither predicts snowfall.
       </p>
       <p>
         Wind barbs point toward the direction the wind comes from. A half feather means 5 knots, a full feather 10 knots,
-        and a pennant 50 knots; add them together. Green marks identify lighter wind speeds, not suitable flying conditions.
+        and a pennant 50 knots; add them together. Green marks indicate speeds below 9 knots; white marks indicate 9 knots or more. These are wind speeds, not flight ratings.
         Rows between model levels are interpolated to show the changing flow; they do not add forecast resolution.
         Tap an hour or focus the chart and use the left and right arrow keys to select it.
       </p>
       <p>
-        Clouds are placed at their estimated altitude. Model cloud fractions are used where the model supplies them;
-        otherwise, relative humidity above 95% identifies inferred cloud layers. Filled cloud cues require at least 30%
-        model cloud fraction or the humidity threshold. These estimates can miss thin layers. A potential cloud-base line shows where a rising surface parcel
-        would condense; that line alone does not mean clouds will form. High cloud cover can also lie above this chart.
+        White crosshatching marks relative humidity above 94%; pale white bands mark model cloud fractions of at least
+        30%. These estimates can miss thin layers. Outlined clouds and the potential cloud-base line mark where a rising
+        surface parcel would condense, even when thermals cannot reach that height. They do not imply actual clouds.
+        High cloud cover can also lie above this chart.
       </p>
       <p>
-        Thermal strength (w*) is in m/s. Boundary-layer and usable-lift lines estimate thermal reach; usable lift assumes
-        a 1 m/s sink rate. Weather details retains the surface diagnostics; cloud, smoke and convection data depend on
+        The colours, lapse-rate thresholds and units follow <a href="http://wxtofly.net/windgramexplain.html">WxToFly’s guide</a>.
+        Thermal strength (w*) is in m/s. Paraglider symbols use a 225 ft/min (1.143 m/s) sink rate. The separate blue
+        usable-lift line assumes 1 m/s sink. Weather details contains rain and other surface diagnostics; cloud, smoke and convection data depend on
         the selected model. Ensemble temperatures and winds show the median forecast. Shaded ribbons span the middle
         50% of ensemble members (the 25th to 75th percentiles).
       </p>

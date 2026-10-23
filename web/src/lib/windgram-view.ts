@@ -1,7 +1,8 @@
-import { publishedLift } from "./published-lift.ts";
+import { publishedLift, publishedWxtoflyLiftTop } from "./published-lift.ts";
 import type { SiteForecast } from "@azohra/meteo.briefing/contract";
-import { componentsToWind, lapseRateCPer1000Ft, localDateKey, relativeHumidityPercent, STABILITY_CLASSES, windToComponents } from "@azohra/meteo.briefing/derive";
+import { componentsToWind, lapseRateCPer1000Ft, localDateKey, relativeHumidityPercent, windToComponents } from "@azohra/meteo.briefing/derive";
 import { buildMeteogramScene, sampledFieldPaths, type FieldNode, type HourSampling, type MeteogramOptions, type MetricStrip } from "@azohra/meteo.briefing/meteogram";
+import { WINDGRAM_STABILITY } from "./windgram-stability.ts";
 
 export interface HeightAnchor { heightM: number; y: number; pressureHpa: number | null }
 export interface WindgramBarb {
@@ -32,7 +33,7 @@ export interface WindgramView {
   contours: TemperatureContour[]; barbs: WindgramBarb[]; clouds: WindgramCloud[];
   cloudBands: { x: number; y: number; width: number; height: number; kind: CloudEvidence; coverPercent: number | null }[];
   freezing: { x: number; y: number; hourIndex: number }[];
-  wings: { x: number; y: number }[]; series: WindgramSeries[];
+  wings: { x: number; y: number; heightM: number; hourIndex: number }[]; series: WindgramSeries[];
   launch: { y: number; heightM: number; label: string } | null;
   diagnostics: readonly MetricStrip[]; diagnosticLeft: number; diagnosticColumnWidth: number;
   sampling: readonly HourSampling[]; selectedHourIndex: number;
@@ -393,7 +394,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     return heights.flatMap((z) => { const value = sampleHeight(nodes, z); return value === null ? [] : [{ altitudeM: bottom - y(z), value }]; });
   });
   const fields = sampledFieldPaths({ nodesByHour: fieldNodes, floorM: 0, topM: plotHeight, plotLeft: left, plotTop: top, plotBottom: bottom, plotWidth,
-    banding: { breakpoints: STABILITY_CLASSES.slice(0, -1).map((c) => c.maxLapse), classNames: STABILITY_CLASSES.map((c) => `meteo-gram-stab-${c.className}`) } });
+    banding: { breakpoints: WINDGRAM_STABILITY.slice(0, -1).map((c) => c.maxLapse), classNames: WINDGRAM_STABILITY.map((c) => `meteo-gram-stab-${c.className}`) } });
   view.fields = Object.entries(fields).map(([className, path]) => ({ className, path }));
   fieldNodes.forEach((nodes, i) => {
     // The public band renderer extends its last value to the plot ceiling.
@@ -423,24 +424,32 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     if (freezing !== undefined) view.freezing.push({ x, y: y(freezing), hourIndex: i });
     const modelCloud = h.levels.map((l) => ({ altitudeM: scalar(l.heightM) ?? NaN, value: scalar(l.cloudFractionPercent) ?? NaN }))
       .filter((n) => Number.isFinite(n.altitudeM) && n.altitudeM >= floorM).sort((a, b) => a.altitudeM - b.altitudeM);
-    const hasModelCloud = modelCloud.filter((n) => Number.isFinite(n.value)).length >= 2;
-    const kind = hasModelCloud ? "model" : "humidity";
-    const layers = moistLayers(hasModelCloud ? modelCloud : sample.relativeHumidityPercent, hasModelCloud ? 30 : 95.00001);
-    for (const layer of layers) {
-      view.clouds.push({ ...layer, hourIndex: i, x, y: y(layer.baseM), kind, coverPercent: hasModelCloud ? layer.coverPercent : null });
-      view.cloudBands.push({ x: x - columnWidth / 2, width: columnWidth, y: y(layer.topM), height: y(layer.baseM) - y(layer.topM), kind, coverPercent: hasModelCloud ? layer.coverPercent : null });
+    // Humidity hatching remains independent of model cloud fraction: either
+    // source can identify a layer the other misses.
+    for (const [kind, nodes, threshold] of [
+      ["model", modelCloud, 30],
+      ["humidity", sample.relativeHumidityPercent, 94.00001],
+    ] as const) {
+      for (const layer of moistLayers(nodes, threshold)) {
+        const coverPercent = kind === "model" ? layer.coverPercent : null;
+        view.clouds.push({ ...layer, hourIndex: i, x, y: y(layer.baseM), kind, coverPercent });
+        view.cloudBands.push({ x: x - columnWidth / 2, width: columnWidth, y: y(layer.topM), height: y(layer.baseM) - y(layer.topM), kind, coverPercent });
+      }
     }
-    const base = scalar(publishedLift(h).cloudBaseM), usable = scalar(publishedLift(h).usableLiftTopM), wstar = scalar(publishedLift(h).thermalVelocityMps);
-    if (sample.cloudCapped && base !== null && base >= floorM && base <= topM && wstar !== null && wstar >= 0.1
-      && !layers.some((l) => base >= l.baseM - 100 && base <= l.topM + 100)) {
+    const base = scalar(publishedLift(h).cloudBaseM);
+    // WxToFly's cloud symbol is the potential LCL, independent of thermal reach.
+    if (base !== null && base >= floorM && base <= topM) {
       view.clouds.push({ hourIndex: i, x, y: y(base), baseM: base, topM: base, kind: "potential", coverPercent: null });
     }
-    if (i % 3 === 1 && usable !== null && usable > floorM + 10 && usable <= topM && wstar !== null && wstar >= 0.1) view.wings.push({ x, y: y(usable) + 10 });
+    const gliderTop = scalar(publishedWxtoflyLiftTop(h));
+    if (i % 3 === 1 && gliderTop !== null && gliderTop > floorM + 10 && gliderTop <= topM) {
+      view.wings.push({ x, y: y(gliderTop) + 8, heightM: gliderTop, hourIndex: i });
+    }
   });
 
   for (const [key, label, color, dash] of [
     ["boundaryLayerTopM", "Boundary layer", "#a56800", "7 5"],
-    ["usableLiftTopM", "Usable lift", "#134ac4", null],
+    ["usableLiftTopM", "Usable lift · 1 m/s sink", "#134ac4", null],
     ["cloudBaseM", "Potential cloud base", "#426173", "2 5"],
   ] as const) {
     const value = (h: ProfileHour) => scalar(publishedLift(h)[key]);

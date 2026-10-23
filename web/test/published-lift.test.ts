@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildCellSiteForecast, type ReplayManifest, type ReplayHour } from '../src/lib/soaring.ts';
-import { publishedLift, parsePublishedProfileJson } from '../src/lib/published-lift.ts';
+import { publishedLift, publishedWxtoflyLiftTop, parsePublishedProfileJson } from '../src/lib/published-lift.ts';
 import { buildWindgramView } from '../src/lib/windgram-view.ts';
 import { buildSounding, readSounding } from '../src/lib/skewt.ts';
 
@@ -22,6 +22,7 @@ test('every archived map hour agrees with the cell windgram and sounding, includ
     const lift = publishedLift(profile.hours[i]);
     assert.equal(lift.thermalVelocityMps, h.thermalVelocityV2Mps![0]);
     assert.equal(lift.usableLiftTopM, h.usableLiftTopV2M![0]);
+    assert.equal(publishedWxtoflyLiftTop(profile.hours[i]), h.hcritWxtoflyM?.[0] ?? null);
     assert.equal(view.hours[i].thermalVelocityMps, h.thermalVelocityV2Mps![0]);
     const sounding = buildSounding(profile, profile.hours[i])!;
     assert.equal(sounding.thermalVelocityMps, h.thermalVelocityV2Mps![0]);
@@ -30,6 +31,30 @@ test('every archived map hour agrees with the cell windgram and sounding, includ
   assert.equal(view.hours[6].thermalVelocityMps, 0.85);
   assert.equal(publishedLift(profile.hours[6]).usableLiftTopM, 465.5);
   assert.doesNotMatch(readSounding(buildSounding(profile, profile.hours[6])!, 378.5).headline, /too weak to climb/);
+});
+
+test('the WxToFly ceiling retains published scalar and ensemble values at the 225 ft/min threshold', () => {
+  const rawProfile = structuredClone(golden);
+  const height = { members: 21, p10: 250, p25: 300, p50: 400, p75: 500, p90: 600 };
+  rawProfile.hours[0].soaring = { thermalVelocityV2Mps: 1, usableLiftTopV2M: 500, hcritWxtoflyM: 446.8 };
+  rawProfile.hours[1].soaring = { thermalVelocityV2Mps: 1, usableLiftTopV2M: 500, hcritWxtoflyM: height };
+  const parsed = parsePublishedProfileJson(JSON.stringify(rawProfile))!;
+  assert.equal(publishedWxtoflyLiftTop(parsed.hours[0]), 446.8);
+  assert.deepEqual(publishedWxtoflyLiftTop(parsed.hours[1]), height);
+  assert.equal(publishedLift(parsed.hours[0]).usableLiftTopM, 500, 'the 1 m/s ceiling remains distinct');
+});
+
+test('a missing, null or invalid 225 ft/min ceiling never falls back to the 1 m/s value', () => {
+  const rawProfile = structuredClone(golden);
+  for (const [index, value] of [null, undefined, '500', { p50: 500 }, { members: 21, p10: 250, p25: 300, p50: '400', p75: 500, p90: 600 }].entries()) {
+    rawProfile.hours[index].soaring = { thermalVelocityV2Mps: 1, usableLiftTopV2M: 500, hcritWxtoflyM: value };
+  }
+  const parsed = parsePublishedProfileJson(JSON.stringify(rawProfile))!;
+  for (const hour of parsed.hours.slice(0, 5)) {
+    assert.equal(publishedWxtoflyLiftTop(hour), null);
+    assert.equal(publishedLift(hour).usableLiftTopM, 500);
+  }
+  assert.equal(publishedWxtoflyLiftTop(parsed.hours[5]), null, 'legacy profiles do not publish the WxToFly diagnostic');
 });
 test('a missing surface or incomplete column never invents a valid profile', () => {
   const broken = structuredClone(hours); broken[3].sfcT = [null];

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast, type SiteForecast } from "@azohra/meteo.briefing/contract";
+import { dewPointC, relativeHumidityPercent } from "@azohra/meteo.briefing/derive";
 import { buildWindgramView, heightToY, readWindgram, visibleHeightAnchors, visibleWindgramHourIndices, yToHeight } from "../src/lib/windgram-view.ts";
 import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramHeightAxisSvg, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
 
@@ -110,6 +111,77 @@ test("temperature contours retain every crossing through an inversion", () => {
   assert.ok(!/NaN|Infinity/.test(contour.path));
 });
 
+function temperatureLabelRects(svg: string, temperatureF: number) {
+  return [...svg.matchAll(/<g class="wg-temperature-label" data-temperature-f="(-?[\d.]+)"><rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"/g)]
+    .filter((match) => Number(match[1]) === temperatureF)
+    .map((match) => ({ x: Number(match[2]), y: Number(match[3]), width: Number(match[4]), height: Number(match[5]) }));
+}
+
+function smoothTemperatureProfile(count = 14) {
+  const profile = steadyProfile(count);
+  for (const hour of profile.hours) {
+    hour.surface.temperatureC = 12;
+    hour.surface.dewPointC = -13;
+    hour.derived.cloudBaseM = null;
+    for (const level of hour.levels) {
+      level.temperatureC = 12 - (level.heightM - profile.site.modelElevationM) * .0065;
+      level.dewPointC = Number(level.temperatureC) - 25;
+      level.cloudFractionPercent = 0;
+    }
+  }
+  return profile;
+}
+
+test("each long connected temperature line receives one label on desktop and mobile", () => {
+  const profile = smoothTemperatureProfile();
+  for (const compact of [false, true]) {
+    const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact, widthPx: compact ? 320 : 1000, heightPx: 844 });
+    const before = structuredClone(view.contours);
+    const svg = renderWindgramSvg(view);
+    for (const temperatureF of [24, 32, 40]) {
+      assert.ok(view.contours.find((contour) => contour.temperatureF === temperatureF)!.labels.length > 1, "hourly physical crossing candidates remain available");
+      assert.equal(temperatureLabelRects(svg, temperatureF).length, 1, `${temperatureF}°F is labelled once, compact=${compact}`);
+    }
+    assert.deepEqual(view.contours, before, "label placement never rewrites the contour geometry");
+  }
+});
+
+test("separate inversion branches each receive one temperature label on their own line", () => {
+  const profile = steadyProfile();
+  for (const hour of profile.hours) {
+    hour.surface.temperatureC = 8;
+    hour.surface.dewPointC = -17;
+    hour.derived.cloudBaseM = null;
+    hour.levels = hour.levels.slice(0, 5).map((level, i) => ({
+      ...level, temperatureC: i % 2 === 0 ? 0 : 8, dewPointC: -25, cloudFractionPercent: 0,
+    }));
+  }
+  const view = viewOf(profile);
+  const contour = view.contours.find((line) => line.temperatureF === 40)!;
+  const expectedHeights = [...new Set(contour.labels.map((label) => label.y))].sort((a, b) => a - b);
+  const labels = temperatureLabelRects(renderWindgramSvg(view), 40).sort((a, b) => a.y - b.y);
+  assert.equal(expectedHeights.length, 5);
+  assert.equal(labels.length, 5, "one label per disconnected inversion branch");
+  labels.forEach((label, i) => close(label.y + label.height / 2, expectedHeights[i], 2));
+});
+
+test("a missing-time gap splits temperature labels without moving either into the gap", () => {
+  const profile = smoothTemperatureProfile(5);
+  profile.hours.forEach((hour, i) => { hour.validAt = `2000-01-01T${[10, 11, 12, 16, 17][i]}:00:00Z`; });
+  const view = viewOf(profile);
+  const labels = temperatureLabelRects(renderWindgramSvg(view), 40).sort((a, b) => a.x - b.x);
+  assert.equal(labels.length, 2);
+  assert.ok(labels[0].x + labels[0].width / 2 <= view.hours[2].x);
+  assert.ok(labels[1].x + labels[1].width / 2 >= view.hours[3].x);
+});
+
+test("single-hour temperature crossings keep one finite label each", () => {
+  const view = viewOf(smoothTemperatureProfile(1));
+  const svg = renderWindgramSvg(view);
+  for (const temperatureF of [24, 32, 40]) assert.equal(temperatureLabelRects(svg, temperatureF).length, 1);
+  assert.doesNotMatch(svg, /NaN|Infinity|undefined/);
+});
+
 test("cloud evidence distinguishes dry LCL, saturated layers and model cloud", () => {
   const dry = steadyProfile();
   for (const hour of dry.hours) {
@@ -154,6 +226,112 @@ test("a missing temperature cannot create a saturated cloud layer", () => {
   const view = viewOf(profile);
   assert.equal(view.cloudBands.length, 0);
   assert.ok(!view.clouds.some((cloud) => cloud.kind === "humidity"));
+});
+
+test("humidity hatching starts above 94 percent even when model cloud fraction is zero", () => {
+  for (const humidity of [93.99, 94, 94.01]) {
+    const profile = steadyProfile();
+    const dewPoint = dewPointC(10, humidity);
+    close(relativeHumidityPercent(10, dewPoint), humidity, 1e-10);
+    for (const hour of profile.hours) {
+      hour.surface.temperatureC = 10;
+      hour.surface.dewPointC = dewPoint;
+      hour.derived.cloudBaseM = null;
+      for (const level of hour.levels) {
+        level.temperatureC = 10;
+        level.dewPointC = dewPoint;
+        level.cloudFractionPercent = 0;
+      }
+    }
+    const view = viewOf(profile);
+    assert.equal(view.cloudBands.some((band) => band.kind === "humidity"), humidity > 94, `RH ${humidity}%`);
+    assert.ok(!view.cloudBands.some((band) => band.kind === "model"));
+    const svg = renderWindgramSvg(view);
+    if (humidity > 94) assert.match(svg, /fill="url\(#windgram-humidity\)"[^>]*data-cloud-band="humidity"/);
+    else assert.doesNotMatch(svg, /data-cloud-band="humidity"/);
+  }
+});
+
+test("potential cloud base remains visible when thermals cannot reach it or have zero strength", () => {
+  const profile = steadyProfile();
+  const base = profile.site.modelElevationM + 1600;
+  for (const hour of profile.hours) {
+    hour.derived.cloudBaseM = base;
+    hour.derived.usableLiftTopM = profile.site.modelElevationM + 300;
+    hour.derived.boundaryLayerTopM = profile.site.modelElevationM + 600;
+    hour.derived.thermalVelocityMps = 0;
+    hour.surface.dewPointC = Number(hour.surface.temperatureC) - 25;
+    for (const level of hour.levels) {
+      level.dewPointC = Number(level.temperatureC) - 25;
+      level.cloudFractionPercent = 0;
+    }
+  }
+  const view = viewOf(profile);
+  assert.ok(base < view.topM);
+  assert.equal(view.cloudBands.length, 0, "a dry LCL does not imply existing cloud");
+  assert.equal(view.clouds.length, profile.hours.length);
+  for (const cloud of view.clouds) {
+    assert.equal(cloud.kind, "potential");
+    assert.equal(cloud.baseM, base);
+    close(cloud.y, heightToY(view, base));
+  }
+  assert.equal([...renderWindgramSvg(view).matchAll(/data-cloud-kind="potential"/g)].length, profile.hours.length);
+});
+
+test("paraglider symbols use the published 225 ft/min ceiling and never substitute the 1 m/s lift top", () => {
+  const profile = steadyProfile();
+  const gliderTop = profile.site.modelElevationM + 700;
+  const oneMetreTop = profile.site.modelElevationM + 1200;
+  for (const hour of profile.hours) {
+    hour.derived.usableLiftTopM = oneMetreTop + 100;
+    Object.assign(hour, { soaring: {
+      thermalVelocityV2Mps: 2, resolvedThermalTopM: oneMetreTop + 600,
+      usableLiftTopV2M: oneMetreTop, surfaceLclM: oneMetreTop + 500, hcritWxtoflyM: gliderTop,
+    } });
+  }
+  const view = viewOf(profile);
+  assert.equal(view.wings.length, 1);
+  assert.equal(view.wings[0].hourIndex, 1);
+  assert.equal(view.wings[0].heightM, gliderTop);
+  close(view.wings[0].y, heightToY(view, gliderTop) + 8);
+  assert.notEqual(view.wings[0].heightM, oneMetreTop);
+  assert.match(renderWindgramSvg(view), /Paraglider ceiling · 225 ft\/min sink/);
+  for (const mode of ["null", "missing", "legacy"]) {
+    const incomplete = structuredClone(profile);
+    for (const hour of incomplete.hours) {
+      const extended = hour as typeof hour & { soaring?: Record<string, unknown> };
+      if (mode === "legacy") delete extended.soaring;
+      else if (mode === "missing") delete extended.soaring!.hcritWxtoflyM;
+      else extended.soaring!.hcritWxtoflyM = null;
+    }
+    assert.equal(viewOf(incomplete).wings.length, 0, `${mode} 225 ft/min diagnostic must stay absent`);
+  }
+});
+
+test("wind feathers are green below 9 knots and white starting at 9 knots", () => {
+  const view = viewOf(steadyProfile());
+  const source = view.barbs.find((barb) => !barb.interpolated)!;
+  view.barbs = [5, 8.99, 9, 9.01].map((speedKt) => ({ ...source, speedKt }));
+  const colors = [...renderWindgramSvg(view).matchAll(/style="color:([^"]+)"[^>]*data-wind-source="native"/g)].map((match) => match[1]);
+  assert.deepEqual(colors, ["#78ff78", "#78ff78", "#ffffff", "#ffffff"]);
+});
+
+test("snowflakes mark the lowest freezing crossing when an inversion creates several", () => {
+  const profile = steadyProfile();
+  for (const hour of profile.hours) {
+    hour.surface.temperatureC = 8;
+    hour.levels.forEach((level, i) => { level.temperatureC = i % 2 === 0 ? -8 : 8; });
+  }
+  const lowest = (profile.site.modelElevationM + profile.hours[0].levels[0].heightM) / 2;
+  const view = viewOf(profile);
+  assert.equal(view.freezing.length, profile.hours.length);
+  for (const mark of view.freezing) close(mark.y, heightToY(view, lowest));
+  const svg = renderWindgramSvg(view);
+  const marks = [...svg.matchAll(/<path d="([^"]+)"[^>]*class="wg-freezing-mark"/g)];
+  assert.equal(marks.length, profile.hours.length);
+  for (const mark of marks) assert.equal([...mark[1].matchAll(/M/g)].length, 3, "snowflake has three crossing arms");
+  assert.doesNotMatch(svg, /<circle[^>]*class="wg-freezing-mark"/);
+  assert.match(svg, /Lowest freezing level · 32°F/);
 });
 
 test("ensemble profiles retain median readings and uncertainty bands", () => {
@@ -302,7 +480,7 @@ test("compact charts thin display marks, retain first and last hours, and keep d
   assert.ok(altitudeLabels(axis).length > 1);
   assert.match(axis, new RegExp(`viewBox="0 0 ${view.left} ${view.height}"`));
   assert.match(axis, /aria-hidden="true"/);
-  assert.match(axis, /fill="#7977ce"/);
+  assert.match(axis, /fill="#7b7de6"/);
   assert.match(svg, /ft MSL/);
   assert.doesNotMatch(svg, / hPa<\/text>/);
   const visibleHours = visibleWindgramHourIndices(view);
@@ -331,10 +509,11 @@ test("compact chart height can fit the space below phone controls", () => {
   }
 });
 
-test("compact charts retain an isolated cloud between displayed time labels and wind columns", () => {
+test("compact charts retain isolated model cloud bands and every potential cloud-base symbol", () => {
   const profile = steadyProfile(14);
   for (const hour of profile.hours) {
     hour.derived.thermalVelocityMps = 0;
+    hour.derived.cloudBaseM = profile.site.modelElevationM + 700;
     for (const level of hour.levels) {
       level.dewPointC = Number(level.temperatureC) - 20;
       level.cloudFractionPercent = 0;
@@ -343,14 +522,18 @@ test("compact charts retain an isolated cloud between displayed time labels and 
   profile.hours[3].levels[2].cloudFractionPercent = 100;
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 320, heightPx: 667 });
   assert.ok(!visibleWindgramHourIndices(view).includes(3));
-  assert.equal(view.clouds.length, 1);
-  assert.equal(view.clouds[0].hourIndex, 3);
+  const modelCloud = view.clouds.filter((cloud) => cloud.kind === "model");
+  assert.equal(modelCloud.length, 1);
+  assert.equal(modelCloud[0].hourIndex, 3);
+  const potential = view.clouds.filter((cloud) => cloud.kind === "potential");
+  assert.equal(potential.length, profile.hours.length, "zero lift does not hide potential LCL symbols");
   const svg = renderWindgramSvg(view);
   const windXs = [...svg.matchAll(/<g transform="translate\(([-\d.]+) [-\d.]+\) scale\(\.7\)"[^>]*data-wind-source=/g)].map((match) => Number(match[1]));
   assert.ok(windXs.every((x) => Math.abs(x - view.hours[3].x) > .01), "the cloud occurs between sampled wind columns");
-  assert.match(svg, /data-cloud-kind="model"/);
-  assert.equal([...svg.matchAll(/data-cloud-kind=/g)].length, view.clouds.length);
+  assert.doesNotMatch(svg, /data-cloud-kind="model"/);
+  assert.equal([...svg.matchAll(/data-cloud-kind="potential"/g)].length, potential.length);
   assert.match(svg, /data-cloud-band="model"/);
+  assert.equal([...svg.matchAll(/data-cloud-band="model"/g)].length, 1);
 });
 
 test("keyboard hour selection and cleanup work without a visible inspector readout", () => {

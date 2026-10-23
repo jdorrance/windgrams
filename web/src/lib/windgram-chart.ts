@@ -1,5 +1,6 @@
 import { DEFAULT_STYLESHEET } from "@azohra/meteo.briefing/meteogram";
 import { barbPaths } from "./wind-barb.ts";
+import { WINDGRAM_STABILITY, WINDGRAM_STABLE_COLOR } from "./windgram-stability.ts";
 import { heightToY, readWindgram, visibleHeightAnchors, visibleWindgramHourIndices, yToHeight, type WindgramBarb, type WindgramCloud, type WindgramView } from "./windgram-view.ts";
 
 const FT = 3.280839895;
@@ -10,17 +11,6 @@ const identifier = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "-");
 const text = (x: number, y: number, value: string, attrs = "") => `<text x="${fmt(x)}" y="${fmt(y)}" ${attrs}>${escape(value)}</text>`;
 const feet = (m: number) => Math.round(m * FT).toLocaleString("en-US");
 const degrees = (direction: number) => `${["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"][Math.round(direction / 22.5) % 16]} ${Math.round(direction) % 360}°`;
-
-const STABILITY = [
-  ["very-unstable", "#ff3d3d", "≤ −3"],
-  ["unstable", "#ff9900", "−3 to −2.5"],
-  ["conditional-strong", "#ffbbff", "−2.5 to −2"],
-  ["conditional", "#ccbfff", "−2 to −1.5"],
-  ["near-neutral", "#faf0e6", "−1.5 to −1.2"],
-  ["stable", "#8080e6", "−1.2 to 0"],
-  ["inverted", "#cccccc", "0 to 0.5"],
-  ["strong-inversion", "#999999", "> 0.5"],
-] as const;
 
 const STYLES = `
 .windgram { font-family: ui-sans-serif, system-ui, sans-serif; }
@@ -52,23 +42,86 @@ const STYLES = `
 .windgram .wg-inspector circle { fill: none; stroke: #17253e; stroke-width: 2; }
 .windgram-compact .wg-hour, .windgram-compact .wg-lift, .windgram-compact .wg-temperature { font-size: 12px; }
 .windgram-compact .wg-axis-feet, .windgram-compact .wg-surface-temp { font-size: 11px; }
-${STABILITY.map(([name, color]) => `.windgram .meteo-gram-stab-${name} { fill: ${color}; }`).join("\n")}
+${WINDGRAM_STABILITY.map(({ className, color }) => `.windgram .meteo-gram-stab-${className} { fill: ${color}; }`).join("\n")}
 `;
 
 // The flat bottom is the indicated cloud base; every lobe is above it.
 const CLOUD_PATH = "M-20 0C-27 0-28-10-20-13C-20-21-8-24-3-17C4-28 19-23 20-14C30-14 32 0 22 0Z";
+const SNOWFLAKE_PATH = "M-4 0H4M-2-3.46L2 3.46M-2 3.46L2-3.46";
 const WING_PATH = "M-12 0Q0-16 12 0M-10-1Q0-9 10-1M-9 0L-1 7M9 0L1 7M-1 7L0 10L1 7";
 
 function cloudGlyph(cloud: WindgramCloud, scale: number) {
-  const label = cloud.kind === "model" ? `Model cloud${cloud.coverPercent == null ? "" : `, ${Math.round(cloud.coverPercent)}%`}`
-    : cloud.kind === "humidity" ? "Cloud inferred from relative humidity above 95%" : "Potential cumulus: thermal reaches condensation level";
-  return `<g class="wg-cloud-symbol" data-cloud-kind="${cloud.kind}" transform="translate(${fmt(cloud.x)} ${fmt(cloud.y)}) scale(${fmt(scale)})"><title>${escape(`${label}; base ${feet(cloud.baseM)} ft MSL`)}</title><path d="${CLOUD_PATH}" class="${cloud.kind === "potential" ? "wg-cloud-potential" : "wg-cloud"}"/></g>`;
+  return `<g class="wg-cloud-symbol" data-cloud-kind="potential" transform="translate(${fmt(cloud.x)} ${fmt(cloud.y)}) scale(${fmt(scale)})"><title>${escape(`Potential cloud base (LCL); ${feet(cloud.baseM)} ft MSL; does not imply clouds or reachable lift`)}</title><path d="${CLOUD_PATH}" class="wg-cloud-potential"/></g>`;
 }
 
 interface LabelBox { x: number; y: number; width: number; height: number }
 const overlaps = (a: LabelBox, b: LabelBox, padding = 0) => a.x < b.x + b.width + padding && a.x + a.width > b.x - padding && a.y < b.y + b.height + padding && a.y + a.height > b.y - padding;
 
-/** Pick nearby spaces on the same isotherm; suppress a label when no space remains. */
+interface ContourPoint { x: number; y: number }
+interface ContourSegment { x1: number; y1: number; x2: number; y2: number }
+interface ContourComponent {
+  segments: ContourSegment[]; candidates: ContourPoint[];
+  minX: number; maxX: number; minY: number; maxY: number;
+}
+const contourPointKey = (x: number, y: number) => `${Math.round(x * 100)},${Math.round(y * 100)}`;
+function closestOnSegment(point: ContourPoint, segment: ContourSegment): ContourPoint {
+  const dx = segment.x2 - segment.x1, dy = segment.y2 - segment.y1;
+  const lengthSquared = dx * dx + dy * dy;
+  const fraction = lengthSquared ? Math.max(0, Math.min(1, ((point.x - segment.x1) * dx + (point.y - segment.y1) * dy) / lengthSquared)) : 0;
+  return { x: segment.x1 + fraction * dx, y: segment.y1 + fraction * dy };
+}
+
+/** The contour builder emits separate marching-square segments. Shared rounded
+ * endpoints join one line; inversions and missing-time gaps remain independent. */
+function contourComponents(contour: WindgramView["contours"][number]): ContourComponent[] {
+  const segments = [...contour.path.matchAll(/M([^ML]+)L([^ML]+)/g)].map((match) => {
+    const [x1, y1] = match[1].split(",").map(Number);
+    const [x2, y2] = match[2].split(",").map(Number);
+    return { x1, y1, x2, y2 };
+  });
+  const parent = segments.map((_, i) => i);
+  const root = (index: number): number => {
+    while (parent[index] !== index) { parent[index] = parent[parent[index]]; index = parent[index]; }
+    return index;
+  };
+  const endpoint = new Map<string, number>();
+  segments.forEach((segment, i) => {
+    for (const key of [contourPointKey(segment.x1, segment.y1), contourPointKey(segment.x2, segment.y2)]) {
+      const previous = endpoint.get(key);
+      if (previous !== undefined) parent[root(i)] = root(previous);
+      else endpoint.set(key, i);
+    }
+  });
+  const groups = new Map<number, ContourComponent>();
+  segments.forEach((segment, i) => {
+    const id = root(i);
+    let group = groups.get(id);
+    if (!group) {
+      group = { segments: [], candidates: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+      groups.set(id, group);
+    }
+    group.segments.push(segment);
+    group.minX = Math.min(group.minX, segment.x1, segment.x2);
+    group.maxX = Math.max(group.maxX, segment.x1, segment.x2);
+    group.minY = Math.min(group.minY, segment.y1, segment.y2);
+    group.maxY = Math.max(group.maxY, segment.y1, segment.y2);
+  });
+  const components = [...groups.values()];
+  for (const candidate of contour.labels) {
+    let nearest: { component: ContourComponent; point: ContourPoint; distanceSquared: number } | null = null;
+    for (const component of components) for (const segment of component.segments) {
+      const point = closestOnSegment(candidate, segment);
+      const distanceSquared = (candidate.x - point.x) ** 2 + (candidate.y - point.y) ** 2;
+      if (!nearest || distanceSquared < nearest.distanceSquared) nearest = { component, point, distanceSquared };
+    }
+    // Physical crossing candidates can differ slightly from the sampled line;
+    // never move one onto a distant inversion branch or across a missing hour.
+    if (nearest && nearest.distanceSquared <= 36) nearest.component.candidates.push(nearest.point);
+  }
+  return components;
+}
+
+/** Label each connected isotherm once, in a readable space on that same line. */
 function temperatureLabels(view: WindgramView, cloudScale: number, clouds = view.clouds, barbs = view.barbs) {
   const occupied: LabelBox[] = clouds.map((c) => ({ x: c.x - 29 * cloudScale, y: c.y - 25 * cloudScale, width: 58 * cloudScale, height: 27 * cloudScale }));
   const winds: LabelBox[] = barbs.map((b) => {
@@ -78,31 +131,30 @@ function temperatureLabels(view: WindgramView, cloudScale: number, clouds = view
   });
   const labels: string[] = [];
   for (const contour of view.contours) {
-    const segments = [...contour.path.matchAll(/M([^ML]+)L([^ML]+)/g)].map((match) => {
-      const [x1, y1] = match[1].split(",").map(Number);
-      const [x2, y2] = match[2].split(",").map(Number);
-      return { x1, y1, x2, y2 };
-    });
-    for (const point of contour.labels) {
-    const value = `${Math.round(contour.temperatureF)}°`;
-    const width = view.compact ? Math.max(24, value.length * 7 + 6) : Math.max(28, value.length * 8 + 10);
-    const height = view.compact ? 19 : 22;
-    // Follow the nearest branch of the actual contour when shifting sideways.
-    // Altitude alone is insufficient: an isotherm can slope steeply over time.
-    const offsets = [0, -view.columnWidth * .24, view.columnWidth * .24];
-    const positions = offsets.flatMap((offset) => {
-      if (offset === 0) return [point];
-      const x = point.x + offset;
-      const candidates = segments.filter((s) => s.x1 !== s.x2 && x >= Math.min(s.x1, s.x2) && x <= Math.max(s.x1, s.x2))
-        .map((s) => s.y1 + (s.y2 - s.y1) * (x - s.x1) / (s.x2 - s.x1)).sort((a, b) => Math.abs(a - point.y) - Math.abs(b - point.y));
-      return candidates.length && Math.abs(candidates[0] - point.y) < 24 ? [{ x, y: candidates[0] }] : [];
-    });
-    const boxes = positions.map((position) => ({ x: position.x - width / 2, y: position.y - height / 2, width, height }))
-      .filter((box) => box.x >= view.left + 3 && box.x + width <= view.left + view.plotWidth - 3 && box.y >= view.top + 3 && box.y + height <= view.bottom - 3 && !occupied.some((other) => overlaps(box, other, 4)));
-    if (!boxes.length) continue;
-    const box = boxes.find((candidate) => !winds.some((wind) => overlaps(candidate, wind, 1))) ?? boxes[0];
-    occupied.push(box);
-    labels.push(`<g class="wg-temperature-label" data-temperature-f="${contour.temperatureF}"><rect x="${fmt(box.x)}" y="${fmt(box.y)}" width="${width}" height="${height}" rx="2" class="wg-temperature-back"/>${text(box.x + width / 2, box.y + (view.compact ? 14 : 16), value, `text-anchor="middle" class="wg-temperature${contour.temperatureF === 32 ? " wg-temperature-freezing" : ""}"`)}</g>`);
+    for (const component of contourComponents(contour)) {
+      const value = `${Math.round(contour.temperatureF)}°`;
+      const width = view.compact ? Math.max(24, value.length * 7 + 6) : Math.max(28, value.length * 8 + 10);
+      const height = view.compact ? 19 : 22;
+      const middleX = (component.minX + component.maxX) / 2, middleY = (component.minY + component.maxY) / 2;
+      // Geometry candidates cover short branches between source-hour labels and
+      // provide another place on the line when the central candidate is cloudy.
+      const stride = Math.max(1, Math.ceil(component.segments.length / 40));
+      const anchors = [...component.candidates, ...component.segments.filter((_, i) => i % stride === 0)
+        .map((segment) => ({ x: (segment.x1 + segment.x2) / 2, y: (segment.y1 + segment.y2) / 2 }))];
+      const positions = anchors.flatMap((point) => [0, -view.columnWidth * .24, view.columnWidth * .24].flatMap((offset) => {
+        if (offset === 0) return [point];
+        const x = point.x + offset;
+        const crossings = component.segments.filter((segment) => segment.x1 !== segment.x2 && x >= Math.min(segment.x1, segment.x2) && x <= Math.max(segment.x1, segment.x2))
+          .map((segment) => segment.y1 + (segment.y2 - segment.y1) * (x - segment.x1) / (segment.x2 - segment.x1)).sort((a, b) => Math.abs(a - point.y) - Math.abs(b - point.y));
+        return crossings.length && Math.abs(crossings[0] - point.y) < 24 ? [{ x, y: crossings[0] }] : [];
+      }));
+      positions.sort((a, b) => (Math.abs(a.x - middleX) + Math.abs(a.y - middleY) * .15) - (Math.abs(b.x - middleX) + Math.abs(b.y - middleY) * .15));
+      const boxes = positions.map((position) => ({ x: position.x - width / 2, y: position.y - height / 2, width, height }))
+        .filter((box) => box.x >= view.left + 3 && box.x + width <= view.left + view.plotWidth - 3 && box.y >= view.top + 3 && box.y + height <= view.bottom - 3 && !occupied.some((other) => overlaps(box, other, 4)));
+      if (!boxes.length) continue;
+      const box = boxes.find((candidate) => !winds.some((wind) => overlaps(candidate, wind, 1))) ?? boxes[0];
+      occupied.push(box);
+      labels.push(`<g class="wg-temperature-label" data-temperature-f="${contour.temperatureF}"><rect x="${fmt(box.x)}" y="${fmt(box.y)}" width="${width}" height="${height}" rx="2" class="wg-temperature-back"/>${text(box.x + width / 2, box.y + (view.compact ? 14 : 16), value, `text-anchor="middle" class="wg-temperature${contour.temperatureF === 32 ? " wg-temperature-freezing" : ""}"`)}</g>`);
     }
   }
   return labels.join("");
@@ -127,7 +179,7 @@ function heightAxisLabels(view: WindgramView) {
 /** Optional stationary altitude scale for an independently zoomed chart. */
 export function renderWindgramHeightAxisSvg(view: WindgramView, options: { idPrefix?: string } = {}): string {
   const id = identifier(options.idPrefix ?? "windgram-height-axis");
-  return `<svg xmlns="${SVG_NS}" id="${id}" viewBox="0 0 ${view.left} ${fmt(view.height)}" width="${view.left}" height="${fmt(view.height)}" aria-hidden="true" focusable="false" class="windgram${view.compact ? " windgram-compact" : ""} windgram-height-axis"><style>${STYLES}</style><rect width="${view.left}" height="${fmt(view.height)}" fill="#7977ce"/>${heightAxisHeader(view)}${heightAxisLabels(view)}<line x1="${view.left - .7}" x2="${view.left - .7}" y1="${view.top}" y2="${fmt(view.bottom)}" stroke="#eeebff" stroke-width="1.4"/>${text(view.left - 8, view.bottom + (view.compact ? 42 : 53), view.compact ? "Sfc °F" : "Surface °F", 'text-anchor="end" class="wg-axis-unit"')}</svg>`;
+  return `<svg xmlns="${SVG_NS}" id="${id}" viewBox="0 0 ${view.left} ${fmt(view.height)}" width="${view.left}" height="${fmt(view.height)}" aria-hidden="true" focusable="false" class="windgram${view.compact ? " windgram-compact" : ""} windgram-height-axis"><style>${STYLES}</style><rect width="${view.left}" height="${fmt(view.height)}" fill="${WINDGRAM_STABLE_COLOR}"/>${heightAxisHeader(view)}${heightAxisLabels(view)}<line x1="${view.left - .7}" x2="${view.left - .7}" y1="${view.top}" y2="${fmt(view.bottom)}" stroke="#eeebff" stroke-width="1.4"/>${text(view.left - 8, view.bottom + (view.compact ? 42 : 53), view.compact ? "Sfc °F" : "Surface °F", 'text-anchor="end" class="wg-axis-unit"')}</svg>`;
 }
 
 /** Avoid colliding wind feathers at small screen sizes without changing samples. */
@@ -155,19 +207,22 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
       && (!glyphHours.size || hour.x - view.hours[Array.from(glyphHours).at(-1)!].x >= 38))) glyphHours.add(i);
   }
   const barbs = displayedBarbs(view, glyphHours);
-  // A brief cloud event must remain visible even between displayed wind columns.
-  const clouds = view.clouds;
+  // Cloud icons mean potential LCL; actual cloud evidence stays in full-width bands.
+  const clouds = view.clouds.filter((cloud) => cloud.kind === "potential");
   const cloudScale = view.compact ? Math.max(.2, Math.min(.58, view.columnWidth / 60)) : Math.max(.64, Math.min(1, view.columnWidth / 64));
   const parts: string[] = [
     `<style>${STYLES}</style>`,
-    `<defs><clipPath id="${id}-plot"><rect x="${view.left}" y="${view.top}" width="${fmt(view.plotWidth)}" height="${fmt(view.plotHeight)}"/></clipPath><pattern id="${id}-missing" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#a7a4c0"/><path d="M0 0L8 8M-2 6L2 10M6-2L10 2" stroke="#77758f" stroke-width="1"/></pattern></defs>`,
-    `<rect width="${fmt(view.width)}" height="${fmt(view.height)}" rx="6" fill="#7977ce"/>`,
+    `<defs><clipPath id="${id}-plot"><rect x="${view.left}" y="${view.top}" width="${fmt(view.plotWidth)}" height="${fmt(view.plotHeight)}"/></clipPath><pattern id="${id}-missing" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#a7a4c0"/><path d="M0 0L8 8M-2 6L2 10M6-2L10 2" stroke="#77758f" stroke-width="1"/></pattern><pattern id="${id}-humidity" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 0L8 8M0 8L8 0" fill="none" stroke="#fff" stroke-width=".8" opacity=".75"/></pattern></defs>`,
+    `<rect width="${fmt(view.width)}" height="${fmt(view.height)}" rx="6" fill="${WINDGRAM_STABLE_COLOR}"/>`,
     heightAxisHeader(view),
     view.compact ? "" : text(right + 12, view.top - 14, "FEET MSL", 'class="wg-axis-unit"'),
-    `<g clip-path="url(#${id}-plot)"><rect x="${view.left}" y="${view.top}" width="${fmt(view.plotWidth)}" height="${fmt(view.plotHeight)}" fill="#8080e6"/>`,
+    `<g clip-path="url(#${id}-plot)"><rect x="${view.left}" y="${view.top}" width="${fmt(view.plotWidth)}" height="${fmt(view.plotHeight)}" fill="${WINDGRAM_STABLE_COLOR}"/>`,
   ];
   for (const field of view.fields) parts.push(`<path d="${escape(field.path)}" class="${escape(field.className)}" fill-rule="evenodd"${field.className === "windgram-missing" ? ` fill="url(#${id}-missing)"` : ""}/>`);
-  for (const band of view.cloudBands) parts.push(`<rect x="${fmt(band.x)}" y="${fmt(band.y)}" width="${fmt(band.width)}" height="${fmt(band.height)}" fill="#fff" opacity="${band.kind === "model" ? ".14" : ".08"}" data-cloud-band="${band.kind}"/>`);
+  for (const band of view.cloudBands) {
+    const label = band.kind === "humidity" ? "Relative humidity above 94%: likely cloud layer" : "Model cloud fraction at least 30%";
+    parts.push(`<rect x="${fmt(band.x)}" y="${fmt(band.y)}" width="${fmt(band.width)}" height="${fmt(band.height)}" fill="${band.kind === "humidity" ? `url(#${id}-humidity)` : "#fff"}"${band.kind === "model" ? ' opacity=".2"' : ""} data-cloud-band="${band.kind}"><title>${label}</title></rect>`);
+  }
   for (const hour of view.hours) parts.push(`<line x1="${fmt(hour.x)}" x2="${fmt(hour.x)}" y1="${view.top}" y2="${fmt(view.bottom)}" class="wg-hourline"/>`);
   for (const anchor of view.anchors) parts.push(`<line x1="${view.left}" x2="${fmt(right)}" y1="${fmt(anchor.y)}" y2="${fmt(anchor.y)}" class="wg-grid"/>`);
   for (const series of view.series) {
@@ -178,16 +233,16 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
   if (view.launch) parts.push(`<line x1="${view.left}" x2="${fmt(right)}" y1="${fmt(view.launch.y)}" y2="${fmt(view.launch.y)}" stroke="#413b62" stroke-width="1.1" stroke-dasharray="3 4"/>`);
   for (const barb of barbs) {
     const geometry = barbPaths(barb.speedKt, barb.directionDeg);
-    const color = barb.speedKt < 6 ? "#c8ffc8" : barb.speedKt < 9 ? "#78ff78" : "#ffffff";
+    const color = barb.speedKt < 9 ? "#78ff78" : "#ffffff";
     const title = `${barb.speedKt.toFixed(1)} kt from ${degrees(barb.directionDeg)} · ${feet(barb.heightM)} ft · ${barb.interpolated ? "estimated between forecast levels" : "forecast level"}`;
     const shape = geometry.calm ? '<circle r="3" class="wg-barb"/>' : `<path d="${geometry.staff}" class="wg-barb-rim"/><path d="${geometry.staff}" class="wg-barb"/>${geometry.flags.map((flag) => `<path d="${flag}" class="wg-barb"${flag.endsWith("Z") ? ' style="fill:currentColor"' : ""}/>`).join("")}`;
     parts.push(`<g transform="translate(${fmt(barb.x)} ${fmt(barb.y)})${view.compact ? " scale(.7)" : ""}" style="color:${color}" class="${barb.interpolated ? "wg-barb-interpolated" : "wg-barb-native"}" data-wind-source="${barb.interpolated ? "interpolated" : "native"}"><title>${escape(title)}</title>${shape}</g>`);
   }
   parts.push(temperatureLabels(view, cloudScale, clouds, barbs));
-  for (const freeze of view.freezing) parts.push(`<circle cx="${fmt(freeze.x)}" cy="${fmt(freeze.y)}" r="2.7" class="wg-freezing-mark"><title>Freezing level · 32°F</title></circle>`);
-  for (const wing of view.wings) parts.push(`<path d="${WING_PATH}" transform="translate(${fmt(wing.x)} ${fmt(wing.y)})" class="wg-wing"><title>Usable lift top</title></path>`);
+  for (const freeze of view.freezing) parts.push(`<path d="${SNOWFLAKE_PATH}" transform="translate(${fmt(freeze.x)} ${fmt(freeze.y)})" class="wg-freezing-mark"><title>Lowest freezing level · 32°F</title></path>`);
+  for (const wing of view.wings) parts.push(`<path d="${WING_PATH}" transform="translate(${fmt(wing.x)} ${fmt(wing.y)})" class="wg-wing"><title>Paraglider ceiling · 225 ft/min sink · ${feet(wing.heightM)} ft MSL</title></path>`);
   if (view.launch) parts.push(text(view.left + 8, Math.max(view.top + 15, view.launch.y - 7), view.launch.label, 'class="wg-launch"'));
-  // Actual clouds are opaque and render after every atmospheric mark.
+  // Potential cloud-base symbols are outlines so the lapse-rate color stays visible.
   for (const cloud of clouds) parts.push(cloudGlyph(cloud, cloudScale));
   parts.push("</g>");
   parts.push(`<rect x="${view.left}" y="${view.top}" width="${fmt(view.plotWidth)}" height="${fmt(view.plotHeight)}" fill="none" stroke="#eeebff" stroke-width="1.4"/>`);
@@ -214,7 +269,7 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
   } else parts.push(text(view.left + view.plotWidth / 2, view.bottom + 75, `${view.timeZone} · wind in knots · temperatures °F${view.ensemble ? " · ensemble median" : ""}`, 'text-anchor="middle" class="wg-axis-unit"'));
   parts.push(`<g class="wg-inspector" data-windgram-cursor="" visibility="hidden"><line data-cursor-vertical=""/><line data-cursor-horizontal=""/><circle data-cursor-point="" r="7"/></g>`);
   const first = view.hours[0], last = view.hours[view.hours.length - 1];
-  const description = `Windgram${first ? ` from ${first.label} to ${last.label}` : ""}, ${view.timeZone}. ${view.compact ? "Feet above sea level at left." : "Pressure and height at left, feet above sea level at right."} Vertical spacing expands the lower atmosphere. Wind feathers use knots. Temperature contours use Fahrenheit. White clouds show model or humidity evidence; outlined clouds show potential cumulus. ${view.ensemble ? "Ensemble median with shaded uncertainty bands." : ""}`;
+  const description = `Windgram${first ? ` from ${first.label} to ${last.label}` : ""}, ${view.timeZone}. ${view.compact ? "Feet above sea level at left." : "Pressure and height at left, feet above sea level at right."} Vertical spacing expands the lower atmosphere. Wind feathers use knots. Temperature contours use Fahrenheit. White crosshatching shows relative humidity above 94%; pale bands show model cloud. Outlined clouds mark potential cloud base; paraglider symbols use 225 feet per minute sink. ${view.ensemble ? "Ensemble median with shaded uncertainty bands." : ""}`;
   return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(view.width)} ${fmt(view.height)}" role="img" aria-labelledby="${id}-title ${id}-description" class="windgram${view.compact ? " windgram-compact" : ""}"><title id="${id}-title">Wind, temperature and clouds by hour and altitude</title><desc id="${id}-description">${escape(description)}</desc>${parts.join("\n")}</svg>`;
 }
 
@@ -264,12 +319,12 @@ export function renderWindgramDiagnosticsSvg(view: WindgramView, options: { idPr
 
 export function renderWindgramKey(): string {
   const icon = (content: string, width = 35) => `<svg xmlns="${SVG_NS}" viewBox="0 0 ${width} 24" width="${width}" height="24" aria-hidden="true">${content}</svg>`;
-  const cloud = icon(`<path d="${CLOUD_PATH}" transform="translate(17 20) scale(.55)" fill="#fff" stroke="#7773bc" stroke-width="1.4"/>`);
+  const humidity = icon('<rect x="2" y="1" width="31" height="22" rx="2" fill="#7b7de6"/><path d="M4 3L22 21M13 3L31 21M4 21L22 3M13 21L31 3" stroke="#fff" stroke-width="1"/>');
   const potential = icon(`<path d="${CLOUD_PATH}" transform="translate(17 20) scale(.55)" fill="none" stroke="#7773bc" stroke-width="1.7" stroke-dasharray="4 3"/>`);
   const wind = icon('<path d="M9 21L9 3M9 3L20 7M9 8L15 10" fill="none" stroke="#355963" stroke-width="1.4"/>');
-  const freezing = icon('<path d="M1 12H34" stroke="#237d92" stroke-width="1.5" stroke-dasharray="5 3"/><circle cx="17" cy="12" r="2.5" fill="#fff" stroke="#237d92"/>');
+  const freezing = icon(`<path d="M1 12H34" stroke="#237d92" stroke-width="1.5" stroke-dasharray="5 3"/><path d="${SNOWFLAKE_PATH}" transform="translate(17 12)" fill="none" stroke="#237d92"/>`);
   const lift = icon(`<path d="${WING_PATH}" transform="translate(17 12) scale(.7)" fill="none" stroke="#134ac4" stroke-width="1.8"/>`);
-  return `<div class="windgram-legend"><div class="windgram-legend-ramp"><strong>Lapse rate · °C / 1,000 ft</strong>${STABILITY.map(([, color, range]) => `<span class="windgram-legend-chip" style="--chip:${color}">${range}</span>`).join("")}</div><div class="windgram-legend-symbols"><span>${wind}Wind · half 5 / full 10 / flag 50 kt</span><span>${cloud}Cloud layer</span><span>${potential}Potential cumulus</span><span>${freezing}32°F freezing level</span><span>${lift}Usable lift top</span></div><details class="windgram-legend-note"><summary>How to read this chart</summary><p>Color shows stability, not flight suitability. Red/orange: fastest cooling with height. Gray: inversion. Hatching: unavailable profile. Cyan dots: lowest freezing crossing. Wind colors: pale green &lt;6 kt, green 6–9 kt, white ≥9 kt. Fainter barbs show display interpolation between native model levels (not additional vertical resolution). Filled clouds need model cloud or humidity evidence; outlined clouds indicate potential only. All heights are above sea level.</p></details></div>`;
+  return `<div class="windgram-legend"><div class="windgram-legend-ramp"><strong>Lapse rate · °C / 1,000 ft</strong>${WINDGRAM_STABILITY.map(({ color, range }) => `<span class="windgram-legend-chip" style="--chip:${color}">${range}</span>`).join("")}</div><div class="windgram-legend-symbols"><span>${wind}Wind · half 5 / full 10 / flag 50 kt</span><span>${humidity}Humidity &gt;94%</span><span>${potential}Potential cloud base</span><span>${freezing}32°F freezing level</span><span>${lift}225 ft/min sink</span></div><details class="windgram-legend-note"><summary>How to read this chart</summary><p>Colors and lapse-rate thresholds follow <a href="http://wxtofly.net/windgramexplain.html">WxToFly’s guide</a>. Red/orange: fastest cooling with height. Gray: inversion. Dark diagonal hatching: unavailable profile. White crosshatching: humidity above 94%. Pale white bands: model cloud fraction ≥30%. Outlined clouds: potential condensation level, even when thermals cannot reach it. Snowflakes: lowest freezing crossing, not snowfall. Wind colors: green &lt;9 kt, white ≥9 kt. Fainter barbs are interpolated between model levels. Paragliders: ceiling at 225 ft/min (1.143 m/s) sink; blue line: 1 m/s sink. Lift w* uses m/s; temperatures use °F; all heights are above sea level. Rain and other surface values are in Weather details.</p></details></div>`;
 }
 
 /** Pointer and keyboard inspection stays in the same nonlinear height coordinates. */
@@ -312,7 +367,7 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement |
       reading.speedKt == null ? "Wind unavailable" : reading.speedKt < .1 ? "Calm" : `${reading.speedKt.toFixed(1)} kt${reading.directionDeg == null ? "" : ` from ${degrees(reading.directionDeg)}`}`,
       reading.speedKt == null ? null : reading.interpolated ? "Estimated between forecast levels" : "Forecast level",
       reading.gustKt == null ? null : `Surface gust ${Math.round(reading.gustKt)} kt`,
-      reading.cloud === "model" ? "Model cloud layer" : reading.cloud === "humidity" ? "Cloud inferred from humidity >95%" : reading.cloud === "potential" ? "Potential cumulus, not confirmed cloud" : null,
+      reading.cloud === "model" ? "Model cloud layer" : reading.cloud === "humidity" ? "Likely cloud layer from humidity >94%" : reading.cloud === "potential" ? "Potential cloud base, not confirmed cloud" : null,
       view.ensemble ? "Ensemble median" : null].filter((value): value is string => value !== null);
     const nextText = `${title} · ${values.join(" · ")}`;
     if (nextText !== lastText) {

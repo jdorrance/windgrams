@@ -28,11 +28,14 @@ export function scalar(v: Value): number | null {
 
 export interface SoundingPoint {
   pressureHpa: number;
+  /** Geopotential height, metres above mean sea level. */
   heightM: number;
   temperatureC: number;
   dewPointC: number;
   windSpeedMps: number | null;
   windDirectionDeg: number | null;
+  /** Wind sampling height when it differs from the temperature anchor (model 10 m wind). */
+  windHeightM?: number;
   /** The surface (2 m / 10 m) values at model elevation. */
   surface: boolean;
 }
@@ -119,6 +122,7 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
     dewPointC: Math.min(tds, ts),
     windSpeedMps: scalar(s.windSpeedMps),
     windDirectionDeg: scalar(s.windDirectionDeg),
+    windHeightM: zs + 10,
     surface: true,
   };
   const points = [surface, ...levels];
@@ -236,13 +240,18 @@ export function environmentAtHeight(points: SoundingPoint[], z: number) {
   return { temperatureC: lerp(a.temperatureC, b.temperatureC), dewPointC: lerp(a.dewPointC, b.dewPointC) };
 }
 
-/** Wind at a height, interpolated as vectors between the points that have wind. */
+/** Wind at a height in metres MSL, interpolated only within the available wind column. */
 export function windAtHeight(points: SoundingPoint[], z: number): { speedMps: number; directionDeg: number } | null {
-  const known = points.filter((p) => p.windSpeedMps !== null && p.windDirectionDeg !== null);
-  if (known.length === 0) return null;
-  if (z <= known[0].heightM) return { speedMps: known[0].windSpeedMps!, directionDeg: known[0].windDirectionDeg! };
+  if (!Number.isFinite(z)) return null;
+  const known = points
+    .filter((p) => Number.isFinite(p.windSpeedMps) && Number.isFinite(p.windDirectionDeg))
+    .map((p) => ({ ...p, heightM: p.windHeightM ?? p.heightM }))
+    .sort((a, b) => a.heightM - b.heightM);
+  if (known.length === 0 || z < known[0].heightM) return null;
   const last = known[known.length - 1];
-  if (z >= last.heightM) return { speedMps: last.windSpeedMps!, directionDeg: last.windDirectionDeg! };
+  if (z > last.heightM) return null;
+  const exact = known.find((p) => p.heightM === z);
+  if (exact) return { speedMps: exact.windSpeedMps!, directionDeg: exact.windDirectionDeg! };
   let i = 0;
   while (known[i + 1].heightM < z) i += 1;
   const a = known[i];
@@ -324,6 +333,7 @@ export interface Reading {
 
 export const feet = (m: number) => Math.round((m * FT) / 100) * 100;
 const ftText = (m: number) => `${feet(m).toLocaleString("en-US")} ft`;
+const referenceFtText = (m: number) => `${Math.round(m * FT).toLocaleString("en-US")} ft`;
 const mphText = (mps: number) => `${Math.round(mps * MPH)} mph`;
 const windText = (w: { speedMps: number; directionDeg: number }) => (w.speedMps * MPH < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${mphText(w.speedMps)}`);
 
@@ -434,17 +444,25 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   // Wind
   // Aloft: the top of the lift, or about 3,000 ft above launch when there are no thermals.
   const topHeight = hasThermals ? (top ?? bl!) : launch + 900;
-  const atLaunch = windAtHeight(sounding.points, launch);
+  const surfaceWindHeight = sounding.points[0].windHeightM ?? sounding.modelElevationM;
+  const windReference = launchM ?? surfaceWindHeight;
+  const atLaunch = windAtHeight(sounding.points, windReference);
   const atTop = windAtHeight(sounding.points, topHeight);
-  if (atLaunch && atTop) {
-    const turn = Math.abs(((atTop.directionDeg - atLaunch.directionDeg + 540) % 360) - 180);
-    const shear = Math.abs(atTop.speedMps - atLaunch.speedMps) * MPH > 10 || (turn > 60 && atTop.speedMps * MPH > 8);
-    const strong = atTop.speedMps * MPH > 20;
-    let text = `Wind at launch height: ${windText(atLaunch)}. At ${ftText(topHeight)}: ${windText(atTop)}.`;
-    if (strong) text += " Strong wind up high: expect drift and broken, turbulent thermals.";
-    else if (shear) text += " The wind changes with height (shear), so thermals may lean and break up.";
-    findings.push({ key: "wind", title: "Wind", text, tone: strong ? "warning" : shear ? "caution" : "neutral" });
+  const windParts: string[] = [];
+  if (launchM !== null) {
+    if (atLaunch) windParts.push(`Model wind at launch elevation (${referenceFtText(launchM)} MSL): ${windText(atLaunch)}.`);
+    else if (launchM < sounding.modelElevationM) windParts.push(`Launch elevation (${referenceFtText(launchM)} MSL) is below model terrain (${referenceFtText(sounding.modelElevationM)} MSL); wind at launch elevation is unavailable.`);
+    else windParts.push(`Model wind at launch elevation (${referenceFtText(launchM)} MSL) is outside the available wind profile.`);
   }
+  if (launchM === null || !atLaunch) {
+    const surfaceWind = windAtHeight(sounding.points, surfaceWindHeight);
+    if (surfaceWind) windParts.push(`Model surface wind (${Math.round(surfaceWindHeight - sounding.modelElevationM)} m above model terrain): ${windText(surfaceWind)}.`);
+  }
+  if (topHeight !== windReference) {
+    windParts.push(atTop ? `At ${ftText(topHeight)} MSL: ${windText(atTop)}.` : `Wind at ${ftText(topHeight)} MSL is outside the available wind profile.`);
+  }
+  windParts.push(`Model terrain is ${referenceFtText(sounding.modelElevationM)} MSL. These are model column winds; local launch exposure and terrain effects are unresolved.`);
+  findings.push({ key: "wind", title: "Wind", text: windParts.join(" "), tone: "neutral" });
 
   // Storms: the model's CAPE counts energy for air lifted to condensation. On a
   // blue day the thermals themselves stop short of that, so the risk is real

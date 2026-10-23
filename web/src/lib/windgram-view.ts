@@ -36,10 +36,14 @@ export interface WindgramView {
   launch: { y: number; heightM: number; label: string } | null;
   diagnostics: readonly MetricStrip[]; diagnosticLeft: number;
   sampling: readonly HourSampling[]; selectedHourIndex: number;
-  ensemble: boolean; sourceNote: string | null;
+  compact: boolean; ensemble: boolean; sourceNote: string | null;
   displayInterpolationNote: string;
 }
-export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "launch" | "launchWindows" | "capabilities" | "widthPx">;
+export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "launch" | "launchWindows" | "capabilities" | "widthPx"> & {
+  compact?: boolean;
+  /** Available viewport height; compact charts reserve room for page controls. */
+  heightPx?: number;
+};
 export interface WindgramReading {
   hourIndex: number; validAt: string; heightM: number;
   temperatureF: number | null; speedKt: number | null; directionDeg: number | null;
@@ -107,6 +111,17 @@ export function yToHeight(view: Scale, y: number): number {
     if (y >= b.y) return a.heightM + (b.heightM - a.heightM) * (a.y - y) / (a.y - b.y);
   }
   return view.topM;
+}
+
+/** Compare with the last retained label so dense profiles still have an axis. */
+export function visibleHeightAnchors(view: Pick<WindgramView, "anchors" | "top" | "compact">): HeightAnchor[] {
+  const minimumGap = view.compact ? 23 : 29;
+  const selected: HeightAnchor[] = [];
+  for (const anchor of view.anchors) {
+    const previous = selected.at(-1);
+    if (!previous || (anchor.y - view.top > 20 && previous.y - anchor.y >= minimumGap)) selected.push(anchor);
+  }
+  return selected;
 }
 
 function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
@@ -301,10 +316,12 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const selected = Array.isArray(window) ? new Set(window.map((h) => h.validAt)) : null;
   const dayWindow = window && !Array.isArray(window) && "dateKey" in window ? window : null;
   const hours = profile.hours.filter((h) => (!selected || selected.has(h.validAt)) && (!dayWindow || localDateKey(h.validAt, dayWindow.timeZone) === dayWindow.dateKey));
-  const left = 102, right = 88, top = 65;
-  const columnWidth = Math.max(48, ((options.widthPx ?? 1000) - left - right) / Math.max(1, hours.length));
+  const compact = options.compact ?? false;
+  const left = compact ? 62 : 102, right = compact ? 12 : 88, top = compact ? 82 : 65;
+  const columnWidth = Math.max(compact ? 44 : 48, ((options.widthPx ?? 1000) - left - right) / Math.max(1, hours.length));
   const plotWidth = columnWidth * Math.max(1, hours.length);
-  const plotHeight = clamp(plotWidth * 0.8, 680, 1100), bottom = top + plotHeight;
+  const plotHeight = compact ? clamp((options.heightPx ?? 720) - 240, 360, 500) : clamp(plotWidth * 0.8, 680, 1100);
+  const bottom = top + plotHeight;
   const floorM = profile.site.modelElevationM;
   const grouped = new Map<number, number[]>();
   for (const h of hours) for (const l of h.levels) {
@@ -328,7 +345,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const ensemble = (profile.run.members ?? 0) > 1 || hours.some((h) => typeof h.surface.temperatureC === "object" && h.surface.temperatureC !== null);
   const view: WindgramView = {
     width: left + plotWidth + right, height: bottom + 86, left, top, plotWidth, plotHeight, bottom, columnWidth, floorM, topM,
-    timeZone: options.timeZone, anchors, sampling, ensemble, sourceNote: scene.smokeSource ? `Smoke: ${scene.smokeSource.model} · run ${scene.smokeSource.referenceTime}` : null,
+    timeZone: options.timeZone, anchors, sampling, compact, ensemble, sourceNote: scene.smokeSource ? `Smoke: ${scene.smokeSource.model} · run ${scene.smokeSource.referenceTime}` : null,
     displayInterpolationNote: "Contours, lapse-rate bands, and intermediate wind barbs use linear display interpolation between captured model levels and do not add vertical resolution or resolve sub-grid inversions.",
     hours: hours.map((h, i) => {
       const temp = scalar(h.surface.temperatureC), gust = scalar(h.surface.windGustMps), direction = scalar(h.surface.windDirectionDeg);

@@ -68,15 +68,46 @@ test("a cumulus day capped by an inversion reads as it should", () => {
   assert.equal(r.headline, "Moderate thermals to about 10,800 ft, cumulus base about 11,000 ft.");
 });
 
-test("a dry day is blue, and strong wind aloft is flagged", () => {
+test("a dry day reports wind aloft without inferring turbulence from a speed threshold", () => {
   const levels = CUMULUS_LEVELS.map((l) => ({ ...l, td: l.td - 18, ws: l.z > 2500 ? 12 : 5 }));
   const s = buildSounding(site, hour({ t: 25, td: -10 }, levels, { bl: 3000, w: 1.8, base: 5200, top: 2800 }))!;
   const r = readSounding(s, 1268);
   assert.match(r.findings.find((f) => f.key === "clouds")!.text, /^Blue day/);
   const wind = r.findings.find((f) => f.key === "wind")!;
-  assert.equal(wind.tone, "warning");
-  assert.match(wind.text, /At 9,200 ft: WNW 2\d mph\. Strong wind up high/);
-  assert.match(r.headline, /blue \(no cumulus\)\. Wind: see below\.$/);
+  assert.equal(wind.tone, "neutral");
+  assert.match(wind.text, /At 9,200 ft MSL: WNW 2\d mph\./);
+  assert.doesNotMatch(wind.text, /turbulent|Strong wind|too strong/);
+  assert.match(r.headline, /blue \(no cumulus\)\.$/);
+});
+
+test("launch altitude is compared in MSL and is not substituted with model surface wind", () => {
+  const s = buildSounding(site, hour({ t: 25, td: 8, ws: 3 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 }))!;
+  const belowTerrain = readSounding(s, 1268).findings.find((finding) => finding.key === "wind")!;
+  assert.match(belowTerrain.text, /Launch elevation \(4,160 ft MSL\) is below model terrain \(4,265 ft MSL\); wind at launch elevation is unavailable/);
+  assert.match(belowTerrain.text, /Model surface wind \(10 m above model terrain\): NW 7 mph/);
+  assert.doesNotMatch(belowTerrain.text, /wind at launch elevation \(.*\): NW 7 mph/);
+
+  const inColumn = readSounding(s, 1520).findings.find((finding) => finding.key === "wind")!;
+  assert.match(inColumn.text, /Model wind at launch elevation \(4,987 ft MSL\): WNW 11 mph/);
+  const aboveColumn = readSounding(s, 5000).findings.find((finding) => finding.key === "wind")!;
+  assert.match(aboveColumn.text, /Model wind at launch elevation \(16,404 ft MSL\) is outside the available wind profile/);
+
+  const unknownLaunch = readSounding(s, null).findings.find((finding) => finding.key === "wind")!;
+  assert.doesNotMatch(unknownLaunch.text, /at launch elevation/);
+  assert.match(unknownLaunch.text, /Model surface wind \(10 m above model terrain\)/);
+
+  const woodstock = readSounding(s, 565).findings.find((finding) => finding.key === "wind")!;
+  assert.match(woodstock.text, /Launch elevation \(1,854 ft MSL\)/);
+  assert.doesNotMatch(woodstock.text, /1,900 ft/);
+});
+
+test("model near-surface wind is referenced to 10 m AGL without shifting the MSL profile", () => {
+  const s = buildSounding(site, hour({ t: 25, td: 8, ws: 3, wd: 315 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 }))!;
+  assert.equal(s.points[0].heightM, Z0);
+  assert.equal(s.points[0].windHeightM, Z0 + 10);
+  assert.equal(s.points[1].heightM, CUMULUS_LEVELS[0].z);
+  assert.equal(windAtHeight(s.points, Z0), null);
+  assert.deepEqual(windAtHeight(s.points, Z0 + 10), { speedMps: 3, directionDeg: 315 });
 });
 
 test("a cold morning has a ground inversion and no thermals", () => {
@@ -124,7 +155,12 @@ test("wind, cloud-layer and freezing-level helpers", () => {
   ];
   const w = windAtHeight(pts, 1400)!;
   assert.ok(Math.abs(w.directionDeg - 280) < 0.5 && w.speedMps < 10 && w.speedMps > 9.8);
-  assert.deepEqual(windAtHeight(pts, 3000), { speedMps: 10, directionDeg: 290 });
+  assert.deepEqual(windAtHeight(pts, 1500), { speedMps: 10, directionDeg: 290 });
+  assert.equal(windAtHeight(pts, 3000), null);
+  assert.equal(windAtHeight(pts, 1299), null);
+  assert.equal(windAtHeight(pts, Number.NaN), null);
+  assert.deepEqual(windAtHeight(pts.slice(1, 2), 1500), { speedMps: 10, directionDeg: 290 });
+  assert.equal(windAtHeight(pts.slice(1, 2), 1600), null);
   const clouds = findCloudLayers(pts);
   assert.equal(clouds.length, 1);
   assert.equal(clouds[0].topM, 1750);

@@ -4,7 +4,7 @@ import { parseSiteForecast, type SiteForecast } from '@azohra/meteo.briefing/con
 import { baseMap, onMapReady } from './map.ts';
 import { DATA_BASE } from '../lib/site.ts';
 import { buildWindgramView } from '../lib/windgram-view.ts';
-import { renderWindgramSvg, renderWindgramKey } from '../lib/windgram-chart.ts';
+import { renderWindgramSvg, renderWindgramKey, renderWindgramHeightAxisSvg } from '../lib/windgram-chart.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
 import { SkewTChart } from '../lib/skewt-chart.ts';
 import { compassPoint } from '../lib/launches.ts';
@@ -420,7 +420,11 @@ async function main() {
 
   const soundingChart = new SkewTChart(el('replay-sounding'), { name: manifest.case.site.name, elevationM: manifest.case.launchElevation.elevationM });
   const profileCache = new Map<number, SiteForecast | null>();
+  const windgramHost = el('replay-windgram');
+  const windgramAxis = el('replay-height-axis');
   let currentWindgramCell = -1;
+  let currentWindgramLayout = '';
+  let currentWindgramHour = -1;
   let currentView = buildWindgramView(blanchardProfile, {
     timeZone: manifest.case.site.timeZone,
     widthPx: 1100,
@@ -429,6 +433,10 @@ async function main() {
   let cursor: SVGRectElement | null = null;
 
   function renderActiveCellWindgram(activeProfile: SiteForecast, cellIdx: number, index: number) {
+    const compact = window.matchMedia('(max-width: 640px)').matches;
+    const widthPx = compact ? Math.max(windgramHost.clientWidth || 320, 240) : 1100;
+    const heightPx = window.innerHeight;
+    const layout = compact ? `compact:${widthPx}:${heightPx}` : 'desktop';
     const matchedLaunch = launchForCell(cellIdx);
     const launchMeta = matchedLaunch && matchedLaunch.launchElevationM != null
       ? { elevationM: matchedLaunch.launchElevationM, name: `${matchedLaunch.name} launch` }
@@ -436,16 +444,25 @@ async function main() {
         ? { elevationM: manifest.case.launchElevation.elevationM, name: `${manifest.case.site.name} launch` }
         : null;
 
-    if (currentWindgramCell !== cellIdx) {
+    const rebuilt = currentWindgramCell !== cellIdx || currentWindgramLayout !== layout;
+    if (rebuilt) {
       currentWindgramCell = cellIdx;
+      currentWindgramLayout = layout;
       currentView = buildWindgramView(activeProfile, {
         timeZone: manifest.case.site.timeZone,
-        widthPx: 1100,
+        widthPx,
+        compact,
+        heightPx,
         launch: launchMeta,
       });
-      el('replay-windgram').innerHTML = renderWindgramSvg(currentView, { idPrefix: 'soaring' });
+      windgramHost.innerHTML = renderWindgramSvg(currentView, { idPrefix: 'soaring' });
+      windgramAxis.innerHTML = compact ? renderWindgramHeightAxisSvg(currentView, { idPrefix: 'soaring-height-axis' }) : '';
+      windgramAxis.hidden = !compact;
       el('windgram-key').innerHTML = renderWindgramKey();
-      const svg = el('replay-windgram').querySelector('svg')!;
+      const svg = windgramHost.querySelector('svg')!;
+      const box = svg.viewBox.baseVal;
+      if (box.width > 0) svg.style.width = `${box.width}px`;
+      windgramHost.dataset.axisWidth = String(compact ? currentView.left : 0);
       cursor = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       for (const [key, value] of Object.entries({
         y: currentView.top,
@@ -456,11 +473,13 @@ async function main() {
         stroke: '#237e81',
         'stroke-width': 2,
         'pointer-events': 'none',
+        'data-selected-hour': '',
       })) {
         cursor.setAttribute(key, String(value));
       }
       svg.append(cursor);
       svg.addEventListener('click', event => {
+        if (currentView.compact && event.clientX - windgramHost.getBoundingClientRect().left < currentView.left) return;
         const matrix = svg.getScreenCTM();
         if (!matrix) return;
         const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
@@ -470,8 +489,18 @@ async function main() {
       });
     }
     if (cursor && currentView.hours[index]) {
-      cursor.setAttribute('x', String(currentView.hours[index].x - currentView.plotWidth / hours.length / 2));
+      const left = currentView.hours[index].x - currentView.columnWidth / 2;
+      cursor.setAttribute('x', String(left));
+      if (compact && (rebuilt || currentWindgramHour !== index)) {
+        const right = left + currentView.columnWidth;
+        if (left < windgramHost.scrollLeft + currentView.left + 16) {
+          windgramHost.scrollLeft = Math.max(0, left - currentView.left - 16);
+        } else if (right > windgramHost.scrollLeft + windgramHost.clientWidth - 16) {
+          windgramHost.scrollLeft = right - windgramHost.clientWidth + 16;
+        }
+      }
     }
+    currentWindgramHour = index;
   }
 
   const inv = activeModel === 'hrrr-conus' ? verificationDoc?.hrrrWrfprsInventory : undefined;
@@ -561,7 +590,11 @@ async function main() {
       renderActiveCellWindgram(cellForecast, selectedCell, index);
     } else {
       currentWindgramCell = -1;
+      currentWindgramHour = -1;
+      cursor = null;
       set('replay-windgram', 'A complete profile is unavailable at this location.');
+      windgramAxis.replaceChildren();
+      windgramAxis.hidden = true;
       set('windgram-key', '');
     }
     el('replay-windgram').dataset.validAt = hour.validAt;
@@ -958,6 +991,11 @@ async function main() {
       event.preventDefault();
       move(event.key === 'ArrowLeft' ? -1 : 1);
     }
+  });
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(update, 150);
   });
   update();
 }

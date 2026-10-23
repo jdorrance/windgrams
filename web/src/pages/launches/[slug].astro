@@ -12,10 +12,7 @@ export function getStaticPaths() {
 
 const { launch } = Astro.props as { launch: Launch };
 const facing = compassPoint(launch.facingDeg);
-const zoneName =
-  new Intl.DateTimeFormat("en-US", { timeZone: launch.timeZone, timeZoneName: "long" })
-    .formatToParts(new Date())
-    .find((p) => p.type === "timeZoneName")?.value ?? launch.timeZone;
+const zoneName = launch.timeZone;
 
 // The weather station listed for this launch, if any, and where it is from the launch.
 const stationEntry = Object.entries((stationsFile as StationsFile).stations).find(([, s]) => s.launches.includes(launch.slug));
@@ -54,6 +51,17 @@ const station = stationEntry && (() => {
       <span id="forecast-date"></span>
       <span id="meteogram-meta"></span>
     </div>
+    <div id="forecast-hour-panel" class="forecast-hour-panel" hidden>
+      <div class="forecast-hour-controls">
+        <button id="forecast-hour-prev" type="button" aria-label="Previous forecast hour">←</button>
+        <label for="forecast-hour">Hour <output id="forecast-hour-label" for="forecast-hour"></output></label>
+        <input id="forecast-hour" type="range" min="0" max="0" value="0" step="1" />
+        <button id="forecast-hour-next" type="button" aria-label="Next forecast hour">→</button>
+        <button id="forecast-hour-peak" type="button">Peak lift</button>
+      </div>
+      <dl id="forecast-conditions" class="forecast-conditions"></dl>
+      <p id="forecast-wind-note" class="forecast-wind-note" hidden></p>
+    </div>
     <h2 class="sr-only" id="meteogram-title">Soaring meteogram</h2>
     <p id="sample-notice" class="notice sample" hidden>
       Sample data for local development. This is not a forecast.
@@ -61,23 +69,24 @@ const station = stationEntry && (() => {
     <p id="forecast-error" class="notice" role="alert" hidden>
       The forecast could not load. <button id="forecast-reload" type="button" class="button secondary">Reload</button>
     </p>
-    <div class="chart-scroll meteogram-frame" id="meteogram">
-      <p class="chart-status">Loading the model forecast…</p>
+    <div class="windgram-viewport">
+      <div class="chart-scroll meteogram-frame" id="meteogram">
+        <p class="chart-status">Loading the model forecast…</p>
+      </div>
+      <div class="windgram-height-axis" id="meteogram-height-axis" aria-hidden="true" hidden></div>
     </div>
-    <p class="windgram-scale" id="meteogram-scale" hidden>Expanded lower atmosphere — height spacing varies.</p>
-    <div class="windgram-reading" id="meteogram-reading" role="status" aria-live="polite" hidden></div>
     <div class="windgram-key" id="meteogram-key"></div>
     <details class="windgram-details" id="meteogram-details" hidden>
-      <summary>Weather details <span class="muted">Pressure, precipitation, cloud cover, smoke and convection</span></summary>
+      <summary>Weather details</summary>
       <div class="chart-scroll meteogram-diagnostics" id="meteogram-diagnostics"></div>
     </details>
     <details class="windgram-guide">
-      <summary>How to read this chart</summary>
+      <summary>Chart details</summary>
       <p>
         Time runs left to right; height above sea level runs up. The lower atmosphere is expanded so launch-level winds,
         inversions and thermal tops are easier to read. Equal vertical distances on the page do not mean equal height
-        differences: use the metre and foot labels. Pressure ticks use the median model heights for the displayed day;
-        inspect the chart for the height at a particular point. The launch line and the model's ground elevation can differ.
+        differences: use the height labels. Pressure ticks on wider screens use the median model heights for the displayed day.
+        The launch line and the model's ground elevation can differ.
       </p>
       <p>
         Background colours show how quickly air temperature changes with height: warm red and orange bands cool rapidly
@@ -89,13 +98,12 @@ const station = stationEntry && (() => {
         Wind barbs point toward the direction the wind comes from. A half feather means 5 knots, a full feather 10 knots,
         and a pennant 50 knots; add them together. Green marks identify lighter wind speeds, not suitable flying conditions.
         Rows between model levels are interpolated to show the changing flow; they do not add forecast resolution.
-        Hover over the chart or focus it and use the arrow keys to inspect an hour and height.
+        Tap an hour or focus the chart and use the left and right arrow keys to select it.
       </p>
       <p>
         Clouds are placed at their estimated altitude. Model cloud fractions are used where the model supplies them;
         otherwise, relative humidity above 95% identifies inferred cloud layers. Filled cloud cues require at least 30%
-        model cloud fraction or the humidity threshold. The readout identifies
-        the source. These estimates can miss thin layers. A potential cloud-base line shows where a rising surface parcel
+        model cloud fraction or the humidity threshold. These estimates can miss thin layers. A potential cloud-base line shows where a rising surface parcel
         would condense; that line alone does not mean clouds will form. High cloud cover can also lie above this chart.
       </p>
       <p>
@@ -116,7 +124,7 @@ const station = stationEntry && (() => {
     <ul class="facts">
       <li>Faces <strong>{facing}</strong> ({launch.facingDeg}°)</li>
       <li>Launch range <strong>{launch.windMinMph}–{launch.windMaxMph} mph</strong>, gusts under {launch.gustMaxMph} mph</li>
-      <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong></li>
+      <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong> <span class="muted" id="launch-elevation-source"></span></li>
       <li>Times in {zoneName}</li>
     </ul>
     {launch.notes && <p class="notice">{launch.notes}</p>}
@@ -174,7 +182,7 @@ const station = stationEntry && (() => {
           <input type="range" id="skewt-hour" min="0" max="0" step="1" value="0" />
         </label>
         <output id="skewt-hour-label" for="skewt-hour" class="sun-time">–</output>
-        <button type="button" class="button secondary" id="skewt-best">Best thermals</button>
+        <button type="button" class="button secondary" id="skewt-best">Peak lift</button>
       </div>
       <p class="skewt-headline" id="skewt-headline" role="status" aria-live="polite"></p>
       <div class="skewt-layout">
@@ -199,7 +207,8 @@ const station = stationEntry && (() => {
         <summary>How to read a Skew-T</summary>
         <div class="muted skewt-howto">
           <p>
-            Height goes up the left side in feet. The <strong>orange line</strong> is the air temperature at each height and the
+            Height goes up the left side in feet above mean sea level (MSL). The launch line is the terrain estimate at the saved launch coordinates.
+            The <strong>orange line</strong> is the air temperature at each height and the
             <strong>green line</strong> is the dew point: where the two lines touch, the air is saturated and cloud forms. The faint grid
             lines leaning to the right are lines of equal temperature. The more the orange line leans left of them, the faster the air
             cools with height: unstable air, good for thermals. Where it runs parallel to them or leans further right, the air is

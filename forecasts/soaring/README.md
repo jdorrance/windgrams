@@ -22,6 +22,14 @@ does not establish forecast skill. See the audit for shallow-profile assumptions
 catalogue and latest HRRR initialization. Add `--model rrfs` to build the same
 regions from the latest published RRFS run, then run
 `node scripts/merge-soaring-regions.mjs --output data` to combine the model indexes.
+Clean runners bootstrap from the tracked `soaring/regions.json` configuration,
+case templates, and static launch/transect geography under `soaring/regions/`.
+No previous publication or ignored local bundle is required. Published regional
+settings are preserved; missing regions and sidecars use these tracked defaults.
+Only completed native bundles are advertised, so a first RRFS-only publication
+can be opened and seeded again without an HRRR archive. Validate both complete
+RRFS regional bundles with
+`node scripts/build-live-soaring.mjs --model rrfs --output data --validate-only`.
 RRFS reads pressure levels from `prslev` and surface fields from `2dfld` in the
 `noaa-rrfs-ops-pds` bucket. `METEO_RRFS_BASE` can select an equivalent mirror.
 Its precipitation is the one-hour accumulation ending at the selected valid time;

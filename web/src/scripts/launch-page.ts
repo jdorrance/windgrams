@@ -1,4 +1,5 @@
-import { parsePublishedProfileJson, publishedLift } from "../lib/published-lift.ts";
+import { launchConditions, matchingHourIndex, peakLiftIndex, validDateKey } from "../lib/launch-forecast.ts";
+import { parsePublishedProfileJson } from "../lib/published-lift.ts";
 // Launch page: day tabs and a model switch scope the meteogram and the NWS
 // charts below them. All forecast data is read from /data at view time, so the
 // page is always as fresh as the dataset without rebuilding the site.
@@ -8,12 +9,12 @@ import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/met
 import { localDateKey, localHourOfDay, localInstantMs, runFreshness } from "@azohra/meteo.briefing/derive";
 import { loadDocument } from "@azohra/meteo.briefing/transport";
 import { buildWindgramView } from "../lib/windgram-view.ts";
-import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
+import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramHeightAxisSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
 import { windWindow, compassPoint, type Launch } from "../lib/launches.ts";
 import { EcmwfChart, type EcmwfSiteDocument } from "../lib/ecmwf-chart.ts";
 import { NwsChart, type NwsHour } from "../lib/nws-chart.ts";
 import { SkewTChart } from "../lib/skewt-chart.ts";
-import { buildSounding, readSounding, scalar, type Finding, type Tone } from "../lib/skewt.ts";
+import { buildSounding, readSounding, type Finding, type Tone } from "../lib/skewt.ts";
 import { choices as balloonChoices, readChoice, type Choice, type RaobDocument } from "../lib/balloon.ts";
 import { parseSrg, type Srg } from "../lib/srg.ts";
 import { fetchWithRetry } from "../lib/http.ts";
@@ -62,9 +63,9 @@ async function getJson<T>(path: string): Promise<T | null> {
   }
 }
 
-function dayLabel(dateKey: string, index: number) {
-  if (index === 0) return "Today";
-  if (index === 1) return "Tomorrow";
+function dayLabel(dateKey: string) {
+  if (dateKey === currentDays[0]) return "Today";
+  if (dateKey === currentDays[1]) return "Tomorrow";
   const date = new Date(`${dateKey}T12:00:00Z`);
   return new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(date);
 }
@@ -105,21 +106,29 @@ function button(label: string, sub: string | null, pressed: boolean, disabled: b
 
 // ── state ────────────────────────────────────────────────────────────────
 
-const days = nextDateKeys(DAYS);
+const currentDays = nextDateKeys(DAYS);
+const query = new URLSearchParams(location.search);
+const requestedDay = query.get('day');
+const days = validDateKey(requestedDay) && !currentDays.includes(requestedDay) ? [...currentDays, requestedDay].sort() : currentDays;
+let selectedValidAt: string | null = query.get('time');
+const requestedModel = query.get('model');
+let manualModel = MODEL_ORDER.includes(requestedModel ?? '');
+let modelsLoading = true;
 // After the day's flying hours, open on tomorrow.
-let day = localHourOfDay(new Date().toISOString(), tz) > DAY_END ? days[1] : days[0];
-let model: string | null = null;
+let day = validDateKey(requestedDay) ? requestedDay : localHourOfDay(new Date().toISOString(), tz) > DAY_END ? currentDays[1] : currentDays[0];
+let model: string | null = manualModel ? requestedModel : null;
 let catalogue: ModelCatalogue | null = null;
 let launchElevationM: number | null = null;
 // Manifests are small and say which hours each model covers; a model's profile
 // is only downloaded when it is selected.
 const manifests = new Map<string, ForecastManifest>();
+const pendingProfiles = new Map<string, Promise<void>>();
 const profiles = new Map<string, { profile: SiteForecast; referenceTime: string; generatedAt: string; stale: boolean } | null>();
 let nws: NwsSiteDocument | null = null;
 let chart: NwsChart | null = null;
 let ecmwf: EcmwfSiteDocument | null = null;
 let skewt: SkewTChart | null = null;
-let skewtDay = "";
+
 let skewtHours: SiteForecast["hours"] = [];
 let ecmwfChart: EcmwfChart | null = null;
 let clearWindgramInspector: (() => void) | null = null;
@@ -127,13 +136,17 @@ const sunlight = new Sunlight(launch);
 
 async function profileFor(slug: string) {
   if (!profiles.has(slug)) {
-    const loaded = await loadDocument({ guard: parsePublishedProfileJson, supportedSchemaVersion: 2, fetch: (url) => fetchWithRetry(url), baseUrl: DATA_BASE, modelSlug: slug, siteSlug: launch.slug }).catch(() => null);
-    profiles.set(
-      slug,
-      loaded && !("miss" in loaded)
-        ? { profile: loaded.document, referenceTime: loaded.manifest.referenceTime, generatedAt: loaded.manifest.generatedAt, stale: loaded.stale }
-        : null,
-    );
+    if (!pendingProfiles.has(slug)) pendingProfiles.set(slug, (async () => {
+      const loaded = await loadDocument({ guard: parsePublishedProfileJson, supportedSchemaVersion: 2, fetch: (url) => fetchWithRetry(url), baseUrl: DATA_BASE, modelSlug: slug, siteSlug: launch.slug }).catch(() => null);
+      const valid = loaded && !('miss' in loaded) && loaded.document.model === slug && loaded.document.site.id === launch.slug;
+      profiles.set(slug, valid ? {
+        profile: loaded.document,
+        referenceTime: loaded.document.run.referenceTime,
+        generatedAt: loaded.document.run.generatedAt,
+        stale: loaded.stale,
+      } : null);
+    })().finally(() => pendingProfiles.delete(slug)));
+    await pendingProfiles.get(slug);
   }
   return profiles.get(slug) ?? null;
 }
@@ -169,8 +182,7 @@ async function selectModel(slug: string) {
   $("meteogram").classList.add("is-loading");
   render();
   await profileFor(slug);
-  $("meteogram").classList.remove("is-loading");
-  if (model === slug) render();
+  if (model === slug) { $("meteogram").classList.remove("is-loading"); render(); }
 }
 
 // ── rendering ────────────────────────────────────────────────────────────
@@ -180,12 +192,14 @@ function renderDayTabs() {
   const restoreFocus = host.contains(document.activeElement);
   const scrollLeft = host.scrollLeft;
   host.replaceChildren(
-    ...days.map((key, i) => {
+    ...days.map((key) => {
       const hasModel = MODEL_ORDER.some((slug) => covers(slug, key));
       const hasNws = nws?.hours.some((h) => inDay(h.validAt, key)) ?? false;
       const hasEcmwf = ecmwf?.hours.some((h) => inDay(h.validAt, key)) ?? false;
-      return button(dayLabel(key, i), daySub(key), key === day, !hasModel && !hasNws && !hasEcmwf, () => {
+      return button(dayLabel(key), daySub(key), key === day, !hasModel && !hasNws && !hasEcmwf, () => {
         day = key;
+        selectedValidAt = null;
+        if (model && !covers(model, day)) { manualModel = false; void chooseDefaultModel(); }
         render();
       });
     }),
@@ -214,7 +228,7 @@ function renderModelSelect(available: string[]) {
   if (!available.length) host.add(new Option("No models available", ""));
 }
 
-$<HTMLSelectElement>("model-select").addEventListener("change", (event) => selectModel((event.target as HTMLSelectElement).value));
+$<HTMLSelectElement>("model-select").addEventListener("change", (event) => { manualModel = true; void selectModel((event.target as HTMLSelectElement).value); });
 
 function renderMeteogram() {
   const frame = $("meteogram");
@@ -223,16 +237,14 @@ function renderMeteogram() {
   const key = $("meteogram-key");
   const diagnostics = $("meteogram-diagnostics");
   const details = $("meteogram-details");
-  const reading = $("meteogram-reading");
-  const scale = $("meteogram-scale");
+  const axis = $("meteogram-height-axis");
   clearWindgramInspector?.();
   clearWindgramInspector = null;
   key.replaceChildren();
   diagnostics.replaceChildren();
-  reading.replaceChildren();
+  axis.replaceChildren();
   details.hidden = true;
-  reading.hidden = true;
-  scale.hidden = true;
+  axis.hidden = true;
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
   title.textContent = entry
@@ -241,8 +253,14 @@ function renderMeteogram() {
 
   if (!loaded) {
     meta.textContent = "";
-    const loading = model !== null && !profiles.has(model);
+    const loading = model !== null ? !profiles.has(model) : modelsLoading;
     frame.innerHTML = `<p class="chart-status">${loading ? "Loading the model forecast…" : "Model forecasts for this launch are not published yet."}</p>`;
+    if (!loading && model) {
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.className = 'button secondary'; retry.textContent = 'Retry forecast';
+      retry.addEventListener('click', () => { profiles.delete(model!); void selectModel(model!); });
+      frame.append(retry);
+    }
     return;
   }
 
@@ -250,7 +268,7 @@ function renderMeteogram() {
     ? runFreshness({ referenceTime: loaded.referenceTime, generatedAt: loaded.generatedAt }, entry, new Date().toISOString(), { currentIntervals: 1, staleAfterIntervals: 3 })
     : "current";
   const run = new Date(loaded.referenceTime);
-  meta.textContent = `Run ${String(run.getUTCHours()).padStart(2, "0")}Z · published ${relativeTime(loaded.generatedAt)}${
+  meta.textContent = `Run ${run.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} ${String(run.getUTCHours()).padStart(2, "0")}Z · published ${relativeTime(loaded.generatedAt)}${
     freshness === "stale" ? " · older than expected" : freshness === "delayed" ? " · newer run is late" : ""
   }${loaded.stale ? " · update in progress" : ""}`;
 
@@ -274,6 +292,7 @@ function renderMeteogram() {
   }
 
   const width = Math.max(frame.clientWidth || 640, 320);
+  const compact = window.matchMedia("(max-width: 640px)").matches;
   const view = buildWindgramView(loaded.profile, {
     timeZone: tz,
     hours,
@@ -281,20 +300,34 @@ function renderMeteogram() {
     launchWindows: [arc],
     capabilities: entry?.capabilities,
     widthPx: width,
+    compact,
+    heightPx: window.innerHeight,
   });
   frame.innerHTML = renderWindgramSvg(view, { idPrefix: `mg-${launch.slug}` });
   diagnostics.innerHTML = renderWindgramDiagnosticsSvg(view, { idPrefix: `mg-details-${launch.slug}` });
   key.innerHTML = renderWindgramKey();
   details.hidden = false;
-  reading.hidden = false;
-  scale.hidden = false;
-  clearWindgramInspector = mountWindgramInspector(frame, reading, view);
+  axis.innerHTML = compact ? renderWindgramHeightAxisSvg(view) : "";
+  axis.hidden = !compact;
+  clearWindgramInspector = mountWindgramInspector(frame, null, view, validAt => {
+    const i = skewtHours.findIndex(h => h.validAt === validAt);
+    if (i >= 0) showSkewTHour(i);
+  });
+  const marker = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  for (const [key, value] of Object.entries({ y: view.top, width: view.columnWidth, height: view.plotHeight, fill: '#fff', 'fill-opacity': .06, stroke: '#203747', 'stroke-width': 2, 'pointer-events': 'none', 'data-selected-hour': '' })) marker.setAttribute(key, String(value));
+  frame.querySelector('svg')!.append(marker);
+  frame.dataset.columnWidth = String(view.columnWidth);
+  frame.dataset.plotLeft = String(view.left);
+  frame.dataset.axisWidth = String(compact ? view.left : 0);
+  diagnostics.dataset.plotLeft = String(compact ? 102 : view.left);
   // The SVG has only a viewBox; pin it to the scene's pixel size so narrow
   // screens scroll sideways instead of shrinking the chart.
   for (const svg of [frame.querySelector("svg"), diagnostics.querySelector("svg")]) {
     const box = svg?.viewBox.baseVal;
     if (svg && box && box.width > 0) svg.style.width = `${box.width}px`;
   }
+  updateHourMarker(true);
+  syncWindgramScroll(frame, diagnostics);
 }
 
 function renderNws() {
@@ -358,25 +391,55 @@ function renderEcmwf() {
 const TONE_ICON: Record<Tone, string> = { good: "✓", neutral: "•", caution: "!", warning: "⚠" };
 const hourFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", timeZone: tz });
 
-function bestThermalHour(hours: SiteForecast["hours"]) {
-  let best = -1;
-  let bestW = 0;
-  hours.forEach((h, i) => {
-    const w = scalar(publishedLift(h).thermalVelocityMps) ?? 0;
-    if (w > bestW) {
-      best = i;
-      bestW = w;
+function updateHourMarker(reveal = false) {
+  const i = skewtHours.findIndex(h => h.validAt === selectedValidAt);
+  const frame = $('meteogram');
+  const marker = frame.querySelector('[data-selected-hour]');
+  marker?.setAttribute('visibility', i < 0 ? 'hidden' : 'visible');
+  if (i >= 0) {
+    const columnWidth = Number(frame.dataset.columnWidth);
+    const left = Number(frame.dataset.plotLeft) + i * columnWidth;
+    marker?.setAttribute('x', String(left));
+    const axisWidth = Number(frame.dataset.axisWidth);
+    if (reveal && axisWidth > 0) {
+      if (left < frame.scrollLeft + axisWidth) frame.scrollLeft = Math.max(0, left - axisWidth);
+      else if (left + columnWidth > frame.scrollLeft + frame.clientWidth) frame.scrollLeft = left + columnWidth - frame.clientWidth;
     }
-  });
-  if (best >= 0) return best;
-  const afternoon = hours.findIndex((h) => localHourOfDay(h.validAt, tz) >= 14);
-  return afternoon >= 0 ? afternoon : 0;
+  }
+  if (selectedValidAt) frame.dataset.validAt = selectedValidAt;
+}
+
+function renderConditions(hour: SiteForecast['hours'][number], index: number) {
+  const label = hourFormat.format(new Date(hour.validAt));
+  const slider = $<HTMLInputElement>('forecast-hour');
+  slider.max = String(skewtHours.length - 1); slider.value = String(index);
+  slider.setAttribute('aria-valuetext', label);
+  $('forecast-hour-label').textContent = label;
+  $<HTMLButtonElement>('forecast-hour-prev').disabled = index === 0;
+  $<HTMLButtonElement>('forecast-hour-next').disabled = index === skewtHours.length - 1;
+  $('forecast-hour-panel').hidden = false;
+  $('forecast-hour-panel').dataset.validAt = hour.validAt;
+  const conditions = launchConditions(hour, launch, launchElevationM);
+  const host = $('forecast-conditions'); host.replaceChildren();
+  for (const [label, value] of conditions.values) {
+    const group = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = label; dd.textContent = value; group.append(dt, dd); host.append(group);
+  }
+  $('forecast-wind-note').textContent = conditions.issues.join(' · ');
+  $('forecast-wind-note').hidden = !conditions.issues.length;
 }
 
 function showSkewTHour(index: number) {
   const loaded = model ? profiles.get(model) : null;
   const hour = skewtHours[index];
   if (!loaded || !hour) return;
+  selectedValidAt = hour.validAt;
+  renderConditions(hour, index);
+  updateHourMarker(true);
+  $('skewt-chart').dataset.validAt = hour.validAt;
+  const url = new URL(location.href);
+  url.searchParams.set('day', day); url.searchParams.set('model', model!); url.searchParams.set('time', hour.validAt);
+  history.replaceState(null, '', url);
   const slider = $<HTMLInputElement>("skewt-hour");
   slider.value = String(index);
   const label = hourFormat.format(new Date(hour.validAt));
@@ -384,7 +447,7 @@ function showSkewTHour(index: number) {
   slider.setAttribute("aria-valuetext", label);
   const sounding = buildSounding(loaded.profile, hour);
   if (!skewt) skewt = new SkewTChart($("skewt-chart"), { name: launch.name, elevationM: launchElevationM });
-  skewt.set(sounding);
+  skewt.set(sounding, { name: launch.name, elevationM: launchElevationM });
   const list = $("skewt-findings");
   list.replaceChildren();
   if (!sounding) {
@@ -419,6 +482,7 @@ function renderFindings(list: HTMLElement, findings: Finding[]) {
 // ── Weather balloon ───────────────────────────────────────────────────────
 
 let balloonChart: SkewTChart | null = null;
+let refreshBalloon: (() => void) | null = null;
 
 function legendItem(label: string, swatch: string) {
   const li = document.createElement("li");
@@ -437,20 +501,22 @@ function renderBalloon(doc: RaobDocument | null, srgText: string | null) {
   const list = balloonChoices(doc, srg, tz);
   const root = $("balloon");
   if (list.length === 0) {
+    refreshBalloon = null;
     root.hidden = true;
     return;
   }
   root.hidden = false;
   const station = doc?.station;
   $("balloon-title").textContent = `Weather balloon sounding · ${station?.name ?? "nearest station"}${station ? ` (${station.id})` : ""}`;
-  const day = new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric", timeZone: tz });
+  const day = new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric", timeZoneName: "short", timeZone: tz });
   const hour = new Intl.DateTimeFormat("en-US", { hour: "numeric", timeZone: tz });
   const tabs = $("balloon-tabs");
 
   const show = (choice: Choice) => {
+    refreshBalloon = () => show(choice);
     for (const b of tabs.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.id === choice.id));
     if (!balloonChart) balloonChart = new SkewTChart($("balloon-chart"), { name: launch.name, elevationM: launchElevationM });
-    balloonChart.set(choice.sounding);
+    balloonChart.set(choice.sounding, { name: launch.name, elevationM: launchElevationM });
     const reading = readChoice(choice, srg, launchElevationM, tz);
     $("balloon-headline").textContent = reading.headline;
     renderFindings($("balloon-findings"), reading.findings);
@@ -462,16 +528,17 @@ function renderBalloon(doc: RaobDocument | null, srgText: string | null) {
       legendItem("Thermal zone", `<span class="key-swatch skewt-key-zone"></span>`),
       legendItem("Inversion (lid)", `<span class="key-swatch skewt-key-lid"></span>`),
     );
-    const when = new Intl.DateTimeFormat("en-US", { weekday: "long", hour: "numeric", minute: "2-digit", timeZone: tz }).format(new Date(choice.validAt));
+    const when = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone: tz }).format(new Date(choice.validAt));
+    const utc = new Date(choice.validAt).toISOString().slice(0, 16).replace("T", " ") + " UTC";
     const elevation = choice.sounding.modelElevationM;
     $("balloon-meta").textContent =
-      choice.kind === "balloon" ? `Launched ${when}` : `NWS model forecast for ${when}`;
+      choice.kind === "balloon" ? `Sounding valid ${when} · ${utc}` : `NWS model forecast for ${when}`;
     $("balloon-note").textContent =
       choice.kind === "balloon"
-        ? `The balloon goes up from ${station ? `${station.name} airport, ${station.distanceKm} km from ${launch.name},` : "the airport"} at ${fmt(ft(elevation))} ft${
+        ? `The balloon station is ${station ? `${station.name}, ${station.distanceKm} km from ${launch.name},` : "at the airport"} at ${fmt(ft(elevation))} ft MSL${
             choice.hasDewPoint ? "" : ". This is the Soaring Forecast's copy of the flight, without humidity"
-          }. ${choice.start.source === "forecast-high" ? "The dashed line is a thermal leaving the ground at the afternoon forecast high: where it meets the morning temperature line is the day's thermal top. " : ""}Balloon data: NWS, via the Iowa Environmental Mesonet.`
-        : "A model hour from the NWS Soaring Forecast: temperature and wind only, so no clouds are shown.";
+          }. Heights are above mean sea level, not above the launch. Times identify the nominal observation cycle, not the exact balloon release. ${choice.start.source === "forecast-high" ? "The dashed line estimates a thermal rising from the station at the forecast high. " : ""}Balloon data: NWS, via the Iowa Environmental Mesonet.`
+        : "A model hour for the station from the NWS Soaring Forecast: temperature and wind only, so no clouds are shown. Heights are above mean sea level.";
   };
 
   tabs.replaceChildren(
@@ -481,7 +548,7 @@ function renderBalloon(doc: RaobDocument | null, srgText: string | null) {
       return b;
     }),
   );
-  show(list[0]);
+  show(list.findLast(choice => choice.kind === "balloon") ?? list[list.length - 1]);
 }
 
 function renderSkewT() {
@@ -489,38 +556,36 @@ function renderSkewT() {
   const body = $("skewt-body");
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
-  const hours = loaded ? loaded.profile.hours.filter((h) => inDay(h.validAt, day) && (h.levels?.length ?? 0) >= 2) : [];
+  const hours = loaded ? loaded.profile.hours.filter((h) => inDay(h.validAt, day)) : [];
   if (!loaded || hours.length === 0) {
     body.hidden = true;
     status.hidden = false;
     status.textContent = !model
-      ? "Model forecasts for this launch are not published yet."
+      ? modelsLoading ? "Loading the sounding…" : "Model forecasts for this launch are not published yet."
       : !loaded
         ? profiles.has(model) ? "The sounding is unavailable for this model. Try another model." : "Loading the sounding…"
         : `${modelLabel(model)} has no upper-air levels for this day.`;
-    skewtDay = "";
+    skewtHours = [];
+    $("forecast-hour-panel").hidden = true;
+    updateHourMarker();
     return;
   }
   status.hidden = true;
   body.hidden = false;
   const run = new Date(loaded.referenceTime);
   $("skewt-meta").textContent = `${entry ? `${entry.label}, ${entry.gridKm} km` : model} · run ${String(run.getUTCHours()).padStart(2, "0")}Z`;
-  const previous = skewtHours[Number($<HTMLInputElement>("skewt-hour").value)]?.validAt;
   skewtHours = hours;
-  const slider = $<HTMLInputElement>("skewt-hour");
-  slider.max = String(hours.length - 1);
-  let index = bestThermalHour(hours);
-  if (day === skewtDay && previous) {
-    // Same day (another model, or a refresh): stay on the same hour when it exists.
-    const same = hours.findIndex((h) => h.validAt === previous);
-    if (same >= 0) index = same;
-  }
-  skewtDay = day;
-  showSkewTHour(index);
+  $<HTMLInputElement>('skewt-hour').max = String(hours.length - 1);
+  showSkewTHour(matchingHourIndex(hours, selectedValidAt, tz));
 }
 
 $<HTMLInputElement>("skewt-hour").addEventListener("input", (e) => showSkewTHour(Number((e.target as HTMLInputElement).value)));
-$("skewt-best").addEventListener("click", () => showSkewTHour(bestThermalHour(skewtHours)));
+$("skewt-best").addEventListener("click", () => showSkewTHour(peakLiftIndex(skewtHours, tz)));
+
+$<HTMLInputElement>('forecast-hour').addEventListener('input', e => showSkewTHour(Number((e.target as HTMLInputElement).value)));
+$('forecast-hour-prev').addEventListener('click', () => showSkewTHour(Number($<HTMLInputElement>('forecast-hour').value) - 1));
+$('forecast-hour-next').addEventListener('click', () => showSkewTHour(Number($<HTMLInputElement>('forecast-hour').value) + 1));
+$('forecast-hour-peak').addEventListener('click', () => showSkewTHour(peakLiftIndex(skewtHours, tz)));
 
 function render() {
   renderDayTabs();
@@ -563,39 +628,54 @@ function renderText(office: NwsOfficeDocument | null) {
   add(`Area Forecast Discussion (NWS ${office?.office ?? ""})`, office?.products.afd);
 }
 
+async function chooseDefaultModel() {
+  const candidates = MODEL_ORDER.filter(slug => manifests.has(slug) && profiles.get(slug) !== null);
+  const choice = manualModel && model ? model : candidates.find(slug => covers(slug, day)) ?? candidates[0];
+  if (!choice || (choice === model && (profiles.has(choice) || pendingProfiles.has(choice)))) return;
+  await selectModel(choice);
+  if (!manualModel && profiles.get(choice) === null) await chooseDefaultModel();
+}
+
 export async function start() {
-  for (const id of ["meteogram", "nws-charts", "ecmwf-charts"]) $(id).classList.add("is-loading");
   const raobPromise = getJson<RaobDocument>(`raob/sites/${launch.slug}.json`);
-  const [modelsJson, contextJson, nwsDoc, ecmwfDoc] = await Promise.all([
-    getJson<unknown>("models.json"),
-    getJson<unknown>("site-context.json"),
-    getJson<NwsSiteDocument>(`nws/sites/${launch.slug}.json`),
-    getJson<EcmwfSiteDocument>(`ecmwf/sites/${launch.slug}.json`),
-    ...MODEL_ORDER.map(loadManifest),
+  const metadata = Promise.all([
+    getJson<unknown>('models.json').then(doc => { catalogue = doc ? parseModelCatalogueJson(JSON.stringify(doc)) : null; renderModelSelect(MODEL_ORDER.filter(slug => manifests.has(slug))); if (model && profiles.get(model)) renderMeteogram(); }),
+    getJson<unknown>('site-context.json').then(doc => {
+      const context = doc ? parseSiteContextJson(JSON.stringify(doc)) : null;
+      launchElevationM = context?.sites[launch.slug]?.elevation.elevationM ?? null;
+      if (launchElevationM != null) {
+        const sourceId = context?.sites[launch.slug]?.elevation.source;
+        const source = context?.sources.find(source => source.id === sourceId);
+        $('launch-elevation').textContent = `${fmt(ft(launchElevationM))} ft MSL`;
+        $('launch-elevation-source').textContent = source ? `Terrain estimate from ${source.product}${source.kind === 'surfaceModel' ? '; includes vegetation' : ''}.` : 'Terrain estimate at the saved launch coordinates.';
+        $('launch-elevation-item').hidden = false;
+      }
+      refreshBalloon?.();
+      if (model && profiles.get(model)) { renderMeteogram(); renderSkewT(); }
+    }),
   ]);
-  catalogue = modelsJson ? parseModelCatalogueJson(JSON.stringify(modelsJson)) : null;
-  const context = contextJson ? parseSiteContextJson(JSON.stringify(contextJson)) : null;
-  launchElevationM = context?.sites[launch.slug]?.elevation.elevationM ?? null;
-  nws = nwsDoc;
-  ecmwf = ecmwfDoc?.schemaVersion === 1 ? ecmwfDoc : null;
-
-  if (launchElevationM != null) {
-    $("launch-elevation").textContent = `${fmt(ft(launchElevationM))} ft`;
-    $("launch-elevation-item").hidden = false;
-  }
-
-  // Default: the sharpest model that covers today (or any published one).
-  model = MODEL_ORDER.find((slug) => covers(slug, day)) ?? MODEL_ORDER.find((slug) => manifests.has(slug)) ?? null;
-  if (model) await profileFor(model);
-
-  if (sample) $("sample-notice").hidden = false;
-  for (const id of ["meteogram", "nws-charts", "ecmwf-charts"]) $(id).classList.remove("is-loading");
+  const nwsTask = (async () => {
+    nws = await getJson<NwsSiteDocument>(`nws/sites/${launch.slug}.json`);
+    renderDayTabs(); renderNws();
+    const office = nws ? await getJson<NwsOfficeDocument>(`nws/offices/${nws.grid.office}.json`) : null;
+    renderText(office);
+    const raob = await raobPromise;
+    renderBalloon(raob?.schemaVersion === 1 ? raob : null, office?.products.srg?.text ?? null);
+  })();
+  const ecmwfTask = getJson<EcmwfSiteDocument>(`ecmwf/sites/${launch.slug}.json`).then(doc => {
+    ecmwf = doc?.schemaVersion === 1 ? doc : null; renderDayTabs(); renderEcmwf();
+  });
+  await Promise.all(MODEL_ORDER.map(async slug => {
+    await loadManifest(slug);
+    renderDayTabs(); renderModelSelect(MODEL_ORDER.filter(slug => manifests.has(slug)));
+    await chooseDefaultModel();
+  }));
+  modelsLoading = false;
+  if (model && !manifests.has(model)) { manualModel = false; model = null; }
+  await chooseDefaultModel();
   render();
-
-  const office = nws ? await getJson<NwsOfficeDocument>(`nws/offices/${nws.grid.office}.json`) : null;
-  renderText(office);
-  const raob = await raobPromise;
-  renderBalloon(raob?.schemaVersion === 1 ? raob : null, office?.products.srg?.text ?? null);
+  await Promise.all([metadata, nwsTask, ecmwfTask]);
+  if (sample) $('sample-notice').hidden = false;
 }
 
 let resizeTimer = 0;
@@ -604,12 +684,28 @@ window.addEventListener("resize", () => {
   resizeTimer = window.setTimeout(renderMeteogram, 150);
 });
 
-// Keep the shared hour axis aligned when either chart is scrolled on a phone.
+// Compact charts use different label gutters. Preserve both full labels at the
+// start, then align their hours while panning without feeding clamped scrolls back.
+const syncedScrollPositions = new WeakMap<HTMLElement, number>();
+function syncWindgramScroll(from: HTMLElement, to: HTMLElement) {
+  const details = $<HTMLDetailsElement>("meteogram-details");
+  if (details.hidden || !details.open || to.clientWidth === 0) return;
+  const offset = Number(to.dataset.plotLeft ?? 0) - Number(from.dataset.plotLeft ?? 0);
+  const wanted = from.scrollLeft === 0 ? 0 : from.scrollLeft + offset;
+  const next = Math.max(0, Math.min(to.scrollWidth - to.clientWidth, wanted));
+  if (Math.abs(to.scrollLeft - next) < .5) return;
+  to.scrollLeft = next;
+  syncedScrollPositions.set(to, to.scrollLeft);
+}
 for (const [from, to] of [["meteogram", "meteogram-diagnostics"], ["meteogram-diagnostics", "meteogram"]]) {
   $(from).addEventListener("scroll", () => {
-    if ($(to).scrollLeft !== $(from).scrollLeft) $(to).scrollLeft = $(from).scrollLeft;
+    const source = $(from);
+    const syncedPosition = syncedScrollPositions.get(source);
+    syncedScrollPositions.delete(source);
+    if (syncedPosition !== undefined && Math.abs(source.scrollLeft - syncedPosition) < .5) return;
+    syncWindgramScroll(source, $(to));
   }, { passive: true });
 }
 $<HTMLDetailsElement>("meteogram-details").addEventListener("toggle", () => {
-  if ($<HTMLDetailsElement>("meteogram-details").open) $("meteogram-diagnostics").scrollLeft = $("meteogram").scrollLeft;
+  syncWindgramScroll($("meteogram"), $("meteogram-diagnostics"));
 });

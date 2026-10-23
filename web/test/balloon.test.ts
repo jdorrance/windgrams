@@ -41,7 +41,7 @@ test("the morning reading uses the NWS numbers and says it plainly", () => {
   const title = (t: string) => r.findings.find((f) => f.title === t)!;
   assert.match(title("Thermals: Fair").text, /forecast high of 77 °F.*The NWS puts it at 9,264 ft, with lift up to 382 ft\/min\./);
   assert.equal(title("When they start").text, "Usable thermals start once it reaches 70 °F, around 1:30 PM (NWS).");
-  assert.match(title("Your launch").text, /From your launch at 4,200 ft, that is about 5,[1-3]00 ft of climb\./);
+  assert.match(title("Launch reference").text, /station-derived thermal top is about 5,[1-3]00 ft above the launch reference \(4,160 ft MSL\)/);
   assert.equal(title("Storms").text, "Lifted index +8.1: very stable aloft: no storm risk.");
   assert.equal(title("Clouds").text, "This table has no humidity, so it cannot show clouds.");
   assert.ok(r.findings.some((f) => f.title === "Valley inversion"));
@@ -88,8 +88,62 @@ test("a flight the archive missed comes from the Soaring Forecast's table, in ti
     soundings: [{ validAt: "2026-09-30T00:00:00Z", levels: evening }],
   };
   const balloons = choices(doc, SRG, TZ).filter((c) => c.kind === "balloon");
-  assert.deepEqual(balloons.map((c) => [c.validAt, c.hasDewPoint]), [["2026-09-30T00:00:00Z", true], ["2026-09-29T12:00:00Z", false]]);
-  assert.equal(balloons[1].start.source, "forecast-high");
-  const r = readChoice(balloons[0], SRG, 1268, TZ);
+  assert.deepEqual(balloons.map((c) => [c.validAt, c.hasDewPoint]), [["2026-09-29T12:00:00Z", false], ["2026-09-30T00:00:00Z", true]]);
+  assert.equal(balloons[0].start.source, "forecast-high");
+  const r = readChoice(balloons[1], SRG, 1268, TZ);
   assert.match(r.findings[0].text, /^At 6:00 PM, with 75 °F at the ground, a thermal would reach about [\d,]+ ft\. Earlier, in the warmer afternoon, thermals went higher/);
+});
+
+test("Thursday morning precedes Thursday evening regardless of source order, with model hours between them", () => {
+  const morning = "2026-10-22T12:00:00Z";
+  const evening = "2026-10-23T00:00:00Z";
+  const timeZone = "America/New_York";
+  const levels = [[913, 874, 12, 2], [850, 1480, 12, -1], [750, 2520, 3.5, -3], [650, 3660, -5.5, -6.5], [500, 5600, -20, -28]]
+    .map(([p, z, t, td]) => ({ pressureHpa: p, heightM: z, temperatureC: t, dewPointC: td, windDirectionDeg: 320, windSpeedMps: 6 }));
+  const srg = {
+    ...SRG,
+    forecastDate: "2026-10-22",
+    observed: { ...SRG.observed!, validAt: "2026-10-22T08:00:00-04:00" },
+    model: [
+      { ...SRG.model[0], validAt: "2026-10-22T14:00:00-04:00" },
+      { ...SRG.model[1], validAt: "2026-10-22T15:00:00Z" },
+    ],
+  };
+  for (const flights of [[evening, morning], [morning, evening]]) {
+    const doc: RaobDocument = {
+      schemaVersion: 1,
+      generatedAt: "2026-10-23T02:00:00Z",
+      station: { id: "KBOI", name: "Boise", latitude: 43.57, longitude: -116.21, distanceKm: 20, elevationM: 874 },
+      soundings: flights.map((validAt) => ({ validAt, levels })),
+    };
+    const list = choices(doc, srg, timeZone);
+    assert.deepEqual(list.map((choice) => [choice.kind, choice.validAt]), [
+      ["balloon", morning],
+      ["model", "2026-10-22T15:00:00Z"],
+      ["model", "2026-10-22T14:00:00-04:00"],
+      ["balloon", evening],
+    ]);
+    const day = new Intl.DateTimeFormat("en-US", { weekday: "long", hour: "numeric", timeZone });
+    assert.deepEqual(list.filter((choice) => choice.kind === "balloon").map((choice) => day.format(new Date(choice.validAt))), ["Thursday 8 AM", "Thursday 8 PM"]);
+    assert.equal(list[0].hasDewPoint, true, "the actual flight takes precedence over the SRG fallback at the same instant");
+    assert.equal(list[0].srgProfile, srg.observed, "the SRG table attaches to the flight even with a different timestamp offset");
+  }
+});
+
+test("balloon winds retain MSL heights and do not turn remote winds into launch or turbulence verdicts", () => {
+  const levels = [[1000, 93, 16, 5], [950, 600, 12, 3], [900, 1100, 9, 0], [850, 1600, 7, -2], [700, 3100, -4, -8], [500, 5600, -20, -25]]
+    .map(([p, z, t, td]) => ({ pressureHpa: p, heightM: z, temperatureC: t, dewPointC: td, windDirectionDeg: 300, windSpeedMps: 15 }));
+  const doc: RaobDocument = { schemaVersion: 1, generatedAt: "2026-10-23T01:00:00Z", station: { id: "KIAD", name: "Dulles", latitude: 38.95, longitude: -77.4, distanceKm: 91, elevationM: 93 }, soundings: [{ validAt: "2026-10-23T00:00:00Z", levels }] };
+  const choice = choices(doc, null, "America/New_York")[0];
+  assert.equal(choice.sounding.modelElevationM, 93);
+  assert.equal(choice.sounding.points[0].heightM, 93, "the station elevation is not added to MSL profile heights");
+  const wind = readChoice(choice, null, 565, "America/New_York").findings.find(f => f.key === "wind")!;
+  assert.match(wind.text, /launch's elevation \(1,854 ft MSL\): WNW 34 mph/);
+  assert.match(wind.text, /do not measure wind at the launch/);
+  assert.doesNotMatch(wind.text, /Strong wind|broken thermals|expect drift/);
+  assert.equal(wind.tone, "neutral");
+  const below = readChoice(choice, null, 10, "America/New_York").findings.find(f => f.key === "wind")!;
+  assert.match(below.text, /wind unavailable at this height/);
+  const unknown = readChoice(choice, null, null, "America/New_York").findings.find(f => f.key === "wind")!;
+  assert.doesNotMatch(unknown.text, /at the launch's elevation/);
 });

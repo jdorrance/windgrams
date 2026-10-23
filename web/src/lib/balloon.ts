@@ -56,6 +56,7 @@ export interface Choice {
 
 const f = (c: number) => Math.round((c * 9) / 5 + 32);
 const ftText = (m: number) => `${feet(m).toLocaleString("en-US")} ft`;
+const referenceHeight = (m: number) => `${Math.round(m * FT).toLocaleString("en-US")} ft MSL`;
 
 function finish(points: SoundingPoint[], validAt: string, startC: number, hasDewPoint: boolean, topLabel: string): Sounding {
   const surface = points[0];
@@ -137,8 +138,8 @@ export const isMorning = (iso: string, timeZone: string) =>
 const localDate = (iso: string, timeZone: string) => new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(iso));
 
 /**
- * Every sounding worth showing, newest balloon first, then the Soaring
- * Forecast's model hours for its day.
+ * Every sounding worth showing, in chronological order across balloon
+ * observations and the Soaring Forecast's model hours.
  */
 export function choices(doc: RaobDocument | null, srg: Srg | null, timeZone: string): Choice[] {
   const out: Choice[] = [];
@@ -154,14 +155,14 @@ export function choices(doc: RaobDocument | null, srg: Srg | null, timeZone: str
       validAt: s.validAt,
       sounding,
       start: start !== null ? { temperatureC: start, source: "forecast-high" } : { temperatureC: sounding.points[0].temperatureC, source: "observed" },
-      srgProfile: srg?.observed?.validAt === s.validAt ? srg.observed : null,
+      srgProfile: srg?.observed && Date.parse(srg.observed.validAt) === Date.parse(s.validAt) ? srg.observed : null,
       hasDewPoint: sounding.hasDewPoint,
     });
   }
   const elevationM = (srg?.stationElevationFt ?? 0) / FT || doc?.station.elevationM || 0;
   // A flight the archive does not have (or no balloon file at all): use the
   // Soaring Forecast's own copy of it.
-  if (srg?.observed && elevationM && !out.some((c) => c.validAt === srg.observed!.validAt)) {
+  if (srg?.observed && elevationM && !out.some((c) => Date.parse(c.validAt) === Date.parse(srg.observed!.validAt))) {
     const start = high(srg.observed.validAt);
     const sounding = srgSounding(srg.observed, elevationM, start);
     if (sounding) {
@@ -176,14 +177,13 @@ export function choices(doc: RaobDocument | null, srg: Srg | null, timeZone: str
       });
     }
   }
-  out.sort((a, b) => b.validAt.localeCompare(a.validAt));
   for (const m of srg?.model ?? []) {
     if (!elevationM) break;
     const sounding = srgSounding(m, elevationM, null);
     if (!sounding) continue;
     out.push({ id: `model-${m.validAt}`, kind: "model", validAt: m.validAt, sounding, start: { temperatureC: sounding.points[0].temperatureC, source: "observed" }, srgProfile: m, hasDewPoint: false });
   }
-  return out;
+  return out.sort((a, b) => Date.parse(a.validAt) - Date.parse(b.validAt) || Number(a.kind === "model") - Number(b.kind === "model"));
 }
 
 /** An evening flight: the ground has already cooled, so the afternoon's thermals went higher than a thermal now would. */
@@ -247,9 +247,9 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
   // Launch
   if (launchM !== null && top !== null) {
     if (top < launchM + 150) {
-      findings.push({ key: "top", title: "Your launch", text: `Thermals top out at or below your launch (${ftText(launchM)}): expect little lift above launch.`, tone: "caution" });
+      findings.push({ key: "top", title: "Launch reference", text: `The station-derived thermal top is near or below the launch reference (${referenceHeight(launchM)}). Local lift at the launch can differ.`, tone: "neutral" });
     } else {
-      findings.push({ key: "top", title: "Your launch", text: `From your launch at ${ftText(launchM)}, that is about ${feet(top - launchM).toLocaleString("en-US")} ft of climb.`, tone: "good" });
+      findings.push({ key: "top", title: "Launch reference", text: `The station-derived thermal top is about ${feet(top - launchM).toLocaleString("en-US")} ft above the launch reference (${referenceHeight(launchM)}). This is a height comparison; local lift at the launch can differ.`, tone: "neutral" });
     }
   }
 
@@ -284,15 +284,12 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
   const words = (w: { speedMps: number; directionDeg: number } | null) => (!w ? "–" : w.speedMps * MPH < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${Math.round(w.speedMps * MPH)} mph`);
   const heights = [launchM ?? station + 600, top ?? station + 2000];
   const [low, high2] = heights.map(at);
-  if (low && high2) {
-    const strong = high2.speedMps * MPH > 20;
-    findings.push({
-      key: "wind",
-      title: "Wind",
-      text: `At launch height (${ftText(heights[0])}): ${words(low)}. At ${ftText(heights[1])}: ${words(high2)}.${strong ? " Strong wind up high: drift and broken thermals." : ""}`,
-      tone: strong ? "warning" : "neutral",
-    });
-  }
+  const profileName = choice.kind === "balloon" ? "Balloon profile" : "NWS station model profile";
+  const lowLabel = launchM !== null ? `at the launch's elevation (${referenceHeight(heights[0])})` : `at ${referenceHeight(heights[0])}`;
+  const wind = [`${profileName} ${lowLabel}: ${low ? words(low) : "wind unavailable at this height"}.`];
+  if (Math.abs(heights[1] - heights[0]) > 1) wind.push(`At ${referenceHeight(heights[1])}: ${high2 ? words(high2) : "wind unavailable at this height"}.`);
+  wind.push("These winds describe the station profile; they do not measure wind at the launch or establish local turbulence.");
+  findings.push({ key: "wind", title: "Wind in the station profile", text: wind.join(" "), tone: "neutral" });
 
   // Stability and storms
   const li = choice.srgProfile?.liftedIndex ?? null;

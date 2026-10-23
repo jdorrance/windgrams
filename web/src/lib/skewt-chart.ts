@@ -145,7 +145,7 @@ export class SkewTChart {
       width: W,
       height: H,
       role: "img",
-      "aria-label": "Skew-T diagram of temperature, dew point and a rising thermal against height, with the thermal zone, top of lift, cloud base, inversions and wind marked.",
+      "aria-label": "Skew-T diagram of temperature, dew point and a rising thermal against height in feet above mean sea level, with the thermal zone, top of lift, cloud base, inversions and wind marked.",
     });
     const defs = el("defs", {}, svg);
     const clip = el("clipPath", { id: "skewt-clip" }, defs);
@@ -193,7 +193,7 @@ export class SkewTChart {
       el("line", { x1: box.left, x2: box.right, y1: yy, y2: yy, class: "skewt-grid" }, svg);
       text(svg, box.left - 6, yy + 4, `${(f / 1000).toLocaleString("en-US")}k`, { class: "tick", "text-anchor": "end" });
     }
-    text(svg, box.left - 6, box.top - 8, "ft", { class: "tick", "text-anchor": "end" });
+    text(svg, box.left - 6, box.top - 8, "ft MSL", { class: "tick", "text-anchor": "end" });
 
     // Where a thermal is warmer than the air around it (it keeps rising).
     const lcl = s.lclM;
@@ -247,7 +247,7 @@ export class SkewTChart {
 
     // Horizontal marks, named on the right; labels solved so they never overlap.
     const marks: { id: string; z: number; label: string; cls: string }[] = [];
-    if (this.launch.elevationM !== null && inside(this.launch.elevationM)) marks.push({ id: "launch", z: this.launch.elevationM, label: `Launch ${ftLabel(this.launch.elevationM)}`, cls: "skewt-mark-launch" });
+    if (this.launch.elevationM !== null && inside(this.launch.elevationM)) marks.push({ id: "launch", z: this.launch.elevationM, label: `Launch ${Math.round(this.launch.elevationM * FT).toLocaleString("en-US")} ft MSL`, cls: "skewt-mark-launch" });
     if (s.marks.top && inside(s.marks.top.heightM)) marks.push({ id: "top", z: s.marks.top.heightM, label: s.marks.top.label, cls: "skewt-mark-top" });
     if (inside(s.marks.cloudBaseM)) marks.push({ id: "base", z: s.marks.cloudBaseM, label: `☁ Cloud base ≈ ${ftLabel(s.marks.cloudBaseM)}`, cls: "skewt-mark-base" });
     if (inside(s.freezingLevelM) && s.freezingLevelM > s.modelElevationM + 50) marks.push({ id: "freezing", z: s.freezingLevelM, label: `Freezing level ${ftLabel(s.freezingLevelM)}`, cls: "skewt-mark-freezing" });
@@ -267,18 +267,22 @@ export class SkewTChart {
     }
 
     const labelLayer = el("g", {}, svg);
-    const place = (items: typeof marks, xPos: number, anchor: "start" | "end", above: boolean) => {
+    const place = (items: typeof marks, xPos: number, anchor: "start" | "end", above: boolean, reservedY: number[] = []) => {
       const solved = solveVerticalLabels(
         items.map((m) => ({ id: m.id, trueY: y(pAt(m.z)) + (above ? -5 : 4) })),
         { minGapPx: 15, topY: box.top + 12, bottomY: box.bottom - 22 },
       );
       for (const sol of solved) {
+        // Mark labels have priority over layer names. The two text columns
+        // overlap horizontally on phones, even when each column is spaced well.
+        if (reservedY.some((yy) => Math.abs(yy - sol.y) < 15)) continue;
         const m = items.find((i) => i.id === sol.id)!;
         text(labelLayer, xPos, sol.y, m.label, { class: `skewt-label ${m.cls}-text`, "text-anchor": anchor });
       }
+      return solved.map((sol) => sol.y);
     };
-    place(marks, box.right - 6, "end", true);
-    place(zoneLabels, box.left + 6, "start", false);
+    const markLabelY = place(marks, box.right - 6, "end", true);
+    place(zoneLabels, box.left + 6, "start", false, markLabelY);
 
     // Wind: barbs (knots, the standard) with the speed in mph beside them.
     const windX = box.right + (narrow ? 16 : 20);
@@ -287,7 +291,7 @@ export class SkewTChart {
     let lastBarbY = Infinity;
     for (const p of s.points) {
       if (p.windSpeedMps === null || p.windDirectionDeg === null) continue;
-      const yy = y(p.pressureHpa);
+      const yy = y(p.windHeightM === undefined ? p.pressureHpa : pAt(p.windHeightM));
       if (yy < box.top + 12 || lastBarbY - yy < 15) continue;
       lastBarbY = yy;
       drawBarb(svg, windX, yy, p.windSpeedMps * KT, p.windDirectionDeg);
@@ -344,7 +348,7 @@ export class SkewTChart {
     tip.replaceChildren();
     const head = document.createElement("div");
     head.className = "tt-time";
-    head.textContent = `${ftLabel(z)} · ${Math.round(p)} hPa`;
+    head.textContent = `${ftLabel(z)} MSL · ${Math.round(p)} hPa`;
     tip.appendChild(head);
     for (const [label, value] of rows) {
       const r = document.createElement("div");

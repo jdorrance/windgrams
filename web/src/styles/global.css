@@ -600,8 +600,74 @@ details[open] > summary {
   font-weight: 600;
 }
 
-.windgram-card .windgram-scale {
-  margin: 7px 0 0;
+.forecast-hour-panel {
+  margin: 12px 0;
+}
+
+.forecast-hour-controls {
+  display: grid;
+  grid-template-columns: 44px minmax(60px, 1fr) 44px auto;
+  align-items: center;
+  gap: 4px 8px;
+  max-width: 560px;
+}
+
+.forecast-hour-controls label {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.forecast-hour-controls button,
+.forecast-hour-controls input {
+  grid-row: 2;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.forecast-hour-controls input {
+  width: 100%;
+  margin: 0;
+}
+
+.forecast-hour-controls button {
+  padding: 4px 8px;
+  border: 1px solid var(--axis);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.forecast-hour-controls button:disabled {
+  opacity: .4;
+}
+
+.forecast-conditions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px 12px;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.forecast-conditions dt {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.forecast-conditions dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.forecast-wind-note {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+  font-size: 12px;
 }
 
 .windgram-card .notice.sample:not([hidden]) {
@@ -642,6 +708,20 @@ details[open] > summary {
 }
 
 @media (max-width: 640px) {
+  .site-header .container {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    padding-inline: 8px;
+  }
+
+  .site-nav {
+    gap: 0;
+  }
+
+  .site-nav a {
+    padding-inline: 6px;
+  }
+
   .forecast-page main > .container {
     padding: 0 8px;
   }
@@ -682,7 +762,8 @@ details[open] > summary {
 }
 
 .meteogram-frame > svg,
-.meteogram-diagnostics > svg {
+.meteogram-diagnostics > svg,
+.windgram-viewport .replay-chart > svg {
   display: block;
   max-width: none;
   height: auto;
@@ -708,26 +789,23 @@ details[open] > summary {
   color: #2f454a;
 }
 
-.windgram-scale {
-  margin: -4px 0 10px;
-  color: var(--ink-2);
-  font-size: 12px;
-}
-
-.windgram-reading {
-  margin-top: 10px;
-  padding: 10px 12px;
-  min-height: 44px;
-  border: 1px solid var(--rule);
+.windgram-viewport {
+  position: relative;
+  overflow: hidden;
   border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 13px;
-  line-height: 1.55;
 }
 
-.windgram-reading strong {
-  color: var(--ink);
+.windgram-viewport > .windgram-height-axis {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  box-shadow: 3px 0 5px rgb(25 25 45 / 12%);
+}
+
+.windgram-height-axis > svg {
+  display: block;
+  max-width: none;
 }
 
 .windgram-key:not(:empty) {
@@ -781,12 +859,6 @@ details[open] > summary {
   margin-top: 16px;
 }
 
-.windgram-details > summary .muted {
-  margin-left: 6px;
-  font-size: 12px;
-  font-weight: 400;
-}
-
 .windgram-guide p {
   max-width: 88ch;
   margin: 10px 0;
@@ -797,13 +869,6 @@ details[open] > summary {
 .meteogram-frame:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: -3px;
-}
-
-@media (max-width: 640px) {
-  .windgram-details > summary .muted {
-    display: block;
-    margin: 3px 0 0 18px;
-  }
 }
 
 .chart-status {

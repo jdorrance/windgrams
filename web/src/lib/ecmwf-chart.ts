@@ -1,10 +1,5 @@
-// Hourly ECMWF IFS forecast as three small-multiple panels sharing one hour axis:
-//   Wind (mph):                 10 m wind, gusts, and the wind at 850 hPa (about
-//                               ridge-top height around Boise); launch range,
-//                               gust limit and direction arrows as on the NWS panel
-//   Boundary layer (ft):        ECMWF's boundary-layer height above ground, a
-//                               rough ceiling for thermals (like NWS mixing height)
-//   Clouds (%):                 low, mid and high cloud layers
+// Hourly ECMWF IFS: surface/aloft wind, mixing depth AGL and cloud fractions.
+// Source values stay SI; axes, tables and launch limits use the selected units.
 
 import { HourlyChart, niceMax, type ChartSpec } from "./hourly-chart.ts";
 import { compassPoint, inArc } from "./launches.ts";

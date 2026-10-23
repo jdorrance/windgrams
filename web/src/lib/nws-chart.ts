@@ -1,9 +1,5 @@
-// Hourly NWS forecast as three small-multiple panels sharing one hour axis:
-//   Wind (mph):         surface wind, gusts, transport wind; the launch's speed
-//                       range as a band, the gust limit as a line, and a row of
-//                       direction arrows marked in/out of the launch's wind window
-//   Mixing height (ft): single series, area wash
-//   Clouds & storms (%): sky cover, chance of precipitation, chance of thunder
+// Hourly NWS: surface/transport wind, mixing height AGL and weather probabilities.
+// Source values stay SI; axes, tables and launch limits use the selected units.
 
 import { HourlyChart, niceMax, type ChartSpec } from "./hourly-chart.ts";
 import { compassPoint, inArc, type DirectionArc } from "./launches.ts";

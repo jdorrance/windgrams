@@ -1,9 +1,5 @@
-// The weather station's last hours as small multiples on one 5-minute axis:
-//   Wind (mph):          5-minute mean wind and peak gust, with the launch's
-//                        speed range, gust limit and a row of direction arrows
-//                        marked in/out of the launch's wind window
-//   Temperature (°F):    temperature and dew point
-//   Sunshine (W/m²):     solar radiation reaching the station
+// Station history on a 5-minute axis: mean wind, peak gust, temperature,
+// dew point and solar radiation. Displays follow the selected unit system.
 
 import { HourlyChart, niceMax, type ChartSpec } from "./hourly-chart.ts";
 import { compassPoint, inArc } from "./launches.ts";

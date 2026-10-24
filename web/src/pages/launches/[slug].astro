@@ -74,6 +74,7 @@ const station = stationEntry && (() => {
       </div>
       <div class="windgram-height-axis" id="meteogram-height-axis" aria-hidden="true" hidden></div>
     </div>
+    <button id="windgram-full-profile" class="windgram-range" type="button" aria-pressed="false" aria-controls="meteogram" hidden>Full profile</button>
     <div id="forecast-conditions-panel" class="forecast-hour-panel" hidden>
       <dl id="forecast-conditions" class="forecast-conditions"></dl>
       <p id="forecast-wind-note" class="forecast-wind-note" hidden></p>
@@ -86,7 +87,7 @@ const station = stationEntry && (() => {
     <details class="windgram-guide">
       <summary>Chart details</summary>
       <p>Time left to right · height MSL. Launch elevation uses terrain at the saved coordinates.</p>
-      <p>Colours: local lapse rate. Red/orange: rapid cooling aloft. Grey: inversion. Cyan line: freezing; snowflakes: lowest freezing level.</p>
+      <p>Colours: lapse rate, smoothed between layers and hours. Red/orange: rapid cooling aloft. Grey: inversion. Cyan line: freezing; snowflakes: lowest freezing level.</p>
       <p>Wind barbs point toward the wind source. Feather values follow the selected units. Faint barbs: interpolated levels. Tap a column or use arrow keys to select an hour.</p>
       <p>White hatching: RH &gt;94%. Pale bands: model cloud ≥30%. Cloud outlines: potential condensation level. Compare with thermal reach.</p>
       <p>Paraglider ceiling: <Unit kind="lift" value={1.143} /> sink. Blue lift line: <Unit kind="lift" value={1} /> sink. Ensemble: median and middle 50% range.</p>

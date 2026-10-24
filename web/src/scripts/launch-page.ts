@@ -9,6 +9,7 @@ import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/met
 import { localDateKey, localHourOfDay, localInstantMs, runFreshness } from "@azohra/meteo.briefing/derive";
 import { loadDocument } from "@azohra/meteo.briefing/transport";
 import { buildWindgramView } from "../lib/windgram-view.ts";
+import { windgramViewport } from "../lib/windgram-viewport.ts";
 import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
 import { windWindow, compassPoint, type Launch } from "../lib/launches.ts";
 import { EcmwfChart, type EcmwfSiteDocument } from "../lib/ecmwf-chart.ts";
@@ -51,6 +52,7 @@ const launch = JSON.parse($("launch-config").textContent ?? "{}") as Launch;
 const tz = launch.timeZone;
 const arc = windWindow(launch);
 let sample = false;
+let fullWindgramProfile = false;
 
 async function getJson<T>(path: string): Promise<T | null> {
   try {
@@ -255,6 +257,7 @@ function renderMeteogram() {
   axis.replaceChildren();
   details.hidden = true;
   axis.hidden = true;
+  $("windgram-full-profile").hidden = true;
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
   title.textContent = entry
@@ -302,8 +305,10 @@ function renderMeteogram() {
   }
 
   const width = Math.max(frame.clientWidth || 640, 240);
-  const compact = window.matchMedia("(max-width: 640px), (max-width: 960px) and (max-height: 600px)").matches;
-  const portrait = window.innerHeight > window.innerWidth;
+  const { compact, portrait, height } = windgramViewport();
+  const rangeButton = $("windgram-full-profile");
+  rangeButton.hidden = !compact;
+  rangeButton.setAttribute("aria-pressed", String(fullWindgramProfile));
   const chartTop = frame.getBoundingClientRect().top + window.scrollY;
   const view = buildWindgramView(loaded.profile, {
     timeZone: tz,
@@ -313,8 +318,9 @@ function renderMeteogram() {
     capabilities: entry?.capabilities,
     widthPx: width,
     compact,
-    heightPx: window.innerHeight,
-    maxHeightPx: compact && portrait ? window.innerHeight - chartTop - 16 : undefined,
+    heightRange: fullWindgramProfile ? "full" : "soaring",
+    heightPx: height,
+    maxHeightPx: compact && portrait ? height - chartTop - 16 : undefined,
   });
   frame.innerHTML = renderWindgramSvg(view, { idPrefix: `mg-${launch.slug}` });
   diagnostics.innerHTML = renderWindgramDiagnosticsSvg(view, { idPrefix: `mg-details-${launch.slug}` });
@@ -690,9 +696,17 @@ export async function start() {
 }
 
 let resizeTimer = 0;
+let viewport = windgramViewport();
 window.addEventListener("resize", () => {
+  const next = windgramViewport();
+  if (next === viewport) return;
+  viewport = next;
   clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(renderMeteogram, 150);
+});
+$("windgram-full-profile").addEventListener("click", () => {
+  fullWindgramProfile = !fullWindgramProfile;
+  renderMeteogram();
 });
 
 // Synchronize only when both charts scroll. A fitted mobile windgram keeps its

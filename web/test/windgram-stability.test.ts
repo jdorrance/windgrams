@@ -23,7 +23,21 @@ function uniformLapseView(lapseCPer1000Ft: number) {
 function paintsPoint(path: string, x: number, y: number) {
   let painted = false;
   for (const ring of path.matchAll(/M([^Z]+)Z/g)) {
-    const points = [...ring[1].matchAll(/(-?[\d.]+)[ ,](-?[\d.]+)/g)].map((match) => [Number(match[1]), Number(match[2])]);
+    // Missing-data masks use relative h/v commands; contour rings use M/L.
+    const tokens = (`M${ring[1]}`).match(/[MLHVmlhv]|-?(?:\d*\.)?\d+(?:e[+-]?\d+)?/g) ?? [];
+    const points: number[][] = [];
+    let command = "M", px = 0, py = 0;
+    for (let i = 0; i < tokens.length;) {
+      if (/^[MLHVmlhv]$/.test(tokens[i])) command = tokens[i++];
+      const relative = command === command.toLowerCase();
+      if (command.toUpperCase() === "H") px = (relative ? px : 0) + Number(tokens[i++]);
+      else if (command.toUpperCase() === "V") py = (relative ? py : 0) + Number(tokens[i++]);
+      else {
+        px = (relative ? px : 0) + Number(tokens[i++]);
+        py = (relative ? py : 0) + Number(tokens[i++]);
+      }
+      points.push([px, py]);
+    }
     for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
       const [xi, yi] = points[i], [xj, yj] = points[j];
       if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) painted = !painted;
@@ -81,7 +95,7 @@ test("lapse legend converts display boundaries without changing WxToFly physics"
   assert.deepEqual(uniformLapseView(-2.7).fields, imperial.fields);
 });
 
-test("interval lapse rates stay constant within their source layer boundaries without displacing inversions", () => {
+test("interval lapse values stay exact while the displayed bands blend between layer midpoints", () => {
   const profile = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")))!;
   profile.site.modelElevationM = 0;
   profile.hours = profile.hours.slice(0, 2).map((hour) => ({
@@ -99,13 +113,60 @@ test("interval lapse rates stay constant within their source layer boundaries wi
     const y = heightToY(view, z);
     return view.fields.filter((field) => paintsPoint(field.path, x, y)).map((field) => field.className);
   };
-  // 0–500 m cools by 5 °C (−3.048 °C/1,000 ft: very-unstable); 400 m must NOT be painted as an inversion.
-  assert.deepEqual(classesAtHeight(400), ["meteo-gram-stab-very-unstable"]);
-  // 500–1,000 m warms by 5 °C (+3.048 °C/1,000 ft: strong-inversion); 900 m must NOT be painted as unstable.
-  assert.deepEqual(classesAtHeight(600), ["meteo-gram-stab-strong-inversion"]);
-  assert.deepEqual(classesAtHeight(900), ["meteo-gram-stab-strong-inversion"]);
-  // 1,000–1,500 m cools by 5 °C (−3.048 °C/1,000 ft: very-unstable).
-  assert.deepEqual(classesAtHeight(1100), ["meteo-gram-stab-very-unstable"]);
+  for (const hour of view.sampling) {
+    assert.deepEqual(hour.lapseCPer1000Ft.map(node => Math.round(node.value * 1000) / 1000),
+      [-3.048, -3.048, 3.048, 3.048, -3.048, -3.048]);
+  }
+  // Each measured interval retains its gradient at its true height midpoint.
+  assert.deepEqual(classesAtHeight(250), ["meteo-gram-stab-very-unstable"]);
+  assert.deepEqual(classesAtHeight(750), ["meteo-gram-stab-strong-inversion"]);
+  assert.deepEqual(classesAtHeight(1250), ["meteo-gram-stab-very-unstable"]);
+  // Smooth display reconstruction gives intermediate colors inside the layer,
+  // replacing the flat blocks without changing the measured interval values.
+  assert.deepEqual(classesAtHeight(350), ["meteo-gram-stab-conditional"]);
+  assert.deepEqual(classesAtHeight(450), ["meteo-gram-stab-stable"]);
+  assert.deepEqual(classesAtHeight(550), ["meteo-gram-stab-strong-inversion"]);
+});
+
+test("display smoothing keeps inversion boundaries at their source heights for unequal layers", () => {
+  const profile = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")))!;
+  profile.site.modelElevationM = 0;
+  const coolTopC = 20 - .6 * 1000 / 304.8;
+  profile.hours = profile.hours.slice(0, 2).map(hour => ({
+    ...hour,
+    surface: { ...hour.surface, temperatureC: 20, dewPointC: 0 },
+    levels: [
+      { pressureHpa: 900, heightM: 1000, temperatureC: coolTopC, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+      { pressureHpa: 875, heightM: 1200, temperatureC: coolTopC + 3 * 200 / 304.8, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+      { pressureHpa: 750, heightM: 2200, temperatureC: coolTopC, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+    ],
+  }));
+  const view = buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 600 });
+  const x = view.hours[0].x;
+  const classesAtHeight = (z: number) => view.fields.filter(field => paintsPoint(field.path, x, heightToY(view, z))).map(field => field.className);
+  // A thin, strong inversion between deeper weak lapse layers must not spread
+  // into either neighboring layer when reconstructing the display.
+  assert.deepEqual(classesAtHeight(950), ["meteo-gram-stab-stable"]);
+  assert.deepEqual(classesAtHeight(1050), ["meteo-gram-stab-strong-inversion"]);
+  assert.deepEqual(classesAtHeight(1150), ["meteo-gram-stab-strong-inversion"]);
+  assert.deepEqual(classesAtHeight(1250), ["meteo-gram-stab-stable"]);
+});
+
+test("displayed stability transitions continuously between forecast hours", () => {
+  const profile = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")))!;
+  profile.hours = profile.hours.slice(0, 2);
+  for (const [index, hour] of profile.hours.entries()) {
+    const lapse = index === 0 ? -3.2 : -.5;
+    hour.surface.temperatureC = 20;
+    for (const level of hour.levels) level.temperatureC = 20 + (level.heightM - profile.site.modelElevationM) / 304.8 * lapse;
+  }
+  const view = buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 600 });
+  const y = view.top + view.plotHeight * .5;
+  for (const [fraction, expected] of [[.25, "unstable"], [.5, "conditional"], [.75, "stable"]] as const) {
+    const x = view.hours[0].x + fraction * (view.hours[1].x - view.hours[0].x);
+    assert.deepEqual(view.fields.filter(field => paintsPoint(field.path, x, y)).map(field => field.className),
+      [`meteo-gram-stab-${expected}`]);
+  }
 });
 
 test("missing temperature intervals are not bridged vertically or blended into adjacent valid hour columns", () => {

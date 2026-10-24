@@ -43,6 +43,8 @@ export interface WindgramView {
 }
 export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "launch" | "launchWindows" | "capabilities" | "widthPx"> & {
   compact?: boolean;
+  /** Compact charts default to the soaring layer; desktop keeps the full profile. */
+  heightRange?: "soaring" | "full";
   /** Available viewport height; compact charts reserve room for page controls. */
   heightPx?: number;
   /** Total height available below page controls, including the chart's axes. */
@@ -183,6 +185,28 @@ function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
   };
 }
 
+/** Reconstruct the colour field from interval centres. Source lapse rates stay
+ * layer averages; this interpolation is only for drawing. Keep the edge of
+ * each valid run, and pin zero crossings to the source inversion boundaries.
+ */
+function stabilityDisplayNodes(intervals: readonly FieldNode[]): FieldNode[] {
+  const nodes: FieldNode[] = [];
+  for (let i = 0; i + 1 < intervals.length; i += 2) {
+    const { altitudeM: base, value } = intervals[i];
+    const upper = intervals[i + 2]?.altitudeM ?? intervals[i + 1].altitudeM;
+    if (!Number.isFinite(value)) {
+      nodes.push({ altitudeM: base, value: NaN }, { altitudeM: upper, value: NaN });
+      continue;
+    }
+    const previous = intervals[i - 2]?.value, next = intervals[i + 2]?.value;
+    if (!Number.isFinite(previous)) nodes.push({ altitudeM: base, value });
+    else if (previous * value <= 0 && previous !== value) nodes.push({ altitudeM: base, value: 0 });
+    nodes.push({ altitudeM: (base + upper) / 2, value });
+    if (!Number.isFinite(next)) nodes.push({ altitudeM: upper, value });
+  }
+  return nodes;
+}
+
 /**
  * Gap-preserving classified field path generator for Windgram stability bands.
  * Never bridges across missing vertical intervals (NaN nodes) and never blends
@@ -208,18 +232,7 @@ function buildStabilityFieldPaths(args: {
     const nodes = args.nodesByHour[hourIndex];
     if (!nodes || nodes.length === 0 || altitudeM < nodes[0].altitudeM) return null;
     const clampedAlt = Math.min(altitudeM, nodes[nodes.length - 1].altitudeM);
-    for (let index = 0; index < nodes.length - 1; index += 1) {
-      const lower = nodes[index];
-      const upper = nodes[index + 1];
-      if (clampedAlt > upper.altitudeM) continue;
-      if (!Number.isFinite(lower.value) || !Number.isFinite(upper.value)) return null;
-      const span = upper.altitudeM - lower.altitudeM;
-      if (span <= 0) return lower.value;
-      const fraction = (clampedAlt - lower.altitudeM) / Math.max(0.001, span);
-      return lower.value + (upper.value - lower.value) * fraction;
-    }
-    const lastVal = nodes[nodes.length - 1]?.value;
-    return typeof lastVal === "number" && Number.isFinite(lastVal) ? lastVal : null;
+    return sampleHeight(nodes, clampedAlt);
   };
 
   const valueAcrossTime = (timePosition: number, altitudeM: number): number | null => {
@@ -495,7 +508,8 @@ function temperatureContours(view: WindgramView): TemperatureContour[] {
       }
     }
     const labels = view.hours.flatMap((h, i) => labelHours.has(i)
-      ? crossings(view.sampling[i].temperatureC, target).map((z) => ({ x: h.x, y: heightToY(view, z) })) : []);
+      ? crossings(view.sampling[i].temperatureC, target).filter(z => z >= view.floorM && z <= view.topM)
+        .map((z) => ({ x: h.x, y: heightToY(view, z) })) : []);
     if (segments.length || labels.length) contours.push({ temperatureF: f, path: segments.join(""), labels });
   }
   return contours;
@@ -607,11 +621,29 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const levelAnchors = [...grouped].map(([pressureHpa, zs]) => ({ pressureHpa, heightM: median(zs) })).sort((a, b) => a.heightM - b.heightM)
     .filter((a, i, all) => i === 0 || a.heightM > all[i - 1].heightM + 5);
   const highest = Math.max(floorM + 800, ...hours.flatMap((h) => h.levels.map((l) => scalar(l.heightM) ?? floorM)), options.launch?.elevationM ?? floorM);
-  const topM = highest + (highest - floorM) * 0.04;
+  const fullTopM = highest + (highest - floorM) * 0.04;
+  // Use the whole displayed day, rather than the selected hour, so the scale
+  // stays fixed while scrubbing. High potential LCLs do not imply usable lift.
+  const liftTops = hours.flatMap((hour) => [publishedLift(hour).usableLiftTopM, publishedWxtoflyLiftTop(hour)]
+    .flatMap(value => {
+      const middle = scalar(value);
+      const upper = value && typeof value === "object" && "p75" in value ? scalar(value.p75) : null;
+      return [middle, upper].filter((z): z is number => z !== null);
+    }));
+  const peakM = Math.max(floorM, options.launch?.elevationM ?? floorM, ...liftTops);
+  const focusedTopM = Math.ceil(Math.max(floorM + 1000, peakM + Math.max(500, (peakM - floorM) * .25)) / 250) * 250;
+  const strengths = hours.map(hour => scalar(publishedLift(hour).thermalVelocityMps));
+  const calmDay = strengths.length > 0 && strengths.every(value => value === 0);
+  const topM = compact && options.heightRange !== "full" && (liftTops.length || calmDay)
+    ? Math.min(fullTopM, focusedTopM) : fullTopM;
   const baseAnchors = [{ pressureHpa: null as number | null, heightM: floorM }, ...levelAnchors];
   // A short headroom segment leaves the top native wind barb inside the frame.
   const span = Math.max(1, baseAnchors.length - 1) + 0.35;
-  const anchors: HeightAnchor[] = baseAnchors.map((a, i) => ({ ...a, y: bottom - plotHeight * i / span }));
+  const fullAnchors: HeightAnchor[] = baseAnchors.map((a, i) => ({ ...a, y: bottom - plotHeight * i / span }));
+  fullAnchors.push({ pressureHpa: null, heightM: fullTopM, y: top });
+  const croppedY = heightToY({ anchors: fullAnchors, floorM, topM: fullTopM, top, bottom }, topM);
+  const anchors: HeightAnchor[] = fullAnchors.filter(a => a.heightM < topM)
+    .map(a => ({ ...a, y: bottom - (bottom - a.y) * plotHeight / (bottom - croppedY) }));
   anchors.push({ pressureHpa: null, heightM: topM, y: top });
   const sampling = hours.map((h) => hourSampling(h, floorM));
   // The library remains the authority for diagnostic semantics and units.
@@ -624,7 +656,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const view: WindgramView = {
     width: left + plotWidth + right, height: bottom + (compact ? 82 : 86), left, top, plotWidth, plotHeight, bottom, columnWidth, floorM, topM,
     timeZone: options.timeZone, anchors, sampling, compact, ensemble, sourceNote: scene.smokeSource ? `Smoke: ${scene.smokeSource.model} · run ${scene.smokeSource.referenceTime}` : null,
-    displayInterpolationNote: "Contours and faint barbs interpolate between model levels.",
+    displayInterpolationNote: "Colours interpolate between layer centres and forecast hours. Contours and faint barbs interpolate between model levels.",
     hours: hours.map((h, i) => {
       const temp = scalar(h.surface.temperatureC), gust = scalar(h.surface.windGustMps), direction = scalar(h.surface.windDirectionDeg);
       const arcs = options.launchWindows;
@@ -643,12 +675,17 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     label: `${options.launch.name ?? "Launch"} · ${formatQuantity(options.launch.elevationM, "elevation")} MSL`,
   };
 
-  // Preserve all interval nodes (including NaN missing intervals) in display coordinates
-  // so missing layers are never bridged vertically or blended into adjacent hours.
+  // Smooth display colours independently of the source interval measurements.
+  // NaN boundaries preserve holes when reconstructing and cropping the field.
   const gaps = timeGaps(view.hours);
   const fieldNodes = sampling.map((s) => {
     if (!s.lapseCPer1000Ft.some((n) => Number.isFinite(n.value))) return [];
-    return s.lapseCPer1000Ft.map((n) => ({ altitudeM: bottom - y(n.altitudeM), value: n.value }));
+    const displayNodes = stabilityDisplayNodes(s.lapseCPer1000Ft);
+    const nodes = displayNodes.filter(n => n.altitudeM <= topM);
+    if (nodes.length && nodes.at(-1)!.altitudeM < topM && displayNodes.at(-1)!.altitudeM > topM) {
+      nodes.push({ altitudeM: topM, value: sampleHeight(displayNodes, topM) ?? NaN });
+    }
+    return nodes.map((n) => ({ altitudeM: bottom - y(n.altitudeM), value: n.value }));
   });
   const fields = buildStabilityFieldPaths({
     nodesByHour: fieldNodes,
@@ -698,6 +735,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   hours.forEach((h, i) => {
     const sample = sampling[i], x = view.hours[i].x;
     const addBarb = (z: number, interpolated: boolean, surface: boolean) => {
+      if (z < floorM || z > topM) return;
       const u = sampleHeight(sample.windU, z), v = sampleHeight(sample.windV, z);
       if (u === null || v === null) return;
       const wind = componentsToWind(u, v);
@@ -710,7 +748,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
       if (b && b.altitudeM - a.altitudeM <= 1000 && ay - y(b.altitudeM) >= 66) addBarb((a.altitudeM + b.altitudeM) / 2, true, false);
     }
     const freezing = crossings(sample.temperatureC, 0)[0];
-    if (freezing !== undefined) view.freezing.push({ x, y: y(freezing), hourIndex: i });
+    if (freezing !== undefined && freezing >= floorM && freezing <= topM) view.freezing.push({ x, y: y(freezing), hourIndex: i });
     const modelCloud = h.levels.map((l) => ({ altitudeM: scalar(l.heightM) ?? NaN, value: scalar(l.cloudFractionPercent) ?? NaN }))
       .filter((n) => Number.isFinite(n.altitudeM) && n.altitudeM >= floorM).sort((a, b) => a.altitudeM - b.altitudeM);
     // Humidity hatching remains independent of model cloud fraction: either
@@ -720,6 +758,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
       ["humidity", sample.relativeHumidityPercent, 94.00001],
     ] as const) {
       for (const layer of moistLayers(nodes, threshold)) {
+        if (layer.baseM >= topM || layer.topM <= floorM) continue;
         const coverPercent = kind === "model" ? layer.coverPercent : null;
         view.clouds.push({ ...layer, hourIndex: i, x, y: y(layer.baseM), kind, coverPercent });
         view.cloudBands.push({ x: x - columnWidth / 2, width: columnWidth, y: y(layer.topM), height: y(layer.baseM) - y(layer.topM), kind, coverPercent });

@@ -5,6 +5,7 @@ import { parseSiteForecast, type SiteForecast } from '@azohra/meteo.briefing/con
 import { baseMap, onMapReady } from './map.ts';
 import { DATA_BASE } from '../lib/site.ts';
 import { buildWindgramView } from '../lib/windgram-view.ts';
+import { windgramViewport } from '../lib/windgram-viewport.ts';
 import { renderWindgramSvg, renderWindgramKey } from '../lib/windgram-chart.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
 import { SkewTChart } from '../lib/skewt-chart.ts';
@@ -430,6 +431,7 @@ async function main() {
   let currentWindgramCell = -1;
   let currentWindgramLayout = '';
   let currentWindgramHour = -1;
+  let fullWindgramProfile = false;
   let currentView = buildWindgramView(blanchardProfile, {
     timeZone: manifest.case.site.timeZone,
     widthPx: 1100,
@@ -438,10 +440,11 @@ async function main() {
   let cursor: SVGRectElement | null = null;
 
   function renderActiveCellWindgram(activeProfile: SiteForecast, cellIdx: number, index: number) {
-    const compact = window.matchMedia('(max-width: 640px), (max-width: 960px) and (max-height: 600px)').matches;
+    const { compact, height: heightPx } = windgramViewport();
+    el('windgram-full-profile').hidden = !compact;
+    el('windgram-full-profile').setAttribute('aria-pressed', String(fullWindgramProfile));
     const widthPx = compact ? Math.max(windgramHost.clientWidth || 320, 240) : 1100;
-    const heightPx = window.innerHeight;
-    const layout = compact ? `compact:${widthPx}:${heightPx}` : 'desktop';
+    const layout = compact ? `compact:${widthPx}:${heightPx}:${fullWindgramProfile}` : 'desktop';
     const matchedLaunch = launchForCell(cellIdx);
     const launchMeta = matchedLaunch && matchedLaunch.launchElevationM != null
       ? { elevationM: matchedLaunch.launchElevationM, name: `${matchedLaunch.name} launch` }
@@ -457,6 +460,7 @@ async function main() {
         timeZone: manifest.case.site.timeZone,
         widthPx,
         compact,
+        heightRange: fullWindgramProfile ? 'full' : 'soaring',
         heightPx,
         launch: launchMeta,
       });
@@ -1031,9 +1035,17 @@ async function main() {
     }
   });
   let resizeTimer = 0;
+  let viewport = windgramViewport();
   window.addEventListener('resize', () => {
+    const next = windgramViewport();
+    if (next === viewport) return;
+    viewport = next;
     window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(update, 150);
+  });
+  el('windgram-full-profile').addEventListener('click', () => {
+    fullWindgramProfile = !fullWindgramProfile;
+    update();
   });
   update();
 }

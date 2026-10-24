@@ -138,7 +138,7 @@ function smoothTemperatureProfile(count = 14) {
 test("each long connected temperature line receives one label on desktop and mobile", () => {
   const profile = smoothTemperatureProfile();
   for (const compact of [false, true]) {
-    const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact, widthPx: compact ? 320 : 1000, heightPx: 844 });
+    const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact, heightRange: "full", widthPx: compact ? 320 : 1000, heightPx: 844 });
     const before = structuredClone(view.contours);
     const svg = renderWindgramSvg(view);
     for (const temperatureF of [24, 32, 40]) {
@@ -459,7 +459,7 @@ test("compact charts fit a full forecast into portrait and landscape phones with
   assert.equal(desktop.top, 65);
   assert.ok(desktop.plotHeight >= 680);
   for (const [widthPx, heightPx] of [[240, 667], [320, 667], [390, 844], [430, 932], [780, 390]]) {
-    const fitted = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx, heightPx });
+    const fitted = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx, heightPx });
     close(fitted.width, widthPx);
     assert.ok(fitted.height <= heightPx - 40, `${widthPx}×${heightPx} fits vertically`);
     assert.deepEqual(fitted.hours.map((hour) => hour.validAt), desktop.hours.map((hour) => hour.validAt));
@@ -472,6 +472,64 @@ test("compact charts fit a full forecast into portrait and landscape phones with
     assert.equal(visibleHours.at(-1), fitted.hours.length - 1);
     for (const [i, index] of visibleHours.entries()) if (i) assert.ok(fitted.hours[index].x - fitted.hours[visibleHours[i - 1]].x >= 34);
   }
+});
+
+test("mobile soaring range enlarges weak lift, preserves readings, and restores the full profile", () => {
+  const profile = smoothTemperatureProfile(5);
+  const floor = profile.site.modelElevationM;
+  for (const hour of profile.hours) {
+    hour.derived.usableLiftTopM = floor + 600;
+    hour.derived.cloudBaseM = floor + 3000;
+    hour.derived.boundaryLayerTopM = floor + 3200;
+  }
+  profile.hours[3].derived.usableLiftTopM = floor + 900;
+  const before = structuredClone(profile);
+  const options = { timeZone: "Etc/UTC", compact: true, widthPx: 390, heightPx: 780, launch: { elevationM: floor + 300 } };
+  const focused = buildWindgramView(profile, options);
+  const full = buildWindgramView(profile, { ...options, heightRange: "full" });
+  assert.ok(focused.topM < full.topM - 1000);
+  assert.ok(focused.topM >= floor + 1400, "headroom above every displayed hour's usable lift");
+  assert.ok(focused.topM < floor + 2000, "high potential cloud base and BL top do not force a tall scale");
+  assert.equal(focused.height, full.height);
+  assert.equal(focused.width, full.width);
+  assert.deepEqual(focused.sampling, full.sampling);
+  assert.deepEqual(profile, before);
+  const visibleLift = (view: typeof focused) => (view.bottom - heightToY(view, floor + 900)) / view.plotHeight;
+  assert.ok(visibleLift(focused) > .5);
+  assert.ok(visibleLift(focused) > visibleLift(full));
+  for (let z = floor; z < focused.topM; z += 50) {
+    close(yToHeight(focused, heightToY(focused, z)), z, .01);
+    assert.deepEqual(readWindgram(focused, 0, z), readWindgram(full, 0, z));
+  }
+  assert.ok(focused.barbs.every(barb => barb.heightM <= focused.topM));
+  assert.ok(focused.freezing.length === 0, "freezing above the crop stays outside the chart");
+  assert.ok(focused.clouds.length === 0, "high potential cloud stays outside the chart");
+  assert.ok(!focused.contours.some(contour => contour.temperatureF === 24), "upper isotherms cannot pile up on the chart edge");
+  assert.doesNotMatch(renderWindgramSvg(focused), /NaN|Infinity|undefined/);
+  const desktop = buildWindgramView(profile, { ...options, compact: false });
+  assert.equal(desktop.topM, full.topM);
+  const highLaunch = buildWindgramView(profile, { ...options, launch: { elevationM: floor + 2000 } });
+  assert.ok(highLaunch.launch && highLaunch.topM >= floor + 2500);
+});
+
+test("mobile range handles zero lift, missing diagnostics, strong days and ensemble spread", () => {
+  const profile = steadyProfile();
+  const floor = profile.site.modelElevationM;
+  const options = { timeZone: "Etc/UTC", compact: true, widthPx: 390 };
+  const fullTop = buildWindgramView(profile, { ...options, heightRange: "full" }).topM;
+  for (const hour of profile.hours) {
+    hour.derived.usableLiftTopM = null;
+    hour.derived.thermalVelocityMps = null;
+  }
+  assert.equal(buildWindgramView(profile, options).topM, fullTop, "unknown lift retains full context");
+  for (const hour of profile.hours) hour.derived.thermalVelocityMps = 0;
+  assert.ok(buildWindgramView(profile, options).topM < fullTop);
+  for (const hour of profile.hours) {
+    Object.assign(hour, { soaring: { thermalVelocityV2Mps: 2, usableLiftTopV2M: { p25: floor + 400, p50: floor + 600, p75: floor + 1400 } } });
+  }
+  assert.ok(buildWindgramView(profile, options).topM >= floor + 1900, "ensemble upper quartile remains in view");
+  for (const hour of profile.hours) Object.assign(hour, { soaring: { thermalVelocityV2Mps: 4, usableLiftTopV2M: fullTop - 200 } });
+  assert.equal(buildWindgramView(profile, options).topM, fullTop, "strong days retain all available heights");
 });
 
 test("compact charts thin display marks, retain first and last hours, and keep diagnostics independently readable", () => {
@@ -503,7 +561,7 @@ test("compact charts thin display marks, retain first and last hours, and keep d
 
 test("compact chart height can fit the space below phone controls", () => {
   for (const maxHeightPx of [264, 350]) {
-    const view = buildWindgramView(fixture(), { timeZone: "Etc/UTC", compact: true, widthPx: 320, heightPx: 667, maxHeightPx });
+    const view = buildWindgramView(fixture(), { timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx: 320, heightPx: 667, maxHeightPx });
     assert.equal(view.height, maxHeightPx);
     assert.equal(view.plotHeight, maxHeightPx - 152);
     assert.ok(visibleHeightAnchors(view).length > 3);

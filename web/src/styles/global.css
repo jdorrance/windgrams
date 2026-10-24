@@ -829,6 +829,24 @@ details[open] > summary {
   border-radius: 8px;
 }
 
+.windgram-range {
+  margin-top: 6px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--axis);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.windgram-range[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--surface);
+}
+
 .windgram-viewport > .windgram-height-axis {
   position: absolute;
   top: 0;

@@ -10,13 +10,20 @@ case "$provider" in
     pack hrrr-conus gfs history/hrrr-conus history/gfs soaring/v1/regions.json
     for case_dir in data/soaring/v1/*; do
       [ -d "$case_dir" ] || continue
-      case "$case_dir" in *-rrfs-live) continue ;; esac
+      case "$case_dir" in *-rrfs-live|*-icon-eu-*) continue ;; esac
       pack "${case_dir#data/}"
     done
     ;;
   rrfs)
     pack rrfs history/rrfs soaring/v1/regions-rrfs.json
     for case_dir in data/soaring/v1/*-rrfs-live; do
+      [ -d "$case_dir" ] || continue
+      pack "${case_dir#data/}"
+    done
+    ;;
+  dwd)
+    pack icon-eu history/icon-eu soaring/v1/regions-icon-eu.json site-context-armenia.json
+    for case_dir in data/soaring/v1/*-icon-eu-*; do
       [ -d "$case_dir" ] || continue
       pack "${case_dir#data/}"
     done

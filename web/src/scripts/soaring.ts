@@ -1,10 +1,11 @@
 import { formatQuantity, getUnitSystem } from '../lib/units.ts';
-import { fetchWithRetry } from "../lib/http.ts";
+import { createReplayProfileCache, readRegionalJson } from '../lib/regional-data.ts';
+import { parsePublishedProfileJson } from '../lib/published-lift.ts';
 import { Marker, type GeoJSONSource, type ExpressionSpecification } from 'maplibre-gl';
-import { parseSiteForecast, type SiteForecast } from '@azohra/meteo.briefing/contract';
+import { type SiteForecast } from '@azohra/meteo.briefing/contract';
 import { baseMap, onMapReady } from './map.ts';
 import { DATA_BASE } from '../lib/site.ts';
-import { buildWindgramView, windgramHours } from '../lib/windgram-view.ts';
+import { buildWindgramView, windgramDayHours } from '../lib/windgram-view.ts';
 import { windgramViewport } from '../lib/windgram-viewport.ts';
 import { mountWindgramInspector, renderWindgramSvg, renderWindgramKey } from '../lib/windgram-chart.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
@@ -14,8 +15,11 @@ import { windBarbs, windBarbImage } from '../lib/map-wind.ts';
 import {
   LAYER_SPECS,
   PRIMARY_LAYERS,
+  availableReplayLayers,
+  refreshReplayLayerLabels,
   buildCellSiteForecast,
   buildCrossSectionLinePath,
+  crossSectionHeightScale,
   displayMetric,
   defaultReplayQuery,
   forecastHourAtValidTime,
@@ -37,16 +41,11 @@ import {
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const set = (id: string, text: string) => { const node = el(id); if (node) node.textContent = text; };
 
-async function read<T>(url: string): Promise<T> {
-  const response = await fetchWithRetry(url);
-  if (!response.ok) throw new Error(`Forecast data unavailable (${response.status}).`);
-  return response.json();
-}
+const read = readRegionalJson;
 
 async function readOptional<T>(url: string): Promise<T | null> {
   try {
-    const response = await fetchWithRetry(url);
-    return response.ok ? (await response.json() as T) : null;
+    return await read<T>(url);
   } catch {
     return null;
   }
@@ -77,7 +76,7 @@ interface PercentileSpread {
 interface LaunchEntry {
   slug: string; name: string; latitude: number; longitude: number; timeZone: string;
   cellIndex: number; gridIndex: number; distanceKm: number; launchElevationM: number | null; modelElevationM: number | null;
-  facingDeg?: number; windArcHalfWidthDeg?: number; windMinMph?: number; windMaxMph?: number; gustMaxMph?: number;
+  facingDeg?: number | null; windArcHalfWidthDeg?: number | null; windMinMph?: number | null; windMaxMph?: number | null; gustMaxMph?: number | null;
   models: Record<string, {
     referenceTime?: string; modelElevationM?: number | null;
     hours: {
@@ -133,19 +132,19 @@ interface VerificationDoc {
   wrfPilotDomain?: { modelSlug: string; label: string; wrfRelease: string; domains: { id: string; dxM: number; eWe: number; eSn: number; eVert: number }[]; physics: { blPblPhysics: string; mpPhysics: string } };
 }
 
-const M_TO_FT = 3.280839895;
 const fmtFt = (m: number | null | undefined) => formatQuantity(m, 'elevation');
 const fmtM = (m: number | null | undefined, datum = 'MSL') => m == null ? 'Unavailable' : `${formatQuantity(m, 'elevation')} ${datum}`;
 
 function renderCrossSectionSvg(
   doc: CrossSectionDoc,
   hour: ReplayHour,
+  heightScale: ReturnType<typeof crossSectionHeightScale>,
   selectedCell: number,
   onSelectCell: (cellIndex: number) => void,
 ): SVGSVGElement {
   const width = 980, height = 300, left = 56, right = 24, top = 26, bottom = 46;
   const plotW = width - left - right, plotH = height - top - bottom;
-  const maxAltM = 3600;
+  const { maxAltM, ticksM } = heightScale;
   const xOf = (km: number) => left + (km / Math.max(1, doc.totalDistanceKm)) * plotW;
   const yOf = (m: number) => top + plotH - Math.min(1, Math.max(0, m / maxAltM)) * plotH;
 
@@ -154,7 +153,7 @@ function renderCrossSectionSvg(
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.style.cssText = 'width:100%;min-width:680px;height:auto;border:1px solid var(--rule);border-radius:6px;background:var(--surface)';
 
-  for (const mVal of (getUnitSystem() === 'metric' ? [0, 1000, 2000, 3000, 3500] : [0, 3000, 6000, 9000, 11500].map(ft => ft / M_TO_FT))) {
+  for (const mVal of ticksM) {
     const y = yOf(mVal);
     const line = document.createElementNS(ns, 'line');
     line.setAttribute('x1', String(left)); line.setAttribute('x2', String(width - right));
@@ -270,16 +269,19 @@ async function main() {
   if (manifest.schemaVersion !== 1 || manifest.case.id !== location.caseId) throw new Error('Replay manifest mismatch');
   const activeModel = replayModel(manifest);
   const activeRegionMeta = regionForCase(regionsCatalogue?.regions ?? [], location.caseId);
+  const optionalBundle = <T>(name: string) => manifest.files && !Object.hasOwn(manifest.files, name)
+    ? Promise.resolve<T | null>(null) : readOptional<T>(`${root}/${name}`);
   const [grid, profileData, audit, hours, launchesDoc, crossSectionDoc, verificationDoc] = await Promise.all([
     read<Grid>(`${root}/grid.geojson`),
     read<unknown>(`${root}/profile.json`),
     read<Audit>(`${root}/audit.json`),
     Promise.all(manifest.hours.map(h => read<ReplayHour>(`${root}/${h.file}`))),
-    readOptional<LaunchesDoc>(`${root}/launches.json`),
-    readOptional<CrossSectionDoc>(`${root}/cross-section.json`),
-    readOptional<VerificationDoc>(`${root}/verification.json`),
+    optionalBundle<LaunchesDoc>('launches.json'),
+    optionalBundle<CrossSectionDoc>('cross-section.json'),
+    optionalBundle<VerificationDoc>('verification.json'),
   ]);
-  const blanchardProfile = parseSiteForecast(profileData);
+  const blanchardProfile = parsePublishedProfileJson(JSON.stringify(profileData));
+  const crossSectionScale = crossSectionDoc ? crossSectionHeightScale(crossSectionDoc.nodes, hours) : null;
   if (!blanchardProfile || blanchardProfile.model !== activeModel || blanchardProfile.hours.length !== hours.length || blanchardProfile.hours.some((h, i) => h.validAt !== hours[i].validAt)) {
     throw new Error('Invalid or unsynchronized regional profile');
   }
@@ -289,7 +291,13 @@ async function main() {
   if (selectedValidHour === null && !query.has('hour') && location.caseId.endsWith('-live')) {
     requested = hours.reduce((best, h) => Math.abs(Date.parse(h.validAt) - Date.now()) < Math.abs(Date.parse(best.validAt) - Date.now()) ? h : best).forecastHour;
   }
-  let layer: Layer = 'thermalVelocityV2Mps';
+  const availableLayers = new Set(availableReplayLayers(hours));
+  const defaultLayer: Layer = PRIMARY_LAYERS.find(candidate => availableLayers.has(candidate)) ?? [...availableLayers][0] ?? 'thermalVelocityV2Mps';
+  let layer: Layer = defaultLayer;
+  const layerSelect = el<HTMLSelectElement>('replay-layer');
+  for (const option of [...layerSelect.options]) if (!availableLayers.has(option.value as Layer)) option.remove();
+  refreshReplayLayerLabels(layerSelect.options);
+  layerSelect.value = layer;
   const launches = launchesDoc?.launches ?? [];
   const launchByCell = new Map(launches.map(launch => [launch.cellIndex, launch]));
   let selection = replaySelection(query, grid.features.map(feature => feature.properties), launches, manifest.siteCell);
@@ -386,6 +394,10 @@ async function main() {
   if (crossSectionDoc) {
     set('cross-section-route', crossSectionDoc.nodes.filter(n => n.waypointLabel).map(n => n.waypointLabel).join(' → '));
   }
+  el("regional-nws").hidden = !launchesDoc?.nwsOffice?.products?.afd?.text;
+  el("regional-observations").hidden = !verificationDoc?.observationVerificationSkill;
+  const modelInformation = el("wrf-lifecycle-summary").closest<HTMLElement>(".reality-card");
+  if (modelInformation) modelInformation.hidden = !verificationDoc?.wrfPilotDomain;
   if (launchesDoc?.nwsOffice?.office) {
     set('nws-afd-summary', `Area Forecast Discussion · NWS ${launchesDoc.nwsOffice.office}`);
   }
@@ -426,6 +438,9 @@ async function main() {
 
   const soundingChart = new SkewTChart(el('replay-sounding'), { name: manifest.case.site.name, elevationM: manifest.case.launchElevation.elevationM });
   const profileCache = new Map<number, SiteForecast | null>();
+  const remoteProfiles = manifest.cellProfiles ? createReplayProfileCache(root, manifest) : null;
+  const pendingProfiles = new Set<number>();
+  const profileErrors = new Set<number>();
   const windgramHost = el('replay-windgram');
   const windgramAxis = el('replay-height-axis');
   let currentWindgramCell = -1;
@@ -436,6 +451,7 @@ async function main() {
   let lastVisibleHour = hours.length - 1;
   let currentView = buildWindgramView(blanchardProfile, {
     timeZone: manifest.case.site.timeZone,
+    hours: windgramDayHours(blanchardProfile, selectedState(manifest, hours, requested).hour.validAt, manifest.case.site.timeZone),
     widthPx: 1100,
     launch: { elevationM: manifest.case.launchElevation.elevationM, name: `${manifest.case.site.name} launch` },
   });
@@ -457,7 +473,8 @@ async function main() {
     el('windgram-full-profile').setAttribute('aria-pressed', String(fullWindgramProfile));
     const widthPx = compact ? Math.max(windgramHost.clientWidth || 320, 240) : 1100;
     const launchMeta = windgramLaunch(cellIdx);
-    const layout = `${compact ? `compact:${widthPx}:${heightPx}:${fullWindgramProfile}` : 'desktop'}:${launchMeta?.elevationM}:${launchMeta?.name}`;
+    const dayHours = windgramDayHours(activeProfile, hours[index].validAt, manifest.case.site.timeZone);
+    const layout = `${compact ? `compact:${widthPx}:${heightPx}:${fullWindgramProfile}` : 'desktop'}:${launchMeta?.elevationM}:${launchMeta?.name}:${dayHours[0]?.validAt}:${dayHours.at(-1)?.validAt}`;
 
     const rebuilt = currentWindgramCell !== cellIdx || currentWindgramLayout !== layout;
     if (rebuilt) {
@@ -466,6 +483,7 @@ async function main() {
       currentWindgramLayout = layout;
       currentView = buildWindgramView(activeProfile, {
         timeZone: manifest.case.site.timeZone,
+        hours: dayHours,
         widthPx,
         compact,
         heightRange: fullWindgramProfile ? 'full' : 'soaring',
@@ -570,21 +588,25 @@ async function main() {
     const properties = grid.features[selectedCell].properties;
     const matchedLaunch = launchForCell(selectedCell);
     const activeLabel = matchedLaunch?.name ?? (selectedCell === manifest.siteCell ? manifest.case.site.name : 'Selected location');
-    if (!profileCache.has(selectedCell)) {
+    if (remoteProfiles && !remoteProfiles.cached(selectedCell) && !pendingProfiles.has(selectedCell) && !profileErrors.has(selectedCell)) {
+      const cellIndex = selectedCell;
+      pendingProfiles.add(cellIndex);
+      void remoteProfiles.load(cellIndex, properties.gridIndex).catch(() => {
+        profileErrors.add(cellIndex);
+      }).finally(() => {
+        pendingProfiles.delete(cellIndex);
+        if (selectedCell === cellIndex) update();
+      });
+    }
+    if (!remoteProfiles && !profileCache.has(selectedCell)) {
       if (profileCache.size >= 32) profileCache.delete(profileCache.keys().next().value!);
       profileCache.set(selectedCell, buildCellSiteForecast(manifest, hours, selectedCell, properties, activeLabel));
     }
-    const cellForecast = profileCache.get(selectedCell);
-    const visibleHours = cellForecast ? windgramHours(cellForecast, {
-      timeZone: manifest.case.site.timeZone,
-      compact: windgramViewport().compact,
-      heightRange: fullWindgramProfile ? 'full' : 'soaring',
-      launch: windgramLaunch(selectedCell),
-    }) : [];
-    firstVisibleHour = Math.max(0, hours.findIndex(hour => hour.validAt === visibleHours[0]?.validAt));
-    const lastIndex = hours.findIndex(hour => hour.validAt === visibleHours.at(-1)?.validAt);
-    lastVisibleHour = lastIndex < firstVisibleHour ? hours.length - 1 : lastIndex;
-    requested = Math.max(hours[firstVisibleHour].forecastHour, Math.min(hours[lastVisibleHour].forecastHour, requested));
+    const cellForecast = remoteProfiles ? remoteProfiles.cached(selectedCell) : profileCache.get(selectedCell);
+    // The map keeps its entire forecast horizon; the chart follows the selected
+    // local day's daylight. Later days remain reachable through these controls.
+    firstVisibleHour = 0;
+    lastVisibleHour = hours.length - 1;
     const state = selectedState(manifest, hours, requested), { hour, index } = state;
     requested = hour.forecastHour;
     slider.min = String(firstVisibleHour);
@@ -616,7 +638,7 @@ async function main() {
       currentWindgramCell = -1;
       currentWindgramHour = -1;
       cursor = null;
-      set('replay-windgram', 'A complete profile is unavailable at this location.');
+      set('replay-windgram', pendingProfiles.has(selectedCell) ? 'Loading profile…' : 'A complete profile is unavailable at this location.');
       windgramAxis.replaceChildren();
       windgramAxis.hidden = true;
       set('windgram-key', '');
@@ -799,7 +821,7 @@ async function main() {
     if (crossSectionDoc && el('replay-cross-section')) {
       const host = el('replay-cross-section');
       host.replaceChildren(
-        renderCrossSectionSvg(crossSectionDoc, hour, selectedCell, ci => {
+        renderCrossSectionSvg(crossSectionDoc, hour, crossSectionScale!, selectedCell, ci => {
           selectCell(ci);
         }),
       );
@@ -811,6 +833,7 @@ async function main() {
       const tbody = el('multimodel-table-body');
       tbody.replaceChildren();
       const modelLabels: [string, string][] = [
+        ['icon-eu', 'ICON-EU'],
         ['hrrr-conus', 'HRRR'],
         ['rrfs', 'RRFS'],
         ['hrdps-continental', 'HRDPS'],
@@ -1033,14 +1056,14 @@ async function main() {
       const group = document.createElement('optgroup');
       group.label = 'Additional layers';
       for (const spec of Object.values(LAYER_SPECS)) {
-        if (PRIMARY_LAYERS.includes(spec.id)) continue;
+        if (PRIMARY_LAYERS.includes(spec.id) || !availableLayers.has(spec.id)) continue;
         const option = document.createElement('option');
         option.value = spec.id; option.textContent = spec.label;
         group.append(option);
       }
       select.append(group);
     } else if (!PRIMARY_LAYERS.includes(layer)) {
-      layer = 'thermalVelocityV2Mps';
+      layer = defaultLayer;
     }
     select.value = layer;
     update();

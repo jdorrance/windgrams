@@ -20,18 +20,19 @@ export interface SiteEntry {
 
 export interface LaunchDetails {
   /** Direction the launch faces (degrees true); also the centre of the wind window. */
-  facingDeg: number;
+  facingDeg: number | null;
   /** Half-width of the acceptable wind-direction arc around facingDeg, degrees. */
-  windArcHalfWidthDeg: number;
+  windArcHalfWidthDeg: number | null;
   /** Acceptable surface wind speed range, mph. */
-  windMinMph: number;
-  windMaxMph: number;
+  windMinMph: number | null;
+  windMaxMph: number | null;
   /** Gusts above this are out of limits, mph. */
-  gustMaxMph: number;
+  gustMaxMph: number | null;
   /** Short place label for cards, e.g. "Oregon". */
   region: string;
   /** Free-text notes shown on the launch page. */
   notes: string;
+  source?: { name: string; url: string; checkedAt: string; license: string };
 }
 
 export interface Launch extends SiteEntry, LaunchDetails {}
@@ -54,16 +55,16 @@ export interface DirectionArc {
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export const DEFAULT_DETAILS: LaunchDetails = {
-  facingDeg: 0,
-  windArcHalfWidthDeg: 45,
-  windMinMph: 5,
-  windMaxMph: 15,
-  gustMaxMph: 20,
+  facingDeg: null,
+  windArcHalfWidthDeg: null,
+  windMinMph: null,
+  windMaxMph: null,
+  gustMaxMph: null,
   region: "",
   notes: "",
 };
 
-/** US time zones offered in the admin form (NWS and HRRR cover the US). */
+/** Time zones offered in the launch editor. */
 export const TIME_ZONES = [
   "America/Los_Angeles",
   "America/New_York",
@@ -73,6 +74,7 @@ export const TIME_ZONES = [
   "America/Chicago",
   "America/Anchorage",
   "Pacific/Honolulu",
+  "Asia/Yerevan",
 ];
 
 export const COMPASS_16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
@@ -84,14 +86,16 @@ export function compassPoint(deg: number): string {
 }
 
 /** The acceptable wind arc for a launch; wraps through north when fromDeg > toDeg. */
-export function windWindow(details: Pick<LaunchDetails, "facingDeg" | "windArcHalfWidthDeg">): DirectionArc {
+export function windWindow(details: Pick<LaunchDetails, "facingDeg" | "windArcHalfWidthDeg">): DirectionArc | null {
+  if (details.facingDeg === null || details.windArcHalfWidthDeg === null) return null;
   return {
     fromDeg: normalize(details.facingDeg - details.windArcHalfWidthDeg),
     toDeg: normalize(details.facingDeg + details.windArcHalfWidthDeg),
   };
 }
 
-export function inArc(directionDeg: number, arc: DirectionArc): boolean {
+export function inArc(directionDeg: number, arc: DirectionArc | null): boolean {
+  if (arc === null) return false;
   const d = normalize(directionDeg);
   return arc.fromDeg <= arc.toDeg ? d >= arc.fromDeg && d <= arc.toDeg : d >= arc.fromDeg || d <= arc.toDeg;
 }
@@ -131,18 +135,20 @@ export function consistencyErrors(sites: SitesFile, launches: LaunchesFile): str
 }
 
 const num = (value: unknown) => (typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN);
+const optionalNum = (value: unknown): number | null => value == null || (typeof value === "string" && value.trim() === "") ? null : num(value);
 const round5 = (value: number) => Math.round(value * 1e5) / 1e5;
 
 /** Compact form values; keep the original stored mph when this text is unchanged. */
-export function windLimitDisplayInput(valueMph: number, system: UnitSystem): string {
+export function windLimitDisplayInput(valueMph: number | null, system: UnitSystem): string {
+  if (valueMph === null) return "";
   return String(Number((convertQuantity(valueMph * 0.44704, "wind", system) ?? NaN).toFixed(1)));
 }
 
-export function windLimitFromDisplayInput(raw: string, system: UnitSystem, originalMph?: number): number | null {
+export function windLimitFromDisplayInput(raw: string, system: UnitSystem, originalMph?: number | null): number | null {
   if (raw.trim() === "") return null;
   const value = Number(raw);
   if (!Number.isFinite(value)) return null;
-  if (originalMph !== undefined && value === Number(windLimitDisplayInput(originalMph, system))) return originalMph;
+  if (originalMph != null && value === Number(windLimitDisplayInput(originalMph, system))) return originalMph;
   return system === "metric" ? value / 1.609344 : value;
 }
 
@@ -157,11 +163,11 @@ export function validateLaunchInput(input: Record<string, unknown>, displayUnits
   const latitude = num(input.latitude);
   const longitude = num(input.longitude);
   const timeZone = typeof input.timeZone === "string" ? input.timeZone : "";
-  const facingDeg = num(input.facingDeg);
-  const windArcHalfWidthDeg = input.windArcHalfWidthDeg === undefined ? DEFAULT_DETAILS.windArcHalfWidthDeg : num(input.windArcHalfWidthDeg);
-  const windMinMph = num(input.windMinMph);
-  const windMaxMph = num(input.windMaxMph);
-  const gustMaxMph = num(input.gustMaxMph);
+  const facingDeg = optionalNum(input.facingDeg);
+  const windArcHalfWidthDeg = optionalNum(input.windArcHalfWidthDeg);
+  const windMinMph = optionalNum(input.windMinMph);
+  const windMaxMph = optionalNum(input.windMaxMph);
+  const gustMaxMph = optionalNum(input.gustMaxMph);
   const region = typeof input.region === "string" ? input.region.trim().slice(0, 80) : "";
   const notes = typeof input.notes === "string" ? input.notes.trim().slice(0, 2000) : "";
 
@@ -175,13 +181,13 @@ export function validateLaunchInput(input: Record<string, unknown>, displayUnits
     if (!(longitude >= -180 && longitude <= 180)) errors.push("Longitude: −180° to 180°.");
   }
   if (!isValidTimeZone(timeZone)) errors.push("Valid time zone required.");
-  if (!(facingDeg >= 0 && facingDeg < 360)) errors.push("Launch direction required.");
-  if (!(windArcHalfWidthDeg >= 10 && windArcHalfWidthDeg <= 90)) errors.push("Wind arc half-width: 10°–90°.");
+  if (facingDeg !== null && !(facingDeg >= 0 && facingDeg < 360)) errors.push("Launch direction: 0°–359°.");
+  if (windArcHalfWidthDeg !== null && !(windArcHalfWidthDeg >= 10 && windArcHalfWidthDeg <= 90)) errors.push("Wind arc half-width: 10°–90°.");
   const windBound = (valueMph: number) => formatQuantity(valueMph * 0.44704, "wind", displayUnits === "metric" ? 5 : 0, displayUnits);
-  if (!(windMinMph >= 0 && windMinMph <= 40)) errors.push(`Minimum wind: 0–${windBound(40)}.`);
-  if (!(windMaxMph > 0 && windMaxMph <= 50)) errors.push(`Maximum wind: above 0, up to ${windBound(50)}.`);
-  if (windMinMph >= windMaxMph) errors.push("Minimum wind: below maximum wind.");
-  if (!(gustMaxMph >= windMaxMph && gustMaxMph <= 60)) errors.push(`Maximum gust: at least maximum wind, up to ${windBound(60)}.`);
+  if (windMinMph !== null && !(windMinMph >= 0 && windMinMph <= 40)) errors.push(`Minimum wind: 0–${windBound(40)}.`);
+  if (windMaxMph !== null && !(windMaxMph > 0 && windMaxMph <= 50)) errors.push(`Maximum wind: above 0, up to ${windBound(50)}.`);
+  if (windMinMph !== null && windMaxMph !== null && windMinMph >= windMaxMph) errors.push("Minimum wind: below maximum wind.");
+  if (gustMaxMph !== null && !(gustMaxMph >= 0 && (windMaxMph === null || gustMaxMph >= windMaxMph) && gustMaxMph <= 60)) errors.push(`Maximum gust: at least maximum wind, up to ${windBound(60)}.`);
   if (errors.length > 0) return { errors };
 
   return {
@@ -191,8 +197,8 @@ export function validateLaunchInput(input: Record<string, unknown>, displayUnits
       latitude: round5(latitude),
       longitude: round5(longitude),
       timeZone,
-      facingDeg: Math.round(facingDeg),
-      windArcHalfWidthDeg: Math.round(windArcHalfWidthDeg),
+      facingDeg: facingDeg === null ? null : Math.round(facingDeg),
+      windArcHalfWidthDeg: windArcHalfWidthDeg === null ? null : Math.round(windArcHalfWidthDeg),
       windMinMph,
       windMaxMph,
       gustMaxMph,
@@ -216,7 +222,9 @@ export function applyLaunch(
   if (mode === "create" && exists) return { error: `A launch with slug "${launch.slug}" already exists.` };
   if (mode === "update" && !exists) return { error: `No launch with slug "${launch.slug}".` };
 
+  const previousSite = sites.sites.find(s => s.slug === launch.slug);
   const site: SiteEntry = {
+    ...previousSite,
     slug: launch.slug,
     name: launch.name,
     latitude: launch.latitude,
@@ -224,6 +232,8 @@ export function applyLaunch(
     timeZone: launch.timeZone,
   };
   const details: LaunchDetails = {
+    ...launches.launches[launch.slug],
+    ...(launch.source ? { source: launch.source } : {}),
     facingDeg: launch.facingDeg,
     windArcHalfWidthDeg: launch.windArcHalfWidthDeg,
     windMinMph: launch.windMinMph,

@@ -228,6 +228,76 @@
         "nws"
       ],
       "nativeModels": []
+    },
+    {
+      "id": "armenia",
+      "name": "Armenia",
+      "status": "active-verified-trial",
+      "caseId": "armenia-icon-eu-live",
+      "timeZone": "Asia/Yerevan",
+      "morningBriefingLocalHour": 8,
+      "bbox": [
+        43.3,
+        38.7,
+        46.8,
+        41.5
+      ],
+      "primarySite": "am-hatis-500",
+      "launches": [
+        "am-aghberk",
+        "am-aparan",
+        "am-aragats-south-summit",
+        "am-armaghan",
+        "am-artanish",
+        "am-arteni",
+        "am-arzni",
+        "am-aygezard",
+        "am-enokavan",
+        "am-fioletovo",
+        "am-gutansar",
+        "am-gutansar-summit",
+        "am-hatis-300",
+        "am-hatis-500",
+        "am-hatis-summit",
+        "am-lalvar",
+        "am-lanjanist",
+        "am-large-lchasar",
+        "am-lernaglukh",
+        "am-lusagyugh",
+        "am-lusashogh",
+        "am-lusashogh-2",
+        "am-maydan-range",
+        "am-mikearmenia",
+        "am-miraq",
+        "am-mrghuz",
+        "am-nor-ughi",
+        "am-sevakavan",
+        "am-sevan-upper",
+        "am-shaghap",
+        "am-shaman",
+        "am-tatevi-vank",
+        "am-teghenis",
+        "am-teghenis-summit",
+        "am-teghut-haghartsin",
+        "am-tsaghkadzor",
+        "am-tsovagyugh",
+        "am-ulgyur",
+        "am-vokhchaberd",
+        "am-xaraba"
+      ],
+      "regionalModels": [
+        "icon-eu"
+      ],
+      "deterministicModels": [
+        "icon-eu",
+        "gfs",
+        "gdps"
+      ],
+      "ensembleModels": [
+        "geps"
+      ],
+      "sparseAdapters": [],
+      "nativeModels": []
     }
   ]
 }

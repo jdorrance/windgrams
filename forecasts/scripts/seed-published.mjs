@@ -12,6 +12,7 @@
 
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -25,6 +26,7 @@ import { isPublishedCase } from './merge-soaring-regions.mjs';
 export const GROUPS = {
   "noaa-cloud": ["hrrr-conus", "gfs"],
   rrfs: ["rrfs"],
+  dwd: ["icon-eu"],
   eccc: ["hrdps-continental", "rdps", "gdps", "geps"],
   soaring: [],
   observations: [],
@@ -51,11 +53,16 @@ function officesOf(document) {
  * The keys to copy for `group`. `get` returns the parsed JSON of a key, or
  * null when the live site has no such object. Throws when a read fails.
  */
-export async function collectGroup(group, { get, getBytes, sites = [] }) {
+export async function collectGroup(group, { get, getBytes, getCachedBytes, sites = [] }) {
   if (!Object.hasOwn(GROUPS, group)) throw new Error(`unknown group "${group}". Known: ${groupNames().join(", ")}`);
   const files = new Map();
-  const take = async (key) => {
-    const payload = getBytes ? await getBytes(key) : await get(key);
+  const take = async (key, expectedHash) => {
+    if (key.endsWith('.gz') && !getBytes) throw new Error(`getBytes is required for compressed published files: ${key}`);
+    // Only immutable bundle bytes are eligible. Fresh remote pointers supply
+    // the manifest hash; that verified manifest supplies each file hash.
+    const cached = expectedHash && getCachedBytes ? await getCachedBytes(key) : null;
+    const validCache = cached != null && createHash('sha256').update(bytesOf(cached)).digest('hex') === expectedHash;
+    const payload = validCache ? cached : getBytes ? await getBytes(key) : await get(key);
     if (payload === null) return null;
     const document = getBytes ? parseJsonBytes(payload, key) : payload;
     files.set(key, payload);
@@ -68,17 +75,19 @@ export async function collectGroup(group, { get, getBytes, sites = [] }) {
     if (!manifest) continue;
     for (const slug of slugsOf(manifest)) {
       const profile = await take(`${model}/sites/${slug}.json`);
-      if (model === 'rrfs' && (!profile || profile.run?.referenceTime !== manifest.referenceTime)) {
-        throw new Error(`Incomplete published RRFS run: ${slug}`);
+      if (['rrfs', 'icon-eu'].includes(model) && (!profile || profile.run?.referenceTime !== manifest.referenceTime)) {
+        throw new Error(`Incomplete published ${model.toUpperCase()} run: ${slug}`);
       }
     }
+    if (model === 'icon-eu') await take(`${model}/source.json`);
   }
 
   if (group === "soaring") {
     const regions = await take("soaring/v1/regions.json");
     const rrfsRegions = await take('soaring/v1/regions-rrfs.json');
+    const iconRegions = await take('soaring/v1/regions-icon-eu.json');
     const caseIds = new Set();
-    for (const r of [...(regions?.regions ?? []), ...(rrfsRegions?.regions ?? [])]) {
+    for (const r of [...(regions?.regions ?? []), ...(rrfsRegions?.regions ?? []), ...(iconRegions?.regions ?? [])]) {
       if (r?.status === "active-verified-trial" && typeof r.caseId === "string") {
         caseIds.add(r.caseId);
       }
@@ -97,7 +106,7 @@ export async function collectGroup(group, { get, getBytes, sites = [] }) {
       }
       if (!/^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)) throw new Error(`Invalid soaring pointer: ${caseId}`);
       const bundleRoot = `soaring/v1/${caseId}/${pointer.bundle}`;
-      const manifest = await take(`${bundleRoot}/manifest.json`);
+      const manifest = await take(`${bundleRoot}/manifest.json`, pointer.manifestSha256);
       if (!manifest || digest(`${bundleRoot}/manifest.json`) !== pointer.manifestSha256 || manifest.case?.id !== caseId) {
         throw new Error(`Incomplete or corrupt soaring manifest: ${caseId}`);
       }
@@ -106,7 +115,7 @@ export async function collectGroup(group, { get, getBytes, sites = [] }) {
       for (const fileName of names) {
         if (!/^[a-zA-Z0-9.-]+$/.test(fileName)) throw new Error(`Invalid soaring bundle file: ${fileName}`);
         const key = `${bundleRoot}/${fileName}`;
-        if (!await take(key) || digest(key) !== manifest.files[fileName]) throw new Error(`Incomplete or corrupt soaring bundle: ${key}`);
+        if (!await take(key, manifest.files[fileName]) || digest(key) !== manifest.files[fileName]) throw new Error(`Incomplete or corrupt soaring bundle: ${key}`);
       }
     }
   }
@@ -132,11 +141,14 @@ export function groupHasLocal(output, group) {
   if (GROUPS[group].some((model) => existsSync(join(output, model, "manifest.json")))) return true;
   if (group === "soaring") {
     const root = join(output, 'soaring', 'v1');
-    try {
-      const regions = JSON.parse(readFileSync(join(root, 'regions.json')));
-      return regions.regions.some(region => [region.caseId, ...(region.nativeModels ?? []).map(item => item.caseId)]
-        .filter(Boolean).some(caseId => isPublishedCase(root, caseId)));
-    } catch { return isPublishedCase(root, 'north-sound-20261021-00z'); }
+    for (const name of ['regions.json', 'regions-rrfs.json', 'regions-icon-eu.json']) {
+      try {
+        const regions = JSON.parse(readFileSync(join(root, name)));
+        if (regions.regions.some(region => [region.caseId, ...(region.nativeModels ?? []).map(item => item.caseId)]
+          .filter(Boolean).some(caseId => isPublishedCase(root, caseId)))) return true;
+      } catch { /* Try other independently published model indexes. */ }
+    }
+    return isPublishedCase(root, 'north-sound-20261021-00z');
   }
   if (group === "observations") {
     return existsSync(join(output, nwsPaths.manifest())) || existsSync(join(output, ecmwfPaths.manifest())) || existsSync(join(output, "raob"));
@@ -156,7 +168,7 @@ export function applyGroup(output, group, files) {
   }
   // Content and manifests land before pointers, then regional catalogues. Raw
   // bytes are preserved because every soaring pointer/file is content hashed.
-  const priority = key => /\/regions(?:-rrfs)?\.json$/.test(key) ? 3 : /\/index\.json$/.test(key) ? 2 : /\/manifest\.json$/.test(key) ? 1 : 0;
+  const priority = key => /\/regions(?:-[a-z0-9-]+)?\.json$/.test(key) ? 3 : /\/index\.json$/.test(key) ? 2 : /\/manifest\.json$/.test(key) ? 1 : 0;
   for (const [key, document] of [...files].sort((a, b) => priority(a[0]) - priority(b[0]))) {
     const path = join(output, key);
     mkdirSync(dirname(path), { recursive: true });
@@ -175,7 +187,7 @@ function bytesOf(document) {
 }
 
 function parseJsonBytes(bytes, key) {
-  const text = bytes.toString("utf8").trimStart();
+  const text = (key.endsWith('.gz') ? gunzipSync(bytes) : bytes).toString("utf8").trimStart();
   if (!JSON_START.test(text)) throw new Error(`${key} was not JSON`);
   return JSON.parse(text);
 }
@@ -213,7 +225,10 @@ async function main() {
 
   let files;
   try {
-    files = await collectGroup(values.group, { getBytes, sites });
+    files = await collectGroup(values.group, { getBytes, sites, getCachedBytes: key => {
+      try { return readFileSync(join(output, key)); }
+      catch (error) { if (error.code === 'ENOENT') return null; throw error; }
+    } });
   } catch (error) {
     if (groupHasLocal(output, values.group)) {
       console.warn(`WARN keeping cached ${values.group}: ${error.message}`);

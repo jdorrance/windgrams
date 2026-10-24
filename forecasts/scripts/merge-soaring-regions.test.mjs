@@ -34,3 +34,32 @@ test('an RRFS-only first publication never advertises nonexistent HRRR or incomp
   const again = mergeRegionIndexes(merged, overlay, id => id === 'north-rrfs-live');
   assert.deepEqual(again.regions[0].nativeModels, [{ model: 'rrfs', caseId: 'north-rrfs-live' }]);
 });
+
+test('ICON adds Armenia while preserving fresh primary and RRFS providers', () => {
+  const primary = { regions: [{ id: 'north', caseId: 'north-hrrr-live', nativeModels: [] }] };
+  const rrfs = { regions: [{ id: 'north', nativeModels: [{ model: 'rrfs', caseId: 'north-rrfs-live' }] }] };
+  const icon = { regions: [
+    { id: 'north', nativeModels: [{ model: 'hrrr-conus', caseId: 'north-stale-hrrr' }, { model: 'rrfs', caseId: 'north-stale-rrfs' }] },
+    { id: 'armenia', status: 'active-verified-trial', caseId: 'armenia-icon-eu-live', nativeModels: [{ model: 'icon-eu', caseId: 'armenia-icon-eu-live' }] },
+  ] };
+  const merged = mergeRegionIndexes(primary, rrfs, () => true, icon);
+  assert.deepEqual(merged.regions[0].nativeModels, [{ model: 'hrrr-conus', caseId: 'north-hrrr-live' }, { model: 'rrfs', caseId: 'north-rrfs-live' }]);
+  assert.equal(merged.regions[1].id, 'armenia');
+  assert.equal(merged.regions[1].caseId, 'armenia-icon-eu-live');
+  assert.deepEqual(merged.regions[1].nativeModels, [{ model: 'icon-eu', caseId: 'armenia-icon-eu-live' }]);
+  assert.deepEqual(mergeRegionIndexes(merged, rrfs, () => true, icon), merged);
+});
+
+test('ICON-only first publication excludes incomplete bundles and keeps last-good native cases', () => {
+  const icon = { regions: [
+    { id: 'armenia', status: 'active-verified-trial', caseId: 'armenia-icon-eu-live', nativeModels: [{ model: 'icon-eu', caseId: 'armenia-icon-eu-live' }] },
+    { id: 'incomplete', status: 'active-verified-trial', nativeModels: [{ model: 'icon-eu', caseId: 'missing-icon-eu-live' }] },
+  ] };
+  const published = id => id === 'armenia-icon-eu-live';
+  const first = mergeRegionIndexes(null, null, published, icon);
+  assert.equal(first.regions.length, 1);
+  assert.equal(first.regions[0].caseId, 'armenia-icon-eu-live');
+  const failedRefresh = structuredClone(icon);
+  failedRefresh.regions[0].nativeModels[0].caseId = 'armenia-icon-eu-incomplete';
+  assert.deepEqual(mergeRegionIndexes(first, null, published, failedRefresh), first);
+});

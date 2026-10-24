@@ -1,4 +1,4 @@
-import { convertQuantity, formatQuantity, unitLabel, type QuantityKind } from './units.ts';
+import { convertQuantity, formatQuantity, getUnitSystem, unitLabel, type QuantityKind, type UnitSystem } from './units.ts';
 import type { SiteForecast } from '@azohra/meteo.briefing/contract';
 
 export const DEFAULT_CASE = 'north-sound-20261021-00z';
@@ -94,6 +94,8 @@ export interface ReplayHour {
   sfcTd?: (number | null)[];
   mslp?: (number | null)[];
   levelsByPressure?: Record<string, LevelArrays>;
+  /** Native model levels use each cell's actual pressure (hPa). */
+  levelsByModel?: Record<string, LevelArrays & { p: (number | null)[] }>;
   status: Quality[];
   levelCount: number[];
   ceilingReached: boolean[];
@@ -107,6 +109,8 @@ export interface ReplayManifest {
   capturedAt: string;
   cellCount: number;
   files?: Record<string, string>;
+  /** Compressed per-cell profiles keep native columns out of eager hourly maps. */
+  cellProfiles?: string;
   siteCell: number;
   case: {
     id: string;
@@ -221,7 +225,22 @@ export const PRIMARY_LAYERS: Layer[] = [
   'lowCloudPercent', 'precipitationMmHr', 'convergence10mX1e5',
 ];
 
+/** Missing extraction fields stay out of the picker; real zeroes remain useful. */
+export function availableReplayLayers(hours: ReplayHour[]): Layer[] {
+  return (Object.keys(LAYER_SPECS) as Layer[]).filter(layer => hours.some(hour =>
+    hour[layer]?.some(value => typeof value === 'number' && Number.isFinite(value))));
+}
+
+/** Replace server-rendered captions with the browser's persisted unit preference. */
+export function refreshReplayLayerLabels(options: Iterable<{ value: string; textContent: string | null }>) {
+  for (const option of options) {
+    const spec = LAYER_SPECS[option.value as Layer];
+    if (spec) option.textContent = spec.label;
+  }
+}
+
 export const SUPPORTED_CASES = new Set([
+  'armenia-icon-eu-live',
   'north-sound-20261021-00z',
   'north-sound-expanded-v2',
   'shenandoah-blue-ridge-20261021-00z',
@@ -257,13 +276,43 @@ export function buildCrossSectionLinePath(
   return d;
 }
 
+/** One height scale across the transect's forecast horizon, including high terrain. */
+export function crossSectionHeightScale(
+  nodes: readonly { cellIndex: number; modelElevationM: number | null; launchElevationM?: number | null }[],
+  hours: readonly ReplayHour[],
+  system: UnitSystem = getUnitSystem(),
+) {
+  let highestM = 0;
+  const include = (value: number | null | undefined) => {
+    if (typeof value === 'number' && Number.isFinite(value)) highestM = Math.max(highestM, value);
+  };
+  for (const node of nodes) {
+    include(node.modelElevationM);
+    include(node.launchElevationM);
+    for (const hour of hours) {
+      include((hour.resolvedThermalTopM ?? hour.boundaryLayerTopM)?.[node.cellIndex]);
+      include((hour.usableLiftTopV2M ?? hour.usableLiftTopM)?.[node.cellIndex]);
+      include((hour.surfaceLclM ?? hour.cloudBaseM)?.[node.cellIndex]);
+    }
+  }
+  // Keep the familiar lowland range and leave room above the highest plotted line.
+  const maxAltM = Math.max(3600, Math.ceil((highestM + Math.max(150, highestM * 0.04)) / 500) * 500);
+  const unitsPerM = convertQuantity(1, 'elevation', system)!;
+  const maxDisplay = maxAltM * unitsPerM;
+  const rawStep = maxDisplay / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const step = [1, 2, 2.5, 3, 5, 10].find(value => value * magnitude >= rawStep)! * magnitude;
+  const ticksM = Array.from({ length: Math.floor(maxDisplay / step) + 1 }, (_, index) => index * step / unitsPerM);
+  return { maxAltM, ticksM };
+}
+
 export function replayLocation(search: string, dataBase: string) {
   const query = new URLSearchParams(search), caseId = query.get('case') ?? DEFAULT_CASE;
-  if (!SUPPORTED_CASES.has(caseId.replace(/-(?:rrfs-)?live$/, ''))) throw new Error(`Unknown replay case: ${caseId}`);
+  if (!SUPPORTED_CASES.has(caseId) && !SUPPORTED_CASES.has(caseId.replace(/-(?:rrfs-)?live$/, ''))) throw new Error(`Unknown replay case: ${caseId}`);
   const hour = Number(query.get('hour') ?? 20);
   return {
     caseId,
-    hour: Number.isInteger(hour) && hour >= 1 && hour <= 84 ? hour : 20,
+    hour: Number.isInteger(hour) && hour >= 1 && hour <= (caseId === 'armenia-icon-eu-live' ? 120 : 84) ? hour : 20,
     root: `${dataBase.replace(/\/$/, '')}/soaring/v1/${caseId}`,
   };
 }
@@ -342,7 +391,7 @@ export function replayModel(manifest: ReplayManifest) {
 }
 
 export function modelLabel(model: string) {
-  return ({ 'hrrr-conus': 'HRRR', rrfs: 'RRFS' } as Record<string, string>)[model] ?? model;
+  return ({ 'hrrr-conus': 'HRRR', rrfs: 'RRFS', 'icon-eu': 'ICON-EU' } as Record<string, string>)[model] ?? model;
 }
 
 export function nativeModels(region: RegionDescriptor) {
@@ -358,7 +407,11 @@ export function regionForCase(regions: RegionDescriptor[], caseId: string) {
 export function defaultReplayQuery(search: string, catalogue: RegionCatalogue | null) {
   const query = new URLSearchParams(search);
   if (query.has('case')) return query;
-  const region = catalogue?.regions.find(r => r.status === 'active-verified-trial' && r.caseId.startsWith('north-sound-')
+  const requestedRegion = query.get('region');
+  const requested = requestedRegion ? catalogue?.regions.find(r => r.id === requestedRegion && r.status === 'active-verified-trial') : undefined;
+  if (requestedRegion && !requested) throw new Error('Regional forecast is unavailable.');
+  const region = requested
+    ?? catalogue?.regions.find(r => r.status === 'active-verified-trial' && r.caseId.startsWith('north-sound-')
     && nativeModels(r).some(entry => entry.caseId.endsWith('-live')));
   if (region) {
     const requestedModel = query.get('model');
@@ -433,27 +486,26 @@ export function buildCellSiteForecast(
   for (const h of hours) {
     if (h.status[cellIndex] !== 'valid') return null;
     const levels: (SiteForecast['hours'][number]['levels'][number] & { heightM: number })[] = [];
-    if (h.levelsByPressure) {
-      for (const p of pList) {
-        const la = h.levelsByPressure[String(p)];
-        if (!la) continue;
-        const hm = la.h[cellIndex], tc = la.t[cellIndex], tdc = la.td[cellIndex], ws = la.ws[cellIndex], wd = la.wd[cellIndex];
-        if (hm == null || tc == null || tdc == null || ws == null || wd == null) continue;
-        if (hm <= elev + 20) continue;
-        const lv: (typeof levels)[number] = {
-          pressureHpa: p,
-          heightM: hm,
-          temperatureC: tc,
-          dewPointC: tdc,
-          windSpeedMps: ws,
-          windDirectionDeg: wd,
-        };
-        const vv = la.vv?.[cellIndex];
-        if (vv != null) lv.verticalVelocityPaS = vv;
-        levels.push(lv);
-      }
-      levels.sort((a, b) => a.heightM - b.heightM);
+    const columns = h.levelsByModel
+      ? Object.values(h.levelsByModel).map(la => ({ p: la.p[cellIndex], la }))
+      : pList.flatMap(p => h.levelsByPressure?.[String(p)] ? [{ p, la: h.levelsByPressure[String(p)] }] : []);
+    for (const { p, la } of columns) {
+      const hm = la.h[cellIndex], tc = la.t[cellIndex], tdc = la.td[cellIndex], ws = la.ws[cellIndex], wd = la.wd[cellIndex];
+      if ([p, hm, tc, tdc, ws, wd].some(value => value == null || !Number.isFinite(value)) || p! <= 0) continue;
+      if (hm! <= elev + 20) continue;
+      const lv: (typeof levels)[number] = {
+        pressureHpa: p!,
+        heightM: hm!,
+        temperatureC: tc!,
+        dewPointC: tdc!,
+        windSpeedMps: ws!,
+        windDirectionDeg: wd!,
+      };
+      const vv = la.vv?.[cellIndex];
+      if (vv != null && Number.isFinite(vv)) lv.verticalVelocityPaS = vv;
+      levels.push(lv);
     }
+    levels.sort((a, b) => a.heightM - b.heightM);
     const surfaceKeys = {
       seaLevelPressureHpa: 'mslp', temperatureC: 'sfcT', dewPointC: 'sfcTd',
       windSpeedMps: 'wind10mSpeedMps', windDirectionDeg: 'wind10mDirDeg',
@@ -506,7 +558,7 @@ export function buildCellSiteForecast(
       modelElevationM: elev,
       timeZone: manifest.case.site.timeZone,
     },
-    semantics: manifest.semantics ?? (replayModel(manifest) === 'rrfs'
+    semantics: manifest.semantics ?? (['rrfs', 'icon-eu'].includes(replayModel(manifest))
       ? { gust: 'instant', precipitation: 'windowMeanRate' }
       : { gust: 'instant', precipitation: 'instantRate', smoke: 'radiativelyCoupled' }),
     hours: siteHours,

@@ -207,14 +207,14 @@ test("P2-4: balloon sounding carries profile-limited coverage limit through head
 
   // For a 4,000 m launch above the 3,000 m profile limit, reports that the profile ends below launch and ceiling is unresolved
   const highLaunchReading = readChoice(choice, { ...SRG, forecastMaxTempC: 35 }, 4000, TZ);
-  assert.match(highLaunchReading.headline, /thermals ≥ 9,843 ft MSL \(profile-limited\) · cloud reach unresolved/);
+  assert.equal(highLaunchReading.headline, "At forecast high 95 °F · thermals ≥ 9,843 ft MSL (profile-limited).");
   assert.match(highLaunchReading.findings.find(f => f.key === "thermals")!.text, /buoyant through profile top.*ceiling unresolved/);
   const launchFinding = highLaunchReading.findings.find(f => f.key === "top")!;
   assert.match(launchFinding.text, /Profile ends at 9,843 ft MSL, near or below launch elevation 13,123 ft MSL · thermal ceiling unresolved/);
   assert.doesNotMatch(launchFinding.text, /Station parcel top near or below launch/);
-  const cloudFinding = highLaunchReading.findings.find(f => f.key === "clouds")!;
-  assert.match(cloudFinding.text, /above profile top 9,843 ft MSL · cloud reach unresolved/);
-  assert.doesNotMatch(cloudFinding.text, /Blue thermals/);
+  assert.equal(choice.sounding.lclM, null, "condensation lies above this observed profile");
+  assert.equal(highLaunchReading.findings.find(f => f.key === "clouds"), undefined);
+  assert.doesNotMatch(JSON.stringify(highLaunchReading), /Blue thermals|Cu possible/);
 
   // For a 1,500 m launch below the 3,000 m profile limit, reports buoyant parcel at profile top with unresolved ceiling
   const lowLaunchReading = readChoice(choice, { ...SRG, forecastMaxTempC: 35 }, 1500, TZ);

@@ -1,15 +1,15 @@
 # Soaring project status
 
-Original plan: October 22, 2026, at commit `dd1223e`. Status reviewed October 23, 2026. This record replaces the earlier phase estimates with the current implementation and remaining work.
+Original plan: October 22, 2026, at commit `dd1223e`. Status reviewed October 24, 2026. This record replaces the earlier phase estimates with the current implementation and remaining work.
 
 ## Delivered
 
-- Point forecasts for HRRR, HRDPS, RRFS, RDPS, GFS, GDPS and GEPS, with NWS, ECMWF and balloon guidance alongside.
-- Native HRRR/RRFS regional maps for North Sound and Shenandoah–Blue Ridge; location and forecast-hour selection synchronize the map, windgram and sounding.
+- Point forecasts for HRRR, HRDPS, RRFS, RDPS, GFS, GDPS and GEPS in their published coverage; ICON-EU for 40 reviewed Armenian launches. NWS and balloon guidance serve US sites; ECMWF adds global context.
+- Native HRRR/RRFS regional maps for North Sound and Shenandoah–Blue Ridge, plus ICON-EU for Armenia; location and forecast-hour selection synchronize the map, windgram and sounding.
 - Hourly site comparisons, regional diagnostics and terrain cross-sections from published model data.
 - Versioned v2 thermal diagnostics, distinct 1 m/s and 225 ft/min lift ceilings, surface and mixed-layer LCL, layer winds, shear and native-grid convergence.
 - Immutable regional bundles, resumable source capture, a 120-run forecast archive and observation-matching utilities.
-- Availability probes and separate HRRR/general and RRFS refresh schedules.
+- Availability probes and separate general, RRFS and ICON-EU refresh schedules.
 - A full-day mobile windgram, shared Imperial/Metric preference, WxToFly colors, potential-LCL symbols and RH >94% hatching.
 
 The [diagnostic notes](forecast-improvement-plan.md) describe the calculations and approximations. [Regional operations](../forecasts/soaring/README.md) and the [fixed HRRR replay](soaring-replay.md) provide reproducible commands.
@@ -18,7 +18,7 @@ The [diagnostic notes](forecast-improvement-plan.md) describe the calculations a
 
 `forecasts/wrf/` contains North Sound domain settings, namelists and a runner scaffold for a 3 km parent / 1 km nest. The Dockerfile installs dependencies and copies those settings. The default runner writes dry-run estimates; a real integration expects WRF/WPS executables, geographic inputs and forcing to be supplied separately. Runtime, cost and forecast benefit still need measurements from completed integrations.
 
-Additional regional entries identify candidate areas for grid publication. Their point comparisons and configuration are distinct from the two active native-grid regions.
+Additional regional entries identify candidate areas for grid publication. Their point comparisons and configuration are distinct from the three active regional forecast areas.
 
 ## Evaluation still to do
 

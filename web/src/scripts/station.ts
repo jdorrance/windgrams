@@ -24,7 +24,7 @@ function start() {
   const config = JSON.parse(byId<HTMLElement>("station-config").textContent ?? "{}") as StationPageConfig;
   const tz = launch.timeZone;
   const arc = windWindow(launch);
-  const windowLabel = `${compassPoint(launch.facingDeg)} ±${launch.windArcHalfWidthDeg}°`;
+  const windowLabel = arc ? `${compassPoint(launch.facingDeg!)} ±${launch.windArcHalfWidthDeg}°` : "unknown";
   const limits = { window: arc, windMinMph: launch.windMinMph, windMaxMph: launch.windMaxMph, gustMaxMph: launch.gustMaxMph };
   const time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" });
 
@@ -196,11 +196,11 @@ function svgEl(name: string, attrs: Record<string, string | number>, parent: Ele
   return node;
 }
 
-function drawCompassFrame(svg: SVGSVGElement, arc: { fromDeg: number; toDeg: number }) {
+function drawCompassFrame(svg: SVGSVGElement, arc: { fromDeg: number; toDeg: number } | null) {
   svg.replaceChildren();
-  const span = (arc.toDeg - arc.fromDeg + 360) % 360;
+  const span = arc ? (arc.toDeg - arc.fromDeg + 360) % 360 : 0;
   svgEl("circle", { cx: C, cy: C, r: R, class: "compass-ring" }, svg);
-  svgEl("path", { d: `M${C} ${C} L${point(arc.fromDeg, R)} A${R} ${R} 0 ${span > 180 ? 1 : 0} 1 ${point(arc.toDeg, R)} Z`, class: "compass-window" }, svg);
+  if (arc) svgEl("path", { d: `M${C} ${C} L${point(arc.fromDeg, R)} A${R} ${R} 0 ${span > 180 ? 1 : 0} 1 ${point(arc.toDeg, R)} Z`, class: "compass-window" }, svg);
   for (const [label, deg] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]] as const) {
     const [x, y] = point(deg, R + 10).split(" ").map(Number);
     const text = svgEl("text", { x, y: y + 4, class: "compass-label", "text-anchor": "middle" }, svg);

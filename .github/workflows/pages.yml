@@ -12,9 +12,10 @@
 #     freshness deadlines against each region's local morning briefing window
 #     (08:00 local time in America/Los_Angeles, America/Boise, America/New_York).
 #
-# Five jobs run at once, one provider host each:
+# Provider jobs run independently; ICON uses its own later refresh window:
 #   noaa-cloud   HRRR, then GFS          NOAA cloud buckets, byte-ranged
 #   rrfs         RRFS                    noaa-rrfs-ops-pds, its own bucket
+#   dwd          ICON-EU                 native DWD cells, 78 hours, 04:55/10:55/16:55/22:55 UTC
 #   eccc         HRDPS, RDPS, GDPS, GEPS Datamart, one whole-domain GRIB at a time
 #   observations NWS, Open-Meteo, IEM    three hosts, in parallel with each other
 #   terrain      site-context.json       elevation tiles, only when launches moved
@@ -25,6 +26,7 @@ on:
   schedule:
     - cron: "55 1,7,13,19 * * *"
     - cron: "55 3,9,15,21 * * *"
+    - cron: "55 4,10,16,22 * * *"
   workflow_dispatch:
     inputs:
       refresh:
@@ -35,6 +37,7 @@ on:
         options:
           - all
           - rrfs
+          - icon-eu
   push:
     branches: [main]
     paths:
@@ -81,7 +84,7 @@ jobs:
 
   noaa-cloud:
     needs: urls
-    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh != 'rrfs')
+    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && github.event.schedule != '55 4,10,16,22 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh == 'all')
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -135,7 +138,7 @@ jobs:
 
   rrfs:
     needs: urls
-    if: github.event_name != 'push' && github.event.schedule != '55 1,7,13,19 * * *'
+    if: github.event_name != 'push' && (github.event.schedule == '55 3,9,15,21 * * *' || (github.event_name == 'workflow_dispatch' && (inputs.refresh == 'all' || inputs.refresh == 'rrfs')))
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -183,9 +186,62 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  dwd:
+    needs: urls
+    if: github.event_name != 'push' && (github.event.schedule == '55 4,10,16,22 * * *' || (github.event_name == 'workflow_dispatch' && (inputs.refresh == 'all' || inputs.refresh == 'icon-eu')))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+        with:
+          package-json: forecasts/package.json
+          lockfile: forecasts/pnpm-lock.yaml
+          working-directory: forecasts
+      - name: Install the native ICON GRIB decoder
+        working-directory: forecasts
+        run: |
+          python3.12 -m venv .venv-icon
+          .venv-icon/bin/pip install --disable-pip-version-check -r scripts/lib/icon-requirements.txt
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}
+          restore-keys: forecast-data-
+      - name: Seed the previous ICON profiles, terrain and regional bundles
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
+        run: |
+          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group dwd
+          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group terrain
+          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group soaring
+      - name: Build and validate native ICON-EU for Armenia
+        working-directory: forecasts
+        env:
+          ICON_PYTHON: ${{ github.workspace }}/forecasts/.venv-icon/bin/python
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: |
+          node scripts/build-icon.mjs --sites sites.json --output data
+          node scripts/build-icon.mjs --sites sites.json --output data --validate-only
+      - name: Pack
+        if: always()
+        working-directory: forecasts
+        run: sh scripts/pack-provider.sh dwd slice
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: data-dwd
+          path: forecasts/slice
+          if-no-files-found: error
+          retention-days: 1
+
   eccc:
     needs: urls
-    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh != 'rrfs')
+    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && github.event.schedule != '55 4,10,16,22 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh == 'all')
     runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
@@ -238,7 +294,7 @@ jobs:
 
   observations:
     needs: urls
-    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh != 'rrfs')
+    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && github.event.schedule != '55 4,10,16,22 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh == 'all')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -295,7 +351,7 @@ jobs:
 
   terrain:
     needs: urls
-    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh != 'rrfs')
+    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && github.event.schedule != '55 4,10,16,22 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh == 'all')
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -336,12 +392,13 @@ jobs:
           retention-days: 1
 
   publish:
-    needs: [urls, noaa-cloud, rrfs, eccc, observations, terrain]
+    needs: [urls, noaa-cloud, rrfs, dwd, eccc, observations, terrain]
     if: >-
       always() &&
       needs.urls.result == 'success' &&
       (needs.noaa-cloud.result == 'success' || needs.noaa-cloud.result == 'skipped') &&
       (needs.rrfs.result == 'success' || needs.rrfs.result == 'skipped' || needs.rrfs.result == 'failure') &&
+      (needs.dwd.result == 'success' || needs.dwd.result == 'skipped' || needs.dwd.result == 'failure') &&
       (needs.eccc.result == 'success' || needs.eccc.result == 'skipped') &&
       (needs.observations.result == 'success' || needs.observations.result == 'skipped') &&
       (needs.terrain.result == 'success' || needs.terrain.result == 'skipped')
@@ -380,7 +437,7 @@ jobs:
           METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
         run: |
           set -eu
-          for group in noaa-cloud rrfs eccc observations terrain soaring; do
+          for group in noaa-cloud rrfs dwd eccc observations terrain soaring; do
             node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group "$group"
           done
       - name: Report RRFS refresh failure while retaining last-good data
@@ -389,6 +446,11 @@ jobs:
           echo '::warning::RRFS refresh failed. Publishing other models with the last complete RRFS profiles and regional bundles.'
           echo '### RRFS refresh failed' >> "$GITHUB_STEP_SUMMARY"
           echo 'Other providers are being published. RRFS retains its last complete run; the RRFS job contains the failure details.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Report ICON refresh failure while retaining last-good data
+        if: needs.dwd.result == 'failure'
+        run: |
+          echo '::warning::ICON-EU refresh failed. Retaining the last complete Armenian profiles and map.'
+          echo 'ICON-EU retains its last complete run; see the DWD job for failure details.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         if: github.event_name != 'push'
         with:
@@ -407,6 +469,7 @@ jobs:
             fi
           done
           rm -f forecasts/data/EMPTY
+          node forecasts/scripts/merge-armenia-terrain.mjs --output forecasts/data --sites forecasts/sites.json
       - name: Require a cached dataset
         if: github.event_name == 'push' && steps.dataset.outputs.cache-matched-key == ''
         run: |
@@ -416,14 +479,19 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.refresh == 'rrfs'
         working-directory: forecasts
         run: node scripts/validate-rrfs.mjs --data data --sites sites.json
+      - name: Validate requested ICON profiles and regional maps before deployment
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh == 'icon-eu'
+        working-directory: forecasts
+        run: node scripts/build-icon.mjs --sites sites.json --output data --validate-only
       - name: Catalogue, matched observation verification, and run index
         working-directory: forecasts
         run: |
           set -eu
           mkdir -p data
           cp sites.json data/sites.json
-          pnpm exec meteo forecast catalogue --output data/models.json
+          node scripts/write-models-catalogue.mjs --output data
           node scripts/merge-soaring-regions.mjs --output data
+          node scripts/pages-artifact.mjs --prune-data data
           node verification/verify-observations.mjs ./data
           node scripts/write-runs-index.mjs --output data
       - name: Require complete regional maps for a requested RRFS refresh
@@ -441,6 +509,7 @@ jobs:
           mkdir -p dist/data
           cp -a ../forecasts/data/. dist/data/
           rm -rf dist/data/EMPTY dist/data/history dist/data/solar
+          node ../forecasts/scripts/pages-artifact.mjs --check-site dist
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:

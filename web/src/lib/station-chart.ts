@@ -9,7 +9,7 @@ import { convertQuantity, defaultQuantityDigits, fmt, formatQuantity, getUnitSys
 
 const windValue = (value: number | null) => convertQuantity(value, "wind");
 const temperatureValue = (value: number | null) => convertQuantity(value, "temperature");
-const launchWind = (valueMph: number) => convertQuantity(valueMph / 2.2369362920544025, "wind")!;
+const launchWind = (valueMph: number | null) => valueMph === null ? null : convertQuantity(valueMph / 2.2369362920544025, "wind");
 
 const pressureValue = (hpa: number | null) => convertQuantity(hpa, "pressure");
 const dir = (deg: number | null) => (deg == null ? "" : `${compassPoint(deg)} `);
@@ -34,7 +34,7 @@ export function stationSpec(launch: ChartLaunch, stationName: string): ChartSpec
     panels(points) {
       const wind = points.map((p) => windValue(p.windSpeedMps));
       const gust = points.map((p) => windValue(p.windGustMps));
-      const windTop = niceMax(Math.max(launchWind(launch.gustMaxMph) + 5, ...[...wind, ...gust].map((v) => v ?? 0)), 5);
+      const windTop = niceMax(Math.max((launchWind(launch.gustMaxMph) ?? 0) + 5, ...[...wind, ...gust].map((v) => v ?? 0)), 5);
       const temperature = points.map((p) => temperatureValue(p.temperatureC));
       const dewPoint = points.map((p) => temperatureValue(p.dewPointC));
       const sun = points.map((p) => p.solarRadiationWm2);
@@ -110,7 +110,7 @@ export function stationSpec(launch: ChartLaunch, stationName: string): ChartSpec
           fmt(p.solarRadiationWm2),
         ];
       },
-      footnote: `5-minute mean wind · Peak gust. ✓ Launch window (${launch.windowLabel}).`,
+      footnote: `5-minute mean wind · Peak gust.${launch.window ? ` ✓ Launch window (${launch.windowLabel}).` : ""}`,
     },
   };
 }

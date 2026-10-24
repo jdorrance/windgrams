@@ -1,3 +1,4 @@
+import { forecastCapabilities, launchCountry, shortModelLabel } from "../lib/forecast-capabilities.ts";
 import { launchConditions, matchingHourIndex, peakLiftIndex, validDateKey } from "../lib/launch-forecast.ts";
 import { parsePublishedProfileJson } from "../lib/published-lift.ts";
 // Launch page: day tabs and a model switch scope the meteogram and the NWS
@@ -24,7 +25,7 @@ import { formatQuantity, relativeTime } from "../lib/units.ts";
 import { Sunlight, type CloudSeries } from "./sunlight.ts";
 
 // Short-range high-resolution models first, then regional, global, and the ensemble.
-const MODEL_ORDER = ["hrrr-conus", "hrdps-continental", "rrfs", "rdps", "gfs", "gdps", "geps"];
+
 const HOUR_MS = 3_600_000;
 const DAY_START = 7;
 const DAY_END = 21;
@@ -50,6 +51,13 @@ interface NwsOfficeDocument {
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const launch = JSON.parse($("launch-config").textContent ?? "{}") as Launch;
 const tz = launch.timeZone;
+const capabilities = forecastCapabilities(launch);
+try { sessionStorage.setItem("windgrams-country", launchCountry(launch)); } catch { /* Storage is optional. */ }
+if (launchCountry(launch) === "AM") {
+  const nav = $<HTMLAnchorElement>("soaring-nav-link");
+  if (nav) { const target = new URL(nav.href); target.searchParams.set("region", "armenia"); nav.href = target.toString(); }
+}
+const MODEL_ORDER = capabilities.models;
 const arc = windWindow(launch);
 let sample = false;
 let fullWindgramProfile = false;
@@ -191,7 +199,7 @@ function covers(slug: string, dateKey: string) {
 }
 
 function modelLabel(slug: string) {
-  return modelEntry(slug)?.label.replace(" CONUS", "").replace(" continental", "") ?? slug;
+  return modelEntry(slug)?.label.replace(" CONUS", "").replace(" continental", "") ?? shortModelLabel(slug);
 }
 
 async function selectModel(slug: string) {
@@ -243,7 +251,9 @@ function renderModelSelect(available: string[]) {
   );
   host.disabled = available.length === 0;
   if (!available.length) host.add(new Option("No models available", ""));
-  $("model-selected-name").textContent = host.value ? host.value.split("-")[0].toUpperCase() : "—";
+  const caption = host.value ? shortModelLabel(host.value) : "—";
+  $("model-selected-name").textContent = caption;
+  $("model-selected-name").dataset.compact = String(caption.length > 5);
   host.title = host.selectedOptions[0]?.textContent ?? "Forecast model";
 }
 
@@ -334,7 +344,7 @@ function renderMeteogram() {
     timeZone: tz,
     hours,
     launch: launchElevationM != null ? { name: launch.name, elevationM: launchElevationM } : null,
-    launchWindows: [arc],
+    launchWindows: arc ? [arc] : [],
     capabilities: entry?.capabilities,
     widthPx: width,
     compact,
@@ -375,6 +385,7 @@ function renderMeteogram() {
 }
 
 function renderNws() {
+  if (!capabilities.nws) return;
   const meta = $("nws-meta");
   const link = $("nws-link") as HTMLAnchorElement;
   if (!nws) {
@@ -413,7 +424,7 @@ const chartLaunch = () => ({
   windMaxMph: launch.windMaxMph,
   gustMaxMph: launch.gustMaxMph,
   window: arc,
-  windowLabel: `${compassPoint(launch.facingDeg)} ±${launch.windArcHalfWidthDeg}°`,
+  windowLabel: arc ? `${compassPoint(launch.facingDeg!)} ±${launch.windArcHalfWidthDeg}°` : "unknown",
 });
 
 function renderEcmwf() {
@@ -680,7 +691,7 @@ async function chooseDefaultModel() {
 }
 
 export async function start() {
-  const raobPromise = getJson<RaobDocument>(`raob/sites/${launch.slug}.json`);
+  const raobPromise = capabilities.raob ? getJson<RaobDocument>(`raob/sites/${launch.slug}.json`) : Promise.resolve(null);
   const metadata = Promise.all([
     getJson<unknown>('models.json').then(doc => { catalogue = doc ? parseModelCatalogueJson(JSON.stringify(doc)) : null; renderModelSelect(MODEL_ORDER.filter(slug => manifests.has(slug))); if (model && profiles.get(model)) renderMeteogram(); }),
     getJson<unknown>('site-context.json').then(doc => {
@@ -698,6 +709,7 @@ export async function start() {
     }),
   ]);
   const nwsTask = (async () => {
+    if (!capabilities.nws) return;
     nws = await getJson<NwsSiteDocument>(`nws/sites/${launch.slug}.json`);
     renderDayTabs(); renderNws();
     const office = nws ? await getJson<NwsOfficeDocument>(`nws/offices/${nws.grid.office}.json`) : null;

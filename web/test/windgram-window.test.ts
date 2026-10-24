@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast, type SiteForecast } from "@azohra/meteo.briefing/contract";
-import { buildWindgramView, windgramHours, type WindgramOptions } from "../src/lib/windgram-view.ts";
+import { buildWindgramView, windgramDayHours, windgramHours, type WindgramOptions } from "../src/lib/windgram-view.ts";
 
 type Hour = SiteForecast["hours"][number];
 const options: WindgramOptions = { timeZone: "America/Boise", compact: true, launch: { elevationM: 1200 } };
@@ -164,4 +164,35 @@ test("daylight clipping is idempotent and preserves source hours and diagnostics
   for (const hour of selected) assert.equal(hour, profile.hours.find(source => source.validAt === hour.validAt));
   assert.deepEqual(windgramHours(profile, { ...options, hours: selected }), selected);
   assert.deepEqual(times(buildWindgramView(profile, { ...options, hours: selected }).hours), times(selected));
+});
+
+test("a 78-hour ICON run provides three complete Armenian daylight windows", () => {
+  const profile = profileAt("2026-10-24", range(1, 78));
+  profile.model = "icon-eu";
+  Object.assign(profile.site, { latitude: 40.294048, longitude: 44.697437, timeZone: "Asia/Yerevan" });
+  for (const dateKey of ["2026-10-24", "2026-10-25", "2026-10-26"]) {
+    const selected = { ...options, timeZone: "Asia/Yerevan", hours: { dateKey, timeZone: "Asia/Yerevan" } };
+    const focused = windgramHours(profile, { ...selected, heightRange: "soaring" });
+    const full = windgramHours(profile, { ...selected, heightRange: "full" });
+    assert.deepEqual(times(focused), times(full));
+    assert.equal(focused.length, 13);
+    assert.equal(focused[0].validAt, `${dateKey}T03:00:00.000Z`);
+    assert.equal(focused.at(-1)!.validAt, `${dateKey}T15:00:00.000Z`);
+  }
+});
+
+test('regional charts select the middle local day without losing source hour identity', () => {
+  const profile = profileAt('2026-10-24', range(1, 78));
+  profile.model = 'icon-eu';
+  Object.assign(profile.site, { latitude: 40.294048, longitude: 44.697437, timeZone: 'Asia/Yerevan' });
+  const original = structuredClone(profile);
+  const selected = windgramDayHours(profile, '2026-10-25T09:00:00Z', 'Asia/Yerevan');
+  assert.deepEqual(times(selected), expected('2026-10-25', 3, 15));
+  assert.equal(profile.hours.indexOf(selected[0]), 26, 'first visible chart column retains forecast hour 27');
+  for (const compact of [true, false]) for (const heightRange of ['soaring', 'full'] as const) {
+    const view = buildWindgramView(profile, { timeZone: 'Asia/Yerevan', hours: selected, compact, heightRange });
+    assert.deepEqual(times(view.hours), times(selected));
+  }
+  assert.deepEqual(times(windgramDayHours(profile, '2026-10-24T21:00:00Z', 'Asia/Yerevan')), times(selected), 'local after-midnight map hours select the next Armenian date');
+  assert.deepEqual(profile, original);
 });

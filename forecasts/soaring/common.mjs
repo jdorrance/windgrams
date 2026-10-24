@@ -7,11 +7,12 @@ export const versions = Object.freeze({ forecast: '0.6.0', briefing: '0.6.2', gr
 export const semantics = { gust: 'instant', precipitation: 'instantRate', smoke: 'radiativelyCoupled' };
 export function modelFor(c) {
   const model = c.model ?? 'hrrr-conus';
-  if (!['hrrr-conus', 'rrfs'].includes(model)) throw new Error(`Unsupported regional model: ${model}`);
+  if (!['hrrr-conus', 'rrfs', 'icon-eu'].includes(model)) throw new Error(`Unsupported regional model: ${model}`);
   return model;
 }
-export const semanticsFor = c => modelFor(c) === 'rrfs' ? { gust: 'instant', precipitation: 'windowMeanRate' } : semantics;
-export const versionsFor = c => modelFor(c) === 'rrfs' ? { ...versions, algorithm: 'rrfs-regional-0.6.0-v1' } : versions;
+export const semanticsFor = c => modelFor(c) === 'icon-eu' ? { gust: 'hourMax', precipitation: 'windowMeanRate' }
+  : modelFor(c) === 'rrfs' ? { gust: 'instant', precipitation: 'windowMeanRate' } : semantics;
+export const versionsFor = c => modelFor(c) === 'hrrr-conus' ? versions : { ...versions, algorithm: `${modelFor(c)}-regional-0.6.0-v1` };
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export const json = value => JSON.stringify(value) + '\n';
 export const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
@@ -34,6 +35,7 @@ export async function atomicWrite(path, bytes) {
 }
 export const validAt = (c, hour) => new Date(Date.parse(c.referenceTime) + hour * 3600000).toISOString().replace('.000Z', 'Z');
 export function fileUrl(c, hour, product = '2dfld') {
+  if (modelFor(c) === 'icon-eu') throw new Error('ICON uses the DWD native-grid adapter');
   const date = c.referenceTime.slice(0, 10).replaceAll('-', '');
   if (modelFor(c) === 'rrfs') {
     if (!['2dfld', 'prslev'].includes(product)) throw new Error(`Unsupported RRFS product: ${product}`);

@@ -1,28 +1,33 @@
 ---
+import { launchCountry, LAUNCH_COUNTRIES } from "../lib/forecast-capabilities.ts";
 import Base from "../layouts/Base.astro";
 import { launches } from "../lib/catalog.ts";
 import { href } from "../lib/site.ts";
-const markers = launches.map((l) => ({ slug: l.slug, name: l.name, latitude: l.latitude, longitude: l.longitude }));
+const markers = launches.map((l) => ({ slug: l.slug, name: l.name, latitude: l.latitude, longitude: l.longitude, country: launchCountry(l) }));
 const regions: string[] = [];
 for (const launch of launches) {
   if (launch.region && !regions.includes(launch.region)) regions.push(launch.region);
 }
 const groups = regions.map((region) => ({
   region,
+  country: launchCountry(launches.find(launch => launch.region === region)!),
   launches: launches.filter((launch) => launch.region === region),
 }));
 ---
 
 <Base current="launches">
-  <h1>Launches</h1>
-  <p class="muted" style="margin-top:6px">Windgrams, soundings, and NWS forecasts.</p>
+  <div class="launch-index-heading">
+    <h1>Launches</h1>
+    <label><span class="sr-only">Country</span><select id="launch-country" aria-label="Country">{LAUNCH_COUNTRIES.map(country => <option value={country.code}>{country.label}</option>)}</select></label>
+  </div>
+  <p class="muted" style="margin-top:6px">Windgrams, soundings and soaring forecasts.</p>
 
   <div id="launch-map" class="map" style="margin-top:20px" role="region" aria-label="Map of launches"></div>
   <script type="application/json" id="launch-markers" set:html={JSON.stringify(markers)} />
 
   {
     groups.map((group) => (
-      <section class="state-group" aria-labelledby={`state-${group.region.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
+      <section class="state-group" data-country={group.country} hidden={group.country !== "US"} aria-labelledby={`state-${group.region.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
         <h2 id={`state-${group.region.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
           {group.region} <span class="muted">{group.launches.length}</span>
         </h2>
@@ -39,7 +44,7 @@ const groups = regions.map((region) => ({
 
   <script>
     import { mountLaunchMap } from "../scripts/map.ts";
-    const markers = JSON.parse(document.getElementById("launch-markers")?.textContent ?? "[]");
-    mountLaunchMap(document.getElementById("launch-map")!, markers);
+    import { mountLaunchCountries } from "../scripts/launch-countries.ts";
+    mountLaunchCountries(mountLaunchMap);
   </script>
 </Base>

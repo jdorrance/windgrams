@@ -805,7 +805,7 @@ details[open] > summary {
   }
 
   .forecast-model {
-    flex-basis: 88px;
+    flex-basis: 94px;
   }
 
   .forecast-days button {
@@ -839,6 +839,14 @@ details[open] > summary {
     font-size: 16px;
     font-weight: 600;
     pointer-events: none;
+  }
+
+  #model-selected-name[data-compact="true"] {
+    font-size: 13px;
+  }
+
+  #model-selected-name {
+    white-space: nowrap;
   }
 
   .forecast-model-value svg {
@@ -1944,3 +1952,7 @@ fieldset {
     height: 360px;
   }
 }
+
+/* Keep the launch map inside one country at a time. */
+.launch-index-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.launch-index-heading select { min-height: 44px; max-width: 180px; }

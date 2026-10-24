@@ -8,7 +8,7 @@ import { convertQuantity, fmt, formatQuantity, getUnitSystem, unitLabel } from "
 const windValue = (value: number | null) => convertQuantity(value, "wind");
 const heightValue = (value: number | null) => convertQuantity(value, "elevation");
 const temperatureValue = (value: number | null) => convertQuantity(value, "temperature");
-const launchWind = (valueMph: number) => convertQuantity(valueMph / 2.2369362920544025, "wind")!;
+const launchWind = (valueMph: number | null) => valueMph === null ? null : convertQuantity(valueMph / 2.2369362920544025, "wind");
 
 export interface NwsHour {
   validAt: string;
@@ -26,10 +26,10 @@ export interface NwsHour {
 }
 
 export interface ChartLaunch {
-  windMinMph: number;
-  windMaxMph: number;
-  gustMaxMph: number;
-  window: DirectionArc;
+  windMinMph: number | null;
+  windMaxMph: number | null;
+  gustMaxMph: number | null;
+  window: DirectionArc | null;
   windowLabel: string;
 }
 
@@ -38,14 +38,14 @@ const dir = (deg: number | null) => (deg == null ? "" : `${compassPoint(deg)} `)
 /** The launch's wind panel pieces shared by every hourly chart. */
 export function windExtras(launch: ChartLaunch, directions: (number | null)[]) {
   return {
-    band: { from: launchWind(launch.windMinMph), to: launchWind(launch.windMaxMph) },
-    limit: launchWind(launch.gustMaxMph),
+    band: launch.windMinMph !== null && launch.windMaxMph !== null ? { from: launchWind(launch.windMinMph)!, to: launchWind(launch.windMaxMph)! } : undefined,
+    limit: launchWind(launch.gustMaxMph) ?? undefined,
     arrows: directions.map((deg) => ({ deg, inWindow: deg != null && inArc(deg, launch.window) })),
     legendTail: [
-      { label: `Launch range ${fmt(launchWind(launch.windMinMph))}–${fmt(launchWind(launch.windMaxMph))} ${unitLabel("wind")}`, kind: "band" as const, color: "var(--good)" },
-      { label: `Gust limit ${fmt(launchWind(launch.gustMaxMph))} ${unitLabel("wind")}`, kind: "limit" as const, color: "var(--critical)" },
-      { label: `Wind from ${launch.windowLabel}`, kind: "arrow-in" as const, color: "var(--good)" },
-      { label: "Wind from other directions", kind: "arrow-out" as const, color: "var(--muted)" },
+      ...(launch.windMinMph !== null && launch.windMaxMph !== null ? [{ label: `Launch range ${fmt(launchWind(launch.windMinMph))}–${fmt(launchWind(launch.windMaxMph))} ${unitLabel("wind")}`, kind: "band" as const, color: "var(--good)" }] : []),
+      ...(launch.gustMaxMph !== null ? [{ label: `Gust limit ${fmt(launchWind(launch.gustMaxMph))} ${unitLabel("wind")}`, kind: "limit" as const, color: "var(--critical)" }] : []),
+      ...(launch.window ? [{ label: `Wind from ${launch.windowLabel}`, kind: "arrow-in" as const, color: "var(--good)" },
+      { label: "Wind from other directions", kind: "arrow-out" as const, color: "var(--muted)" }] : [{ label: "Wind direction", kind: "arrow-out" as const, color: "var(--muted)" }]),
     ],
   };
 }
@@ -65,7 +65,7 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
       const wind = hours.map((h) => windValue(h.windSpeedMps));
       const gust = hours.map((h) => windValue(h.windGustMps));
       const transport = hours.map((h) => windValue(h.transportWindSpeedMps));
-      const windTop = niceMax(Math.max(launchWind(launch.gustMaxMph) + 5, ...[...wind, ...gust, ...transport].map((v) => v ?? 0)), 5);
+      const windTop = niceMax(Math.max((launchWind(launch.gustMaxMph) ?? 0) + 5, ...[...wind, ...gust, ...transport].map((v) => v ?? 0)), 5);
       const mixing = hours.map((h) => heightValue(h.mixingHeightM));
       const extras = windExtras(launch, hours.map((h) => h.windDirectionDeg));
       return [
@@ -146,7 +146,7 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
         ];
       },
       textColumns: [8],
-      footnote: `✓ Launch window (${launch.windowLabel}).`,
+      footnote: launch.window ? `✓ Launch window (${launch.windowLabel}).` : undefined,
     },
   };
 }

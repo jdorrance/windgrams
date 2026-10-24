@@ -595,6 +595,286 @@
       "latitude": 42.2317,
       "longitude": -123.004,
       "timeZone": "America/Los_Angeles"
+    },
+    {
+      "slug": "am-aghberk",
+      "name": "Aghberk",
+      "latitude": 40.5364,
+      "longitude": 45.2972,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-aparan",
+      "name": "Aparan",
+      "latitude": 40.5913,
+      "longitude": 44.4741,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-aragats-south-summit",
+      "name": "Aragats South Summit",
+      "latitude": 40.5037,
+      "longitude": 44.1841,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-armaghan",
+      "name": "Armaghan",
+      "latitude": 40.066,
+      "longitude": 45.2102,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-artanish",
+      "name": "Artanish",
+      "latitude": 40.4805,
+      "longitude": 45.3089,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-arteni",
+      "name": "Arteni",
+      "latitude": 40.3772,
+      "longitude": 43.7855,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-arzni",
+      "name": "Arzni",
+      "latitude": 40.3016,
+      "longitude": 44.5687,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-aygezard",
+      "name": "Aygezard",
+      "latitude": 39.9382,
+      "longitude": 44.6558,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-enokavan",
+      "name": "Enokavan",
+      "latitude": 40.9167,
+      "longitude": 45.1001,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-fioletovo",
+      "name": "Fioletovo",
+      "latitude": 40.7298,
+      "longitude": 44.7511,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-gutansar",
+      "name": "Gutansar",
+      "latitude": 40.3639,
+      "longitude": 44.6845,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-gutansar-summit",
+      "name": "Gutansar Summit",
+      "latitude": 40.368917,
+      "longitude": 44.683311,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-hatis-300",
+      "name": "Hatis 300",
+      "latitude": 40.2727,
+      "longitude": 44.7074,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-hatis-500",
+      "name": "Hatis 500",
+      "latitude": 40.294048,
+      "longitude": 44.697437,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-hatis-summit",
+      "name": "Hatis Summit",
+      "latitude": 40.30632,
+      "longitude": 44.725273,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-lalvar",
+      "name": "Lalvar",
+      "latitude": 41.1586,
+      "longitude": 44.6221,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-lanjanist",
+      "name": "Lanjanist",
+      "latitude": 39.900185,
+      "longitude": 44.944862,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-large-lchasar",
+      "name": "Large Lchasar",
+      "latitude": 40.4959,
+      "longitude": 44.8851,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-lernaglukh",
+      "name": "Lernaglukh",
+      "latitude": 40.5942,
+      "longitude": 44.4704,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-lusagyugh",
+      "name": "Lusagyugh",
+      "latitude": 40.6218,
+      "longitude": 44.4151,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-lusashogh",
+      "name": "Lusashogh",
+      "latitude": 39.8435,
+      "longitude": 44.9606,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-lusashogh-2",
+      "name": "Lusashogh 2",
+      "latitude": 39.839,
+      "longitude": 44.9631,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-maydan-range",
+      "name": "Maydan Range",
+      "latitude": 40.6047,
+      "longitude": 44.8612,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-mikearmenia",
+      "name": "MikeArmenia",
+      "latitude": 40.3359,
+      "longitude": 44.1686,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-miraq",
+      "name": "Miraq",
+      "latitude": 40.6335,
+      "longitude": 44.3515,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-mrghuz",
+      "name": "Mrghuz",
+      "latitude": 40.7049,
+      "longitude": 45.259,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-nor-ughi",
+      "name": "Nor Ughi",
+      "latitude": 39.94476667,
+      "longitude": 44.67611944,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-sevakavan",
+      "name": "Sevakavan",
+      "latitude": 39.8638,
+      "longitude": 45.0049,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-sevan-upper",
+      "name": "Sevan Upper",
+      "latitude": 40.589128,
+      "longitude": 44.951533,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-shaghap",
+      "name": "Shaghap",
+      "latitude": 39.920522,
+      "longitude": 44.924853,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-shaman",
+      "name": "Shaman",
+      "latitude": 39.8869,
+      "longitude": 44.9469,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-tatevi-vank",
+      "name": "Tatevi Vank",
+      "latitude": 39.351,
+      "longitude": 46.247,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-teghenis",
+      "name": "Teghenis",
+      "latitude": 40.5082,
+      "longitude": 44.5045,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-teghenis-summit",
+      "name": "Teghenis Summit",
+      "latitude": 40.516132,
+      "longitude": 44.521318,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-teghut-haghartsin",
+      "name": "Teghut / Haghartsin",
+      "latitude": 40.8308,
+      "longitude": 44.9458,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-tsaghkadzor",
+      "name": "Tsaghkadzor",
+      "latitude": 40.5263,
+      "longitude": 44.6509,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-tsovagyugh",
+      "name": "Tsovagyugh",
+      "latitude": 40.5933,
+      "longitude": 44.9465,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-ulgyur",
+      "name": "Ulgyur",
+      "latitude": 39.823449,
+      "longitude": 45.215636,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-vokhchaberd",
+      "name": "Vokhchaberd Range",
+      "latitude": 40.1607,
+      "longitude": 44.7785,
+      "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "am-xaraba",
+      "name": "Xaraba",
+      "latitude": 39.9139,
+      "longitude": 44.9151,
+      "timeZone": "Asia/Yerevan"
     }
   ]
 }

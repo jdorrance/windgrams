@@ -79,7 +79,7 @@ test("validateLaunchInput normalizes a good submission", () => {
 test("validateLaunchInput reports every problem", () => {
   const result = validateLaunchInput({ ...input, name: "X", latitude: "91", timeZone: "Mars/Olympus", facingDeg: "", windMinMph: "20", windMaxMph: "10", gustMaxMph: "5" });
   assert.ok("errors" in result);
-  assert.equal(result.errors.length, 6);
+  assert.equal(result.errors.length, 5);
 });
 
 test("validateLaunchInput asks for a map pick when coordinates are missing", () => {
@@ -109,4 +109,29 @@ test("consistencyErrors finds orphans on either side", () => {
   const orphan: LaunchesFile = { schemaVersion: 1, launches: { ...launches.launches, extra: launches.launches["cervidae-peak"] } };
   assert.deepEqual(consistencyErrors(sites, orphan), ["extra: in launches.json but not in sites.json"]);
   assert.deepEqual(consistencyErrors(sites, { schemaVersion: 1, launches: {} }), ["cervidae-peak: missing from launches.json"]);
+});
+
+
+test("unknown launch limits remain unknown through validation and saving", () => {
+  const result = validateLaunchInput({ ...input, timeZone: "Asia/Yerevan", facingDeg: "", windArcHalfWidthDeg: "", windMinMph: null, windMaxMph: null, gustMaxMph: null });
+  assert.ok("launch" in result);
+  assert.equal(result.launch.facingDeg, null);
+  assert.equal(result.launch.windArcHalfWidthDeg, null);
+  assert.equal(result.launch.windMinMph, null);
+  assert.equal(result.launch.windMaxMph, null);
+  assert.equal(result.launch.gustMaxMph, null);
+  assert.equal(windWindow(result.launch), null);
+  assert.equal(inArc(0, null), false);
+  const saved = applyLaunch(sites, launches, result.launch, "create");
+  assert.ok(!("error" in saved));
+  assert.equal(joinLaunches(saved.sites, saved.launches)[1].windMaxMph, null);
+  assert.equal(joinLaunches(sites, { schemaVersion: 1, launches: {} })[0].facingDeg, null);
+});
+
+test("editing preserves catalogue attribution", () => {
+  const source = { name: "Club", url: "https://example.org/site", checkedAt: "2026-10-24", license: "CC-BY-SA" };
+  const withSource = { ...launches, launches: { "cervidae-peak": { ...launches.launches["cervidae-peak"], source } } };
+  const result = applyLaunch(sites, withSource, { ...joinLaunches(sites, launches)[0], name: "Revised" }, "update");
+  assert.ok(!("error" in result));
+  assert.deepEqual(result.launches.launches["cervidae-peak"].source, source);
 });

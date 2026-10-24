@@ -1,4 +1,5 @@
 ---
+import { forecastCapabilities } from "../../lib/forecast-capabilities.ts";
 import Unit from "../../components/Unit.astro";
 import { launchNoteParts } from "../../lib/launch-notes.ts";
 import Base from "../../layouts/Base.astro";
@@ -13,7 +14,8 @@ export function getStaticPaths() {
 }
 
 const { launch } = Astro.props as { launch: Launch };
-const facing = compassPoint(launch.facingDeg);
+const facing = launch.facingDeg === null ? null : compassPoint(launch.facingDeg);
+const capabilities = forecastCapabilities(launch);
 const zoneName = launch.timeZone;
 
 // The weather station listed for this launch, if any, and where it is from the launch.
@@ -29,14 +31,14 @@ const station = stationEntry && (() => {
 })();
 ---
 
-<Base forecast title={launch.name} description={`Soaring meteogram and National Weather Service forecast for ${launch.name}.`}>
+<Base forecast title={launch.name} description={`Windgrams, soundings and soaring forecasts for ${launch.name}.`}>
   <script type="application/json" id="launch-config" set:html={JSON.stringify(launch)} />
 
   <section class="card windgram-card" aria-labelledby="launch-title">
     <header class="forecast-heading">
       <div class="forecast-identity">
         <h1 id="launch-title">{launch.name}</h1>
-        <span class="forecast-facing">{facing}-facing</span>
+        {facing && <span class="forecast-facing">{facing}-facing</span>}
       </div>
       <div class="forecast-heading-actions">
         <button class="forecast-run-button" type="button" popovertarget="forecast-info" aria-label="Forecast details" title="Forecast date and model run">
@@ -116,8 +118,10 @@ const station = stationEntry && (() => {
     </div>
     {launch.region && <p class="eyebrow">{launch.region}</p>}
     <ul class="facts">
-      <li>Faces <strong>{facing}</strong> ({launch.facingDeg}°)</li>
-      <li>Launch range <strong><Unit kind="wind" value={launch.windMinMph * .44704} numberOnly />–<Unit kind="wind" value={launch.windMaxMph * .44704} /></strong>, gusts under <Unit kind="wind" value={launch.gustMaxMph * .44704} /></li>
+      {facing && <li>Faces <strong>{facing}</strong> ({launch.facingDeg}°)</li>}
+      {launch.windMinMph !== null && launch.windMaxMph !== null && <li>Launch range <strong><Unit kind="wind" value={launch.windMinMph * .44704} numberOnly />–<Unit kind="wind" value={launch.windMaxMph * .44704} /></strong></li>}
+      {launch.gustMaxMph !== null && <li>Gust limit <Unit kind="wind" value={launch.gustMaxMph * .44704} /></li>}
+      {launch.source && <li>Source: <a href={launch.source.url} rel="noopener noreferrer" target="_blank">{launch.source.name}</a> · {launch.source.license}</li>}
       <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong> <span class="muted" id="launch-elevation-source"></span></li>
       <li>Times in {zoneName}</li>
     </ul>
@@ -267,7 +271,7 @@ const station = stationEntry && (() => {
     </div>
   </section>
 
-  <section class="card" aria-labelledby="nws-title">
+  <section class="card" aria-labelledby="nws-title" hidden={!capabilities.nws}>
     <div class="card-head">
       <h2 id="nws-title">National Weather Service forecast</h2>
       <span class="card-sub"><span id="nws-meta"></span> · <a id="nws-link" hidden>Open on weather.gov</a></span>
@@ -292,7 +296,7 @@ const station = stationEntry && (() => {
     </details>
   </section>
 
-  <section class="card" aria-labelledby="text-title">
+  <section class="card" aria-labelledby="text-title" hidden={!capabilities.nws}>
     <div class="card-head">
       <h2 id="text-title">Forecast discussion</h2>
       <span class="card-sub">NWS bulletins · original wording and units</span>

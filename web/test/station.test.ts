@@ -217,3 +217,15 @@ test("a failing API keeps the last copy, and its errors never show the key", asy
   response = await serveStation(get(), { DATA: bucket, WU_API_KEY: SECRET }, "KIDBOISE863", opts({ now: later, fetchImpl: wu({ current: 204, history: historyBody }).fetchImpl }));
   assert.equal(((await response.json()) as StationDocument).current!.observedAt, "2026-09-30T16:28:41Z");
 });
+
+test("unknown station launch limits stay neutral, retaining any known exceeded limit", () => {
+  const current = parseWuCurrent(currentBody)!;
+  const unknown = { window: null, windMinMph: null, windMaxMph: null, gustMaxMph: null };
+  const reading = readWind(current, 6, unknown, compassPoint, "unknown")!;
+  assert.equal(reading.tone, "neutral");
+  assert.equal(reading.headline, "Launch limits incomplete");
+  assert.ok(reading.checks.every(check => check.tone === "neutral"));
+  const partial = readWind({ ...current, windSpeedMps: 10 }, 6, { ...unknown, windMaxMph: 15 }, compassPoint, "unknown")!;
+  assert.equal(partial.tone, "warning");
+  assert.equal(partial.headline, "Outside limits: speed");
+});

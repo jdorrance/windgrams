@@ -16,6 +16,16 @@ WINDGRAMS_BASE=/windgrams pnpm preview --host 127.0.0.1 --port 4323
 
 `pnpm build` creates the production site. The Pages workflow adds the published forecast documents and excludes the larger history and sunlight trees.
 
+## Regional coverage
+
+The launch index separates United States and Armenia, with a session-persisted country selector and `?country=AM` deep link. Cards retain names only. Armenian sites use `Asia/Yerevan` and prefer ICON-EU; published global models provide comparisons. US model priority stays unchanged. The provider capability helper scopes NWS and the US balloon archive to US launches.
+
+Unknown launch direction, wind arc and speed/gust limits are `null`. Charts omit unknown limit bands and suitability marks; station readings retain measured wind with neutral unknown-limit text. Admin inputs accept blanks, preserve stored values across unit changes, and retain catalogue attribution on save.
+
+The Armenia Soaring case is `armenia-icon-eu-live`, selected by `/soaring/?region=armenia`. Production ICON bundles contain compressed scalar map hours and a `cellProfiles` template for individual compressed profiles. The browser loads profiles on selection, validates their grid/run/time identity, and retains eight in an LRU cache. Plain JSON and HTTP-decoded gzip both work. Native `levelsByModel[level].p` arrays remain supported for engineering replays; pressure-level arrays remain supported for HRRR/RRFS. ICON windgram axis ticks interpolate median height at fixed isobars; source soundings retain native floating pressures. This keeps hour-dependent model pressure from creating duplicate height ticks. US-only discussions and observational checks appear where those products are available.
+
+The regional time slider spans the published horizon. Its windgram shows daylight for the selected hour's local date, in either height view; sounding and map retain the exact selected forecast hour. Layers with no finite values in that model's horizon are omitted, including unsupported ICON vertical motion and convergence.
+
 ## Display conventions
 
 - Imperial is the default. The header setting persists in browser storage, with session storage and a `units` URL parameter as fallbacks. Switching units reloads the current page while retaining model, day, time and location parameters.

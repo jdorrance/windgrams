@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { nearestGridpoint, parseIdx } from '@azohra/meteo.grib';
 import { parseSiteForecast } from '@azohra/meteo.briefing/contract';
-import { DRY_ADIABATIC_LAPSE_C_PER_M } from '@azohra/meteo.briefing/derive';
+import { DRY_ADIABATIC_LAPSE_C_PER_M, mixingRatioKgKg } from '@azohra/meteo.briefing/derive';
 import { capture, captureAsset, inspectField } from './capture.mjs';
 import { replay, verifyCapture } from './replay.mjs';
 import { readJson, json } from './common.mjs';
@@ -77,7 +77,7 @@ test('real archived Blanchard columns reproduce every published hour exactly and
   assert.ok(Math.abs(WXTOFLY_SINK_MPS - 1.143) < 0.001);
   assert.equal(results[6].v2.surfaceLclM, 1315.0);
   assert.equal(results[6].v2.effectiveCloudLimitM, 1315.0);
-  assert.equal(results[6].v2.mixedLayerLclM, 1608.0);
+  assert.equal(results[6].v2.mixedLayerLclM, 1602.3); // Log-pressure layer clipping; independent pressure-mass integration gives 1602.2853 m.
   assert.ok(results[6].v2.cuPotentialM < 0);
   assert.ok(results[6].v2.blMeanWindSpeedMps > 0);
   assert.ok(results[6].v2.blWindShearMps >= 0);
@@ -137,8 +137,9 @@ test('P1-1: usable-lift solver solves descending branch above zeta=0.3125 (F_max
   // Both sink thresholds (1.0 m/s and 1.143 m/s / 225 ft/min)
   const top100 = computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.9, cloudBaseM: null }, 1.0);
   const top225 = computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.9, cloudBaseM: null }, WXTOFLY_SINK_MPS);
-  assert.equal(Number(top100.toFixed(1)), 888.3);
-  assert.equal(Number(top225.toFixed(1)), 819.3);
+  // Quartic roots with y = zeta^(1/3): 3.2 y^4 - 4 y + sink/W* = 0.
+  assert.equal(Number(top100.toFixed(1)), 888.9);
+  assert.equal(Number(top225.toFixed(1)), 827.2);
   assert.ok(top225 < top100);
 });
 
@@ -218,15 +219,29 @@ test('P1-2: height-integrated BL wind (retaining 80 m wind) and pressure-mass mi
   assert.equal(computeBoundaryLayerWind(0, { windSpeedMps: null, windDirectionDeg: 270 }, [], 500), null);
   assert.equal(computeBoundaryLayerWind(0, surfaceWind, [], 500), null);
 
-  // Mixed-layer LCL: pressure-mass integration is invariant to equivalent intermediate samples and clips shallow layers
-  const lcl500Coarse = computeMixedLayerLclM(0, 20, 12, levelsCoarse, 500);
-  const lcl500Dense = computeMixedLayerLclM(0, 20, 12, levelsResampled, 500);
-  assert.ok(Math.abs(lcl500Coarse - lcl500Dense) <= 0.5);
-
-  const lcl100Coarse = computeMixedLayerLclM(0, 20, 12, levelsCoarse, 100);
-  const lcl100Dense = computeMixedLayerLclM(0, 20, 12, levelsResampled, 100);
-  assert.ok(Math.abs(lcl100Coarse - lcl100Dense) <= 0.2);
-  assert.notEqual(Math.round(lcl100Coarse), Math.round(lcl500Coarse));
+  // Equivalent thermodynamic resampling preserves theta and mixing ratio as
+  // linear functions of pressure, with log-pressure interpolation over height.
+  // Keep the lowest level fixed so the inferred surface pressure stays fixed.
+  const [lower, upper] = levelsCoarse;
+  const p = Math.sqrt(lower.pressureHpa * upper.pressureHpa);
+  const fraction = (lower.pressureHpa - p) / (lower.pressureHpa - upper.pressureHpa);
+  const theta = level => (level.temperatureC + 273.15) * (1000 / level.pressureHpa) ** 0.2854;
+  const mixedTheta = theta(lower) + fraction * (theta(upper) - theta(lower));
+  const r0 = mixingRatioKgKg(lower.dewPointC, lower.pressureHpa);
+  const r1 = mixingRatioKgKg(upper.dewPointC, upper.pressureHpa);
+  const r = r0 + fraction * (r1 - r0), vaporPressure = r * p / (0.622 + r);
+  const gamma = Math.log(vaporPressure / 6.1094);
+  const intermediate = { heightM: 750, pressureHpa: p,
+    temperatureC: mixedTheta * (p / 1000) ** 0.2854 - 273.15,
+    dewPointC: 243.04 * gamma / (17.625 - gamma) };
+  const equivalent = [lower, intermediate, upper];
+  const lcl1000Coarse = computeMixedLayerLclM(0, 20, 12, levelsCoarse, 1000);
+  const lcl1000Dense = computeMixedLayerLclM(0, 20, 12, equivalent, 1000);
+  assert.ok(Math.abs(lcl1000Coarse - lcl1000Dense) < 1e-8);
+  const lcl600Coarse = computeMixedLayerLclM(0, 20, 12, levelsCoarse, 600);
+  const lcl600Dense = computeMixedLayerLclM(0, 20, 12, equivalent, 600);
+  assert.ok(Math.abs(lcl600Coarse - lcl600Dense) < 1e-8);
+  assert.notEqual(Math.round(lcl600Coarse), Math.round(lcl1000Coarse));
   assert.equal(computeMixedLayerLclM(0, 20, 12, [], 500), null);
 });
 
@@ -312,7 +327,8 @@ test('Feedback 3 & 4: model-aware post-processing handles deterministic, GEPS en
   assert.equal(detDoc.soaringMeta.synthesizedLevels, 0);
   assert.equal(detDoc.hours[6].derived.usableLiftTopM, 724.5); // v1 untouched
   assert.equal(detDoc.hours[6].soaring.usableLiftTopV2M, 470.2); // v2 bounded by 504.3m resolved top
-  assert.equal(detDoc.hours[6].soaring.surfaceLclM, 1315.0);
+  // Published rounded temperature/dew point give 1315.3494 m by Bolton's LCL formula.
+  assert.equal(detDoc.hours[6].soaring.surfaceLclM, 1315.3);
   assert.equal(detDoc.hours[6].soaring.effectiveCloudLimitM, 1315.0);
 
   // GEPS ensemble percentile document refuses nonlinear median post-processing

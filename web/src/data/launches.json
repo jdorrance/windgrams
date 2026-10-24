@@ -765,6 +765,637 @@
       "gustMaxMph": 20,
       "region": "Oregon",
       "notes": "Large, well-maintained gravel launch. West launch has room for simultaneous launches; north launch also available."
+    },
+    "am-aghberk": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12129",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-aparan": {
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11564",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-aragats-south-summit": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9306",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-armaghan": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Gegharkunik tourism guide",
+        "url": "https://developmentprinciples.org/wp-content/uploads/2021/05/Gegharqunik_Guide_book.pdf",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      }
+    },
+    "am-artanish": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19927",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-arteni": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19912",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-arzni": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11992",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-aygezard": {
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11507",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-enokavan": {
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Access via Enokavan road from Ijevan.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14843",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-fioletovo": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9307",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-gutansar": {
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9308",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-gutansar-summit": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Summit takeoff area. 4WD access.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/gutan/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      }
+    },
+    "am-hatis-300": {
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Cleared launch amid rocky, obsidian-covered slopes. 4WD access.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9304",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-hatis-500": {
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Rocky launch. 4WD access.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/hatis/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      }
+    },
+    "am-hatis-summit": {
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Rocky mountain; cleared takeoff areas.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/hatis/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      }
+    },
+    "am-lalvar": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13080",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-lanjanist": {
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Rocky terrain and steep cliffs. Strong thermal turbulence in hot weather.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/vedi/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      }
+    },
+    "am-large-lchasar": {
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9312",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-lernaglukh": {
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Grassy ridge launch. 4WD access from Ttu Jur or Lernaglukh.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9744",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-lusagyugh": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12272",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-lusashogh": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Track access beyond Lusashogh.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15451",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-lusashogh-2": {
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Track access beyond Lusashogh.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15452",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-maydan-range": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14108",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-mikearmenia": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12185",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-miraq": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13163",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-mrghuz": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15715",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-nor-ughi": {
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Coordinate from the source takeoff description.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14321",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-sevakavan": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12174",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-sevan-upper": {
+      "facingDeg": 22.5,
+      "windArcHalfWidthDeg": 22.5,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Lake-breeze soaring. Power lines border landing fields; rapid fog and turbulence changes.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/sevan/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      }
+    },
+    "am-shaghap": {
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Rocky terrain and steep cliffs. Strong thermal turbulence in hot weather.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/vedi/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      }
+    },
+    "am-shaman": {
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9309",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-tatevi-vank": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12446",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-teghenis": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13035",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-teghenis-summit": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Broad launch area. 4WD access.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/teghenis/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      }
+    },
+    "am-teghut-haghartsin": {
+      "facingDeg": 158,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=18865",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-tsaghkadzor": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9310",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-tsovagyugh": {
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "Lake-breeze ridge soaring. Grassy launch; watch cloud growth.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9311",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-ulgyur": {
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/vedi/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      }
+    },
+    "am-vokhchaberd": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12904",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
+    },
+    "am-xaraba": {
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Armenia",
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12049",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      }
     }
   }
 }

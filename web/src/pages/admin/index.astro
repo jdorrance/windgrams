@@ -58,17 +58,18 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
       <div class="field">
         <label for="f-tz">Time zone</label>
         <select id="f-tz" name="timeZone">
-          {TIME_ZONES.map((tz) => <option value={tz}>{tz.replace("America/", "").replace("Pacific/", "").replace("_", " ")}</option>)}
+          {TIME_ZONES.map((tz) => <option value={tz}>{tz.replace("America/", "").replace("Pacific/", "").replace("Asia/", "").replace("_", " ")}</option>)}
         </select>
       </div>
 
       <fieldset class="field wide">
         <legend>Launch faces</legend>
         <div class="compass">
+          <label><input type="radio" name="facing" value="" checked />Unknown</label>
           {
             COMPASS_16.map((point, i) => (
               <label>
-                <input type="radio" name="facing" value={String(i * 22.5)} required />
+                <input type="radio" name="facing" value={String(i * 22.5)} />
                 {point}
               </label>
             ))
@@ -80,23 +81,24 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
       <div class="field">
         <label for="f-arc">Wind window</label>
         <select id="f-arc" name="windArcHalfWidthDeg">
+          <option value="" selected>Unknown</option>
           <option value="30">±30°</option>
-          <option value="45" selected>±45°</option>
+          <option value="45">±45°</option>
           <option value="60">±60°</option>
           <option value="90">±90°</option>
         </select>
       </div>
       <div class="field">
         <label for="f-min">Minimum wind (<span data-unit-label="wind">mph</span>)</label>
-        <input type="number" id="f-min" name="windMinMph" min="0" max="40" step="any" value="5" required />
+        <input type="number" id="f-min" name="windMinMph" min="0" max="40" step="any" placeholder="Unknown" />
       </div>
       <div class="field">
         <label for="f-max">Maximum wind (<span data-unit-label="wind">mph</span>)</label>
-        <input type="number" id="f-max" name="windMaxMph" min="0" max="50" step="any" value="15" required />
+        <input type="number" id="f-max" name="windMaxMph" min="0" max="50" step="any" placeholder="Unknown" />
       </div>
       <div class="field">
         <label for="f-gust">Maximum gust (<span data-unit-label="wind">mph</span>)</label>
-        <input type="number" id="f-gust" name="gustMaxMph" min="0" max="60" step="any" value="20" required />
+        <input type="number" id="f-gust" name="gustMaxMph" min="0" max="60" step="any" placeholder="Unknown" />
       </div>
       <div class="field wide">
         <label for="f-notes">Notes</label>

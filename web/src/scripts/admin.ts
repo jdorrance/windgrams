@@ -15,7 +15,7 @@ let launches: Launch[] = [];
 let editing: Launch | null = null;
 const units = getUnitSystem();
 const windFields = ["windMinMph", "windMaxMph", "gustMaxMph"] as const;
-let originalWinds = { windMinMph: 5, windMaxMph: 15, gustMaxMph: 20 };
+let originalWinds: Pick<Launch, "windMinMph" | "windMaxMph" | "gustMaxMph"> = { windMinMph: null, windMaxMph: null, gustMaxMph: null };
 
 interface ApiError {
   error?: string;
@@ -44,9 +44,9 @@ field("name").addEventListener("input", () => {
   if (!editing) $("slug-hint").textContent = field("name").value ? `Address: /launches/${slugify(field("name").value)}` : "";
 });
 
-function setFacing(deg: number) {
-  const snapped = (Math.round(deg / 22.5) * 22.5) % 360;
-  for (const input of form.querySelectorAll<HTMLInputElement>('input[name="facing"]')) input.checked = Number(input.value) === snapped;
+function setFacing(deg: number | null) {
+  const snapped = deg === null ? null : (Math.round(deg / 22.5) * 22.5) % 360;
+  for (const input of form.querySelectorAll<HTMLInputElement>('input[name="facing"]')) input.checked = snapped === null ? input.value === "" : Number(input.value) === snapped && input.value !== "";
 }
 
 function openForm(launch: Launch | null) {
@@ -60,8 +60,8 @@ function openForm(launch: Launch | null) {
   field("latitude").value = launch ? String(launch.latitude) : "";
   field("longitude").value = launch ? String(launch.longitude) : "";
   field("timeZone").value = launch?.timeZone ?? TIME_ZONES[0];
-  field("windArcHalfWidthDeg").value = String(launch?.windArcHalfWidthDeg ?? 45);
-  originalWinds = { windMinMph: launch?.windMinMph ?? 5, windMaxMph: launch?.windMaxMph ?? 15, gustMaxMph: launch?.gustMaxMph ?? 20 };
+  field("windArcHalfWidthDeg").value = launch?.windArcHalfWidthDeg == null ? "" : String(launch.windArcHalfWidthDeg);
+  originalWinds = { windMinMph: launch?.windMinMph ?? null, windMaxMph: launch?.windMaxMph ?? null, gustMaxMph: launch?.gustMaxMph ?? null };
   for (const name of windFields) {
     const input = field(name) as HTMLInputElement;
     input.value = windLimitDisplayInput(originalWinds[name], units);
@@ -69,7 +69,7 @@ function openForm(launch: Launch | null) {
   }
   field("notes").value = launch?.notes ?? "";
   if (launch) setFacing(launch.facingDeg);
-  else for (const input of form.querySelectorAll<HTMLInputElement>('input[name="facing"]')) input.checked = false;
+  else setFacing(null);
   $("slug-hint").textContent = launch ? `Address: /launches/${launch.slug}` : "";
   picker.invalidate();
   if (launch) picker.set(launch.latitude, launch.longitude);
@@ -87,8 +87,8 @@ function renderList() {
       launch.name,
       launch.slug,
       `${launch.latitude.toFixed(4)}, ${launch.longitude.toFixed(4)}`,
-      `${compassPoint(launch.facingDeg)} ±${launch.windArcHalfWidthDeg}°`,
-      `${windLimitDisplayInput(launch.windMinMph, units)}–${windLimitDisplayInput(launch.windMaxMph, units)}, gust ${windLimitDisplayInput(launch.gustMaxMph, units)}`,
+      launch.facingDeg === null ? "Unknown" : `${compassPoint(launch.facingDeg)}${launch.windArcHalfWidthDeg === null ? "" : ` ±${launch.windArcHalfWidthDeg}°`}`,
+      `${windLimitDisplayInput(launch.windMinMph, units) || "—"}–${windLimitDisplayInput(launch.windMaxMph, units) || "—"}, gust ${windLimitDisplayInput(launch.gustMaxMph, units) || "—"}`,
     ];
     cells.forEach((text, i) => {
       const td = document.createElement("td");

@@ -16,7 +16,7 @@ export interface Sunlight3DOptions {
   heights: Float32Array;
   /** The sunlight picture draped on the ground; covers the relief's extent exactly. */
   picture: HTMLCanvasElement;
-  launch: { latitude: number; longitude: number; name: string; facingDeg: number };
+  launch: { latitude: number; longitude: number; name: string; facingDeg: number | null };
   onPick(lat: number, lon: number): void;
 }
 
@@ -259,7 +259,7 @@ export class Sunlight3D {
   /** Starts looking at the launch from the side it faces, from 30° up. */
   private lookAtLaunch() {
     const target = this.positionOf(this.options.launch.latitude, this.options.launch.longitude);
-    const a = (this.options.launch.facingDeg * Math.PI) / 180;
+    const a = ((this.options.launch.facingDeg ?? 0) * Math.PI) / 180;
     const extent = (this.options.meta.width - 1) * this.mpp;
     const distance = Math.min(extent * 0.55, 11_000);
     const el = (30 * Math.PI) / 180;

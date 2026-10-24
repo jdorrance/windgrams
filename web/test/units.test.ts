@@ -173,8 +173,11 @@ test("edited metric limits retain fractional mph and physical comparisons", () =
 test("blank wind inputs stay missing and validation uses selected units", () => {
   for (const raw of ["", "  ", "NaN", "Infinity"]) assert.equal(windLimitFromDisplayInput(raw, "metric", 5), null);
   const blank = validateLaunchInput({ ...launchInput, windMinMph: windLimitFromDisplayInput("", "metric", 5) }, "metric");
-  assert.ok("errors" in blank);
-  assert.match(blank.errors[0], /km\/h/);
-  assert.doesNotMatch(blank.errors[0], /mph/);
+  assert.ok("launch" in blank);
+  assert.equal(blank.launch.windMinMph, null);
+  const invalid = validateLaunchInput({ ...launchInput, windMinMph: 100 }, "metric");
+  assert.ok("errors" in invalid);
+  assert.match(invalid.errors[0], /km\/h/);
+  assert.doesNotMatch(invalid.errors[0], /mph/);
   assert.equal(windLimitFromDisplayInput("0", "metric"), 0);
 });

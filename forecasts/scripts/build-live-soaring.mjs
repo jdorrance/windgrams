@@ -13,6 +13,7 @@ import { modelFor } from '../soaring/common.mjs';
 import { SOARING_CONTRACT_VERSION } from '../soaring/science.mjs';
 import { greatCircleDistanceKm } from '@azohra/meteo.grib';
 import { isPublishedCase } from './merge-soaring-regions.mjs';
+import { regionSupportsModel, regionIndexName } from './lib/model-coverage.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -38,7 +39,7 @@ export function regionPublication(regionsDoc, model, soaringV1Root) {
   const regions = [];
   for (const region of regionsDoc.regions ?? []) {
     const native = (region.nativeModels ?? []).filter(entry =>
-      (model !== 'rrfs' || entry.model === 'rrfs') && isPublishedCase(soaringV1Root, entry.caseId));
+      (model === 'hrrr-conus' || entry.model === model) && isPublishedCase(soaringV1Root, entry.caseId));
     if (region.status === 'active-verified-trial' && !native.length) continue;
     const preferred = native.find(entry => entry.model === model) ?? native[0];
     const published = { ...region, ...(preferred ? { caseId: preferred.caseId } : {}), nativeModels: native };
@@ -55,9 +56,9 @@ export function regionPublication(regionsDoc, model, soaringV1Root) {
 
 export function validateNativeRegions(dataRoot, model, referenceTime) {
   const root = join(dataRoot, 'soaring', 'v1');
-  const configured = loadRegionConfiguration(root).regions.filter(region => region.status === 'active-verified-trial');
+  const configured = loadRegionConfiguration(root).regions.filter(region => region.status === 'active-verified-trial' && regionSupportsModel(region, model));
   if (!configured.length) throw new Error(`No active native ${model} regions configured`);
-  const path = join(root, model === 'rrfs' ? 'regions-rrfs.json' : 'regions.json');
+  const path = join(root, regionIndexName(model));
   if (!existsSync(path)) throw new Error(`Missing native ${model} region catalogue`);
   const catalogue = JSON.parse(readFileSync(path, 'utf8'));
   for (const region of configured) {
@@ -171,7 +172,7 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
     if (![item.latitude, item.longitude].every(Number.isFinite)) return null;
     const ranked = cells.map(cell => ({ cell: cell.properties, distance: greatCircleDistanceKm(6371, item.latitude, item.longitude, cell.properties.latitude, cell.properties.longitude) }));
     const nearest = ranked.reduce((a, b) => b.distance < a.distance ? b : a);
-    if (nearest.distance > 5) return null;
+    if (nearest.distance > (manifest.model === 'icon-eu' ? 8 : 5)) return null;
     return { ...item, cellIndex: nearest.cell.cellIndex, gridIndex: nearest.cell.gridIndex, modelElevationM: nearest.cell.modelElevationM, distanceKm: Math.round(nearest.distance * 100) / 100 };
   };
   if (previousSidecars.crossSection) {
@@ -203,7 +204,7 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
     for (const launch of launchesDoc.launches ?? []) {
       launch.models = {};
       const slug = launch.slug;
-      for (const mslug of ['hrrr-conus', 'rrfs', 'hrdps-continental', 'rdps', 'gdps', 'gfs', 'geps', 'ecmwf', 'nws']) {
+      for (const mslug of ['hrrr-conus', 'rrfs', 'icon-eu', 'hrdps-continental', 'rdps', 'gdps', 'gfs', 'geps', 'ecmwf', 'nws']) {
         const mp = join(dataRoot, mslug, 'sites', `${slug}.json`);
         if (!existsSync(mp)) continue;
         const mdoc = JSON.parse(readFileSync(mp, 'utf8'));
@@ -381,6 +382,9 @@ function readPreviousSidecars(soaringV1Root, caseId) {
 export async function buildLiveSoaring(values, { captureImpl = capture, replayImpl = replay, log = console.log } = {}) {
   const dataRoot = resolve(values.output ?? 'data');
   const model = modelFor({ model: values.model ?? 'hrrr-conus' });
+  if (model === 'icon-eu' && !values['validate-only']) {
+    throw new Error('Build ICON-EU points and native maps together with node scripts/build-icon.mjs --sites sites.json --output data');
+  }
   const soaringV1Root = join(dataRoot, 'soaring', 'v1');
   const regionsPath = join(soaringV1Root, 'regions.json');
 
@@ -391,7 +395,7 @@ export async function buildLiveSoaring(values, { captureImpl = capture, replayIm
       : null
   );
   if (!referenceTime) {
-    if (model === 'rrfs') throw new Error('No RRFS referenceTime available for the required native regional build');
+    if (model === 'rrfs' || model === 'icon-eu') throw new Error(`No ${model.toUpperCase()} referenceTime available for the required native regional build`);
     log(`No ${model} referenceTime available; keeping seeded soaring bundles.`);
     return;
   }
@@ -399,16 +403,15 @@ export async function buildLiveSoaring(values, { captureImpl = capture, replayIm
 
   const regionsDoc = loadRegionConfiguration(soaringV1Root);
   mkdirSync(soaringV1Root, { recursive: true });
-  const modelRegionsPath = model === 'rrfs' ? join(soaringV1Root, 'regions-rrfs.json') : regionsPath;
-  if (model === 'rrfs' && existsSync(modelRegionsPath)) {
+  const modelRegionsPath = join(soaringV1Root, regionIndexName(model));
+  if (model !== 'hrrr-conus' && existsSync(modelRegionsPath)) {
     const prior = JSON.parse(readFileSync(modelRegionsPath, 'utf8'));
     for (const region of regionsDoc.regions ?? []) {
       const entry = prior.regions?.find(r => r.id === region.id)?.nativeModels?.find(m => m.model === model);
       if (entry) region.nativeModels = [...(region.nativeModels ?? []).filter(m => m.model !== model), entry];
     }
   }
-  for (const region of regionsDoc.regions ?? []) region.deterministicModels = [...new Set([...(region.deterministicModels ?? []), 'rrfs'])];
-  const activeRegions = (regionsDoc.regions ?? []).filter(r => r.status === 'active-verified-trial' && typeof r.caseId === 'string');
+  const activeRegions = (regionsDoc.regions ?? []).filter(r => r.status === 'active-verified-trial' && typeof r.caseId === 'string' && regionSupportsModel(r, model));
   if (activeRegions.length === 0) {
     if (model === 'rrfs') throw new Error('No active RRFS regions configured');
     log('No active-verified-trial regions configured; skipping.');

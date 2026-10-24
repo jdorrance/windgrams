@@ -10,6 +10,18 @@ import { collectGroup } from './seed-published.mjs';
 import { SOARING_CONTRACT_VERSION } from '../soaring/science.mjs';
 const sha = value => createHash('sha256').update(value).digest('hex');
 
+test('ICON builds direct callers to the native builder before reading templates or downloading', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'icon-builder-route-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const output = join(root, 'unwritten');
+  const dependencies = { captureImpl() { assert.fail('ICON must not use CONUS capture'); }, replayImpl() { assert.fail('ICON must not use CONUS replay'); } };
+  for (const referenceTime of [undefined, '2026-10-24T06:00:00Z']) {
+    await assert.rejects(buildLiveSoaring({ output, model: 'icon-eu', 'reference-time': referenceTime }, dependencies), /node scripts\/build-icon\.mjs/);
+  }
+  await assert.rejects(buildLiveSoaring({ output, model: 'icon-eu', 'validate-only': true }, dependencies), /No ICON-EU referenceTime/);
+  assert.equal(existsSync(output), false);
+});
+
 test('live daylight follows region, DST, and remaining hours rather than skipping today', () => {
   assert.deepEqual(daytimeForecastHoursForCycle('2026-10-21T18:00:00Z'), [2,3,4,5,6,7,8,9]);
   assert.deepEqual(daytimeForecastHoursForCycle('2026-10-21T18:00:00Z','America/New_York'), [2,3,4,5,6]);
@@ -116,7 +128,7 @@ test('a clean CI output builds both native RRFS regions from tracked geography a
   const root = mkdtempSync(join(tmpdir(), 'rrfs-clean-build-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const output = join(root, 'data'), soaringRoot = join(output, 'soaring', 'v1');
-  const regions = loadRegionConfiguration(soaringRoot).regions.filter(region => region.status === 'active-verified-trial');
+  const regions = loadRegionConfiguration(soaringRoot).regions.filter(region => region.status === 'active-verified-trial' && (!region.regionalModels || region.regionalModels.includes('rrfs')));
   assert.deepEqual(regions.map(region => region.id), ['north-sound', 'shenandoah-blue-ridge']);
   assert.equal(existsSync(soaringRoot), false);
   const captured = [], replayed = [], ref = '2026-10-23T06:00:00Z';

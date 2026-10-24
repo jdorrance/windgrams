@@ -38,7 +38,7 @@ const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
         </a>
         <nav class="site-nav" aria-label="Main">
           <a href={href()} aria-current={current === "launches" ? "page" : undefined}>Launches</a>
-          <a href={href("soaring")}>Soaring</a>
+          <a id="soaring-nav-link" href={href("soaring")}>Soaring</a>
           <a href={href("about")} aria-current={current === "about" ? "page" : undefined}>About</a>
         </nav>
         <label class="unit-control">
@@ -58,7 +58,7 @@ const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
     <footer class="site-footer">
       <div class="container">
         <p>
-          Model data: NOAA (HRRR, RRFS, GFS) and Environment and Climate Change Canada (HRDPS, RDPS, GDPS, GEPS, under the
+          Model data: <a href="https://opendata.dwd.de/weather/nwp/">DWD (ICON-EU)</a>, NOAA (HRRR, RRFS, GFS) and Environment and Climate Change Canada (HRDPS, RDPS, GDPS, GEPS, under the
           <a href="https://eccc-msc.github.io/open-data/licence/readme_en/">Data Server End-use Licence</a>), processed with
           <a href="https://meteo.azohra.com/">meteo by Azohra</a>. Terrain:
           <a href="https://www.usgs.gov/3d-elevation-program">USGS 3DEP</a> and

@@ -20,6 +20,21 @@ permissions:
   contents: read
 
 jobs:
+  icon-decoder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: forecasts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install the pinned native ICON decoder
+        run: |
+          python3.12 -m venv .venv-icon
+          .venv-icon/bin/pip install --disable-pip-version-check -r scripts/lib/icon-requirements.txt
+      - name: Offline native decoder tests
+        run: .venv-icon/bin/python scripts/lib/icon-decode.test.py
+
   forecasts:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -94,8 +109,8 @@ jobs:
       - name: Type checks
         run: pnpm run check
       - name: Sample dataset
-        # All 85 model profiles are validated; synthetic terrain is exercised
-        # at western and eastern launches without rebuilding 85 tile pyramids.
+        # All 125 model profiles are validated; synthetic terrain is exercised
+        # at western and eastern US launches without rebuilding every tile pyramid.
         run: pnpm run dev-data --solar-site wa-blanchard --solar-site va-woodstock
       - name: Build
         run: pnpm run build

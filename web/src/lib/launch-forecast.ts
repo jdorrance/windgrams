@@ -37,9 +37,9 @@ export function launchConditions(hour: Hour, settings: LaunchDetails, launchElev
   const strength = scalar(lift.thermalVelocityMps), top = scalar(lift.usableLiftTopM), base = scalar(lift.cloudBaseM);
   const feet = (v: number) => `${formatQuantity(v, 'elevation')} MSL`;
   const issues: string[] = [];
-  if (speed !== null && speed > 0.5 && direction !== null && !inArc(direction, windWindow(settings))) issues.push('Wind outside launch direction');
-  if (speed !== null && speed * 2.23693629 > settings.windMaxMph) issues.push('Wind above saved limit');
-  if (gust !== null && gust * 2.23693629 > settings.gustMaxMph) issues.push('Gusts above saved limit');
+  if (speed !== null && speed > 0.5 && direction !== null && windWindow(settings) !== null && !inArc(direction, windWindow(settings))) issues.push('Wind outside launch direction');
+  if (settings.windMaxMph !== null && speed !== null && speed * 2.23693629 > settings.windMaxMph) issues.push('Wind above saved limit');
+  if (settings.gustMaxMph !== null && gust !== null && gust * 2.23693629 > settings.gustMaxMph) issues.push('Gusts above saved limit');
   if (top !== null && launchElevationM !== null && top <= launchElevationM) issues.push('Usable lift below launch');
   return {
     values: [

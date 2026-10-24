@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mosaic, tilesAround } from "./mosaic.mjs";
-import { contextIsFresh, engineTerrain as T, measure } from "../terrain.mjs";
+import { contextIsFresh, engineTerrain as T, measure, GLO90_SOURCE, glo90Url, mergeSiteContexts } from "../terrain.mjs";
+import { parseSiteContextJson } from '@azohra/meteo.briefing/contract';
 
 const CERVIDAE = { slug: "cervidae-peak", name: "Cervidae Peak", latitude: 43.62332, longitude: -115.98076, timeZone: "America/Boise" };
 
@@ -137,4 +138,62 @@ test("contextIsFresh follows the engine's rule: same points for every launch", (
   assert.equal(contextIsFresh([{ ...CERVIDAE, longitude: -115.9 }], context), false);
   assert.equal(contextIsFresh([CERVIDAE, { ...CERVIDAE, slug: "other" }], context), false);
   assert.equal(contextIsFresh([CERVIDAE], null), false);
+});
+
+test('Armenian measurements consistently use 90 m DEM tiles across tile edges', async () => {
+  const site = { slug: 'am-edge', name: 'Synthetic tile-edge test', latitude: 40.001, longitude: 44.001, timeZone: 'Asia/Yerevan' };
+  const opened = [];
+  // A plane rising 1 m per 10 m east and 1 m per 20 m north has an analytic
+  // slope and aspect, independent of the DEM pixel spacing or mosaic boundaries.
+  const planarHeight = (lat, lon) => 1800 + (lon - site.longitude) * T.mPerDegLon(site.latitude) * 0.1 + (lat - site.latitude) * T.M_PER_DEG_LAT * 0.05;
+  const open = async url => {
+    opened.push(url);
+    const dem = /Copernicus_DSM_COG_30_N(\d+)_00_E(\d+)_00_DEM/.exec(url);
+    if (dem) return syntheticTile({ west: +dem[2], south: +dem[1], res: 1 / 1200, value: planarHeight, type: Float64Array });
+    const cover = /ESA_WorldCover_10m_2021_v200_N(\d+)E(\d+)_Map/.exec(url);
+    if (cover) return syntheticTile({ west: +cover[2], south: +cover[1], degrees: 3, res: 1 / 12000, nodata: 0, value: () => 30, type: Uint8Array });
+    throw new Error(`Unexpected source for Armenia: ${url}`);
+  };
+  const document = await measure([site], { open, fetchImpl: async () => { throw new Error('Armenia must skip Canadian elevation services'); }, log: () => {}, warn: () => {}, generatedAt: '2026-10-24T12:00:00Z' });
+  const entry = document.sites[site.slug];
+  assert.equal(entry.elevation.source, 'glo90');
+  assert.equal(entry.elevation.elevationM, 1800);
+  assert.equal(entry.terrain.source, 'glo90');
+  assert.equal(entry.terrain.elevationM, 1800);
+  assert.equal(entry.terrain.slopeDeg, 6.4);
+  assert.equal(entry.terrain.aspectDeg, 243);
+  assert.equal(entry.landCover.atLaunch, 'grassland');
+  assert.ok(entry.landCover.fractions.every(disc => disc.byClass.grassland === 1));
+  assert.equal(opened.filter(url => url.includes('copernicus-dem-90m')).length, 4);
+  assert.ok(opened.every(url => !url.includes('copernicus-dem-30m')));
+  assert.deepEqual(document.sources.find(source => source.id === 'glo90'), GLO90_SOURCE);
+  assert.equal(document.sources.some(source => source.id === 'glo30'), false);
+  assert.ok(parseSiteContextJson(JSON.stringify(document)));
+  assert.equal(glo90Url(40.3, 44.7), 'https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com/Copernicus_DSM_COG_30_N40_00_E044_00_DEM/Copernicus_DSM_COG_30_N40_00_E044_00_DEM.tif');
+});
+
+test('incremental terrain sync preserves US measurements and credits new Armenian sources', () => {
+  const am = { slug: 'am-hatis', latitude: 40.3, longitude: 44.7 };
+  const point = site => ({ latitude: site.latitude, longitude: site.longitude });
+  const contextEntry = (site, source, elevationM) => ({
+    point: point(site), elevation: { source, elevationM },
+    terrain: { source, elevationM, slopeDeg: 10, aspectDeg: 180, relief: [{ radiusKm: 1, minM: elevationM - 100, maxM: elevationM + 100, percentile: 50 }] },
+    landCover: { source: 'worldcover2021', atLaunch: 'grassland', fractions: [{ radiusKm: 1, byClass: { grassland: 1 } }] },
+  });
+  const original = { schemaVersion: 3, generatedAt: '2026-10-21T00:00:00Z', sources: [T.SOURCES.glo30, T.SOURCES.worldcover2021], sites: {
+    [CERVIDAE.slug]: contextEntry(CERVIDAE, 'glo30', 1500), removed: contextEntry({ latitude: 43, longitude: -116 }, 'glo30', 1400),
+  } };
+  const measured = { schemaVersion: 3, generatedAt: '2026-10-24T12:00:00Z', sources: [GLO90_SOURCE, T.SOURCES.worldcover2021], sites: { [am.slug]: contextEntry(am, 'glo90', 2200) } };
+  const before = structuredClone(original);
+  const merged = mergeSiteContexts([CERVIDAE, am], original, measured);
+  assert.deepEqual(original, before);
+  assert.deepEqual(merged.sites[CERVIDAE.slug], original.sites[CERVIDAE.slug]);
+  assert.deepEqual(merged.sites[am.slug], measured.sites[am.slug]);
+  assert.equal(merged.sites.removed, undefined);
+  assert.equal(new Set(merged.sources.map(source => source.id)).size, 3);
+  assert.equal(merged.generatedAt, measured.generatedAt);
+  assert.ok(parseSiteContextJson(JSON.stringify(merged)));
+  assert.deepEqual(mergeSiteContexts([am], null, measured), measured);
+  assert.throws(() => mergeSiteContexts([{ ...am, latitude: 40.4 }], original, measured), /Missing current terrain measurement/);
+  assert.throws(() => mergeSiteContexts([CERVIDAE, am], null, measured), /Missing current terrain measurement/);
 });

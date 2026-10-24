@@ -19,6 +19,7 @@ import { configureModelFeeds, modelFeedEnvironment } from "./lib/model-feeds.mjs
 import { probeCycleReadiness } from "./check-readiness.mjs";
 import { loadRrfsBuilder } from './lib/rrfs-builder.mjs';
 import { validateRrfsProfile } from './validate-rrfs.mjs';
+import { modelCoversSite } from './lib/model-coverage.mjs';
 
 const COORDINATE = /\(([-0-9.]+),\s*([-0-9.]+)\) is outside the model grid/;
 const NAMED = /build failed:\s+(.+?) is outside the model grid/;
@@ -175,6 +176,17 @@ async function main() {
     },
   });
   if (!values.model) throw new Error("usage: node scripts/build-covered.mjs --model SLUG --sites sites.json --output data");
+  if (values.model === 'icon-eu') {
+    const args = [fileURLToPath(new URL('./build-icon.mjs', import.meta.url)), '--sites', values.sites, '--output', values.output];
+    if (values['reference-time']) args.push('--reference-time', values['reference-time']);
+    if (values['max-steps']) throw new Error('Use build-icon.mjs --hours for a separate trial dataset; production ICON requires all 78 hours');
+    await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, args, { stdio: 'inherit' });
+      child.on('error', reject);
+      child.on('close', code => code === 0 ? resolve() : reject(new Error(`ICON build exited ${code}`)));
+    });
+    return;
+  }
   if (values['reference-time'] && values.model !== 'rrfs') throw new Error('--reference-time is supported for rrfs');
   const maxSteps = values['max-steps'] === undefined ? undefined : Number(values['max-steps']);
   if (maxSteps !== undefined && (!Number.isInteger(maxSteps) || maxSteps < 1)) throw new Error('--max-steps must be a positive integer');
@@ -191,7 +203,7 @@ async function main() {
   const directory = mkdtempSync(join(tmpdir(), "windgrams-sites-"));
   try {
     const { result, post, changed } = await stageModelBuild(resolve(values.output), values.model, staging =>
-      buildCovered(values.model, catalogue.sites, sites => {
+      buildCovered(values.model, catalogue.sites.filter(site => modelCoversSite(values.model, site)), sites => {
         const path = join(directory, 'sites.json');
         writeFileSync(path, JSON.stringify({ ...catalogue, sites }));
         return runMeteo(values.model, staging, path, referenceTime, maxSteps);

@@ -1,12 +1,14 @@
 # Soaring diagnostic implementation notes
 
-Status reviewed October 23, 2026. The v2.1 calculation and publication paths are implemented. Archived numerical checks pass; broader observational skill evaluation remains open. This document replaces the earlier implementation checklist with the behavior in the source.
+Status reviewed October 24, 2026. The v2.1 calculation and publication paths are implemented. Archived numerical checks pass; broader observational skill evaluation remains open. This document replaces the earlier implementation checklist with the behavior in the source.
 
 ## Inputs and height references
 
 `forecasts/soaring/fields.mjs` defines the captured fields. The historical baseline uses nine pressure levels from 925 to 600 hPa. The expanded HRRR case requests 18 levels from 1000 to 400 hPa plus available 80 m winds and native cloud/convective fields. Each case records its actual levels and optional-field availability.
 
 Published pressure-level heights, terrain, LCL and lift ceilings are metres MSL. Model `pblHeightM` is depth in metres AGL. Surface wind is sampled at 10 m AGL. Chart interpolation joins captured levels; vertical coverage is reported separately in `verticalResolution`.
+
+ICON-EU retains native model levels 45–74: actual pressure per cell, full-level height from HHL interfaces, temperature, specific-humidity-derived dewpoint and horizontal wind. These use the same parcel and layer diagnostics as the US models. Pressure arrays remain cell-specific; chart interpolation never turns a model-level index into pressure. Armenian launch terrain uses independently sampled Copernicus GLO-90; source-reported launch elevations stay outside the MSL/AGL calculations until their datum is established.
 
 RRFS captures its own pressure and surface products. Hourly accumulation intervals and the conversion between geometric vertical velocity and pressure velocity are checked during ingest.
 
@@ -44,6 +46,8 @@ The browser presents published quantities in the selected Imperial or Metric uni
 - Pale cloud band: model cloud fraction of at least 30%.
 - Paraglider: published 225 ft/min ceiling; blue line: 1 m/s ceiling.
 - Snowflake: lowest freezing crossing.
+
+ICON axis ticks use fixed isobars with median heights interpolated in log-pressure across displayed columns. Source atmospheric levels, soundings and forecast values remain native. This prevents each changing native pressure from adding a duplicate height-axis tick.
 
 One label is placed on each connected temperature contour when room is available. Mobile charts fit the day's hours. Strongest thermals selects the greatest published $w_*$; the tallest cloud-base line can occur later.
 

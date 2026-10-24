@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { parseForecastManifest, parseSiteForecast } from '@azohra/meteo.briefing/contract';
 import { SOARING_CONTRACT_VERSION } from '../soaring/science.mjs';
+import { modelCoversSite } from './lib/model-coverage.mjs';
 
 const finite = Number.isFinite;
 function requireValue(condition, message) { if (!condition) throw new Error(message); }
@@ -46,7 +47,7 @@ export function validateRrfsDataset(dataRoot, sitesPath) {
   requireValue(parseForecastManifest(manifest) && manifest.model === 'rrfs', 'Invalid RRFS manifest');
   requireValue(manifest.firstForecastHour === 1 && manifest.lastForecastHour === 84 && manifest.forecastHours === 84, 'RRFS manifest does not cover f001–f084');
   const sites = JSON.parse(readFileSync(sitesPath, 'utf8')).sites;
-  const expected = sites.map(s => s.slug).sort();
+  const expected = sites.filter(site => modelCoversSite('rrfs', site)).map(s => s.slug).sort();
   requireValue(JSON.stringify(manifest.sites.map(s => s.slug).sort()) === JSON.stringify(expected), 'RRFS manifest does not contain the complete launch catalogue');
   const profiles = expected.map(slug => validateRrfsProfile(JSON.parse(readFileSync(join(dataRoot, 'rrfs', 'sites', `${slug}.json`), 'utf8')), manifest.referenceTime, slug));
   return { model: 'rrfs', referenceTime: manifest.referenceTime, sites: profiles.length, forecastHoursPerSite: 84,

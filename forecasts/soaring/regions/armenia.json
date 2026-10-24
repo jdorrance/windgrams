@@ -1,0 +1,782 @@
+{
+  "source": "Launch catalogue coordinates; Copernicus GLO-90 measured elevations (2026-10-24). Model cells resolved for each forecast.",
+  "launches": {
+    "schemaVersion": 1,
+    "launches": [
+      {
+        "slug": "am-aghberk",
+        "name": "Aghberk",
+        "latitude": 40.5364,
+        "longitude": 45.2972,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2535.1
+      },
+      {
+        "slug": "am-aparan",
+        "name": "Aparan",
+        "latitude": 40.5913,
+        "longitude": 44.4741,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2404.8
+      },
+      {
+        "slug": "am-aragats-south-summit",
+        "name": "Aragats South Summit",
+        "latitude": 40.5037,
+        "longitude": 44.1841,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 3803.6
+      },
+      {
+        "slug": "am-armaghan",
+        "name": "Armaghan",
+        "latitude": 40.066,
+        "longitude": 45.2102,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2714.2
+      },
+      {
+        "slug": "am-artanish",
+        "name": "Artanish",
+        "latitude": 40.4805,
+        "longitude": 45.3089,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2438.3
+      },
+      {
+        "slug": "am-arteni",
+        "name": "Arteni",
+        "latitude": 40.3772,
+        "longitude": 43.7855,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1970.8
+      },
+      {
+        "slug": "am-arzni",
+        "name": "Arzni",
+        "latitude": 40.3016,
+        "longitude": 44.5687,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1351.6
+      },
+      {
+        "slug": "am-aygezard",
+        "name": "Aygezard",
+        "latitude": 39.9382,
+        "longitude": 44.6558,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1060.3
+      },
+      {
+        "slug": "am-enokavan",
+        "name": "Enokavan",
+        "latitude": 40.9167,
+        "longitude": 45.1001,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1227
+      },
+      {
+        "slug": "am-fioletovo",
+        "name": "Fioletovo",
+        "latitude": 40.7298,
+        "longitude": 44.7511,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2154.4
+      },
+      {
+        "slug": "am-gutansar",
+        "name": "Gutansar",
+        "latitude": 40.3639,
+        "longitude": 44.6845,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2171.3
+      },
+      {
+        "slug": "am-gutansar-summit",
+        "name": "Gutansar Summit",
+        "latitude": 40.368917,
+        "longitude": 44.683311,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2266.9
+      },
+      {
+        "slug": "am-hatis-300",
+        "name": "Hatis 300",
+        "latitude": 40.2727,
+        "longitude": 44.7074,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1646.7
+      },
+      {
+        "slug": "am-hatis-500",
+        "name": "Hatis 500",
+        "latitude": 40.294048,
+        "longitude": 44.697437,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1888.7
+      },
+      {
+        "slug": "am-hatis-summit",
+        "name": "Hatis Summit",
+        "latitude": 40.30632,
+        "longitude": 44.725273,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2497.9
+      },
+      {
+        "slug": "am-lalvar",
+        "name": "Lalvar",
+        "latitude": 41.1586,
+        "longitude": 44.6221,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2096.3
+      },
+      {
+        "slug": "am-lanjanist",
+        "name": "Lanjanist",
+        "latitude": 39.900185,
+        "longitude": 44.944862,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2368.1
+      },
+      {
+        "slug": "am-large-lchasar",
+        "name": "Large Lchasar",
+        "latitude": 40.4959,
+        "longitude": 44.8851,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2148.1
+      },
+      {
+        "slug": "am-lernaglukh",
+        "name": "Lernaglukh",
+        "latitude": 40.5942,
+        "longitude": 44.4704,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2425.2
+      },
+      {
+        "slug": "am-lusagyugh",
+        "name": "Lusagyugh",
+        "latitude": 40.6218,
+        "longitude": 44.4151,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2562
+      },
+      {
+        "slug": "am-lusashogh",
+        "name": "Lusashogh",
+        "latitude": 39.8435,
+        "longitude": 44.9606,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1827.8
+      },
+      {
+        "slug": "am-lusashogh-2",
+        "name": "Lusashogh 2",
+        "latitude": 39.839,
+        "longitude": 44.9631,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1874.3
+      },
+      {
+        "slug": "am-maydan-range",
+        "name": "Maydan Range",
+        "latitude": 40.6047,
+        "longitude": 44.8612,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2318.5
+      },
+      {
+        "slug": "am-mikearmenia",
+        "name": "MikeArmenia",
+        "latitude": 40.3359,
+        "longitude": 44.1686,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1684.5
+      },
+      {
+        "slug": "am-miraq",
+        "name": "Miraq",
+        "latitude": 40.6335,
+        "longitude": 44.3515,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2252.5
+      },
+      {
+        "slug": "am-mrghuz",
+        "name": "Mrghuz",
+        "latitude": 40.7049,
+        "longitude": 45.259,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2581.6
+      },
+      {
+        "slug": "am-nor-ughi",
+        "name": "Nor Ughi",
+        "latitude": 39.94476667,
+        "longitude": 44.67611944,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1317.1
+      },
+      {
+        "slug": "am-sevakavan",
+        "name": "Sevakavan",
+        "latitude": 39.8638,
+        "longitude": 45.0049,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2363.5
+      },
+      {
+        "slug": "am-sevan-upper",
+        "name": "Sevan Upper",
+        "latitude": 40.589128,
+        "longitude": 44.951533,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2288.6
+      },
+      {
+        "slug": "am-shaghap",
+        "name": "Shaghap",
+        "latitude": 39.920522,
+        "longitude": 44.924853,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2313.9
+      },
+      {
+        "slug": "am-shaman",
+        "name": "Shaman",
+        "latitude": 39.8869,
+        "longitude": 44.9469,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2110.3
+      },
+      {
+        "slug": "am-tatevi-vank",
+        "name": "Tatevi Vank",
+        "latitude": 39.351,
+        "longitude": 46.247,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1963.2
+      },
+      {
+        "slug": "am-teghenis",
+        "name": "Teghenis",
+        "latitude": 40.5082,
+        "longitude": 44.5045,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2752
+      },
+      {
+        "slug": "am-teghenis-summit",
+        "name": "Teghenis Summit",
+        "latitude": 40.516132,
+        "longitude": 44.521318,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2798.9
+      },
+      {
+        "slug": "am-teghut-haghartsin",
+        "name": "Teghut / Haghartsin",
+        "latitude": 40.8308,
+        "longitude": 44.9458,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2447
+      },
+      {
+        "slug": "am-tsaghkadzor",
+        "name": "Tsaghkadzor",
+        "latitude": 40.5263,
+        "longitude": 44.6509,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2797.4
+      },
+      {
+        "slug": "am-tsovagyugh",
+        "name": "Tsovagyugh",
+        "latitude": 40.5933,
+        "longitude": 44.9465,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2192.5
+      },
+      {
+        "slug": "am-ulgyur",
+        "name": "Ulgyur",
+        "latitude": 39.823449,
+        "longitude": 45.215636,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2385.1
+      },
+      {
+        "slug": "am-vokhchaberd",
+        "name": "Vokhchaberd Range",
+        "latitude": 40.1607,
+        "longitude": 44.7785,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 1968.2
+      },
+      {
+        "slug": "am-xaraba",
+        "name": "Xaraba",
+        "latitude": 39.9139,
+        "longitude": 44.9151,
+        "timeZone": "Asia/Yerevan",
+        "launchElevationM": 2135.4
+      }
+    ]
+  },
+  "crossSection": {
+    "title": "Hatis → Sevan → Tatev",
+    "totalDistanceKm": 215.69,
+    "nodes": [
+      {
+        "nodeIndex": 0,
+        "distanceKm": 0,
+        "latitude": 40.294048,
+        "longitude": 44.697437,
+        "waypointLabel": "Hatis 500",
+        "launchElevationM": 1888.7
+      },
+      {
+        "nodeIndex": 1,
+        "distanceKm": 3.92,
+        "latitude": 40.323555999999996,
+        "longitude": 44.7228466,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 2,
+        "distanceKm": 7.85,
+        "latitude": 40.353063999999996,
+        "longitude": 44.7482562,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 3,
+        "distanceKm": 11.77,
+        "latitude": 40.382571999999996,
+        "longitude": 44.7736658,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 4,
+        "distanceKm": 15.69,
+        "latitude": 40.412079999999996,
+        "longitude": 44.7990754,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 5,
+        "distanceKm": 19.61,
+        "latitude": 40.441587999999996,
+        "longitude": 44.824484999999996,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 6,
+        "distanceKm": 23.54,
+        "latitude": 40.471096,
+        "longitude": 44.8498946,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 7,
+        "distanceKm": 27.46,
+        "latitude": 40.500604,
+        "longitude": 44.8753042,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 8,
+        "distanceKm": 31.38,
+        "latitude": 40.530112,
+        "longitude": 44.9007138,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 9,
+        "distanceKm": 35.31,
+        "latitude": 40.55962,
+        "longitude": 44.926123399999994,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 10,
+        "distanceKm": 39.23,
+        "latitude": 40.589128,
+        "longitude": 44.951533,
+        "waypointLabel": "Sevan Upper",
+        "launchElevationM": 2288.6
+      },
+      {
+        "nodeIndex": 11,
+        "distanceKm": 43.15,
+        "latitude": 40.56161404444445,
+        "longitude": 44.98032115555555,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 12,
+        "distanceKm": 47.07,
+        "latitude": 40.53410008888889,
+        "longitude": 45.00910931111111,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 13,
+        "distanceKm": 50.99,
+        "latitude": 40.506586133333336,
+        "longitude": 45.037897466666664,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 14,
+        "distanceKm": 54.92,
+        "latitude": 40.47907217777778,
+        "longitude": 45.066685622222224,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 15,
+        "distanceKm": 58.84,
+        "latitude": 40.451558222222225,
+        "longitude": 45.09547377777778,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 16,
+        "distanceKm": 62.76,
+        "latitude": 40.42404426666667,
+        "longitude": 45.12426193333333,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 17,
+        "distanceKm": 66.68,
+        "latitude": 40.396530311111114,
+        "longitude": 45.15305008888889,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 18,
+        "distanceKm": 70.6,
+        "latitude": 40.36901635555556,
+        "longitude": 45.18183824444444,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 19,
+        "distanceKm": 74.52,
+        "latitude": 40.3415024,
+        "longitude": 45.210626399999995,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 20,
+        "distanceKm": 78.44,
+        "latitude": 40.31398844444445,
+        "longitude": 45.239414555555555,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 21,
+        "distanceKm": 82.37,
+        "latitude": 40.28647448888889,
+        "longitude": 45.26820271111111,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 22,
+        "distanceKm": 86.29,
+        "latitude": 40.25896053333334,
+        "longitude": 45.29699086666667,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 23,
+        "distanceKm": 90.21,
+        "latitude": 40.23144657777778,
+        "longitude": 45.32577902222222,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 24,
+        "distanceKm": 94.13,
+        "latitude": 40.203932622222226,
+        "longitude": 45.354567177777774,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 25,
+        "distanceKm": 98.05,
+        "latitude": 40.17641866666667,
+        "longitude": 45.383355333333334,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 26,
+        "distanceKm": 101.97,
+        "latitude": 40.148904711111115,
+        "longitude": 45.41214348888889,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 27,
+        "distanceKm": 105.89,
+        "latitude": 40.12139075555556,
+        "longitude": 45.44093164444444,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 28,
+        "distanceKm": 109.82,
+        "latitude": 40.093876800000004,
+        "longitude": 45.4697198,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 29,
+        "distanceKm": 113.74,
+        "latitude": 40.06636284444445,
+        "longitude": 45.49850795555555,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 30,
+        "distanceKm": 117.66,
+        "latitude": 40.03884888888889,
+        "longitude": 45.52729611111111,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 31,
+        "distanceKm": 121.58,
+        "latitude": 40.01133493333334,
+        "longitude": 45.556084266666666,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 32,
+        "distanceKm": 125.5,
+        "latitude": 39.98382097777778,
+        "longitude": 45.58487242222222,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 33,
+        "distanceKm": 129.42,
+        "latitude": 39.95630702222222,
+        "longitude": 45.61366057777778,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 34,
+        "distanceKm": 133.34,
+        "latitude": 39.928793066666664,
+        "longitude": 45.64244873333333,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 35,
+        "distanceKm": 137.27,
+        "latitude": 39.90127911111111,
+        "longitude": 45.671236888888885,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 36,
+        "distanceKm": 141.19,
+        "latitude": 39.87376515555555,
+        "longitude": 45.700025044444445,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 37,
+        "distanceKm": 145.11,
+        "latitude": 39.8462512,
+        "longitude": 45.7288132,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 38,
+        "distanceKm": 149.03,
+        "latitude": 39.81873724444444,
+        "longitude": 45.75760135555556,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 39,
+        "distanceKm": 152.95,
+        "latitude": 39.79122328888889,
+        "longitude": 45.78638951111111,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 40,
+        "distanceKm": 156.87,
+        "latitude": 39.76370933333333,
+        "longitude": 45.81517766666666,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 41,
+        "distanceKm": 160.79,
+        "latitude": 39.736195377777776,
+        "longitude": 45.84396582222222,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 42,
+        "distanceKm": 164.72,
+        "latitude": 39.70868142222222,
+        "longitude": 45.872753977777776,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 43,
+        "distanceKm": 168.64,
+        "latitude": 39.681167466666665,
+        "longitude": 45.90154213333333,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 44,
+        "distanceKm": 172.56,
+        "latitude": 39.65365351111111,
+        "longitude": 45.93033028888889,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 45,
+        "distanceKm": 176.48,
+        "latitude": 39.626139555555554,
+        "longitude": 45.95911844444444,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 46,
+        "distanceKm": 180.4,
+        "latitude": 39.5986256,
+        "longitude": 45.9879066,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 47,
+        "distanceKm": 184.32,
+        "latitude": 39.57111164444444,
+        "longitude": 46.016694755555555,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 48,
+        "distanceKm": 188.24,
+        "latitude": 39.54359768888889,
+        "longitude": 46.04548291111111,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 49,
+        "distanceKm": 192.17,
+        "latitude": 39.51608373333333,
+        "longitude": 46.07427106666667,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 50,
+        "distanceKm": 196.09,
+        "latitude": 39.488569777777776,
+        "longitude": 46.10305922222222,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 51,
+        "distanceKm": 200.01,
+        "latitude": 39.46105582222222,
+        "longitude": 46.131847377777774,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 52,
+        "distanceKm": 203.93,
+        "latitude": 39.433541866666665,
+        "longitude": 46.160635533333334,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 53,
+        "distanceKm": 207.85,
+        "latitude": 39.40602791111111,
+        "longitude": 46.18942368888889,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 54,
+        "distanceKm": 211.77,
+        "latitude": 39.378513955555555,
+        "longitude": 46.21821184444445,
+        "waypointLabel": null,
+        "launchElevationM": null
+      },
+      {
+        "nodeIndex": 55,
+        "distanceKm": 215.69,
+        "latitude": 39.351,
+        "longitude": 46.247,
+        "waypointLabel": "Tatevi Vank",
+        "launchElevationM": 1963.2
+      }
+    ]
+  }
+}

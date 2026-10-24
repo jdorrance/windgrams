@@ -65,3 +65,19 @@ test("station plots, hover values and pressure table convert without changing so
   assert.equal(station.pressureHpa, 1013.25);
   assert.equal(station.temperatureC, 20);
 });
+
+test("unknown launch limits retain weather without bands, thresholds or suitability marks", () => {
+  const unknown = { windMinMph: null, windMaxMph: null, gustMaxMph: null, window: null, windowLabel: "unknown" };
+  const extras = windExtras(unknown, [0, 300, null]);
+  assert.equal(extras.band, undefined);
+  assert.equal(extras.limit, undefined);
+  assert.ok(extras.arrows.every(arrow => !arrow.inWindow));
+  assert.equal(extras.legendTail.length, 1);
+  for (const spec of [nwsSpec(unknown), ecmwfSpec(unknown), stationSpec(unknown, "Station")]) {
+    const panel = spec.panels([ecmwf as never])[0];
+    assert.ok(Number.isFinite(panel.yMax));
+    assert.equal(panel.band, undefined);
+    assert.equal(panel.limit, undefined);
+    assert.ok(spec.tooltip(ecmwf as never).every(row => row.extra !== "✓"));
+  }
+});

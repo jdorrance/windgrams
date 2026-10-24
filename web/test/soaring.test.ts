@@ -2,6 +2,7 @@ import test, { afterEach } from 'node:test';
 import { setUnitSystem } from '../src/lib/units.ts';
 afterEach(() => setUnitSystem('imperial'));
 import assert from 'node:assert/strict';
+import { availableReplayLayers, crossSectionHeightScale, refreshReplayLayerLabels } from '../src/lib/soaring.ts';
 import { LAYER_SPECS, buildCrossSectionLinePath, defaultReplayQuery, displayMetric, forecastHourAtValidTime, historicalLabel, nativeModels, regionForCase, replayLocation, replaySelection, selectedState, setReplaySelectionQuery, type RegionCatalogue, type ReplayManifest, type ReplayHour } from '../src/lib/soaring.ts';
 
 test('replay links preserve the project base and reject unknown cases', () => {
@@ -10,6 +11,62 @@ test('replay links preserve the project base and reject unknown cases', () => {
   assert.equal(replayLocation('?hour=NaN','/data').hour,20);
   assert.throws(()=>replayLocation('?case=../bad','/data'),/Unknown/);
   assert.match(historicalLabel('2026-10-21T00:00:00Z'),/Historical forecast.*HRRR.*2026-10-21.*00:00 UTC/);
+});
+
+test('regional layer choices omit absent native fields while keeping zero and later-hour data', () => {
+  const hours = [
+    { thermalVelocityV2Mps: [0, null], convergence10mX1e5: [null, null], w925Mps: [null], precipitationMmHr: [0, 0] },
+    { thermalVelocityV2Mps: [1, 2], convergence10mX1e5: [null, null], blMeanWindSpeedMps: [null, 3] },
+  ] as ReplayHour[];
+  const layers = availableReplayLayers(hours);
+  assert.ok(layers.includes('thermalVelocityV2Mps'));
+  assert.ok(layers.includes('precipitationMmHr'));
+  assert.ok(layers.includes('blMeanWindSpeedMps'));
+  assert.ok(!layers.includes('convergence10mX1e5'));
+  assert.ok(!layers.includes('w925Mps'));
+  assert.ok(!layers.includes('capeJkg'));
+});
+
+test('regional initialization refreshes server-rendered layer captions from the saved unit system', () => {
+  const options = [
+    { value: 'thermalVelocityV2Mps', textContent: 'Thermal strength · ft/min' },
+    { value: 'usableLiftTopV2M', textContent: 'Usable lift top · ft MSL' },
+    { value: 'precipitationMmHr', textContent: 'Rain · in/h' },
+    { value: 'wind10mSpeedMps', textContent: 'Surface wind · mph' },
+  ];
+  const ids = options.map(option => option.value);
+  for (const region of ['armenia', 'north-sound']) {
+    setUnitSystem('metric');
+    refreshReplayLayerLabels(options);
+    assert.deepEqual(options.map(option => option.textContent), ['Thermal strength · m/s', 'Usable lift top · m MSL', 'Rain · mm/h', 'Surface wind · km/h'], region);
+    setUnitSystem('imperial');
+    refreshReplayLayerLabels(options);
+    assert.deepEqual(options.map(option => option.textContent), ['Thermal strength · ft/min', 'Usable lift top · ft MSL', 'Rain · in/h', 'Surface wind · mph'], region);
+    assert.deepEqual(options.map(option => option.value), ids, 'unit captions preserve selected layer identifiers');
+  }
+});
+
+test('mountain transects keep terrain, launch, lift and cloud lines inside a stable horizon scale', () => {
+  const nodes = [{ cellIndex: 1, modelElevationM: 3088, launchElevationM: 4000 }];
+  const hours = [
+    { resolvedThermalTopM: [20000, 3805], usableLiftTopV2M: [null, 3650], surfaceLclM: [null, 3900] },
+    { resolvedThermalTopM: [null, 4700], usableLiftTopV2M: [null, 4500], surfaceLclM: [null, 5250] },
+  ] as ReplayHour[];
+  const metric = crossSectionHeightScale(nodes, hours, 'metric');
+  const imperial = crossSectionHeightScale(nodes, hours, 'imperial');
+  assert.equal(metric.maxAltM, 5500);
+  assert.equal(imperial.maxAltM, metric.maxAltM, 'unit switching preserves the physical range');
+  assert.deepEqual(crossSectionHeightScale(nodes, [...hours].reverse(), 'metric'), metric, 'every forecast hour shares one scale');
+  const yOf = (heightM: number) => 300 * (1 - heightM / metric.maxAltM);
+  assert.ok(yOf(3805) > 0 && yOf(5250) > 0);
+  assert.ok(yOf(3805) > yOf(4700), 'different high tops remain distinct instead of flattening at the old ceiling');
+  assert.equal(buildCrossSectionLinePath([{ distanceKm: 0 }, { distanceKm: 10 }], [3805, 4700], value => value, yOf), 'M0.0,92.5L10.0,43.6');
+  for (const scale of [metric, imperial]) {
+    assert.ok(scale.ticksM.length >= 3 && scale.ticksM.length <= 6);
+    assert.ok(scale.ticksM.every((height, index) => Number.isFinite(height) && height <= scale.maxAltM && (!index || height > scale.ticksM[index - 1])));
+  }
+  assert.equal(crossSectionHeightScale([{ cellIndex: 0, modelElevationM: 500 }], [], 'metric').maxAltM, 3600, 'lowland minimum remains');
+  assert.equal(crossSectionHeightScale([{ cellIndex: 0, modelElevationM: null }], [{ surfaceLclM: [NaN], resolvedThermalTopM: [Infinity] }] as ReplayHour[]).maxAltM, 3600);
 });
 test('RRFS live routes accept the 84-hour horizon and preserve explicit historical cases', () => {
   const caseId = 'north-sound-expanded-v2-rrfs-live';
@@ -217,4 +274,18 @@ test('omitted map ceiling diagnostics remain unavailable while supplied nulls re
     assert.equal(displayMetric(null, 'resolvedThermalTopM'), 'Stable');
     assert.match(displayMetric(null, 'hcritWxtoflyM'), /^Below /);
   }
+});
+
+test('Armenia regional links select ICON-EU and retain its full forecast horizon', () => {
+  const region = { id: 'armenia', status: 'active-verified-trial', caseId: 'armenia-icon-eu-live', nativeModels: [{ model: 'icon-eu', caseId: 'armenia-icon-eu-live' }] } as RegionCatalogue['regions'][number];
+  const catalogue = { regions: [region] } as RegionCatalogue;
+  const query = defaultReplayQuery('?region=armenia&model=icon-eu', catalogue);
+  assert.equal(query.get('case'), 'armenia-icon-eu-live');
+  assert.equal(replayLocation(`?${query}&hour=120`, '/data').hour, 120);
+  assert.equal(replayLocation(`?${query}&hour=121`, '/data').hour, 20);
+  assert.equal(regionForCase(catalogue.regions, 'armenia-icon-eu-live'), region);
+  assert.match(historicalLabel('2026-10-24T00:00:00Z', true, 'icon-eu'), /ICON-EU/);
+  assert.throws(() => defaultReplayQuery('?region=armenia&model=rrfs', catalogue), /unavailable/);
+  assert.throws(() => defaultReplayQuery('?region=armenia', null), /unavailable/);
+  assert.throws(() => defaultReplayQuery('?region=unknown', catalogue), /unavailable/);
 });

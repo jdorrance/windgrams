@@ -1,0 +1,4 @@
+# Public GRIB decoder and array extraction; install in an isolated virtualenv.
+eccodes==2.44.0
+eccodeslib==2.50.0.33
+numpy==2.2.6

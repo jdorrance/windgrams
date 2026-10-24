@@ -12,7 +12,7 @@ import { parseArgs } from "node:util";
 import { cataloguedModelSlugs } from "@azohra/meteo.forecast";
 import { parseRunsIndexJson } from "@azohra/meteo.briefing/contract";
 
-export function runsIndexFromDisk(output, slugs = cataloguedModelSlugs()) {
+export function runsIndexFromDisk(output, slugs = [...new Set([...cataloguedModelSlugs(), 'icon-eu'])]) {
   const runs = {};
   for (const slug of slugs) {
     const path = join(output, slug, "manifest.json");

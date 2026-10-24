@@ -1,0 +1,784 @@
+{
+  "schemaVersion": 1,
+  "countryCode": "AM",
+  "region": "Armenia",
+  "timeZone": "Asia/Yerevan",
+  "checkedAt": "2026-10-24",
+  "launches": [
+    {
+      "slug": "am-aghberk",
+      "name": "Aghberk",
+      "latitude": 40.5364,
+      "longitude": 45.2972,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12129",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "12129",
+      "sourceElevationM": 2544.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-aparan",
+      "name": "Aparan",
+      "latitude": 40.5913,
+      "longitude": 44.4741,
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11564",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "11564",
+      "sourceElevationM": 2424.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-aragats-south-summit",
+      "name": "Aragats South Summit",
+      "latitude": 40.5037,
+      "longitude": 44.1841,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9306",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "9306",
+      "sourceElevationM": 3783.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-armaghan",
+      "name": "Armaghan",
+      "latitude": 40.066,
+      "longitude": 45.2102,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Gegharkunik tourism guide",
+        "url": "https://developmentprinciples.org/wp-content/uploads/2021/05/Gegharqunik_Guide_book.pdf",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      },
+      "sourceElevationM": null,
+      "elevationDatum": "unknown",
+      "review": "Takeoff coordinate in the local tourism guide, printed page 32. Summit altitude is not a takeoff measurement."
+    },
+    {
+      "slug": "am-artanish",
+      "name": "Artanish",
+      "latitude": 40.4805,
+      "longitude": 45.3089,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19927",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "19927",
+      "sourceElevationM": 2452.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-arteni",
+      "name": "Arteni",
+      "latitude": 40.3772,
+      "longitude": 43.7855,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19912",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "19912",
+      "sourceElevationM": 1942.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-arzni",
+      "name": "Arzni",
+      "latitude": 40.3016,
+      "longitude": 44.5687,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11992",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "11992",
+      "sourceElevationM": 1360.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-aygezard",
+      "name": "Aygezard",
+      "latitude": 39.9382,
+      "longitude": 44.6558,
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11507",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "11507",
+      "sourceElevationM": 1067.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-enokavan",
+      "name": "Enokavan",
+      "latitude": 40.9167,
+      "longitude": 45.1001,
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Access via Enokavan road from Ijevan.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14843",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "14843",
+      "sourceElevationM": 1225.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-fioletovo",
+      "name": "Fioletovo",
+      "latitude": 40.7298,
+      "longitude": 44.7511,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9307",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "9307",
+      "sourceElevationM": 2165.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-gutansar",
+      "name": "Gutansar",
+      "latitude": 40.3639,
+      "longitude": 44.6845,
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 20,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9308",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "9308",
+      "sourceElevationM": 2176.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-gutansar-summit",
+      "name": "Gutansar Summit",
+      "latitude": 40.368917,
+      "longitude": 44.683311,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Summit takeoff area. 4WD access.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/gutan/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      },
+      "sourceElevationM": 2270,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-hatis-300",
+      "name": "Hatis 300",
+      "latitude": 40.2727,
+      "longitude": 44.7074,
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Cleared launch amid rocky, obsidian-covered slopes. 4WD access.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9304",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "9304",
+      "sourceElevationM": 1642.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-hatis-500",
+      "name": "Hatis 500",
+      "latitude": 40.294048,
+      "longitude": 44.697437,
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "notes": "Rocky launch. 4WD access.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/hatis/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      },
+      "sourceId": "9305",
+      "sourceElevationM": 1890,
+      "elevationDatum": "unknown",
+      "corroboratingSources": [
+        {
+          "name": "Paragliding Earth contributors",
+          "url": "https://paraglidingearth.com/?site=9305",
+          "checkedAt": "2026-10-24",
+          "license": "CC-BY-SA-3.0",
+          "retrievedAt": "2026-10-20"
+        }
+      ],
+      "review": "Coordinates use the local club’s named takeoff; original PGE point retained in the source snapshot. Reported altitude awaits an independent terrain reference."
+    },
+    {
+      "slug": "am-hatis-summit",
+      "name": "Hatis Summit",
+      "latitude": 40.30632,
+      "longitude": 44.725273,
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "notes": "Rocky mountain; cleared takeoff areas.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/hatis/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      },
+      "sourceElevationM": 2495,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-lalvar",
+      "name": "Lalvar",
+      "latitude": 41.1586,
+      "longitude": 44.6221,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13080",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "13080",
+      "sourceElevationM": 2079.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-lanjanist",
+      "name": "Lanjanist",
+      "latitude": 39.900185,
+      "longitude": 44.944862,
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "notes": "Rocky terrain and steep cliffs. Strong thermal turbulence in hot weather.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/vedi/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      },
+      "sourceElevationM": 2375,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-large-lchasar",
+      "name": "Large Lchasar",
+      "latitude": 40.4959,
+      "longitude": 44.8851,
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9312",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "9312",
+      "sourceElevationM": 2157.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-lernaglukh",
+      "name": "Lernaglukh",
+      "latitude": 40.5942,
+      "longitude": 44.4704,
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Grassy ridge launch. 4WD access from Ttu Jur or Lernaglukh.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9744",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "9744",
+      "sourceElevationM": 2437.0,
+      "elevationDatum": "unknown",
+      "corroboratingSources": [
+        {
+          "name": "Sky Club Armenia",
+          "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/aparan/",
+          "checkedAt": "2026-10-24",
+          "license": "Source copyright retained"
+        }
+      ],
+      "review": "Sky Club’s Aparan point is about 92 m north; PGE’s separate Aparan takeoff is about 450 m southeast with a different direction set. Keep both takeoffs."
+    },
+    {
+      "slug": "am-lusagyugh",
+      "name": "Lusagyugh",
+      "latitude": 40.6218,
+      "longitude": 44.4151,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12272",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "12272",
+      "sourceElevationM": 2562.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-lusashogh",
+      "name": "Lusashogh",
+      "latitude": 39.8435,
+      "longitude": 44.9606,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Track access beyond Lusashogh.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15451",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "15451",
+      "sourceElevationM": 1828.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-lusashogh-2",
+      "name": "Lusashogh 2",
+      "latitude": 39.839,
+      "longitude": 44.9631,
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Track access beyond Lusashogh.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15452",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "15452",
+      "sourceElevationM": 1875.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-maydan-range",
+      "name": "Maydan Range",
+      "latitude": 40.6047,
+      "longitude": 44.8612,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14108",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "14108",
+      "sourceElevationM": 2330.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-mikearmenia",
+      "name": "MikeArmenia",
+      "latitude": 40.3359,
+      "longitude": 44.1686,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12185",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "12185",
+      "sourceElevationM": 1688.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-miraq",
+      "name": "Miraq",
+      "latitude": 40.6335,
+      "longitude": 44.3515,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13163",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "13163",
+      "sourceElevationM": 2264.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-mrghuz",
+      "name": "Mrghuz",
+      "latitude": 40.7049,
+      "longitude": 45.259,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15715",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "15715",
+      "sourceElevationM": 2589.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-nor-ughi",
+      "name": "Nor Ughi",
+      "latitude": 39.94476667,
+      "longitude": 44.67611944,
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Coordinate from the source takeoff description.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14321",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "14321",
+      "sourceElevationM": 2167.0,
+      "elevationDatum": "unknown",
+      "review": "Corrected [44,39] GeoJSON point from source DMS 39 56 41.16 N, 44 40 34.03 E. Source altitude 2167 m is unverified and excluded from terrain calculations."
+    },
+    {
+      "slug": "am-sevakavan",
+      "name": "Sevakavan",
+      "latitude": 39.8638,
+      "longitude": 45.0049,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12174",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "12174",
+      "sourceElevationM": 2378.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-sevan-upper",
+      "name": "Sevan Upper",
+      "latitude": 40.589128,
+      "longitude": 44.951533,
+      "facingDeg": 22.5,
+      "windArcHalfWidthDeg": 22.5,
+      "notes": "Lake-breeze soaring. Power lines border landing fields; rapid fog and turbulence changes.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/sevan/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      },
+      "sourceElevationM": 2300,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-shaghap",
+      "name": "Shaghap",
+      "latitude": 39.920522,
+      "longitude": 44.924853,
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "notes": "Rocky terrain and steep cliffs. Strong thermal turbulence in hot weather.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/vedi/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      },
+      "sourceElevationM": 2330,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-shaman",
+      "name": "Shaman",
+      "latitude": 39.8869,
+      "longitude": 44.9469,
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9309",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "9309",
+      "sourceElevationM": 2114.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-tatevi-vank",
+      "name": "Tatevi Vank",
+      "latitude": 39.351,
+      "longitude": 46.247,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12446",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "12446",
+      "sourceElevationM": 1967.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-teghenis",
+      "name": "Teghenis",
+      "latitude": 40.5082,
+      "longitude": 44.5045,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13035",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "13035",
+      "sourceElevationM": 2765.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-teghenis-summit",
+      "name": "Teghenis Summit",
+      "latitude": 40.516132,
+      "longitude": 44.521318,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Broad launch area. 4WD access.",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/teghenis/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      },
+      "sourceElevationM": 2840,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-teghut-haghartsin",
+      "name": "Teghut / Haghartsin",
+      "latitude": 40.8308,
+      "longitude": 44.9458,
+      "facingDeg": 158,
+      "windArcHalfWidthDeg": 23,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=18865",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "18865",
+      "sourceElevationM": 2549.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-tsaghkadzor",
+      "name": "Tsaghkadzor",
+      "latitude": 40.5263,
+      "longitude": 44.6509,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9310",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "9310",
+      "sourceElevationM": 2806.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-tsovagyugh",
+      "name": "Tsovagyugh",
+      "latitude": 40.5933,
+      "longitude": 44.9465,
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Lake-breeze ridge soaring. Grassy launch; watch cloud growth.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9311",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "9311",
+      "sourceElevationM": 2189.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-ulgyur",
+      "name": "Ulgyur",
+      "latitude": 39.823449,
+      "longitude": 45.215636,
+      "facingDeg": 202.5,
+      "windArcHalfWidthDeg": 22.5,
+      "notes": "",
+      "source": {
+        "name": "Sky Club Armenia",
+        "url": "https://skyclub.am/paragliding-guided-tours/flying-sites/vedi/",
+        "checkedAt": "2026-10-24",
+        "license": "Source copyright retained"
+      },
+      "sourceId": "12015",
+      "sourceElevationM": 2390,
+      "elevationDatum": "unknown",
+      "corroboratingSources": [
+        {
+          "name": "Paragliding Earth contributors",
+          "url": "https://paraglidingearth.com/?site=12015",
+          "checkedAt": "2026-10-24",
+          "license": "CC-BY-SA-3.0",
+          "retrievedAt": "2026-10-20"
+        }
+      ],
+      "review": "Coordinates use the local club’s named takeoff; original PGE point retained in the source snapshot. Reported altitude awaits an independent terrain reference."
+    },
+    {
+      "slug": "am-vokhchaberd",
+      "name": "Vokhchaberd Range",
+      "latitude": 40.1607,
+      "longitude": 44.7785,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12904",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "12904",
+      "sourceElevationM": 1965.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "am-xaraba",
+      "name": "Xaraba",
+      "latitude": 39.9139,
+      "longitude": 44.9151,
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12049",
+        "checkedAt": "2026-10-24",
+        "license": "CC-BY-SA-3.0",
+        "retrievedAt": "2026-10-20"
+      },
+      "sourceId": "12049",
+      "sourceElevationM": 2138.0,
+      "elevationDatum": "unknown"
+    }
+  ]
+}

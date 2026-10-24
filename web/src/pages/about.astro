@@ -13,9 +13,11 @@ import Base from "../layouts/Base.astro";
         Choose Imperial or Metric in the header. Your selection is saved in this browser.
       </p>
       <p style="margin-top:8px">
+        Choose United States or Armenia on the launch map. Armenia uses ICON-EU, with GFS and available global models for comparison.
         HRRR and HRDPS cover the next two days. RRFS extends to 84 hours; RDPS adds another regional forecast.
         GFS and GDPS show the longer trend. GEPS shows the median and spread of 21 ensemble members.
-        The Soaring map offers native HRRR and RRFS grids for North Sound and Shenandoah–Blue Ridge.
+        The Soaring map offers HRRR and RRFS for North Sound and Shenandoah–Blue Ridge, and ICON-EU for Armenia.
+        ICON-EU resolves weather at roughly 6.5 km; narrow valleys, ridge exposure and launch gusts remain local effects.
       </p>
     </section>
     <section class="card">
@@ -46,16 +48,17 @@ import Base from "../layouts/Base.astro";
     <section class="card">
       <h2>Updates and other guidance</h2>
       <p style="margin-top:8px">
-        Forecast refreshes start at 01:55, 07:55, 13:55 and 19:55 UTC. RRFS refreshes start two hours later.
+        Forecast refreshes start at 01:55, 07:55, 13:55 and 19:55 UTC. RRFS starts two hours later; ICON-EU starts at 04:55, 10:55, 16:55 and 22:55 UTC.
         Run labels show the forecast currently published; delayed feeds retain their last complete run.
-        NWS forecasts and discussions, ECMWF guidance and nearby balloon observations add context.
+        US pages include NWS forecasts, discussions and nearby balloon observations. ECMWF guidance adds a global comparison.
         Connected station panels show timestamped measurements. Local terrain, exposure and changing weather also shape launch conditions.
       </p>
     </section>
     <section class="card">
       <h2>Sources</h2>
       <p style="margin-top:8px">
-        Models: <a href="https://www.noaa.gov/">NOAA</a> and
+        Models: <a href="https://opendata.dwd.de/weather/nwp/v1/m/icon-eu/p/">DWD ICON-EU</a>
+        (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), <a href="https://www.noaa.gov/">NOAA</a> and
         <a href="https://eccc-msc.github.io/open-data/licence/readme_en/">Environment and Climate Change Canada</a>,
         processed with <a href="https://meteo.azohra.com/">meteo by Azohra</a>.
         Official forecasts: <a href="https://www.weather.gov/">National Weather Service</a>.
@@ -63,11 +66,15 @@ import Base from "../layouts/Base.astro";
         <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, via <a href="https://open-meteo.com/">Open-Meteo</a>.
         Balloons: NWS via the <a href="https://mesonet.agron.iastate.edu/archive/raob/">Iowa Environmental Mesonet</a>.
         Station feeds: <a href="https://www.wunderground.com/">Weather Underground</a>. Launch catalogue: flyingsites.
+        Armenian launch data: <a href="https://paraglidingearth.com/">ParaglidingEarth contributors</a>,
+        <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>.
+        Additional site research: <a href="https://skyclub.am/paragliding-guided-tours/flying-sites/">Sky Club</a>.
+        Source links appear in Launch info.
       </p>
       <p style="margin-top:8px">
-        Terrain uses Copernicus GLO-30 and available regional elevation data; sunlight terrain uses
+        Launch terrain uses Copernicus GLO-30, GLO-90 in Armenia, and available regional elevation data. Sunlight terrain uses
         <a href="https://www.usgs.gov/3d-elevation-program">USGS 3DEP</a> with a Copernicus fallback.
-        Produced using Copernicus WorldDEM-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018,
+        Produced using Copernicus WorldDEM-30 and WorldDEM-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018,
         provided under COPERNICUS by the European Union and ESA; all rights reserved.
         Land cover: © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021),
         processed by ESA WorldCover consortium, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.

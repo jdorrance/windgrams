@@ -30,6 +30,7 @@ export const DETERMINISTIC_COLUMN_MODELS = Object.freeze([
   'hrdps-continental',
   'hrdps-west',
   'rrfs',
+  'icon-eu',
   'rdps',
   'nam',
   'nam-conus-nest',

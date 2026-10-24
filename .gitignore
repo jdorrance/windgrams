@@ -7,3 +7,6 @@ worker-bundle/
 
 # Original NOAA byte ranges; never served by the web app.
 forecasts/.soaring-cache/
+
+# Local ecCodes decoder environment.
+forecasts/.venv-icon/

@@ -634,6 +634,11 @@ export function windgramHours(profile: SiteForecast, options: WindgramOptions): 
   return hours.slice(first, last < 0 ? hours.length : last + 1);
 }
 
+/** Regional maps retain many days; each chart shows the selected local day's daylight. */
+export function windgramDayHours(profile: SiteForecast, validAt: string, timeZone: string): ProfileHour[] {
+  return windgramHours(profile, { timeZone, compact: true, hours: { dateKey: localDateKey(validAt, timeZone), timeZone } });
+}
+
 export function buildWindgramView(profile: SiteForecast, options: WindgramOptions): WindgramView {
   const hours = windgramHours(profile, options);
   const compact = options.compact ?? false;
@@ -649,9 +654,30 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const focused = compact && options.heightRange !== "full";
   const floorM = focused ? Math.max(modelFloorM, scalar(options.launch?.elevationM) ?? modelFloorM) : modelFloorM;
   const grouped = new Map<number, number[]>();
-  for (const h of hours) for (const l of h.levels) {
-    const p = scalar(l.pressureHpa), z = scalar(l.heightM);
-    if (p !== null && z !== null && z > modelFloorM + 5) grouped.set(p, [...(grouped.get(p) ?? []), z]);
+  if (profile.model === "icon-eu") {
+    // Native hybrid pressures change with each forecast hour. Fixed isobar ticks
+    // keep the display scale independent of that changing pressure inventory.
+    const ticks = [1000, 975, 950, 925, 900, 875, 850, 800, 750, 700, 650, 600, 550, 500, 450, 400, 350, 300, 250, 200, 150, 100];
+    for (const hour of hours) {
+      const levels = hour.levels.map(level => ({ p: scalar(level.pressureHpa), z: scalar(level.heightM) }))
+        .filter((level): level is { p: number; z: number } => level.p !== null && level.p > 0 && level.z !== null)
+        .sort((a, b) => a.z - b.z);
+      for (const p of ticks) {
+        for (let i = 1; i < levels.length; i++) {
+          const a = levels[i - 1], b = levels[i];
+          if (a.p <= b.p || p > a.p || p < b.p) continue;
+          const fraction = (Math.log(p) - Math.log(a.p)) / (Math.log(b.p) - Math.log(a.p));
+          const z = a.z + fraction * (b.z - a.z);
+          if (z > modelFloorM + 5) grouped.set(p, [...(grouped.get(p) ?? []), z]);
+          break;
+        }
+      }
+    }
+  } else {
+    for (const h of hours) for (const l of h.levels) {
+      const p = scalar(l.pressureHpa), z = scalar(l.heightM);
+      if (p !== null && z !== null && z > modelFloorM + 5) grouped.set(p, [...(grouped.get(p) ?? []), z]);
+    }
   }
   const levelAnchors = [...grouped].map(([pressureHpa, zs]) => ({ pressureHpa, heightM: median(zs) })).sort((a, b) => a.heightM - b.heightM)
     .filter((a, i, all) => i === 0 || a.heightM > all[i - 1].heightM + 5);

@@ -16,6 +16,7 @@ import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { parseSites } from "@azohra/meteo.forecast";
 import { storeFromEnv } from "./lib/store.mjs";
+import { nwsCoversSite } from "./lib/model-coverage.mjs";
 import {
   DEFAULT_USER_AGENT,
   buildManifest,
@@ -35,7 +36,7 @@ const { values: args } = parseArgs({
 
 const store = args.publish ? storeFromEnv() : null;
 const sitesPath = resolve(args.sites);
-const sites = parseSites(readFileSync(sitesPath, "utf-8"), sitesPath);
+const sites = parseSites(readFileSync(sitesPath, "utf-8"), sitesPath).filter(nwsCoversSite);
 const getJson = createClient({ userAgent: process.env.NWS_USER_AGENT || DEFAULT_USER_AGENT });
 const now = Date.now();
 // "WARN " lines become warning annotations in GitHub Actions (scripts/run-annotated.sh).

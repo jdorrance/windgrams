@@ -26,6 +26,15 @@ import { mosaic, tilesAround } from "./lib/mosaic.mjs";
 const engineDir = dirname(createRequire(import.meta.url).resolve("@azohra/meteo.forecast/package.json"));
 export const engineTerrain = await import(pathToFileURL(join(engineDir, "dist/terrain.js")).href);
 const T = engineTerrain;
+export const GLO90_SOURCE = Object.freeze({
+  ...T.SOURCES[T.GLO30_ID], id: 'glo90', product: 'Copernicus GLO-90 DEM', resolutionM: 90,
+  attribution: T.SOURCES[T.GLO30_ID].attribution.replace('WorldDEM-30', 'WorldDEM-90'),
+});
+// The public GLO-30 release omits Armenia. Use the complete GLO-90 release
+// consistently across each terrain window, including neighbouring border tiles.
+export const usesGlo90 = site => site.timeZone === 'Asia/Yerevan';
+export const glo90Url = (latitude, longitude) => T.glo30Url(latitude, longitude)
+  .replace('copernicus-dem-30m', 'copernicus-dem-90m').replaceAll('DSM_COG_10_', 'DSM_COG_30_');
 
 /**
  * Measures the terrain context for `sites` exactly as the engine does, reading
@@ -54,12 +63,17 @@ export async function measure(sites, { open = T.openCog, fetchImpl = globalThis.
     return T.cogWindow(mosaic(tiles), site.latitude, site.longitude, halfM);
   }
 
+  const terrainCache = new Map();
   const terrainOf = async (site) => {
-    const { window, lats, lons } = await windowAround(T.glo30Url, site, Math.max(...T.RELIEF_RADII_M) + 200);
-    return T.terrainFromWindow(window, lats, lons, site);
+    if (terrainCache.has(site.slug)) return terrainCache.get(site.slug);
+    const { window, lats, lons } = await windowAround(usesGlo90(site) ? glo90Url : T.glo30Url, site, Math.max(...T.RELIEF_RADII_M) + 200);
+    const terrain = T.terrainFromWindow(window, lats, lons, site);
+    if (usesGlo90(site)) terrain.source = GLO90_SOURCE.id;
+    terrainCache.set(site.slug, terrain);
+    return terrain;
   };
   const elevationOf = async (site) =>
-    T.pickElevation(
+    usesGlo90(site) ? { source: GLO90_SOURCE.id, elevationM: (await terrainOf(site)).elevationM } : T.pickElevation(
       async (url) => T.projectedPoint(await openOnce(url), site.latitude, site.longitude),
       await T.lidarbcUrls(site.latitude, site.longitude, fetchRetry),
     );
@@ -70,6 +84,7 @@ export async function measure(sites, { open = T.openCog, fetchImpl = globalThis.
 
   const stamp = generatedAt ?? new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const document = roundDocument(await T.buildDocument(sites, { terrainOf, elevationOf, landCoverOf, generatedAt: stamp, log, warn }));
+  if (sites.some(usesGlo90)) document.sources.push(GLO90_SOURCE);
   if (parseSiteContextJson(JSON.stringify(document)) === null) throw new Error("the measured site-context.json fails the reader contract");
   return document;
 }
@@ -80,6 +95,21 @@ export function contextIsFresh(sites, context) {
     const point = context.sites[site.slug]?.point;
     return point !== undefined && point.latitude === site.latitude && point.longitude === site.longitude;
   });
+}
+
+/** Keep measured and retained launch contexts together, with every source credited. */
+export function mergeSiteContexts(cataloguedSites, context, measured) {
+  const sources = new Map([...(context?.sources ?? []), ...measured.sources].map(source => [source.id, source]));
+  const sites = Object.fromEntries(cataloguedSites.map(site => {
+    const entry = measured.sites[site.slug] ?? context?.sites[site.slug];
+    if (!entry || entry.point?.latitude !== site.latitude || entry.point?.longitude !== site.longitude) {
+      throw new Error(`Missing current terrain measurement: ${site.slug}`);
+    }
+    return [site.slug, entry];
+  }));
+  const document = { ...measured, sources: [...sources.values()], sites };
+  if (!parseSiteContextJson(JSON.stringify(document))) throw new Error('Merged site-context.json fails the reader contract');
+  return document;
 }
 
 const serialize = (document) => Buffer.from(`${JSON.stringify(document, null, 2)}\n`);
@@ -101,9 +131,11 @@ async function main() {
       console.log("site-context.json is up to date");
       return;
     }
-    const document = await measure(catalogue.sites);
+    const pending = catalogue.sites.filter(site => !contextIsFresh([site], context));
+    const measured = await measure(pending);
+    const document = mergeSiteContexts(catalogue.sites, context, measured);
     await store.put("site-context.json", serialize(document));
-    console.log(`Measured terrain for ${catalogue.sites.length} launch(es) and published site-context.json`);
+    console.log(`Measured terrain for ${pending.length} launch(es) and published site-context.json`);
     return;
   }
 

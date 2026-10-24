@@ -9,7 +9,7 @@ import { convertQuantity, defaultQuantityDigits, fmt, formatQuantity, getUnitSys
 const windValue = (value: number | null) => convertQuantity(value, "wind");
 const heightValue = (value: number | null) => convertQuantity(value, "elevation");
 const temperatureValue = (value: number | null) => convertQuantity(value, "temperature");
-const launchWind = (valueMph: number) => convertQuantity(valueMph / 2.2369362920544025, "wind")!;
+const launchWind = (valueMph: number | null) => valueMph === null ? null : convertQuantity(valueMph / 2.2369362920544025, "wind");
 
 export interface EcmwfHour {
   validAt: string;
@@ -68,7 +68,7 @@ export function ecmwfSpec(launch: ChartLaunch): ChartSpec<EcmwfHour> {
       const wind = hours.map((h) => windValue(h.windSpeedMps));
       const gust = hours.map((h) => windValue(h.windGustMps));
       const aloft = hours.map((h) => windValue(h.wind850SpeedMps));
-      const windTop = niceMax(Math.max(launchWind(launch.gustMaxMph) + 5, ...[...wind, ...gust, ...aloft].map((v) => v ?? 0)), 5);
+      const windTop = niceMax(Math.max((launchWind(launch.gustMaxMph) ?? 0) + 5, ...[...wind, ...gust, ...aloft].map((v) => v ?? 0)), 5);
       const bl = hours.map((h) => heightValue(h.boundaryLayerHeightM));
       const extras = windExtras(launch, hours.map((h) => h.windDirectionDeg));
       return [
@@ -151,7 +151,7 @@ export function ecmwfSpec(launch: ChartLaunch): ChartSpec<EcmwfHour> {
           `${fmt(temperatureValue(h.temperatureC))} ${unitLabel("temperature")}`,
         ];
       },
-      footnote: `✓ Launch window (${launch.windowLabel}). Precipitation: prior hour.`,
+      footnote: `${launch.window ? `✓ Launch window (${launch.windowLabel}). ` : ""}Precipitation: prior hour.`,
     },
   };
 }

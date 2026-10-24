@@ -1,0 +1,764 @@
+{
+  "schemaVersion": 1,
+  "source": "Paragliding Earth contributors",
+  "endpoint": "https://paraglidingearth.com/api/geojson/getCountrySites.php?iso=am",
+  "retrievedAt": "2026-10-20",
+  "checkedAt": "2026-10-24",
+  "license": "CC-BY-SA-3.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+  "rawSha256": "c43f06d91ecf7483ecd239aebd58b20c3d6fa6202ca812924675bb30ea50b4ba",
+  "rawBytes": 23584,
+  "detailSourceSha256": "ad4ad7f7da67bcdd769b79dbf09e9050ff66e9eb921c33ba144a9f19958e73a9",
+  "detailSource": "Adjacent flyingsites/data/am.geojson.json; retrieval date unavailable",
+  "modifications": "Compact source snapshot: retains launch facts, compass flags and descriptions needed for review; omits personal/contact data and landing details. Detail descriptions/comments come from the sibling catalogue. Names, coordinates, reported heights and all 34 IDs match the October 20 API snapshot.",
+  "features": [
+    {
+      "sourceId": "9304",
+      "name": "Mt. Hadis 300",
+      "coordinates": [
+        44.7074,
+        40.2727
+      ],
+      "sourceElevationM": 1642.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 1,
+        "SE": 2,
+        "S": 1,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "TO1: BeginnersÃ¯Â¿Â½ take-off site at 145m from the camp level. The slope is 32%-34% (30Ã¯Â¿Â½-35Ã¯Â¿Â½). The slope is rather rocky with many obsidian rocks. The take-off site is cleaned of rocks.\r\n\r\nTO2: Ã¯Â¿Â½300mÃ¯Â¿Â½ take-off site as we call it is 210-235m from the level of the camp site. The take-off area of 80x70m is cleaned of rocks and burrs. 10 pilots can prepare and launch from this site at a time. There is thermo-dynamic activity at about 60m from the slope the width of which is about 350m. If the weather is good cross-country flights are possible. This take-off site is accessibly for 4WD vehicles.",
+      "comments": "Hatis is part of the Geghama Mountain Range. It is 2529m above sea level, and the absolute height is 1880m. It is of volcanic origin (there are obsidian deposits all over the mountain). There are virtually no plants, only grass and some bushes which dry out by mid summer leaving nasty burrs. The average temperature in summer is +25 Ã¯Â¿Â½C - +40 Ã¯Â¿Â½C (during the day), +9Ã¯Â¿Â½- +20Ã¯Â¿Â½C (at night). Hang-gliding pilots used to fly here in 1970-80Ã¯Â¿Â½s, paragliding pilots started flying here in 1990Ã¯Â¿Â½s.\r\n\r\nThe area is very interesting from the point of view of lifts. The thermal lifts are narrow and therefore a little aggressive. Our experience shows that the peak of thermal activity from mid-spring to mid-fall is around 12:00 Ã¯Â¿Â½ 15:00. Of course, sometimes there are e-80xceptions both for the better and for the worse.\r\n\r\nOverall the area is very good. We call it a Ã¯Â¿Â½learning and explorationÃ¯Â¿Â½ site. If pilots learns to fly at this site they will fly in any other conditions much easier since here they learn to understand the wind much better!"
+    },
+    {
+      "sourceId": "9305",
+      "name": "Mt. Hadis 500",
+      "coordinates": [
+        44.6949,
+        40.2925
+      ],
+      "sourceElevationM": 1495.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "The third take-off site is located at 1.5km to the West of the camp site at the height of 480m from the camp level (we call it the Ã¯Â¿Â½500mÃ¯Â¿Â½ take-off). More experienced pilots usually take off from here. The site is rather rocky, partly cleaned. The site is accessible for 4WD vehicles.",
+      "comments": ""
+    },
+    {
+      "sourceId": "9306",
+      "name": "Aragats Mountain-south top",
+      "coordinates": [
+        44.1841,
+        40.5037
+      ],
+      "sourceElevationM": 3783.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": ""
+    },
+    {
+      "sourceId": "9307",
+      "name": "Fioletovo",
+      "coordinates": [
+        44.7511,
+        40.7298
+      ],
+      "sourceElevationM": 2165.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": ""
+    },
+    {
+      "sourceId": "9308",
+      "name": "Mt. Gutansar",
+      "coordinates": [
+        44.6845,
+        40.3639
+      ],
+      "sourceElevationM": 2176.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 1,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": ""
+    },
+    {
+      "sourceId": "9309",
+      "name": "Mt Shaman",
+      "coordinates": [
+        44.9469,
+        39.8869
+      ],
+      "sourceElevationM": 2114.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 1,
+        "S": 1,
+        "SW": 1,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": ""
+    },
+    {
+      "sourceId": "9310",
+      "name": "Tsaxkadzor",
+      "coordinates": [
+        44.6509,
+        40.5263
+      ],
+      "sourceElevationM": 2806.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": ""
+    },
+    {
+      "sourceId": "9311",
+      "name": "tsovagyugh",
+      "coordinates": [
+        44.9465,
+        40.5933
+      ],
+      "sourceElevationM": 2189.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 1,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 1,
+        "NW": 1
+      },
+      "takeoffDescription": "",
+      "comments": "This site is about 1 hour NorthEast from Yerevan. During the summer, a very consistent sea breeze from Lake Sevan provides dynamic ridge soaring. A grassy launch is approached via a 20 walk. A popular site for new pilots as well as experienced pilots as lots of airtime can be had without lots of work. Thermal flying is possible but I personally have not climbed more than 300 meters above launch. Watch out for over developing clouds capable of cloud suck. Many landings in the large LZ require the use of big ears or spiral dives to get down."
+    },
+    {
+      "sourceId": "9312",
+      "name": "Mt Large Lchasar",
+      "coordinates": [
+        44.8851,
+        40.4959
+      ],
+      "sourceElevationM": 2157.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 2,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 2,
+        "NW": 2
+      },
+      "takeoffDescription": "",
+      "comments": ""
+    },
+    {
+      "sourceId": "9744",
+      "name": "Lernaglukh",
+      "coordinates": [
+        44.4704,
+        40.5942
+      ],
+      "sourceElevationM": 2437.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 2,
+        "SE": 0,
+        "S": 2,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "The site is on the top of the mountainous range  at the height of ~400m from the flatland. It's clean, grassy and has a plenty of place for simultaneous starts during competitions.",
+      "comments": ""
+    },
+    {
+      "sourceId": "11507",
+      "name": "Aygezard",
+      "coordinates": [
+        44.6558,
+        39.9382
+      ],
+      "sourceElevationM": 1067.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 1,
+        "S": 2,
+        "SW": 1,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "39.56'38.68'N\r\n44.38'59.78'E",
+      "comments": ""
+    },
+    {
+      "sourceId": "11564",
+      "name": "APARAN",
+      "coordinates": [
+        44.4741,
+        40.5913
+      ],
+      "sourceElevationM": 2424.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 2,
+        "SW": 2,
+        "W": 2,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": ""
+    },
+    {
+      "sourceId": "11992",
+      "name": "Arzni",
+      "coordinates": [
+        44.5687,
+        40.3016
+      ],
+      "sourceElevationM": 1360.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "12015",
+      "name": "Ulgyur",
+      "coordinates": [
+        45.2118,
+        39.8234
+      ],
+      "sourceElevationM": 2326.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "12049",
+      "name": "Xaraba",
+      "coordinates": [
+        44.9151,
+        39.9139
+      ],
+      "sourceElevationM": 2138.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "12129",
+      "name": "Aghberk",
+      "coordinates": [
+        45.2972,
+        40.5364
+      ],
+      "sourceElevationM": 2544.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "12174",
+      "name": "Sevakavan",
+      "coordinates": [
+        45.0049,
+        39.8638
+      ],
+      "sourceElevationM": 2378.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "12185",
+      "name": "MikeArmenia",
+      "coordinates": [
+        44.1686,
+        40.3359
+      ],
+      "sourceElevationM": 1688.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "12272",
+      "name": "Lusagyugh",
+      "coordinates": [
+        44.4151,
+        40.6218
+      ],
+      "sourceElevationM": 2562.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "12446",
+      "name": "Tatevi Vank",
+      "coordinates": [
+        46.247,
+        39.351
+      ],
+      "sourceElevationM": 1967.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "12904",
+      "name": "Vokhchaberd range",
+      "coordinates": [
+        44.7785,
+        40.1607
+      ],
+      "sourceElevationM": 1965.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "13035",
+      "name": "Teghenis",
+      "coordinates": [
+        44.5045,
+        40.5082
+      ],
+      "sourceElevationM": 2765.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "13080",
+      "name": "mt. Lalvar",
+      "coordinates": [
+        44.6221,
+        41.1586
+      ],
+      "sourceElevationM": 2079.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "13163",
+      "name": "Miraq",
+      "coordinates": [
+        44.3515,
+        40.6335
+      ],
+      "sourceElevationM": 2264.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "14108",
+      "name": "Maydan Range",
+      "coordinates": [
+        44.8612,
+        40.6047
+      ],
+      "sourceElevationM": 2330.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "14321",
+      "name": "Nor Ughi",
+      "coordinates": [
+        44,
+        39
+      ],
+      "sourceElevationM": 2167.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 2,
+        "S": 2,
+        "SW": 2,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "39 56'41.16'N 44 40'34.03'E",
+      "comments": ""
+    },
+    {
+      "sourceId": "14843",
+      "name": "Enokavan",
+      "coordinates": [
+        45.1001,
+        40.9167
+      ],
+      "sourceElevationM": 1225.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 1,
+        "SW": 2,
+        "W": 1,
+        "NW": 0
+      },
+      "takeoffDescription": "40Â°55'0.26'N\r\n45Â° 6'0.53'E",
+      "comments": ""
+    },
+    {
+      "sourceId": "15451",
+      "name": "Lusashogh",
+      "coordinates": [
+        44.9606,
+        39.8435
+      ],
+      "sourceElevationM": 1828.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "39Â°50'36.59'N  44Â°57'38.09'E",
+      "comments": ""
+    },
+    {
+      "sourceId": "15452",
+      "name": "Lusashogh 2",
+      "coordinates": [
+        44.9631,
+        39.839
+      ],
+      "sourceElevationM": 1875.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 2,
+        "NW": 1
+      },
+      "takeoffDescription": "39Â°50'20.28'N\r\n 44Â°57'47.01'E",
+      "comments": ""
+    },
+    {
+      "sourceId": "15652",
+      "name": "Aragatsotn 2",
+      "coordinates": [
+        44.1798,
+        40.2363
+      ],
+      "sourceElevationM": 1063.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 2,
+        "NE": 2,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 2
+      },
+      "takeoffDescription": "",
+      "comments": "for Paramotor"
+    },
+    {
+      "sourceId": "15715",
+      "name": "Mrghuz",
+      "coordinates": [
+        45.259,
+        40.7049
+      ],
+      "sourceElevationM": 2589.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "18865",
+      "name": "Teghut / Haghartsin",
+      "coordinates": [
+        44.9458,
+        40.8308
+      ],
+      "sourceElevationM": 2549.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 2,
+        "S": 2,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "40Â°49'50.78'N; 44Â°56'44.77'E - Elevation : 2549m.",
+      "comments": ""
+    },
+    {
+      "sourceId": "19912",
+      "name": "Arteni mountain",
+      "coordinates": [
+        43.7855,
+        40.3772
+      ],
+      "sourceElevationM": 1942.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    },
+    {
+      "sourceId": "19927",
+      "name": "Artanish mountain",
+      "coordinates": [
+        45.3089,
+        40.4805
+      ],
+      "sourceElevationM": 2452.0,
+      "elevationDatum": "unknown",
+      "directionFlags": {
+        "N": 0,
+        "NE": 0,
+        "E": 0,
+        "SE": 0,
+        "S": 0,
+        "SW": 0,
+        "W": 0,
+        "NW": 0
+      },
+      "takeoffDescription": "",
+      "comments": "initialy imported from International Leonardo"
+    }
+  ]
+}

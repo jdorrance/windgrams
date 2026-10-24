@@ -58,6 +58,16 @@ test("answers 304 when the client already has the object", async () => {
   assert.equal(response.body, null);
 });
 
+test('serves compressed regional profiles through the dataset-store route', async () => {
+  const key = 'soaring/v1/armenia-icon-eu-live/bundles/abc123/cell-17.json.gz';
+  const bucket = fakeBucket({ [key]: { body: 'compressed profile', contentType: 'application/gzip' } });
+  const response = await worker.fetch(request(`/data/${key}`), env(bucket));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'application/gzip');
+  assert.equal(await response.text(), 'compressed profile');
+  assert.deepEqual(bucket.requested, [key]);
+});
+
 test("rejects keys outside the dataset shape without touching the store", async () => {
   const bucket = fakeBucket({});
   // "/data/../x" is normalized away by URL parsing before the Worker sees it; the

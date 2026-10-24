@@ -11,6 +11,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 model="${1:?usage: scripts/build-local.sh <model-slug>}"
+if [[ "$model" == "icon-eu" ]]; then
+  exec node scripts/build-icon.mjs --sites sites.json --output data
+fi
 if [[ -z "${METEO_DATA_BASE:-}" ]]; then
   export METEO_DATA_BASE="http://127.0.0.1:4321/data"
 fi

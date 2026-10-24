@@ -118,3 +118,46 @@ test('point loading retains published diagnostics and nulls without resurrecting
   assert.equal(sounding.thermalVelocityMps, null);
   assert.match(readSounding(sounding, 378.5).headline, /Unavailable/);
 });
+
+test('native model-level soundings retain pressure at the selected cell and ignore pressure-level substitutes', () => {
+  const native = structuredClone(hours);
+  for (const hour of native) {
+    hour.levelsByModel = Object.fromEntries(Object.entries(hour.levelsByPressure!).map(([pressure, arrays], i) => [String(45 + i), {
+      ...arrays, p: arrays.h.map((_, cell) => Number(pressure) - 1.25 - cell / 10),
+    }]));
+  }
+  const iconManifest = { ...manifest, model: 'icon-eu', case: { ...manifest.case, model: 'icon-eu', site: { ...manifest.case.site, timeZone: 'Asia/Yerevan' } } };
+  const profile = buildCellSiteForecast(iconManifest, native, 0, cell)!;
+  assert.ok(profile);
+  assert.equal(profile.model, 'icon-eu');
+  assert.equal(profile.site.timeZone, 'Asia/Yerevan');
+  assert.equal(profile.semantics.precipitation, 'windowMeanRate');
+  const original = buildCellSiteForecast(manifest, hours, 0, cell)!;
+  for (let i = 0; i < profile.hours.length; i++) {
+    assert.deepEqual(profile.hours[i].levels.map(level => level.pressureHpa), original.hours[i].levels.map(level => Number(level.pressureHpa) - 1.25));
+    assert.deepEqual(profile.hours[i].levels.map(level => level.heightM), original.hours[i].levels.map(level => level.heightM));
+    assert.deepEqual(publishedLift(profile.hours[i]), publishedLift(original.hours[i]));
+  }
+  const missing = structuredClone(native);
+  for (const levels of Object.values(missing[0].levelsByModel!)) levels.p[0] = null;
+  assert.equal(buildCellSiteForecast(iconManifest, missing, 0, cell), null, 'missing native pressure cannot fall back to unrelated pressure levels');
+});
+
+test('native ICON pressure changes keep one stable isobar axis and preserve source pressures', () => {
+  const source = parsePublishedProfileJson(JSON.stringify(golden))!;
+  source.model = 'icon-eu';
+  for (const [index, hour] of source.hours.entries()) {
+    for (const level of hour.levels) level.pressureHpa = Number(level.pressureHpa) + index * .17;
+  }
+  assert.ok(parsePublishedProfileJson(JSON.stringify(source)), "published contract accepts native floating pressures");
+  const before = structuredClone(source);
+  const view = buildWindgramView(source, { timeZone: source.site.timeZone });
+  const pressures = view.anchors.map(anchor => anchor.pressureHpa).filter(value => value !== null);
+  assert.equal(new Set(pressures).size, pressures.length);
+  assert.ok(pressures.length > 2 && pressures.length <= 22);
+  assert.ok(pressures.every(p => p % 25 === 0));
+  assert.ok(view.anchors.every((anchor, i, all) => i === 0 || anchor.heightM > all[i - 1].heightM));
+  const sounding = buildSounding(source, source.hours[2])!;
+  assert.ok(sounding.points.some(point => Math.abs(point.pressureHpa % 1) > .01));
+  assert.deepEqual(source, before);
+});

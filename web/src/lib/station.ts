@@ -181,10 +181,10 @@ export const STALE_MINUTES = 20;
 export const GUST_WINDOW_MINUTES = 15;
 
 export interface WindLimits {
-  window: DirectionArc;
-  windMinMph: number;
-  windMaxMph: number;
-  gustMaxMph: number;
+  window: DirectionArc | null;
+  windMinMph: number | null;
+  windMaxMph: number | null;
+  gustMaxMph: number | null;
 }
 
 /** Same scale as the rest of the page: good (green), caution (amber), warning (red), neutral. */
@@ -231,22 +231,26 @@ export function readWind(current: StationObservation, gustMps: number | null, li
 
   if (deg === null || speed < 1) {
     checks.push({ label: "Direction", tone: "neutral", text: "Calm · direction variable" });
+  } else if (limits.window === null) {
+    checks.push({ label: "Direction", tone: "neutral", text: `${compass(deg)} ${deg}° · launch sector unknown` });
   } else if (inArc(deg, limits.window)) {
     checks.push({ label: "Direction", tone: "good", text: `${compass(deg)} ${deg}° · launch sector ${windowLabel}` });
   } else {
     checks.push({ label: "Direction", tone: "warning", text: `${compass(deg)} ${deg}° · outside launch sector ${windowLabel}` });
   }
 
-  if (speed > limits.windMaxMph) checks.push({ label: "Speed", tone: "warning", text: `${mph(speed)}: stronger than ${mph(limits.windMaxMph)}` });
-  else if (speed < limits.windMinMph) checks.push({ label: "Speed", tone: "caution", text: `${mph(speed)}: lighter than ${mph(limits.windMinMph)}` });
+  if (limits.windMaxMph !== null && speed > limits.windMaxMph) checks.push({ label: "Speed", tone: "warning", text: `${mph(speed)}: stronger than ${mph(limits.windMaxMph)}` });
+  else if (limits.windMinMph !== null && speed < limits.windMinMph) checks.push({ label: "Speed", tone: "caution", text: `${mph(speed)}: lighter than ${mph(limits.windMinMph)}` });
+  else if (limits.windMinMph === null || limits.windMaxMph === null) checks.push({ label: "Speed", tone: "neutral", text: `${mph(speed)} · launch limits unknown` });
   else checks.push({ label: "Speed", tone: "good", text: `${mph(speed)}: within ${mph(limits.windMinMph)}–${mph(limits.windMaxMph)}` });
 
   if (gust === null) checks.push({ label: "Gusts", tone: "neutral", text: "Gusts unavailable" });
+  else if (limits.gustMaxMph === null) checks.push({ label: "Gusts", tone: "neutral", text: `${mph(gust)} peak / ${GUST_WINDOW_MINUTES} min · gust limit unknown` });
   else if (gust > limits.gustMaxMph) checks.push({ label: "Gusts", tone: "warning", text: `${mph(gust)} peak / ${GUST_WINDOW_MINUTES} min · over ${mph(limits.gustMaxMph)}` });
   else checks.push({ label: "Gusts", tone: "good", text: `${mph(gust)} peak / ${GUST_WINDOW_MINUTES} min · under ${mph(limits.gustMaxMph)}` });
 
   const tones = checks.map((c) => c.tone);
-  const tone: Tone = tones.includes("warning") ? "warning" : tones.every((t) => t === "good") ? "good" : "caution";
+  const tone: Tone = tones.includes("warning") ? "warning" : tones.every((t) => t === "good") ? "good" : tones.some(t => t === "caution") ? "caution" : "neutral";
   const headline =
     tone === "good"
       ? "Within saved limits"
@@ -254,7 +258,7 @@ export function readWind(current: StationObservation, gustMps: number | null, li
         ? `Outside limits: ${checks.filter((c) => c.tone === "warning").map((c) => c.label.toLowerCase()).join(", ")}`
         : deg === null || speed < 1
           ? "Calm"
-          : "Light wind";
+          : tone === "neutral" ? (limits.window === null || limits.windMinMph === null || limits.windMaxMph === null || limits.gustMaxMph === null ? "Launch limits incomplete" : "Wind observations incomplete") : "Light wind";
   return { tone, headline, checks, gustMps };
 }
 

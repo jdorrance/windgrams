@@ -5,163 +5,149 @@ import { parseSiteForecast, type SiteForecast } from "@azohra/meteo.briefing/con
 import { buildWindgramView, windgramHours, type WindgramOptions } from "../src/lib/windgram-view.ts";
 
 type Hour = SiteForecast["hours"][number];
-const timestamp = (hour: number) => new Date(Date.UTC(2000, 0, 1, hour)).toISOString();
-const options: WindgramOptions = { timeZone: "Etc/UTC", compact: true, launch: { elevationM: 1200 } };
+const options: WindgramOptions = { timeZone: "America/Boise", compact: true, launch: { elevationM: 1200 } };
+const timestamp = (date: string, hour: number) => new Date(Date.parse(`${date}T00:00:00Z`) + hour * 3_600_000).toISOString();
 const times = (hours: readonly { validAt: string }[]) => hours.map(hour => hour.validAt);
-const range = (first: number, last: number) => Array.from({ length: last - first + 1 }, (_, i) => first + i);
+const range = (first: number, last: number, step = 1) => Array.from({ length: Math.floor((last - first) / step) + 1 }, (_, i) => first + i * step);
+const expected = (date: string, first: number, last: number, step = 1) => range(first, last, step).map(hour => timestamp(date, hour));
 
-function publish(hour: Hour, top: unknown, strength: unknown = top === null ? 0 : 2) {
+function publish(hour: Hour, top: unknown, strength: unknown) {
   Object.assign(hour, { soaring: { thermalVelocityV2Mps: strength, usableLiftTopV2M: top } });
 }
 
-function profileAt(hours = range(6, 22)): SiteForecast {
+function profileAt(date = "2026-09-30", hours = range(6, 29)): SiteForecast {
   const profile = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")));
   assert.ok(profile);
-  profile.site.modelElevationM = 900;
+  Object.assign(profile.site, { latitude: 43.62332, longitude: -115.98076, modelElevationM: 900, timeZone: "America/Boise" });
   const template = profile.hours[0];
   profile.hours = hours.map(time => {
-    const hour = { ...structuredClone(template), validAt: timestamp(time) };
-    // Retain a different legacy forecast to catch accidental family mixing.
-    hour.derived.usableLiftTopM = 3000;
-    hour.derived.thermalVelocityMps = 3;
+    const hour = { ...structuredClone(template), validAt: timestamp(date, time) };
     publish(hour, null, 0);
     return hour;
   });
   return profile;
 }
 
-function soaring(profile: SiteForecast, hours: number[], top = 1800) {
-  for (const hour of profile.hours) if (hours.some(time => timestamp(time) === hour.validAt)) publish(hour, top);
-}
+test("mobile brackets sunrise and sunset in every season", () => {
+  // NREL SPA references also checked independently in sunlight.test.ts:
+  // Sep 30: 13:40:35–Oct 1 01:26:25Z; Jun 21: 12:02:35–Jun 22 03:29:05Z;
+  // Dec 21: 15:14:15–Dec 22 00:10:05Z. Include the available samples on either side.
+  for (const [date, start, end, first, last] of [
+    ["2026-09-30", 6, 29, 13, 26],
+    ["2026-06-21", 6, 29, 12, 28],
+    ["2026-12-21", 7, 30, 15, 25],
+  ] as const) {
+    const profile = profileAt(date, range(start, end));
+    const visible = expected(date, first, last);
+    assert.deepEqual(times(windgramHours(profile, options)), visible, date);
+    assert.deepEqual(times(buildWindgramView(profile, options).hours), visible, "chart and controls share the window");
+  }
+});
 
-test("mobile keeps one hour of context around usable lift above launch", () => {
+test("summer daylight includes sunrise before 7am local", () => {
+  const profile = profileAt("2026-06-21");
+  assert.equal(windgramHours(profile, options)[0].validAt, "2026-06-21T12:00:00.000Z", "6am MDT brackets 6:02am sunrise");
+});
+
+test("three-hour forecasts keep the samples outside sunrise and sunset", () => {
+  const profile = profileAt("2026-09-30", range(6, 27, 3));
+  assert.deepEqual(times(windgramHours(profile, options)), expected("2026-09-30", 12, 27, 3));
+});
+
+test("daylight window stays fixed across weak, strong, unknown and ensemble lift", () => {
   const profile = profileAt();
-  soaring(profile, [12, 13, 14]);
-  const expected = range(11, 15).map(timestamp);
-  assert.deepEqual(times(windgramHours(profile, options)), expected);
-  assert.deepEqual(times(buildWindgramView(profile, options).hours), expected, "chart and hour controls use the same window");
+  const visible = expected("2026-09-30", 13, 26);
+  for (const [top, strength] of [[null, 0], [3000, 4], [null, null], [{ members: 21, p10: 900, p25: 1000, p50: 1500, p75: 2200, p90: 2600 }, 2]]) {
+    for (const hour of profile.hours) publish(hour, top, strength);
+    assert.deepEqual(times(windgramHours(profile, options)), visible);
+    assert.deepEqual(times(windgramHours(profile, { ...options, launch: { elevationM: 4000 } })), visible);
+    assert.deepEqual(times(windgramHours(profile, { ...options, launch: null })), visible);
+  }
 });
 
-test("three-hour forecasts retain the nearest samples outside the padded window", () => {
-  const profile = profileAt([0, 3, 6, 9, 12, 15, 18, 21]);
-  soaring(profile, [12, 15]);
-  assert.deepEqual(times(windgramHours(profile, options)), [9, 12, 15, 18].map(timestamp));
+test("missing timestamps remain gaps inside the daylight window", () => {
+  const profile = profileAt("2026-09-30", range(6, 29).filter(hour => hour !== 17 && hour !== 18));
+  assert.deepEqual(times(windgramHours(profile, options)), expected("2026-09-30", 13, 26).filter(time => ![17, 18].some(hour => time === timestamp("2026-09-30", hour))));
 });
 
-test("separate soaring periods retain the midday lull between them", () => {
-  const profile = profileAt();
-  soaring(profile, [10, 11, 15, 16]);
-  assert.deepEqual(times(windgramHours(profile, options)), range(9, 17).map(timestamp));
-});
-
-test("missing forecast timestamps remain gaps inside the selected window", () => {
-  const profile = profileAt([6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 18]);
-  soaring(profile, [10, 14]);
-  assert.deepEqual(times(windgramHours(profile, options)), [9, 10, 13, 14, 15].map(timestamp));
-});
-
-test("one usable hour keeps its neighbours and a one-sample forecast remains intact", () => {
-  const profile = profileAt();
-  soaring(profile, [13]);
-  assert.deepEqual(times(windgramHours(profile, options)), [12, 13, 14].map(timestamp));
-  const single = profileAt([13]);
-  soaring(single, [13]);
+test("partial forecasts stay inside supplied coverage without invented padding", () => {
+  for (const [start, end, first, last] of [[18, 29, 18, 26], [6, 20, 13, 20], [18, 23, 18, 23]]) {
+    const profile = profileAt("2026-09-30", range(start, end));
+    assert.deepEqual(times(windgramHours(profile, options)), expected("2026-09-30", first, last));
+  }
+  const single = profileAt("2026-09-30", [18]);
   assert.deepEqual(windgramHours(single, options), single.hours);
-  const empty = profileAt([]);
-  assert.deepEqual(windgramHours(empty, options), []);
+  assert.deepEqual(windgramHours(profileAt("2026-09-30", []), options), []);
 });
 
-test("lift at or below launch leaves the full day available", () => {
-  const profile = profileAt();
-  soaring(profile, [10, 11], 1199);
-  soaring(profile, [12, 13], 1200);
-  assert.deepEqual(windgramHours(profile, options), profile.hours);
+test("nighttime-only coverage retains its available context", () => {
+  for (const hours of [range(6, 10), range(27, 29)]) {
+    const profile = profileAt("2026-09-30", hours);
+    assert.deepEqual(windgramHours(profile, options), profile.hours);
+  }
 });
 
-test("a launch below model terrain uses model terrain as the usable-lift floor", () => {
+test("explicit hour selection is applied before daylight clipping", () => {
   const profile = profileAt();
-  soaring(profile, [8, 9], 900);
-  soaring(profile, [12], 901);
-  const lowLaunch = { ...options, launch: { elevationM: 600 } };
-  assert.deepEqual(times(windgramHours(profile, lowLaunch)), [11, 12, 13].map(timestamp));
-  assert.deepEqual(times(windgramHours(profile, { ...options, launch: null })), [11, 12, 13].map(timestamp));
-});
-
-test("ensemble median defines the window instead of optimistic upper members", () => {
-  const profile = profileAt();
-  const quantiles = (p50: number) => ({ members: 21, p10: 900, p25: 1000, p50, p75: 2200, p90: 2600 });
-  for (const hour of profile.hours) publish(hour, quantiles(1100), 2);
-  publish(profile.hours[6], quantiles(1600), 2); // 12 UTC
-  publish(profile.hours[7], quantiles(1700), 2); // 13 UTC
-  assert.deepEqual(times(windgramHours(profile, options)), range(11, 14).map(timestamp));
-});
-
-test("unknown lift at any supplied hour retains the full range", () => {
-  const profile = profileAt();
-  soaring(profile, [12, 13, 14]);
-  publish(profile.hours[0], null, null);
-  assert.deepEqual(times(windgramHours(profile, options)), times(profile.hours));
-});
-
-test("a known below-launch ceiling remains nonusable when thermal strength is missing", () => {
-  const profile = profileAt();
-  soaring(profile, [12, 13, 14]);
-  publish(profile.hours[0], 1100, null);
-  assert.deepEqual(times(windgramHours(profile, options)), range(11, 15).map(timestamp));
-});
-
-test("known usable ceiling can define the window when thermal strength is missing", () => {
-  const profile = profileAt();
-  publish(profile.hours[6], 1800, null);
-  assert.deepEqual(times(windgramHours(profile, options)), [11, 12, 13].map(timestamp));
-});
-
-test("a day of zero thermal strength and null lift ceilings keeps every supplied hour", () => {
-  const profile = profileAt();
-  assert.deepEqual(windgramHours(profile, options), profile.hours);
-});
-
-test("desktop and Full profile preserve the supplied day", () => {
-  const profile = profileAt();
-  soaring(profile, [12, 13, 14]);
-  assert.deepEqual(windgramHours(profile, { ...options, compact: false }), profile.hours);
-  assert.deepEqual(windgramHours(profile, { ...options, compact: undefined }), profile.hours);
-  assert.deepEqual(windgramHours(profile, { ...options, heightRange: "full" }), profile.hours);
-});
-
-test("explicit hour selection is applied before cropping and supplies no outside padding", () => {
-  const profile = profileAt();
-  soaring(profile, [10, 11, 12, 13, 14]);
-  const selected = profile.hours.filter(hour => [12, 13, 14, 15, 16, 17].some(time => hour.validAt === timestamp(time)));
-  assert.deepEqual(times(windgramHours(profile, { ...options, hours: selected })), range(12, 15).map(timestamp));
+  const hours = profile.hours.filter(hour => hour.validAt >= timestamp("2026-09-30", 18));
+  assert.deepEqual(times(windgramHours(profile, { ...options, hours })), expected("2026-09-30", 18, 26));
   assert.deepEqual(windgramHours(profile, { ...options, hours: [] }), []);
 });
 
-test("local day filtering precedes cropping across a UTC date boundary", () => {
-  const profile = profileAt(range(0, 32));
-  soaring(profile, [26, 27, 28]);
-  publish(profile.hours[1], null, null);
-  publish(profile.hours[31], null, null);
-  const hours = { dateKey: "2000-01-01", timeZone: "America/New_York" };
-  assert.deepEqual(times(windgramHours(profile, { ...options, hours })), [25, 26, 27, 28].map(timestamp));
-  assert.deepEqual(times(windgramHours(profile, { ...options, hours, heightRange: "full" })), range(5, 28).map(timestamp));
+test("local date selection crosses UTC midnight and its timezone takes precedence", () => {
+  const profile = profileAt("2026-09-30", range(0, 53));
+  const hours = { dateKey: "2026-09-30", timeZone: "America/Boise" };
+  const selected = { ...options, timeZone: "Etc/UTC", hours };
+  assert.deepEqual(times(windgramHours(profile, selected)), expected("2026-09-30", 13, 26));
+  assert.deepEqual(times(windgramHours(profile, { ...selected, heightRange: "full" })), expected("2026-09-30", 6, 29));
 });
 
-test("published V2 nulls never borrow the legacy lift ceiling", () => {
-  const profile = profileAt();
-  soaring(profile, [12, 13]);
-  publish(profile.hours[0], null, 2);
-  assert.deepEqual(times(windgramHours(profile, options)), range(11, 14).map(timestamp));
-  publish(profile.hours[0], null, null);
-  assert.deepEqual(windgramHours(profile, options), profile.hours, "unknown V2 retains context despite complete legacy fields");
+test("DST transition days use their local calendar date", () => {
+  // March 8 has 23 hours (07Z–next 06Z); November 1 has 25 (06Z–next 07Z).
+  for (const [date, start, end, last] of [["2026-03-08", 7, 29, 26], ["2026-11-01", 6, 30, 25]] as const) {
+    const profile = profileAt(date, range(start, end));
+    assert.deepEqual(times(windgramHours(profile, options)), expected(date, 14, last));
+  }
 });
 
-test("windowing keeps source hours and diagnostics unchanged", () => {
+test("multi-date regional profiles retain a contiguous interval including overnight hours", () => {
+  const profile = profileAt("2026-09-30", range(6, 53));
+  assert.deepEqual(times(windgramHours(profile, options)), expected("2026-09-30", 13, 50));
+});
+
+test("desktop and Full profile retain every supplied hour", () => {
   const profile = profileAt();
-  soaring(profile, [12, 13, 14]);
+  for (const overrides of [{ compact: false }, { compact: undefined }, { heightRange: "full" as const }]) {
+    assert.deepEqual(windgramHours(profile, { ...options, ...overrides }), profile.hours);
+  }
+});
+
+test("unavailable solar events and invalid locations preserve supplied hours", () => {
+  for (const coords of [
+    { latitude: NaN, longitude: -115.98076 },
+    { latitude: 43.62332, longitude: NaN },
+    { latitude: 91, longitude: 0 },
+    { latitude: 0, longitude: 181 },
+    { latitude: undefined, longitude: undefined },
+  ]) {
+    const profile = profileAt();
+    Object.assign(profile.site, coords);
+    assert.deepEqual(windgramHours(profile, options), profile.hours);
+  }
+  for (const date of ["2026-06-21", "2026-12-21"]) {
+    const profile = profileAt(date, range(0, 23));
+    Object.assign(profile.site, { latitude: 80, longitude: 0 });
+    assert.deepEqual(windgramHours(profile, { ...options, timeZone: "Etc/UTC" }), profile.hours, "polar day/night");
+  }
+});
+
+test("daylight clipping is idempotent and preserves source hours and diagnostics", () => {
+  const profile = profileAt();
   const before = structuredClone(profile);
   const selected = windgramHours(profile, options);
   assert.deepEqual(profile, before);
   assert.ok(selected.length < profile.hours.length);
   for (const hour of selected) assert.equal(hour, profile.hours.find(source => source.validAt === hour.validAt));
+  assert.deepEqual(windgramHours(profile, { ...options, hours: selected }), selected);
+  assert.deepEqual(times(buildWindgramView(profile, { ...options, hours: selected }).hours), times(selected));
 });

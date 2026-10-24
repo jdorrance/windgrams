@@ -176,13 +176,16 @@ async function loadManifest(slug: string) {
   if (manifest && manifest.sites.some((s) => s.slug === launch.slug)) manifests.set(slug, manifest);
 }
 
-/** True when the model's published run has hours inside the pilots' day for `dateKey`. */
+/** Published coverage of the selected day; mobile includes early dawn and full-day view. */
 function covers(slug: string, dateKey: string) {
   const m = manifests.get(slug);
   if (!m) return false;
   const reference = Date.parse(m.referenceTime);
   const first = reference + m.firstForecastHour * HOUR_MS;
   const last = reference + m.lastForecastHour * HOUR_MS;
+  if (windgramViewport().compact) {
+    return first < localInstantMs(dateKey, 24, tz) && last >= localInstantMs(dateKey, 0, tz);
+  }
   return first <= localInstantMs(dateKey, DAY_END, tz) && last >= localInstantMs(dateKey, DAY_START, tz);
 }
 
@@ -244,10 +247,11 @@ function renderModelSelect(available: string[]) {
 $<HTMLSelectElement>("model-select").addEventListener("change", (event) => { manualModel = true; void selectModel((event.target as HTMLSelectElement).value); });
 
 function selectedWindgramHours(profile: SiteForecast) {
+  const { compact } = windgramViewport();
   return windgramHours(profile, {
     timeZone: tz,
-    hours: profile.hours.filter(hour => inDay(hour.validAt, day)),
-    compact: windgramViewport().compact,
+    hours: compact ? { dateKey: day, timeZone: tz } : profile.hours.filter(hour => inDay(hour.validAt, day)),
+    compact,
     heightRange: fullWindgramProfile ? "full" : "soaring",
     launch: launchElevationM != null ? { elevationM: launchElevationM } : null,
   });
@@ -715,7 +719,7 @@ window.addEventListener("resize", () => {
   if (next === viewport) return;
   viewport = next;
   clearTimeout(resizeTimer);
-  resizeTimer = window.setTimeout(() => { renderSkewT(); renderMeteogram(); }, 150);
+  resizeTimer = window.setTimeout(() => { renderDayTabs(); renderSkewT(); renderMeteogram(); }, 150);
 });
 $("windgram-full-profile").addEventListener("click", () => {
   fullWindgramProfile = !fullWindgramProfile;

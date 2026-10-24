@@ -1,9 +1,10 @@
 import { convertQuantity, formatQuantity, getUnitSystem } from "./units.ts";
 import { publishedEffectiveCloudLimit, publishedLift, publishedWxtoflyLiftTop } from "./published-lift.ts";
 import type { SiteForecast } from "@azohra/meteo.briefing/contract";
-import { componentsToWind, lapseRateCPer1000Ft, localDateKey, relativeHumidityPercent, windToComponents } from "@azohra/meteo.briefing/derive";
+import { componentsToWind, lapseRateCPer1000Ft, localDateKey, localInstantMs, relativeHumidityPercent, windToComponents } from "@azohra/meteo.briefing/derive";
 import { buildMeteogramScene, type FieldNode, type HourSampling, type MeteogramOptions, type MetricStrip } from "@azohra/meteo.briefing/meteogram";
 import { WINDGRAM_STABILITY } from "./windgram-stability.ts";
+import { sunriseSunset } from "./sun.ts";
 
 export interface HeightAnchor { heightM: number; y: number; pressureHpa: number | null }
 export interface WindgramBarb {
@@ -43,7 +44,7 @@ export interface WindgramView {
 }
 export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "launch" | "launchWindows" | "capabilities" | "widthPx"> & {
   compact?: boolean;
-  /** Compact charts focus on soaring hours and heights; desktop keeps the full profile. */
+  /** Compact charts show daylight and soaring heights; desktop keeps the full profile. */
   heightRange?: "soaring" | "full";
   /** Available viewport height; compact charts reserve room for page controls. */
   heightPx?: number;
@@ -598,9 +599,9 @@ function moistLayers(nodes: readonly FieldNode[], threshold: number) {
   return layers;
 }
 
-/** First-to-last usable thermal lift, with an hour of context on each side.
- * Keep actual bracketing samples for coarse forecasts and retain lulls inside
- * the window. Unknown diagnostics and days without a window retain all hours.
+/** Sunrise through sunset, bracketed by available forecast samples.
+ * A multi-day profile stays contiguous so its controls retain their time indices.
+ * Polar days/nights and forecasts outside daylight retain the supplied hours.
  */
 export function windgramHours(profile: SiteForecast, options: WindgramOptions): ProfileHour[] {
   const window = options.hours;
@@ -608,13 +609,21 @@ export function windgramHours(profile: SiteForecast, options: WindgramOptions): 
   const dayWindow = window && !Array.isArray(window) && "dateKey" in window ? window : null;
   const hours = profile.hours.filter((h) => (!selected || selected.has(h.validAt)) && (!dayWindow || localDateKey(h.validAt, dayWindow.timeZone) === dayWindow.dateKey));
   if (!options.compact || options.heightRange === "full" || hours.length < 2) return hours;
-  const floorM = Math.max(profile.site.modelElevationM, scalar(options.launch?.elevationM) ?? profile.site.modelElevationM);
   const times = hours.map(hour => Date.parse(hour.validAt));
-  const lifts = hours.map(hour => publishedLift(hour));
-  if (times.some(time => !Number.isFinite(time)) || lifts.some(lift => scalar(lift.usableLiftTopM) === null && scalar(lift.thermalVelocityMps) === null)) return hours;
-  const usable = lifts.flatMap((lift, i) => (scalar(lift.usableLiftTopM) ?? -Infinity) > floorM ? [i] : []);
-  if (!usable.length) return hours;
-  const start = times[usable[0]] - 3_600_000, end = times[usable.at(-1)!] + 3_600_000;
+  const { latitude, longitude } = profile.site;
+  if (times.some(time => !Number.isFinite(time)) || !Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return hours;
+  const timeZone = dayWindow?.timeZone ?? options.timeZone;
+  const daylight = (validAt: string) => {
+    const dateKey = localDateKey(validAt, timeZone);
+    // Resolve both midnights locally: DST days can have 23 or 25 hours.
+    return sunriseSunset(localInstantMs(dateKey, 0, timeZone), localInstantMs(dateKey, 24, timeZone), latitude, longitude);
+  };
+  const firstDay = daylight(hours[0].validAt);
+  const lastDay = localDateKey(hours[0].validAt, timeZone) === localDateKey(hours.at(-1)!.validAt, timeZone)
+    ? firstDay : daylight(hours.at(-1)!.validAt);
+  if (!firstDay || !lastDay) return hours;
+  const start = firstDay.sunrise, end = lastDay.sunset;
+  if (times.at(-1)! < start || times[0] > end) return hours;
   const first = Math.max(0, times.findLastIndex(time => time <= start));
   const last = times.findIndex(time => time >= end);
   return hours.slice(first, last < 0 ? hours.length : last + 1);

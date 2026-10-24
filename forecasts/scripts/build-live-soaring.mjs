@@ -10,6 +10,7 @@ import { parseArgs } from 'node:util';
 import { capture } from '../soaring/capture.mjs';
 import { replay } from '../soaring/replay.mjs';
 import { modelFor } from '../soaring/common.mjs';
+import { SOARING_CONTRACT_VERSION } from '../soaring/science.mjs';
 import { greatCircleDistanceKm } from '@azohra/meteo.grib';
 import { isPublishedCase } from './merge-soaring-regions.mjs';
 
@@ -19,11 +20,11 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export function loadRegionConfiguration(soaringV1Root) {
   const defaults = JSON.parse(readFileSync(join(ROOT, 'soaring', 'regions.json'), 'utf8'));
   const publishedPath = join(soaringV1Root, 'regions.json');
-  if (!existsSync(publishedPath)) return defaults;
+  if (!existsSync(publishedPath)) return { ...defaults, soaringContractVersion: SOARING_CONTRACT_VERSION };
   const published = JSON.parse(readFileSync(publishedPath, 'utf8'));
   const regions = new Map(defaults.regions.map(region => [region.id, region]));
   for (const region of published.regions ?? []) regions.set(region.id, { ...regions.get(region.id), ...region });
-  return { ...defaults, ...published, regions: [...regions.values()] };
+  return { ...defaults, ...published, soaringContractVersion: SOARING_CONTRACT_VERSION, regions: [...regions.values()] };
 }
 
 export function initialRegionSidecars(region) {
@@ -44,7 +45,12 @@ export function regionPublication(regionsDoc, model, soaringV1Root) {
     if (published.expandedCaseId && !isPublishedCase(soaringV1Root, published.expandedCaseId)) delete published.expandedCaseId;
     regions.push(published);
   }
-  return { ...regionsDoc, generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'), regions };
+  return {
+    ...regionsDoc,
+    soaringContractVersion: SOARING_CONTRACT_VERSION,
+    generatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    regions,
+  };
 }
 
 export function validateNativeRegions(dataRoot, model, referenceTime) {
@@ -125,7 +131,8 @@ export function buildLiveCaseSpec(templateCase, referenceTimeIso, model = 'hrrr-
 }
 
 /**
- * Checks whether `data/soaring/v1/<caseId>` already points to a valid bundle for `referenceTimeIso`.
+ * Checks whether `data/soaring/v1/<caseId>` already points to a valid bundle for `referenceTimeIso`
+ * built under the current `SOARING_CONTRACT_VERSION`.
  */
 export function isRegionBundleCurrent(soaringV1Root, caseId, referenceTimeIso) {
   try {
@@ -137,6 +144,7 @@ export function isRegionBundleCurrent(soaringV1Root, caseId, referenceTimeIso) {
     if (!existsSync(manifestPath)) return false;
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     if (manifest?.case?.referenceTime !== referenceTimeIso || manifest.case.id !== caseId) return false;
+    if ((manifest.soaringContractVersion ?? '2.0.0') !== SOARING_CONTRACT_VERSION) return false;
     if (sha256(readFileSync(manifestPath)) !== pointer.manifestSha256) return false;
     verifyBundle(join(soaringV1Root, caseId, pointer.bundle), manifest);
     return true;
@@ -152,6 +160,7 @@ export function isRegionBundleCurrent(soaringV1Root, caseId, referenceTimeIso) {
 export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBundleDir, previousSidecars) {
   const manifestPath = join(newBundleDir, 'manifest.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  manifest.soaringContractVersion ??= SOARING_CONTRACT_VERSION;
   const validSet = new Set((manifest.hours ?? []).map(h => h.validAt));
 
   const sameGeometry = previousSidecars.gridSha256 === manifest.files['grid.geojson'];
@@ -209,20 +218,46 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
           modelElevationM: mdoc.site?.modelElevationM ?? mdoc.site?.gridElevationM ?? mdoc.grid?.elevationM ?? null,
           hours: matchedHours.map(mh => {
             if (mslug === 'geps') {
+              const s = mh.soaring ?? null;
+              const d = mh.derived ?? {};
+              const rawWindDir = mh.surface?.windDirectionDeg;
+              const windDirectionDeg = typeof rawWindDir === 'number' && Number.isFinite(rawWindDir)
+                ? rawWindDir
+                : (rawWindDir?.p50 ?? null);
+              const spreadOf = dist => dist && (dist.p10 != null || dist.p90 != null)
+                ? { p10: dist.p10 ?? null, p90: dist.p90 ?? null }
+                : null;
+              const effCloudDist = s?.effectiveCloudLimitM ?? d.cloudBaseM;
               return {
                 validAt: mh.validAt,
                 tempC: mh.surface?.temperatureC?.p50 ?? null,
+                tempSpreadC: spreadOf(mh.surface?.temperatureC),
                 dewPointC: mh.surface?.dewPointC?.p50 ?? null,
                 windSpeedMps: mh.surface?.windSpeedMps?.p50 ?? null,
-                windDirectionDeg: mh.surface?.windDirectionDeg?.p50 ?? null,
+                windSpeedSpreadMps: spreadOf(mh.surface?.windSpeedMps),
+                windDirectionDeg,
                 windGustMps: mh.surface?.windGustMps?.p50 ?? null,
                 cloudCoverPct: mh.surface?.cloudCoverPercent?.p50 ?? null,
                 pblHeightM: null,
                 sensibleHeatWm2: mh.surface?.sensibleHeatFluxWm2?.p50 ?? null,
-                wstarMps: mh.derived?.thermalVelocityMps?.p50 ?? null,
-                usableLiftTopM: mh.derived?.usableLiftTopM?.p50 ?? null,
-                blTopM: mh.derived?.boundaryLayerTopM?.p50 ?? null,
-                cloudBaseM: mh.derived?.cloudBaseM?.p50 ?? null,
+                // Preserve legacy GEPS member-derived diagnostics distinctly from V2 fields
+                wstarMps: d.thermalVelocityMps?.p50 ?? null,
+                wstarLegacySpreadMps: spreadOf(d.thermalVelocityMps),
+                usableLiftTopM: d.usableLiftTopM?.p50 ?? null,
+                usableLiftLegacySpreadM: spreadOf(d.usableLiftTopM),
+                blTopM: d.boundaryLayerTopM?.p50 ?? null,
+                blTopLegacySpreadM: spreadOf(d.boundaryLayerTopM),
+                // Populate V2 fields only when member-level V2 diagnostics were derived
+                wstarV2Mps: s?.thermalVelocityV2Mps?.p50 ?? null,
+                wstarSpreadMps: spreadOf(s?.thermalVelocityV2Mps),
+                usableLiftTopV2M: s?.usableLiftTopV2M?.p50 ?? null,
+                usableLiftSpreadM: spreadOf(s?.usableLiftTopV2M),
+                resolvedThermalTopM: s?.resolvedThermalTopM?.p50 ?? null,
+                thermalTopSpreadM: spreadOf(s?.resolvedThermalTopM),
+                surfaceLclM: s?.surfaceLclM?.p50 ?? null,
+                effectiveCloudLimitM: effCloudDist?.p50 ?? null,
+                cloudLimitSpreadM: spreadOf(effCloudDist),
+                cloudBaseM: d.cloudBaseM?.p50 ?? null,
               };
             }
             if (mslug === 'ecmwf' || mslug === 'nws') {
@@ -239,6 +274,8 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
                 wstarMps: null,
                 usableLiftTopM: null,
                 blTopM: mh.soaring?.modelBlTopM ?? null,
+                surfaceLclM: mh.soaring?.surfaceLclM ?? null,
+                effectiveCloudLimitM: null,
                 cloudBaseM: mh.soaring?.surfaceLclM ?? null,
               };
             }
@@ -257,10 +294,12 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
               usableLiftTopM: mh.derived?.usableLiftTopM ?? null,
               ...(Object.hasOwn(s, 'thermalVelocityV2Mps') ? { wstarV2Mps: s.thermalVelocityV2Mps ?? null, usableLiftTopV2M: s.usableLiftTopV2M ?? null, resolvedThermalTopM: s.resolvedThermalTopM ?? null } : {}),
               hcritWxtoflyM: s.hcritWxtoflyM ?? null,
+              surfaceLclM: s.surfaceLclM ?? null,
+              effectiveCloudLimitM: s.effectiveCloudLimitM ?? mh.derived?.cloudBaseM ?? null,
               mixedLayerLclM: s.mixedLayerLclM ?? null,
               experimentalTerrain: s.experimental?.terrainAdjustment ?? null,
               blTopM: mh.derived?.boundaryLayerTopM ?? null,
-              cloudBaseM: mh.derived?.cloudBaseM ?? null,
+              cloudBaseM: s.surfaceLclM ?? mh.derived?.cloudBaseM ?? null,
             };
           }),
         };

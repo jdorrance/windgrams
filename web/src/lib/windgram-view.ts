@@ -1,8 +1,8 @@
 import { convertQuantity, formatQuantity, getUnitSystem } from "./units.ts";
-import { publishedLift, publishedWxtoflyLiftTop } from "./published-lift.ts";
+import { publishedEffectiveCloudLimit, publishedLift, publishedWxtoflyLiftTop } from "./published-lift.ts";
 import type { SiteForecast } from "@azohra/meteo.briefing/contract";
 import { componentsToWind, lapseRateCPer1000Ft, localDateKey, relativeHumidityPercent, windToComponents } from "@azohra/meteo.briefing/derive";
-import { buildMeteogramScene, sampledFieldPaths, type FieldNode, type HourSampling, type MeteogramOptions, type MetricStrip } from "@azohra/meteo.briefing/meteogram";
+import { buildMeteogramScene, type FieldNode, type HourSampling, type MeteogramOptions, type MetricStrip } from "@azohra/meteo.briefing/meteogram";
 import { WINDGRAM_STABILITY } from "./windgram-stability.ts";
 
 export interface HeightAnchor { heightM: number; y: number; pressureHpa: number | null }
@@ -85,7 +85,12 @@ export function sampleHeight(nodes: readonly FieldNode[], heightM: number): numb
   if (!nodes.length || heightM < nodes[0].altitudeM || heightM > nodes[nodes.length - 1].altitudeM) return null;
   for (let i = 0; i < nodes.length; i++) {
     const a = nodes[i];
-    if (Math.abs(a.altitudeM - heightM) < 0.00001) return Number.isFinite(a.value) ? a.value : null;
+    if (Math.abs(a.altitudeM - heightM) < 0.00001) {
+      if (Number.isFinite(a.value)) return a.value;
+      const next = nodes[i + 1];
+      if (next && Math.abs(next.altitudeM - heightM) < 0.00001 && Number.isFinite(next.value)) return next.value;
+      return null;
+    }
     const b = nodes[i + 1];
     if (b && heightM > a.altitudeM && heightM < b.altitudeM) {
       if (!Number.isFinite(a.value) || !Number.isFinite(b.value)) return null;
@@ -152,12 +157,19 @@ function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
     return s === null || d === null ? { uMps: NaN, vMps: NaN } : windToComponents(s, d);
   };
   const winds = [wind(hour.surface.windSpeedMps, hour.surface.windDirectionDeg), ...levels.map((l) => wind(l.windSpeedMps, l.windDirectionDeg))];
-  const lapseCPer1000Ft = temperatureC.map((p, i) => {
-    const a = temperatureC[Math.min(i, temperatureC.length - 2)], b = temperatureC[Math.min(i + 1, temperatureC.length - 1)];
-    return { altitudeM: p.altitudeM, value: a && b && Number.isFinite(a.value) && Number.isFinite(b.value)
-      ? lapseRateCPer1000Ft({ heightM: a.altitudeM, temperatureC: a.value }, { heightM: b.altitudeM, temperatureC: b.value }) ?? NaN : NaN };
+  // Represent temperature gradients as interval quantities, constant within each source interval.
+  // Use a tiny step epsilon before interior upper endpoints so interval transitions stay sharp.
+  const lastIdx = temperatureC.length - 2;
+  const lapseCPer1000Ft = temperatureC.slice(0, -1).flatMap((a, i) => {
+    const b = temperatureC[i + 1];
+    if (!b) return [];
+    const value = Number.isFinite(a.value) && Number.isFinite(b.value)
+      ? lapseRateCPer1000Ft({ heightM: a.altitudeM, temperatureC: a.value }, { heightM: b.altitudeM, temperatureC: b.value }) ?? NaN : NaN;
+    const upperAlt = i < lastIdx && b.altitudeM - a.altitudeM > 0.02 ? b.altitudeM - 0.01 : b.altitudeM;
+    return [{ altitudeM: a.altitudeM, value }, { altitudeM: upperAlt, value }];
   });
-  const usable = scalar(publishedLift(hour).usableLiftTopM), base = scalar(publishedLift(hour).cloudBaseM);
+  const usable = scalar(publishedLift(hour).usableLiftTopM);
+  const effectiveLimit = scalar(publishedEffectiveCloudLimit(hour));
   return {
     validAt: hour.validAt, temperatureC, dewPointC, lapseCPer1000Ft,
     relativeHumidityPercent: temperatureC.map((p, i) => ({ altitudeM: p.altitudeM, value: Number.isFinite(p.value) && Number.isFinite(dewPointC[i].value) ? relativeHumidityPercent(p.value, dewPointC[i].value) : NaN })),
@@ -166,9 +178,252 @@ function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
     verticalVelocityPaS: levels.map((l) => ({ altitudeM: scalar(l.heightM)!, value: scalar(l.verticalVelocityPaS) ?? NaN })),
     thermalIndexC: [], smoke: hour.smoke && finite(scalar(hour.smoke.surfaceUgm3)) ? { surfaceUgm3: scalar(hour.smoke.surfaceUgm3)!, aot: scalar(hour.smoke.aot) } : null,
     observation: null, aotObservation: null,
-    cloudCapped: usable === null || base === null ? null : usable >= base - 1,
+    cloudCapped: usable === null || effectiveLimit === null ? null : usable >= effectiveLimit - 1,
     capeCapped: scalar(hour.surface.capeJkg) === null || scalar(hour.surface.cinJkg) === null ? null : scalar(hour.surface.cinJkg)! <= -50,
   };
+}
+
+/**
+ * Gap-preserving classified field path generator for Windgram stability bands.
+ * Never bridges across missing vertical intervals (NaN nodes) and never blends
+ * a missing interval from one hour into an adjacent hour's valid column.
+ */
+function buildStabilityFieldPaths(args: {
+  nodesByHour: readonly (readonly FieldNode[])[];
+  gaps: ReadonlySet<number>;
+  floorM: number;
+  topM: number;
+  plotLeft: number;
+  plotTop: number;
+  plotBottom: number;
+  plotWidth: number;
+  banding: { breakpoints: readonly number[]; classNames: readonly string[] };
+}): Record<string, string> {
+  const hourCount = args.nodesByHour.length;
+  if (hourCount === 0) return {};
+  const FIELD_COLUMNS_PER_HOUR = 24;
+  const FIELD_ROW_HEIGHT = 1.5;
+
+  const valueAt = (hourIndex: number, altitudeM: number): number | null => {
+    const nodes = args.nodesByHour[hourIndex];
+    if (!nodes || nodes.length === 0 || altitudeM < nodes[0].altitudeM) return null;
+    const clampedAlt = Math.min(altitudeM, nodes[nodes.length - 1].altitudeM);
+    for (let index = 0; index < nodes.length - 1; index += 1) {
+      const lower = nodes[index];
+      const upper = nodes[index + 1];
+      if (clampedAlt > upper.altitudeM) continue;
+      if (!Number.isFinite(lower.value) || !Number.isFinite(upper.value)) return null;
+      const span = upper.altitudeM - lower.altitudeM;
+      if (span <= 0) return lower.value;
+      const fraction = (clampedAlt - lower.altitudeM) / Math.max(0.001, span);
+      return lower.value + (upper.value - lower.value) * fraction;
+    }
+    const lastVal = nodes[nodes.length - 1]?.value;
+    return typeof lastVal === "number" && Number.isFinite(lastVal) ? lastVal : null;
+  };
+
+  const valueAcrossTime = (timePosition: number, altitudeM: number): number | null => {
+    const lowerIndex = Math.floor(timePosition);
+    const upperIndex = Math.min(hourCount - 1, Math.ceil(timePosition));
+    const lower = valueAt(lowerIndex, altitudeM);
+    const upper = valueAt(upperIndex, altitudeM);
+    if (lowerIndex === upperIndex) return lower;
+    if (args.gaps.has(upperIndex)) {
+      return timePosition < lowerIndex + 0.5 ? lower : upper;
+    }
+    if (lower === null && upper === null) return null;
+    if (lower === null) return timePosition >= lowerIndex + 0.5 ? upper : null;
+    if (upper === null) return timePosition <= lowerIndex + 0.5 ? lower : null;
+    return lower + (upper - lower) * (timePosition - lowerIndex);
+  };
+
+  const columns = Math.max(1, hourCount * FIELD_COLUMNS_PER_HOUR);
+  const plotHeight = args.plotBottom - args.plotTop;
+  const rows = Math.max(1, Math.ceil(plotHeight / FIELD_ROW_HEIGHT));
+  const values: (number | null)[][] = [];
+  for (let row = 0; row <= rows; row += 1) {
+    const altitudeM = args.topM - (row / rows) * (args.topM - args.floorM);
+    const rowValues: (number | null)[] = [];
+    for (let column = 0; column <= columns; column += 1) {
+      const timePosition = Math.min(hourCount - 1, Math.max(0, (column / columns) * hourCount - 0.5));
+      rowValues.push(valueAcrossTime(timePosition, altitudeM));
+    }
+    values.push(rowValues);
+  }
+
+  const xOf = (column: number) => args.plotLeft + (column / columns) * args.plotWidth;
+  const yOf = (row: number) => args.plotTop + (row / rows) * plotHeight;
+  const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+  const shortNum = (v: number) => Number(v.toFixed(1));
+
+  let centrePredicate: (mean: number, allValid: boolean) => boolean = () => false;
+  const rings = (inside: (r: number, c: number) => boolean, fraction: (a: number | null, b: number | null) => number) => {
+    type Seg = { from: [number, number]; to: [number, number]; used: boolean };
+    const allSegments: Seg[] = [];
+    const byStart = new Map<string, Seg[]>();
+    const key = (point: [number, number]) => `${point[0].toFixed(3)},${point[1].toFixed(3)}`;
+    const addSegment = (from: [number, number], to: [number, number]) => {
+      const fromKey = key(from);
+      if (fromKey === key(to)) return;
+      const segment: Seg = { from, to, used: false };
+      allSegments.push(segment);
+      const queue = byStart.get(fromKey);
+      if (queue) queue.push(segment);
+      else byStart.set(fromKey, [segment]);
+    };
+    const insideAt = (r: number, c: number) => r >= 0 && r <= rows && c >= 0 && c <= columns && inside(r, c);
+    const valAt = (r: number, c: number) => (r >= 0 && r <= rows && c >= 0 && c <= columns ? values[r][c] : null);
+    const clampX = (x: number) => Math.min(args.plotLeft + args.plotWidth, Math.max(args.plotLeft, x));
+    const clampY = (y: number) => Math.min(args.plotBottom, Math.max(args.plotTop, y));
+
+    const saddleCentreInside = (r: number, c: number) => {
+      const corners = [valAt(r, c), valAt(r, c + 1), valAt(r + 1, c + 1), valAt(r + 1, c)].filter((v): v is number => v !== null);
+      if (corners.length === 0) return false;
+      const mean = corners.reduce((sum, v) => sum + v, 0) / corners.length;
+      return centrePredicate(mean, corners.length === 4);
+    };
+
+    for (let r = -1; r <= rows; r += 1) {
+      for (let c = -1; c <= columns; c += 1) {
+        const tl = insideAt(r, c);
+        const tr = insideAt(r, c + 1);
+        const br = insideAt(r + 1, c + 1);
+        const bl = insideAt(r + 1, c);
+        const caseIndex = (tl ? 8 : 0) | (tr ? 4 : 0) | (br ? 2 : 0) | (bl ? 1 : 0);
+        if (caseIndex === 0 || caseIndex === 15) continue;
+        const vTL = valAt(r, c);
+        const vTR = valAt(r, c + 1);
+        const vBR = valAt(r + 1, c + 1);
+        const vBL = valAt(r + 1, c);
+        const topPt: [number, number] = [clampX(xOf(c + fraction(vTL, vTR))), clampY(yOf(r))];
+        const bottomPt: [number, number] = [clampX(xOf(c + fraction(vBL, vBR))), clampY(yOf(r + 1))];
+        const leftPt: [number, number] = [clampX(xOf(c)), clampY(yOf(r + fraction(vTL, vBL)))];
+        const rightPt: [number, number] = [clampX(xOf(c + 1)), clampY(yOf(r + fraction(vTR, vBR)))];
+        switch (caseIndex) {
+          case 1: addSegment(leftPt, bottomPt); break;
+          case 2: addSegment(bottomPt, rightPt); break;
+          case 3: addSegment(leftPt, rightPt); break;
+          case 4: addSegment(rightPt, topPt); break;
+          case 6: addSegment(bottomPt, topPt); break;
+          case 7: addSegment(leftPt, topPt); break;
+          case 8: addSegment(topPt, leftPt); break;
+          case 9: addSegment(topPt, bottomPt); break;
+          case 11: addSegment(topPt, rightPt); break;
+          case 12: addSegment(rightPt, leftPt); break;
+          case 13: addSegment(rightPt, bottomPt); break;
+          case 14: addSegment(bottomPt, leftPt); break;
+          case 5:
+            if (saddleCentreInside(r, c)) { addSegment(leftPt, topPt); addSegment(rightPt, bottomPt); }
+            else { addSegment(leftPt, bottomPt); addSegment(rightPt, topPt); }
+            break;
+          case 10:
+            if (saddleCentreInside(r, c)) { addSegment(topPt, rightPt); addSegment(bottomPt, leftPt); }
+            else { addSegment(topPt, leftPt); addSegment(bottomPt, rightPt); }
+            break;
+        }
+      }
+    }
+    const takeFrom = (pointKey: string) => {
+      const queue = byStart.get(pointKey);
+      if (!queue) return null;
+      while (queue.length > 0) {
+        const candidate = queue[queue.length - 1];
+        if (!candidate.used) return candidate;
+        queue.pop();
+      }
+      return null;
+    };
+    const out: [number, number][][] = [];
+    for (const first of allSegments) {
+      if (first.used) continue;
+      const ring: [number, number][] = [first.from];
+      let current: Seg | null = first;
+      while (current) {
+        current.used = true;
+        ring.push(current.to);
+        current = takeFrom(key(current.to));
+      }
+      if (ring.length >= 4) out.push(ring);
+    }
+    return out;
+  };
+
+  const thresholdRings = (t: number) => {
+    centrePredicate = (mean, allValid) => allValid && mean >= t;
+    return rings(
+      (r, c) => {
+        const v = values[r][c];
+        return v !== null && v >= t;
+      },
+      (a, b) => {
+        if (a === null || b === null || a === b) return 0.5;
+        return clamp01((t - a) / (b - a));
+      },
+    );
+  };
+  const domainRings = () => {
+    centrePredicate = (_mean, allValid) => allValid;
+    return rings((r, c) => values[r][c] !== null, () => 0.5);
+  };
+
+  const ringCache = new Map<number, [number, number][][]>();
+  const ringsAt = (t: number) => {
+    let cached = ringCache.get(t);
+    if (!cached) {
+      cached = thresholdRings(t);
+      ringCache.set(t, cached);
+    }
+    return cached;
+  };
+
+  const toPath = (ringSets: [number, number][][][]) => {
+    const parts: string[] = [];
+    for (const set of ringSets) {
+      for (const ring of set) {
+        const rounded: [number, number][] = [];
+        for (const point of ring) {
+          const x = shortNum(point[0]);
+          const y = shortNum(point[1]);
+          const last = rounded[rounded.length - 1];
+          if (last && last[0] === x && last[1] === y) continue;
+          const beforeLast = rounded[rounded.length - 2];
+          if (last && beforeLast) {
+            const cross = (last[0] - beforeLast[0]) * (y - beforeLast[1]) - (last[1] - beforeLast[1]) * (x - beforeLast[0]);
+            if (Math.abs(cross) < 0.35) {
+              last[0] = x;
+              last[1] = y;
+              continue;
+            }
+          }
+          rounded.push([x, y]);
+        }
+        if (rounded.length >= 3) {
+          parts.push(rounded.map(([x, y], idx) => `${idx === 0 ? "M" : "L"}${x} ${y}`).join("") + "Z");
+        }
+      }
+    }
+    return parts.join("");
+  };
+
+  const result: Record<string, string> = {};
+  const { breakpoints, classNames } = args.banding;
+  for (let interval = 0; interval < classNames.length; interval += 1) {
+    const className = classNames[interval];
+    if (!className) continue;
+    const lower = interval === 0 ? null : breakpoints[interval - 1];
+    const upper = interval === classNames.length - 1 ? null : breakpoints[interval];
+    const sets: [number, number][][][] = [];
+    if (lower === null) {
+      sets.push(domainRings());
+      if (upper !== null) sets.push(ringsAt(upper));
+    } else {
+      sets.push(ringsAt(lower));
+      if (upper !== null) sets.push(ringsAt(upper));
+    }
+    const path = toPath(sets);
+    if (path !== "") result[className] = result[className] ? result[className] + path : path;
+  }
+  return result;
 }
 
 /** All crossing branches, including an inversion's second crossing. */
@@ -388,24 +643,55 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     label: `${options.launch.name ?? "Launch"} · ${formatQuantity(options.launch.elevationM, "elevation")} MSL`,
   };
 
-  // Sample in physical metres before moving nodes into display coordinates.
-  // Inserting every anchor preserves physical interpolation across scale bends.
+  // Preserve all interval nodes (including NaN missing intervals) in display coordinates
+  // so missing layers are never bridged vertically or blended into adjacent hours.
+  const gaps = timeGaps(view.hours);
   const fieldNodes = sampling.map((s) => {
-    const nodes = s.lapseCPer1000Ft;
-    if (nodes.some((n) => !Number.isFinite(n.value)) || nodes.length < 2) return [];
-    const heights = [...new Set([...nodes.map((n) => n.altitudeM), ...anchors.map((a) => a.heightM)])].sort((a, b) => a - b);
-    return heights.flatMap((z) => { const value = sampleHeight(nodes, z); return value === null ? [] : [{ altitudeM: bottom - y(z), value }]; });
+    if (!s.lapseCPer1000Ft.some((n) => Number.isFinite(n.value))) return [];
+    return s.lapseCPer1000Ft.map((n) => ({ altitudeM: bottom - y(n.altitudeM), value: n.value }));
   });
-  const fields = sampledFieldPaths({ nodesByHour: fieldNodes, floorM: 0, topM: plotHeight, plotLeft: left, plotTop: top, plotBottom: bottom, plotWidth,
-    banding: { breakpoints: WINDGRAM_STABILITY.slice(0, -1).map((c) => c.maxLapse), classNames: WINDGRAM_STABILITY.map((c) => `meteo-gram-stab-${c.className}`) } });
+  const fields = buildStabilityFieldPaths({
+    nodesByHour: fieldNodes,
+    gaps,
+    floorM: 0,
+    topM: plotHeight,
+    plotLeft: left,
+    plotTop: top,
+    plotBottom: bottom,
+    plotWidth,
+    banding: {
+      breakpoints: WINDGRAM_STABILITY.slice(0, -1).map((c) => c.maxLapse),
+      classNames: WINDGRAM_STABILITY.map((c) => `meteo-gram-stab-${c.className}`),
+    },
+  });
   view.fields = Object.entries(fields).map(([className, path]) => ({ className, path }));
   fieldNodes.forEach((nodes, i) => {
-    // The public band renderer extends its last value to the plot ceiling.
-    // Mask that extension so a truncated profile never invents stability aloft.
-    const missingHeight = nodes.length ? bottom - nodes[nodes.length - 1].altitudeM - top : plotHeight;
+    const rawNodes = sampling[i].lapseCPer1000Ft;
+    const validNodes = nodes.filter((n) => Number.isFinite(n.value));
+    const highestValidAlt = validNodes.length ? validNodes[validNodes.length - 1].altitudeM : 0;
+    // Mask any missing internal intervals below the last valid measurement.
+    let missingSpan: { baseY: number; topY: number } | null = null;
+    for (let k = 0; k + 1 < rawNodes.length; k += 2) {
+      const a = rawNodes[k], b = rawNodes[k + 1];
+      if (Number.isFinite(a.value) && Number.isFinite(b.value)) continue;
+      const dispTop = bottom - y(b.altitudeM);
+      if (dispTop > highestValidAlt + 0.001) continue;
+      const baseY = y(a.altitudeM), topY = y(b.altitudeM);
+      if (missingSpan && Math.abs(missingSpan.topY - baseY) < 0.05) missingSpan.topY = topY;
+      else {
+        if (missingSpan && missingSpan.baseY > missingSpan.topY) {
+          view.fields.push({ className: "windgram-missing", path: `M${left + i * columnWidth},${missingSpan.topY}h${columnWidth}v${missingSpan.baseY - missingSpan.topY}h-${columnWidth}Z` });
+        }
+        missingSpan = { baseY, topY };
+      }
+    }
+    if (missingSpan && missingSpan.baseY > missingSpan.topY) {
+      view.fields.push({ className: "windgram-missing", path: `M${left + i * columnWidth},${missingSpan.topY}h${columnWidth}v${missingSpan.baseY - missingSpan.topY}h-${columnWidth}Z` });
+    }
+    // Mask any truncated top extension above the highest valid node.
+    const missingHeight = validNodes.length ? bottom - highestValidAlt - top : plotHeight;
     if (missingHeight > 0) view.fields.push({ className: "windgram-missing", path: `M${left + i * columnWidth},${top}h${columnWidth}v${missingHeight}h-${columnWidth}Z` });
   });
-  const gaps = timeGaps(view.hours);
   for (const i of gaps) view.fields.push({ className: "windgram-missing", path: `M${view.hours[i - 1].x + 1},${top}h${columnWidth - 2}v${plotHeight}h-${columnWidth - 2}Z` });
   view.contours = temperatureContours(view);
 
@@ -486,7 +772,7 @@ export function readWindgram(view: WindgramView, hourIndex: number, heightM: num
   const u = sample ? sampleHeight(sample.windU, z) : null, v = sample ? sampleHeight(sample.windV, z) : null;
   const wind = u !== null && v !== null ? componentsToWind(u, v) : null;
   const cloud = view.clouds.find((c) => c.hourIndex === index && (c.kind === "potential" ? Math.abs(z - c.baseM) < 25 : z >= c.baseM && z <= c.topM));
-  return { hourIndex: index, validAt: view.hours[index]?.validAt ?? "", heightM: z, temperatureF: t === null ? null : fahrenheit(t),
-    speedKt: wind ? wind.speedMps * KT : null, directionDeg: wind && wind.speedMps >= 0.05 ? wind.directionDeg : null,
-    interpolated: !!sample && !sample.windU.some((n) => Math.abs(n.altitudeM - z) < 0.5), gustKt: view.hours[index]?.gustKt ?? null, cloud: cloud?.kind ?? null };
+  return { hourIndex: index, validAt: view.hours[index]?.validAt ?? "", heightM: z,
+    temperatureF: t === null ? null : fahrenheit(t), speedKt: wind === null ? null : wind.speedMps * KT, directionDeg: wind?.directionDeg ?? null,
+    interpolated: !sample?.temperatureC.some((n) => Math.abs(n.altitudeM - z) < 5), gustKt: view.hours[index]?.gustKt ?? null, cloud: cloud?.kind ?? null };
 }

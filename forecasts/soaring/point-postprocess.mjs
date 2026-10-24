@@ -4,7 +4,7 @@
 // 1. No synthetic pressure levels: sparse 9-level profiles remain 9 levels (`synthesizedLevels: 0`).
 // 2. Deterministic column models (`hrrr-conus`, `hrdps-continental`, `rrfs`, `rdps`, `nam`, `gfs`, `gdps`)
 //    retain their v1 `hour.derived` block unchanged for public contract compatibility and attach
-//    a versioned `hour.soaring` (`contractVersion: "2.0.0"`) block with consistent v2 thermal top,
+//    a versioned `hour.soaring` (`contractVersion: "2.1.0"`) block with consistent v2 thermal top,
 //    W* (`thermalVelocityV2Mps`), `usableLiftTopV2M`, `hcritWxtoflyM`, `dryHcritM`, physical
 //    `mixedLayerLclM` (without the legacy 0.85 multiplier), and isolated `experimental.terrainAdjustment`.
 // 3. Ensemble models (`geps`) must derive nonlinear soaring diagnostics per member BEFORE
@@ -96,7 +96,7 @@ export function deriveEnsembleSoaringDiagnostics(memberColumns, terrainM, option
 
   if (memberResults.length === 0) return null;
 
-  const heightKeys = ['resolvedThermalTopM', 'thermalTopPlus1CM', 'usableLiftTopV2M', 'hcritWxtoflyM', 'dryHcritM', 'surfaceLclM', 'mixedLayerLclM', 'cuPotentialM', 'odPotentialM'];
+  const heightKeys = ['resolvedThermalTopM', 'thermalTopPlus1CM', 'usableLiftTopV2M', 'hcritWxtoflyM', 'dryHcritM', 'surfaceLclM', 'effectiveCloudLimitM', 'mixedLayerLclM', 'cuPotentialM', 'odPotentialM'];
   const speedKeys = ['thermalVelocityV2Mps', 'blMeanWindSpeedMps', 'blTopWindSpeedMps', 'blWindShearMps', 'buoyancyShearRatio'];
 
   const aggregated = {

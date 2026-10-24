@@ -7,7 +7,8 @@ const fields = {
   usableLiftTopM: 'usableLiftTopV2M',
   cloudBaseM: 'surfaceLclM',
 } as const;
-const retainedFields = [...Object.values(fields), 'hcritWxtoflyM'] as const;
+const optionalFields = ['hcritWxtoflyM', 'effectiveCloudLimitM', 'mixedLayerLclM'] as const;
+const retainedFields = [...Object.values(fields), ...optionalFields] as const;
 type Lift = { [K in keyof typeof fields]: Hour['derived'][K] | null };
 
 /** Select a published diagnostic family, never replace its nulls with older physics. */
@@ -15,6 +16,27 @@ export function publishedLift(hour: Hour): Lift {
   const extension = (hour as Hour & { soaring?: Record<string, unknown> }).soaring;
   if (!extension || !Object.hasOwn(extension, 'thermalVelocityV2Mps')) return hour.derived;
   return Object.fromEntries(Object.entries(fields).map(([key, source]) => [key, extension[source] ?? null])) as Lift;
+}
+
+/** Potential cloud base (surface-parcel Bolton LCL, m MSL). */
+export function publishedSurfaceLcl(hour: Hour): Lift['cloudBaseM'] {
+  return publishedLift(hour).cloudBaseM;
+}
+
+/**
+ * Effective cloud ceiling (m MSL) that caps usable lift: the lower of surface LCL
+ * and the model-derived near-saturation proxy (T − Td ≤ 0.5 °C).
+ */
+export function publishedEffectiveCloudLimit(hour: Hour): Lift['cloudBaseM'] {
+  const extension = (hour as Hour & { soaring?: Record<string, unknown> }).soaring;
+  if (!extension || !Object.hasOwn(extension, 'thermalVelocityV2Mps')) return hour.derived.cloudBaseM;
+  return (extension.effectiveCloudLimitM ?? hour.derived.cloudBaseM ?? extension.surfaceLclM ?? null) as Lift['cloudBaseM'];
+}
+
+/** Mixed-layer parcel LCL (m MSL). */
+export function publishedMixedLayerLcl(hour: Hour): Lift['cloudBaseM'] {
+  const extension = (hour as Hour & { soaring?: Record<string, unknown> }).soaring;
+  return (extension?.mixedLayerLclM ?? null) as Lift['cloudBaseM'];
 }
 
 /** Published glider ceiling at 225 ft/min sink (1.143 m/s), as in the WxToFly guide. */

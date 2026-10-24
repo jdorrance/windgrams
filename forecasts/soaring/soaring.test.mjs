@@ -12,12 +12,19 @@ import { readJson, json } from './common.mjs';
 import { EXTENDED_HRRR_PRESSURE_LEVELS, fields, selectRecords } from './fields.mjs';
 import { projection, regionalGrid, storageIndex, storageCoordinates, wind } from './grid.mjs';
 import {
+  LENSCHOW_F_MAX,
+  LENSCHOW_PEAK_ZETA,
   SOARING_CONTRACT_VERSION,
   WXTOFLY_SINK_MPS,
   assertAgreement,
   cellSource,
+  computeBoundaryLayerWind,
   computeExperimentalTerrainAdjustment,
+  computeLegacyThermalVelocityMps,
+  computeMixedLayerLclM,
   computeNativeGridConvergence,
+  computeThermalVelocityMps,
+  computeUsableLiftTopV2M,
   deriveCell,
   differences,
   geometricWFromOmegaMps,
@@ -46,7 +53,7 @@ const golden = await readJson(new URL('./fixtures/blanchard-published.json',impo
 const quiet = () => {};
 async function temporary(t) { const root=await mkdtemp(join(tmpdir(),'soaring-test-')); t.after(()=>rm(root,{recursive:true,force:true})); return root; }
 
-test('real archived Blanchard columns reproduce every published hour exactly and compute consistent v2.0.0 diagnostics', () => {
+test('real archived Blanchard columns reproduce every published hour exactly and compute consistent v2.1.0 diagnostics', () => {
   const results = real.hours.map(h => deriveCell(c,real.terrain,cellSource(c,real.grid,real.cell,h.forecastHour,h.raw),golden.run.generatedAt));
   const profile = profileFor(c,results[0].site,results.map(r=>r.hour),golden.run.generatedAt);
   assert.deepEqual(differences(profile,golden),[]);
@@ -59,18 +66,18 @@ test('real archived Blanchard columns reproduce every published hour exactly and
   assert.equal(results[0].v2.contractVersion, SOARING_CONTRACT_VERSION);
   assert.equal(results[0].v2.resolvedThermalTopM, null);
   assert.equal(results[6].v2.resolvedThermalTopM, 504.3); // 221.7 m terrain + 282.6 m HPBL instead of 778.9 m 925 hPa jump
-  assert.equal(results[6].v2.thermalVelocityV2Mps, 0.85);
-  assert.equal(results[6].v2.usableLiftTopV2M, 465.5);
-  assert.equal(results[6].v2.hcritWxtoflyM, 446.8);
-  assert.equal(results[6].v2.dryHcritM, 465.5);
+  assert.equal(results[6].v2.thermalVelocityV2Mps, 0.88);
+  assert.equal(results[6].v2.usableLiftTopV2M, 470.2);
+  assert.equal(results[6].v2.hcritWxtoflyM, 452.2);
+  assert.equal(results[6].v2.dryHcritM, 470.2);
   assert.ok(results[6].v2.hcritWxtoflyM <= results[6].v2.usableLiftTopV2M);
   assert.ok(results[6].v2.usableLiftTopV2M <= results[6].v2.dryHcritM);
   assert.ok(results[6].v2.dryHcritM <= results[6].v2.resolvedThermalTopM);
   assert.ok(results[6].v2.thermalTopPlus1CM > results[6].v2.resolvedThermalTopM);
   assert.ok(Math.abs(WXTOFLY_SINK_MPS - 1.143) < 0.001);
   assert.equal(results[6].v2.surfaceLclM, 1315.0);
-  // Physical mixedLayerLclM without legacy 0.85 multiplier:
-  assert.equal(results[6].v2.mixedLayerLclM, 1885.2);
+  assert.equal(results[6].v2.effectiveCloudLimitM, 1315.0);
+  assert.equal(results[6].v2.mixedLayerLclM, 1608.0);
   assert.ok(results[6].v2.cuPotentialM < 0);
   assert.ok(results[6].v2.blMeanWindSpeedMps > 0);
   assert.ok(results[6].v2.blWindShearMps >= 0);
@@ -103,6 +110,185 @@ test('real archived Blanchard columns reproduce every published hour exactly and
   assert.throws(()=>assertAgreement(profile,hourly,0),/mismatch/);
 });
 
+test('P1-1: usable-lift solver solves descending branch above zeta=0.3125 (F_max=2.03581321244618) and handles cloud caps and sink thresholds', () => {
+  assert.equal(LENSCHOW_PEAK_ZETA, 0.3125);
+  assert.equal(LENSCHOW_F_MAX, 2.03581321244618);
+
+  // Ground 0 m, thermal depth 1,000 m, W* = 0.8 m/s, sink 1 m/s, cloud base 880 m -> analytical descending crossing 835.21 m
+  const withCloud880 = computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.8, cloudBaseM: 880 }, 1.0);
+  const withoutCloud = computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.8, cloudBaseM: null }, 1.0);
+  assert.equal(Number(withCloud880.toFixed(2)), 835.21);
+  assert.equal(Number(withoutCloud.toFixed(2)), 835.21);
+
+  // Lift below sink everywhere (W* * F_max < sink) -> null
+  assert.equal(computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.49, cloudBaseM: null }, 1.0), null);
+  assert.equal(computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.56, cloudBaseM: null }, WXTOFLY_SINK_MPS), null);
+
+  // Cloud below the first usable portion of the curve (W* = 0.5 m/s, cloud at 100 m; 0.5 * F(0.1) = 0.8546 < 1.0) -> null
+  assert.equal(computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.5, cloudBaseM: 100 }, 1.0), null);
+  // Cloud on ascending branch where lift IS already >= sink (W* = 0.9 m/s, cloud at 100 m; 0.9 * F(0.1) = 1.538 >= 1.0) -> 100 m
+  assert.equal(computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.9, cloudBaseM: 100 }, 1.0), 100);
+
+  // Lift remaining usable through the thermal top (W* * F(1) >= sink => ratio <= 0.8) -> capped by min(cloudBase, thermalTop)
+  assert.equal(computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 1.5, cloudBaseM: null }, 1.0), 1000);
+  assert.equal(computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 1.5, cloudBaseM: 750 }, 1.0), 750);
+  assert.equal(computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 1.5, cloudBaseM: null }, WXTOFLY_SINK_MPS), 1000);
+
+  // Both sink thresholds (1.0 m/s and 1.143 m/s / 225 ft/min)
+  const top100 = computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.9, cloudBaseM: null }, 1.0);
+  const top225 = computeUsableLiftTopV2M({ modelElevationM: 0, resolvedThermalTopM: 1000, thermalVelocityV2Mps: 0.9, cloudBaseM: null }, WXTOFLY_SINK_MPS);
+  assert.equal(Number(top100.toFixed(1)), 888.3);
+  assert.equal(Number(top225.toFixed(1)), 819.3);
+  assert.ok(top225 < top100);
+});
+
+test('P1-2: height-integrated BL wind (retaining 80 m wind) and pressure-mass mixed parcel are invariant to equivalent resampling and clip shallow layers', () => {
+  // Synthetic linear wind profile from 0 to 10 m/s over 500 m (eastward, 270 deg)
+  const surfaceWind = { windSpeedMps: 0, windDirectionDeg: 270 };
+  const levelsCoarse = [
+    { heightM: 500, pressureHpa: 955, temperatureC: 15, dewPointC: 9, windSpeedMps: 10, windDirectionDeg: 270 },
+    { heightM: 1000, pressureHpa: 900, temperatureC: 10, dewPointC: 6, windSpeedMps: 20, windDirectionDeg: 270 },
+  ];
+  const levelsResampled = [
+    { heightM: 80, pressureHpa: 1003.6, temperatureC: 19.2, dewPointC: 11.52, windSpeedMps: 1.6, windDirectionDeg: 270 },
+    ...levelsCoarse,
+  ];
+
+  // Over 500 m layer: height mean is 5.00 m/s with or without the 80 m intermediate sample
+  const wind500Coarse = computeBoundaryLayerWind(0, surfaceWind, levelsCoarse, 500);
+  const wind500Dense = computeBoundaryLayerWind(0, surfaceWind, levelsResampled, 500);
+  assert.equal(Number(wind500Coarse.blMeanWindSpeedMps.toFixed(2)), 5.0);
+  assert.equal(Number(wind500Dense.blMeanWindSpeedMps.toFixed(2)), 5.0);
+  assert.equal(Number(wind500Coarse.blWindShearMps.toFixed(2)), 10.0);
+
+  // Reducing the layer to 100 m clips at 100 m (where speed = 2.0 m/s), giving height mean 1.00 m/s instead of 5.00 m/s
+  const wind100Coarse = computeBoundaryLayerWind(0, surfaceWind, levelsCoarse, 100);
+  const wind100Dense = computeBoundaryLayerWind(0, surfaceWind, levelsResampled, 100);
+  assert.equal(Number(wind100Coarse.blMeanWindSpeedMps.toFixed(2)), 1.0);
+  assert.equal(Number(wind100Dense.blMeanWindSpeedMps.toFixed(2)), 1.0);
+  assert.equal(Number(wind100Coarse.blTopWindSpeedMps.toFixed(2)), 2.0);
+  assert.equal(Number(wind100Coarse.blWindShearMps.toFixed(2)), 2.0);
+
+  // P2: Retain valid 80 m wind even when a pressure-level sample lies below 80 m (e.g., at 50 m)
+  const lowLevelJetLevels = [
+    { heightM: 50, pressureHpa: 1007, temperatureC: 19, dewPointC: 10, windSpeedMps: 0, windDirectionDeg: 270 },
+    { heightM: 210, pressureHpa: 988, temperatureC: 17, dewPointC: 9, windSpeedMps: 10, windDirectionDeg: 270 },
+  ];
+  const with80m = computeBoundaryLayerWind(
+    0,
+    { windSpeedMps: 0, windDirectionDeg: 270 },
+    [lowLevelJetLevels[0]],
+    210,
+    { windSpeedMps: 10, windDirectionDeg: 270 },
+  );
+  assert.ok(with80m.blMeanWindSpeedMps > 0);
+  const jetWith210 = computeBoundaryLayerWind(
+    0,
+    { windSpeedMps: 0, windDirectionDeg: 270 },
+    [
+      { heightM: 50, pressureHpa: 1007, temperatureC: 19, dewPointC: 10, windSpeedMps: 0, windDirectionDeg: 270 },
+      { heightM: 200, pressureHpa: 989, temperatureC: 17, dewPointC: 9, windSpeedMps: 0, windDirectionDeg: 270 },
+    ],
+    100,
+    { windSpeedMps: 20.7, windDirectionDeg: 270 },
+  );
+  assert.equal(Number(jetWith210.blMeanWindSpeedMps.toFixed(2)), 6.90);
+
+  // Coincident heights at 80 m are merged cleanly without zero-thickness NaN/division issues
+  const coincident80 = computeBoundaryLayerWind(
+    0,
+    { windSpeedMps: 0, windDirectionDeg: 270 },
+    [
+      { heightM: 80, pressureHpa: 1003.6, temperatureC: 19.2, dewPointC: 11.5, windSpeedMps: 8, windDirectionDeg: 270 },
+      { heightM: 160, pressureHpa: 994, temperatureC: 18.4, dewPointC: 11.0, windSpeedMps: 16, windDirectionDeg: 270 },
+    ],
+    160,
+    { windSpeedMps: 8, windDirectionDeg: 270 },
+  );
+  assert.equal(Number(coincident80.blMeanWindSpeedMps.toFixed(2)), 8.0);
+
+  // Turning winds: 10 m/s from South (180 deg, v=+10) at surface to 10 m/s from West (270 deg, u=+10) at 500 m
+  const turningLevels = [{ heightM: 500, pressureHpa: 955, temperatureC: 15, dewPointC: 9, windSpeedMps: 10, windDirectionDeg: 270 }];
+  const turningWind = computeBoundaryLayerWind(0, { windSpeedMps: 10, windDirectionDeg: 180 }, turningLevels, 500);
+  assert.equal(Number(turningWind.blMeanWindSpeedMps.toFixed(2)), 7.07); // hypot(5, 5) = 7.071 m/s
+  assert.equal(Number(turningWind.blMeanWindDirDeg.toFixed(1)), 225.0); // SW
+  assert.equal(Number(turningWind.blWindShearMps.toFixed(2)), 14.14); // hypot(10, -10) = 14.142 m/s
+
+  // Insufficient coverage returns null
+  assert.equal(computeBoundaryLayerWind(0, { windSpeedMps: null, windDirectionDeg: 270 }, [], 500), null);
+  assert.equal(computeBoundaryLayerWind(0, surfaceWind, [], 500), null);
+
+  // Mixed-layer LCL: pressure-mass integration is invariant to equivalent intermediate samples and clips shallow layers
+  const lcl500Coarse = computeMixedLayerLclM(0, 20, 12, levelsCoarse, 500);
+  const lcl500Dense = computeMixedLayerLclM(0, 20, 12, levelsResampled, 500);
+  assert.ok(Math.abs(lcl500Coarse - lcl500Dense) <= 0.5);
+
+  const lcl100Coarse = computeMixedLayerLclM(0, 20, 12, levelsCoarse, 100);
+  const lcl100Dense = computeMixedLayerLclM(0, 20, 12, levelsResampled, 100);
+  assert.ok(Math.abs(lcl100Coarse - lcl100Dense) <= 0.2);
+  assert.notEqual(Math.round(lcl100Coarse), Math.round(lcl500Coarse));
+  assert.equal(computeMixedLayerLclM(0, 20, 12, [], 500), null);
+});
+
+test('P1-3: surface-density-consistent Deardorff W* is invariant to reference pressure and avoids upper-level pressure bias', () => {
+  // Controlled dry example: 20 C, sensible heat 200 W/m2, latent heat 0, depth 1,000 m
+  // At 1,000 hPa surface (with first upper level at 925 hPa): legacy gives 1.712 m/s, surface-consistent gives 1.777 m/s
+  const legacy1000 = computeLegacyThermalVelocityMps(20, 200, 0, 1000, 925);
+  const v21_1000 = computeThermalVelocityMps({
+    surfaceTemperatureC: 20,
+    sensibleHeatFluxWm2: 200,
+    latentHeatFluxWm2: 0,
+    boundaryLayerDepthM: 1000,
+    surfacePressureHpa: 1000,
+  });
+  assert.equal(Number(legacy1000.toFixed(3)), 1.712);
+  assert.equal(Number(v21_1000.toFixed(3)), 1.777);
+
+  // At 800 hPa surface (elevated site with first upper level at 750 hPa): legacy gives 1.678 m/s, surface-consistent gives 1.914 m/s
+  const legacy800 = computeLegacyThermalVelocityMps(20, 200, 0, 1000, 750);
+  const v21_800 = computeThermalVelocityMps({
+    surfaceTemperatureC: 20,
+    sensibleHeatFluxWm2: 200,
+    latentHeatFluxWm2: 0,
+    boundaryLayerDepthM: 1000,
+    surfacePressureHpa: 800,
+  });
+  assert.equal(Number(legacy800.toFixed(3)), 1.678);
+  assert.equal(Number(v21_800.toFixed(3)), 1.914);
+
+  // Exact invariance to arbitrary potential-temperature reference pressure (500, 850, 1000, 1013.25, 1015 hPa)
+  for (const pRef of [500, 850, 1000, 1013.25, 1015]) {
+    const wRef = computeThermalVelocityMps({
+      surfaceTemperatureC: 20,
+      sensibleHeatFluxWm2: 200,
+      latentHeatFluxWm2: 0,
+      boundaryLayerDepthM: 1000,
+      surfacePressureHpa: 1000,
+      referencePressureHpa: pRef,
+    });
+    assert.ok(Math.abs(wRef - v21_1000) < 1e-12);
+  }
+
+  // Insensitivity to which upper level is listed first when surface pressure is known
+  const wFrom925 = computeThermalVelocityMps({
+    surfaceTemperatureC: 20,
+    sensibleHeatFluxWm2: 200,
+    latentHeatFluxWm2: 0,
+    boundaryLayerDepthM: 1000,
+    surfacePressureHpa: 1000,
+    firstLevel: { heightM: 750, pressureHpa: 925, temperatureC: 13 },
+  });
+  const wFrom850 = computeThermalVelocityMps({
+    surfaceTemperatureC: 20,
+    sensibleHeatFluxWm2: 200,
+    latentHeatFluxWm2: 0,
+    boundaryLayerDepthM: 1000,
+    surfacePressureHpa: 1000,
+    firstLevel: { heightM: 1450, pressureHpa: 850, temperatureC: 8 },
+  });
+  assert.ok(Math.abs(wFrom925 - wFrom850) < 1e-12);
+});
+
 test('Feedback 2: expanded 18-level HRRR field selection and 80 m wind match captured .idx inventory without synthetic levels', async () => {
   assert.equal(EXTENDED_HRRR_PRESSURE_LEVELS.length, 18);
   const idxBytes = await readFile(new URL('./fixtures/hrrr-20261021-00z-f20.idx', import.meta.url));
@@ -122,10 +308,12 @@ test('Feedback 2: expanded 18-level HRRR field selection and 80 m wind match cap
 test('Feedback 3 & 4: model-aware post-processing handles deterministic, GEPS ensemble, and sparse ECMWF/NWS adapters', () => {
   // Deterministic model preserves v1 derived and adds v2 soaring
   const detDoc = postprocessPointForecast(structuredClone(golden), { modelSlug: 'hrrr-conus', launchElevationM: 378.5 });
-  assert.equal(detDoc.soaringMeta.contractVersion, '2.0.0');
+  assert.equal(detDoc.soaringMeta.contractVersion, SOARING_CONTRACT_VERSION);
   assert.equal(detDoc.soaringMeta.synthesizedLevels, 0);
   assert.equal(detDoc.hours[6].derived.usableLiftTopM, 724.5); // v1 untouched
-  assert.equal(detDoc.hours[6].soaring.usableLiftTopV2M, 465.5); // v2 bounded by 504.3m resolved top
+  assert.equal(detDoc.hours[6].soaring.usableLiftTopV2M, 470.2); // v2 bounded by 504.3m resolved top
+  assert.equal(detDoc.hours[6].soaring.surfaceLclM, 1315.0);
+  assert.equal(detDoc.hours[6].soaring.effectiveCloudLimitM, 1315.0);
 
   // GEPS ensemble percentile document refuses nonlinear median post-processing
   const gepsDoc = {
@@ -152,6 +340,7 @@ test('Feedback 3 & 4: model-aware post-processing handles deterministic, GEPS en
   assert.equal(ensAgg.memberCount, 3);
   assert.ok(ensAgg.thermalVelocityV2Mps.p50 >= ensAgg.thermalVelocityV2Mps.p10);
   assert.ok(ensAgg.usableLiftTopV2M.p90 <= ensAgg.resolvedThermalTopM.p90);
+  assert.ok(ensAgg.effectiveCloudLimitM.p50 > 0);
 
   // Feedback 4: ECMWF and NWS keep unsupported W* and usableLiftTopM null
   const ecmwfDoc = postprocessPointForecast({

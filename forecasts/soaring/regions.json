@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "soaringContractVersion": "2.0.0",
+  "soaringContractVersion": "2.1.0",
   "trialRegionId": "north-sound",
   "regions": [
     {

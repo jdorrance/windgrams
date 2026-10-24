@@ -162,6 +162,8 @@ export class Sunlight {
     }
     if (!this.index) {
       status.textContent = "Sunlight map pending.";
+      const section = document.getElementById("sun-section");
+      if (section) section.hidden = true;
       return;
     }
     status.hidden = true;

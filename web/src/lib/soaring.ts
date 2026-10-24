@@ -13,6 +13,7 @@ export type Layer =
   | 'boundaryLayerTopM'
   | 'pblHeightM'
   | 'surfaceLclM'
+  | 'effectiveCloudLimitM'
   | 'mixedLayerLclM'
   | 'cuPotentialM'
   | 'odPotentialM'
@@ -55,6 +56,7 @@ export interface ReplayHour {
   hcritWxtoflyM?: (number | null)[];
   dryHcritM?: (number | null)[];
   surfaceLclM?: (number | null)[];
+  effectiveCloudLimitM?: (number | null)[];
   mixedLayerLclM?: (number | null)[];
   cuPotentialM?: (number | null)[];
   odPotentialM?: (number | null)[];
@@ -181,6 +183,7 @@ const definitions: LayerDefinition[] = [
   { id: 'pblHeightM', name: 'Mixing depth', group: 'Thermals', kind: 'elevation', datum: 'AGL', stops: [0,250,500,1000,2000], colors: thermalColors, note: 'Model boundary-layer depth.' },
   { id: 'sensibleHeatFluxWm2', name: 'Surface heating', group: 'Thermals', unit: 'W/m²', stops: [-30,0,50,150,300], colors: ['#6b8ea4','#f4f8fa','#c3e1e9','#e8bc52','#c44935'], note: 'Negative: cooling · positive: heating.' },
   { id: 'surfaceLclM', name: 'Potential cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Surface-parcel condensation level.' },
+  { id: 'effectiveCloudLimitM', name: 'Effective cloud limit', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Model-derived near-saturation ceiling proxy.' },
   { id: 'mixedLayerLclM', name: 'Mixed-layer cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Mixed-parcel condensation level.' },
   { id: 'cuPotentialM', name: 'Cumulus potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#289b9c','#1a5f7a'], note: 'Thermal top minus surface LCL · positive: Cu potential.' },
   { id: 'odPotentialM', name: 'Spreadout potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#7c689c','#4a356b'], note: 'Thermal top minus mixed LCL · positive: spreadout potential.' },
@@ -228,6 +231,31 @@ export const SUPPORTED_CASES = new Set([
   'rogue-valley-woodrat-20261021-06z',
   'intermountain-idaho-utah-v2',
 ]);
+
+/**
+ * Builds an SVG path string for a cross-section line series using the node array's
+ * iteration position (never `node.nodeIndex`), so sparse or reordered node identifiers
+ * cannot misalign vertices with position-indexed `vals`.
+ */
+export function buildCrossSectionLinePath(
+  nodes: readonly { distanceKm: number; nodeIndex?: number }[],
+  vals: readonly (number | null | undefined)[],
+  xOf: (km: number) => number,
+  yOf: (m: number) => number,
+): string {
+  let d = '';
+  let connected = false;
+  nodes.forEach((n, idx) => {
+    const v = vals[idx];
+    if (v == null || !Number.isFinite(v)) {
+      connected = false;
+      return;
+    }
+    d += `${connected ? 'L' : 'M'}${xOf(n.distanceKm).toFixed(1)},${yOf(v).toFixed(1)}`;
+    connected = true;
+  });
+  return d;
+}
 
 export function replayLocation(search: string, dataBase: string) {
   const query = new URLSearchParams(search), caseId = query.get('case') ?? DEFAULT_CASE;
@@ -450,6 +478,8 @@ export function buildCellSiteForecast(
       hcritWxtoflyM: h.hcritWxtoflyM?.[cellIndex] ?? null,
       resolvedThermalTopM: h.resolvedThermalTopM?.[cellIndex] ?? null,
       surfaceLclM: h.surfaceLclM?.[cellIndex] ?? null,
+      effectiveCloudLimitM: h.effectiveCloudLimitM?.[cellIndex] ?? h.cloudBaseM[cellIndex] ?? null,
+      mixedLayerLclM: h.mixedLayerLclM?.[cellIndex] ?? null,
     } : undefined;
     siteHours.push({
       ...(soaring ? { soaring } : {}),

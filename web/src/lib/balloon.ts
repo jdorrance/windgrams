@@ -7,12 +7,14 @@ import { formatQuantity } from './units.ts';
 //     used when the balloon file is missing;
 //   - the Soaring Forecast's model hours (9 AM to 6 PM; temperature and wind).
 //
-// The morning balloon is read the way the Soaring Forecast is made: a thermal
-// leaves the ground at the forecast high and rises along a dry adiabat until
-// it is no warmer than the morning air. That height is the day's thermal top.
+// For morning balloon soundings, the surface parcel starts at the NWS forecast
+// high and is lifted via `parcelAscent` (dry-adiabatic up to LCL when moisture
+// is present, moist-adiabatic above LCL, or dry-adiabatic throughout when
+// dew point is absent in SRG tables) until buoyancy ceases or the profile
+// ceiling is reached (which is then flagged as profile-limited).
 
 import {
-  findCloudLayers, findStableLayers, freezingLevel, liftParcel, thermalTop, windAtHeight,
+  findCloudLayers, findStableLayers, freezingLevel, isThermalTopProfileLimited, liftParcel, thermalTop, windAtHeight,
   type Finding, type Reading, type Sounding, type SoundingPoint,
 } from "./skewt.ts";
 import type { Srg, SrgProfile } from "./srg.ts";
@@ -63,6 +65,7 @@ function finish(points: SoundingPoint[], validAt: string, startC: number, hasDew
   const surface = points[0];
   const { parcel, lclM } = liftParcel(points, startC, surface.dewPointC);
   const top = thermalTop(parcel);
+  const profileLimited = isThermalTopProfileLimited(parcel);
   const thermals = top !== null && top > surface.heightM + 100;
   return {
     validAt,
@@ -74,6 +77,7 @@ function finish(points: SoundingPoint[], validAt: string, startC: number, hasDew
     thermalVelocityMps: 0,
     cloudBaseM: hasDewPoint ? lclM : null,
     usableLiftTopM: thermals ? top : null,
+    thermalTopProfileLimited: profileLimited,
     capeJkg: null,
     inversions: findStableLayers(points),
     cloudLayers: hasDewPoint ? findCloudLayers(points) : [],
@@ -82,7 +86,7 @@ function finish(points: SoundingPoint[], validAt: string, startC: number, hasDew
     hasDewPoint,
     marks: {
       zoneTopM: thermals ? top : null,
-      top: thermals ? { heightM: top, label: `${topLabel} ≈ ${ftText(top)}` } : null,
+      top: thermals ? { heightM: top, label: `${topLabel}${profileLimited ? " ≥ " : " ≈ "}${ftText(top)}` } : null,
       cloudBaseM: thermals && hasDewPoint && lclM !== null && lclM <= top + 100 ? lclM : null,
     },
   };
@@ -188,7 +192,10 @@ export function choices(doc: RaobDocument | null, srg: Srg | null, timeZone: str
 }
 
 /** An evening flight: the ground has already cooled, so the afternoon's thermals went higher than a thermal now would. */
-function eveningText(_s: Sounding, top: number, choice: Choice, time: Intl.DateTimeFormat) {
+function eveningText(s: Sounding, top: number, choice: Choice, time: Intl.DateTimeFormat) {
+  if (s.thermalTopProfileLimited) {
+    return `${time.format(new Date(choice.validAt))} station parcel: ${f(choice.start.temperatureC)} surface · buoyant through profile top ${referenceHeight(top)} (ceiling unresolved).`;
+  }
   return `${time.format(new Date(choice.validAt))} station parcel: ${f(choice.start.temperatureC)} surface · top ${referenceHeight(top)}.`;
 }
 
@@ -211,14 +218,21 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
   const station = s.modelElevationM;
   const fromHigh = choice.start.source === "forecast-high";
   const morning = choice.kind === "balloon" && isMorning(choice.validAt, timeZone);
+  const profileLimited = Boolean(s.thermalTopProfileLimited);
 
   // Thermals
   if (top !== null) {
-    const lead = fromHigh
-      ? `Forecast high ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)} · ${ftText(top - station)} above station.`
-      : choice.kind === "model"
-        ? `NWS ${time.format(new Date(choice.validAt))} · surface ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)}.`
-        : eveningText(s, top, choice, time);
+    const lead = profileLimited
+      ? fromHigh
+        ? `Forecast high ${f(choice.start.temperatureC)} · parcel buoyant through profile top ${referenceHeight(top)} (≥ ${ftText(top - station)} above station · ceiling unresolved).`
+        : choice.kind === "model"
+          ? `NWS ${time.format(new Date(choice.validAt))} · surface ${f(choice.start.temperatureC)} · parcel buoyant through profile top ${referenceHeight(top)} (ceiling unresolved).`
+          : eveningText(s, top, choice, time)
+      : fromHigh
+        ? `Forecast high ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)} · ${ftText(top - station)} above station.`
+        : choice.kind === "model"
+          ? `NWS ${time.format(new Date(choice.validAt))} · surface ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)}.`
+          : eveningText(s, top, choice, time);
     let text = lead;
     if (fromHigh && srg?.maxThermalHeightFt) text += ` NWS top ${ftText(srg.maxThermalHeightFt / FT)}${srg.maxLiftFpm ? ` · lift ${formatQuantity(srg.maxLiftFpm / 196.850394, "lift")}` : ""}.`;
     const tone = fromHigh && srg?.soaringIndex ? SOARING_TONE[srg.soaringIndex.toLowerCase()] ?? "neutral" : "neutral";
@@ -244,7 +258,23 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
 
   // Launch
   if (launchM !== null && top !== null) {
-    if (top < launchM + 150) {
+    if (profileLimited) {
+      if (top < launchM + 150) {
+        findings.push({
+          key: "top",
+          title: "Launch reference",
+          text: `Profile ends at ${referenceHeight(top)}, near or below launch elevation ${referenceHeight(launchM)} · thermal ceiling unresolved.`,
+          tone: "neutral",
+        });
+      } else {
+        findings.push({
+          key: "top",
+          title: "Launch reference",
+          text: `Parcel remains buoyant at profile top ${referenceHeight(top)} (≥ ${ftText(top - launchM)} above launch elevation ${referenceHeight(launchM)} · ceiling unresolved).`,
+          tone: "neutral",
+        });
+      }
+    } else if (top < launchM + 150) {
       findings.push({ key: "top", title: "Launch reference", text: `Station parcel top near or below launch elevation ${referenceHeight(launchM)}.`, tone: "neutral" });
     } else {
       findings.push({ key: "top", title: "Launch reference", text: `Station parcel top ${ftText(top - launchM)} above launch elevation ${referenceHeight(launchM)}.`, tone: "neutral" });
@@ -253,11 +283,18 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
 
   // Clouds
   if (choice.hasDewPoint && top !== null && s.lclM !== null) {
-    findings.push(
-      s.lclM <= top + 100
-        ? { key: "clouds", title: "Clouds", text: `Cu possible · base ${referenceHeight(s.lclM)}.`, tone: "good" }
-        : { key: "clouds", title: "Clouds", text: `Blue thermals · LCL ${referenceHeight(s.lclM)} above parcel top.`, tone: "neutral" },
-    );
+    if (s.lclM <= top + 100) {
+      findings.push({ key: "clouds", title: "Clouds", text: `Cu possible · base ${referenceHeight(s.lclM)}.`, tone: "good" });
+    } else if (profileLimited) {
+      findings.push({
+        key: "clouds",
+        title: "Clouds",
+        text: `LCL ${referenceHeight(s.lclM)} above profile top ${referenceHeight(top)} · cloud reach unresolved.`,
+        tone: "neutral",
+      });
+    } else {
+      findings.push({ key: "clouds", title: "Clouds", text: `Blue thermals · LCL ${referenceHeight(s.lclM)} above parcel top.`, tone: "neutral" });
+    }
   } else if (!choice.hasDewPoint) {
     findings.push({ key: "clouds", title: "Clouds", text: "Humidity unavailable · cloud estimate unavailable.", tone: "neutral" });
   }
@@ -302,7 +339,11 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
 
   let headline: string;
   if (top === null) headline = "Stable surface parcel.";
-  else if (fromHigh) headline = `At forecast high ${f(choice.start.temperatureC)} · thermals to ${referenceHeight(top)}${choice.hasDewPoint && s.lclM !== null ? (s.lclM <= top + 100 ? ` · Cu base ${referenceHeight(s.lclM)}` : " · blue") : ""}.`;
+  else if (profileLimited) {
+    headline = fromHigh
+      ? `At forecast high ${f(choice.start.temperatureC)} · thermals ≥ ${referenceHeight(top)} (profile-limited)${choice.hasDewPoint && s.lclM !== null ? (s.lclM <= top + 100 ? ` · Cu base ${referenceHeight(s.lclM)}` : " · cloud reach unresolved") : ""}.`
+      : `Thermals ≥ ${referenceHeight(top)} (profile-limited) · ${time.format(new Date(choice.validAt))}.`;
+  } else if (fromHigh) headline = `At forecast high ${f(choice.start.temperatureC)} · thermals to ${referenceHeight(top)}${choice.hasDewPoint && s.lclM !== null ? (s.lclM <= top + 100 ? ` · Cu base ${referenceHeight(s.lclM)}` : " · blue") : ""}.`;
   else headline = `Thermals to ${referenceHeight(top)} · ${time.format(new Date(choice.validAt))}.`;
   return { headline, findings };
 }

@@ -1,5 +1,5 @@
 // Builds one model, leaving out launches the grid does not cover,
-// then runs model-aware v2.0.0 soaring post-processing and 120-run (30-day) rolling history archival.
+// then runs model-aware v2.1.0 soaring post-processing and 120-run (30-day) rolling history archival.
 //
 // meteo forecast build fails the whole model when any launch is outside the
 // grid. That launch is removed and the build starts again. The first check
@@ -56,7 +56,7 @@ export async function buildCovered(model, sites, run, log = console.log) {
 }
 
 /**
- * Applies model-aware v2.0.0 soaring post-processing to all generated site profiles for `model`
+ * Applies model-aware v2.1.0 soaring post-processing to all generated site profiles for `model`
  * and archives the run in the 120-run (30-day) rolling history directory.
  */
 export function postprocessAndArchiveModelOutput(outputRoot, modelSlug, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS } = {}) {
@@ -197,7 +197,7 @@ async function main() {
         return runMeteo(values.model, staging, path, referenceTime, maxSteps);
       }));
     if (result.dropped.length > 0) console.log(`${values.model}: built ${result.kept.length}, skipped ${result.dropped.join(", ")}`);
-    console.log(`${values.model}: ${changed ? `post-processed ${post.postprocessedCount} site profile(s) (contract v2.0.0)` : 'kept current last-good output'}`);
+    console.log(`${values.model}: ${changed ? `post-processed ${post.postprocessedCount} site profile(s) (contract v2.1.0)` : 'kept current last-good output'}`);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 

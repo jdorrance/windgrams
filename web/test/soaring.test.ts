@@ -2,7 +2,7 @@ import test, { afterEach } from 'node:test';
 import { setUnitSystem } from '../src/lib/units.ts';
 afterEach(() => setUnitSystem('imperial'));
 import assert from 'node:assert/strict';
-import { LAYER_SPECS, defaultReplayQuery, displayMetric, forecastHourAtValidTime, historicalLabel, nativeModels, regionForCase, replayLocation, replaySelection, selectedState, setReplaySelectionQuery, type RegionCatalogue, type ReplayManifest, type ReplayHour } from '../src/lib/soaring.ts';
+import { LAYER_SPECS, buildCrossSectionLinePath, defaultReplayQuery, displayMetric, forecastHourAtValidTime, historicalLabel, nativeModels, regionForCase, replayLocation, replaySelection, selectedState, setReplaySelectionQuery, type RegionCatalogue, type ReplayManifest, type ReplayHour } from '../src/lib/soaring.ts';
 
 test('replay links preserve the project base and reject unknown cases', () => {
   assert.equal(replayLocation('?hour=27','/windgrams/data').root,'/windgrams/data/soaring/v1/north-sound-20261021-00z');
@@ -107,6 +107,7 @@ test('zero, unavailable, insufficient levels, and no usable lift have distinct l
   assert.match(displayMetric(null,'usableLiftTopV2M'),/Below 197 ft\/min sink threshold/);
   assert.equal(displayMetric(724.5,'usableLiftTopM'),'2,377 ft MSL');
   assert.equal(displayMetric(465.5,'usableLiftTopV2M'),'1,527 ft MSL');
+  assert.equal(displayMetric(981,'effectiveCloudLimitM'),'3,219 ft MSL');
 });
 test('one selected hour drives map, site cards, windgram, and sounding time with both v1 and v2 metrics', () => {
   const hours=[14,20,27].map((f,i)=>({
@@ -128,6 +129,26 @@ test('one selected hour drives map, site cards, windgram, and sounding time with
   assert.equal(selectedState(manifest,hours,20).siteTopV2,'1,527 ft MSL');
   assert.match(selectedState(manifest,hours,20).validLabel,/1:00 PM PDT/);
   assert.throws(()=>selectedState(manifest,[],20),/does not match/);
+});
+
+test('P2-1: cross-section line path uses iteration position instead of sparse or reordered nodeIndex', () => {
+  const sparseNodes = [
+    { nodeIndex: 0, distanceKm: 0 },
+    { nodeIndex: 5, distanceKm: 10 },
+    { nodeIndex: 12, distanceKm: 20 },
+  ];
+  const reorderedNodes = [
+    { nodeIndex: 2, distanceKm: 0 },
+    { nodeIndex: 0, distanceKm: 10 },
+    { nodeIndex: 1, distanceKm: 20 },
+  ];
+  const vals = [1000, 1500, 2000];
+  const xOf = (km: number) => km * 10;
+  const yOf = (m: number) => 300 - m * 0.1;
+
+  assert.equal(buildCrossSectionLinePath(sparseNodes, vals, xOf, yOf), 'M0.0,200.0L100.0,150.0L200.0,100.0');
+  assert.equal(buildCrossSectionLinePath(reorderedNodes, vals, xOf, yOf), 'M0.0,200.0L100.0,150.0L200.0,100.0');
+  assert.equal(buildCrossSectionLinePath(sparseNodes, [1000, null, 2000], xOf, yOf), 'M0.0,200.0M200.0,100.0');
 });
 
 

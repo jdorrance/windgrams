@@ -14,6 +14,7 @@ import {
   LAYER_SPECS,
   PRIMARY_LAYERS,
   buildCellSiteForecast,
+  buildCrossSectionLinePath,
   displayMetric,
   defaultReplayQuery,
   forecastHourAtValidTime,
@@ -68,6 +69,10 @@ interface ExperimentalTerrain {
   rawMslHeightsPreserved: boolean;
   assumptions: string[];
 }
+interface PercentileSpread {
+  p10: number | null;
+  p90: number | null;
+}
 interface LaunchEntry {
   slug: string; name: string; latitude: number; longitude: number; timeZone: string;
   cellIndex: number; gridIndex: number; distanceKm: number; launchElevationM: number | null; modelElevationM: number | null;
@@ -75,14 +80,20 @@ interface LaunchEntry {
   models: Record<string, {
     referenceTime?: string; modelElevationM?: number | null;
     hours: {
-      validAt: string; tempC?: number | null; dewPointC?: number | null;
-      windSpeedMps?: number | null; windDirectionDeg?: number | null; windGustMps?: number | null;
+      validAt: string; tempC?: number | null; tempSpreadC?: PercentileSpread | null; dewPointC?: number | null;
+      windSpeedMps?: number | null; windSpeedSpreadMps?: PercentileSpread | null; windDirectionDeg?: number | null; windGustMps?: number | null;
       cloudCoverPct?: number | null; pblHeightM?: number | null; sensibleHeatWm2?: number | null;
-      wstarMps?: number | null; usableLiftTopM?: number | null;
-      wstarV2Mps?: number | null; usableLiftTopV2M?: number | null; hcritWxtoflyM?: number | null;
-      resolvedThermalTopM?: number | null; mixedLayerLclM?: number | null;
+      wstarMps?: number | null; wstarLegacySpreadMps?: PercentileSpread | null;
+      usableLiftTopM?: number | null; usableLiftLegacySpreadM?: PercentileSpread | null;
+      wstarV2Mps?: number | null; wstarSpreadMps?: PercentileSpread | null;
+      usableLiftTopV2M?: number | null; usableLiftSpreadM?: PercentileSpread | null;
+      hcritWxtoflyM?: number | null;
+      resolvedThermalTopM?: number | null; thermalTopSpreadM?: PercentileSpread | null;
+      surfaceLclM?: number | null; effectiveCloudLimitM?: number | null; cloudLimitSpreadM?: PercentileSpread | null;
+      mixedLayerLclM?: number | null;
       experimentalTerrain?: ExperimentalTerrain | null;
-      blTopM?: number | null; cloudBaseM?: number | null;
+      blTopM?: number | null; blTopLegacySpreadM?: PercentileSpread | null;
+      cloudBaseM?: number | null;
     }[];
   }>;
 }
@@ -194,13 +205,7 @@ function renderCrossSectionSvg(
   });
 
   const drawLine = (vals: (number | null | undefined)[], color: string, dash = '', widthPx = 2) => {
-    let d = '', connected = false;
-    nodes.forEach(n => {
-      const v = vals[n.nodeIndex];
-      if (v == null || !Number.isFinite(v)) { connected = false; return; }
-      d += `${connected ? 'L' : 'M'}${xOf(n.distanceKm).toFixed(1)},${yOf(v).toFixed(1)}`;
-      connected = true;
-    });
+    const d = buildCrossSectionLinePath(nodes, vals, xOf, yOf);
     const path = document.createElementNS(ns, 'path');
     path.setAttribute('fill', 'none'); path.setAttribute('stroke', color);
     path.setAttribute('stroke-width', String(widthPx));
@@ -634,6 +639,7 @@ async function main() {
       ['Parcel top · legacy', fmtM(hour.boundaryLayerTopM[selectedCell], 'MSL')],
       [`${modelLabel(activeModel)} model boundary-layer depth`, fmtM(hour.pblHeightM[selectedCell], 'AGL')],
       ['Potential cloud base (surface LCL)', fmtM((hour.surfaceLclM ?? hour.cloudBaseM)[selectedCell], 'MSL')],
+      ['Effective cloud limit (model near-saturation proxy)', fmtM((hour.effectiveCloudLimitM ?? hour.cloudBaseM)[selectedCell], 'MSL')],
       ['Mixed-layer cloud base', fmtM(hour.mixedLayerLclM?.[selectedCell], 'MSL')],
       ['Cu / OD potential', `${hour.cuPotentialM?.[selectedCell] != null ? `${hour.cuPotentialM[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.cuPotentialM[selectedCell], "elevation")}` : '–'} / ${hour.odPotentialM?.[selectedCell] != null ? `${hour.odPotentialM[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.odPotentialM[selectedCell], "elevation")}` : '–'}`],
       [`Wind at ${formatQuantity(10, 'elevation')} AGL (gust)`, w10s != null && w10d != null ? `${compassPoint(w10d)} (${w10d.toFixed(0)}°) @ ${formatQuantity(w10s, "wind")}${w10g != null ? ` (gust ${formatQuantity(w10g, "wind")})` : ''}` : 'Unavailable'],
@@ -785,6 +791,7 @@ async function main() {
         ['rdps', 'RDPS'],
         ['gdps', 'GDPS'],
         ['gfs', 'GFS'],
+        ['geps', 'GEPS median'],
         ['ecmwf', 'ECMWF'],
         ['nws', 'NWS'],
       ];
@@ -794,9 +801,47 @@ async function main() {
         const mh = mdata.hours.find(h => h.validAt === hour.validAt);
         if (!mh) continue;
         const isSparseAdapter = mslug === 'ecmwf' || mslug === 'nws';
-        const wstarVal = isSparseAdapter ? null : (Object.hasOwn(mh, 'wstarV2Mps') ? mh.wstarV2Mps : mh.wstarMps);
-        const uTopVal = isSparseAdapter ? null : (Object.hasOwn(mh, 'usableLiftTopV2M') ? mh.usableLiftTopV2M : mh.usableLiftTopM);
-        const blTopVal = isSparseAdapter ? mh.blTopM : (Object.hasOwn(mh, 'resolvedThermalTopM') ? mh.resolvedThermalTopM : mh.blTopM);
+        const isLegacyOnlyEnsemble = mslug === 'geps' && mh.wstarV2Mps == null && mh.usableLiftTopV2M == null && mh.resolvedThermalTopM == null;
+        const wstarVal = isSparseAdapter ? null : (mh.wstarV2Mps ?? (isLegacyOnlyEnsemble ? null : mh.wstarMps));
+        const uTopVal = isSparseAdapter ? null : (mh.usableLiftTopV2M ?? (isLegacyOnlyEnsemble ? null : mh.usableLiftTopM));
+        const blTopVal = isSparseAdapter ? mh.blTopM : (mh.resolvedThermalTopM ?? (isLegacyOnlyEnsemble ? null : mh.blTopM));
+        const surfaceLclVal = Object.hasOwn(mh, 'surfaceLclM') ? mh.surfaceLclM : (isSparseAdapter ? mh.cloudBaseM : null);
+        const effCloudLimitVal = isSparseAdapter ? null : (Object.hasOwn(mh, 'effectiveCloudLimitM') ? mh.effectiveCloudLimitM : mh.cloudBaseM);
+
+        const spreadText = (spread: PercentileSpread | null | undefined, kind: 'lift' | 'elevation') =>
+          spread && spread.p10 != null && spread.p90 != null
+            ? ` <span class="muted" title="Ensemble p10–p90 range">(${formatQuantity(spread.p10, kind)}–${formatQuantity(spread.p90, kind)})</span>`
+            : '';
+
+        const cloudParts: string[] = [];
+        if (surfaceLclVal != null) cloudParts.push(`LCL ${fmtFt(surfaceLclVal)}`);
+        if (effCloudLimitVal != null && (surfaceLclVal == null || Math.abs(effCloudLimitVal - surfaceLclVal) > 1)) {
+          cloudParts.push(`${isLegacyOnlyEnsemble ? 'v1 ' : ''}limit ${fmtFt(effCloudLimitVal)}${spreadText(mh.cloudLimitSpreadM, 'elevation')}`);
+        }
+        const cloudLabel = (cloudParts.length ? cloudParts.join(' · ') : '–') + (mh.cloudCoverPct != null ? ` (${Math.round(mh.cloudCoverPct)}%)` : '');
+
+        const wstarCell = isSparseAdapter
+          ? '<span class="muted" title="Surface forecast · thermal profile unavailable">Unavailable</span>'
+          : wstarVal != null
+            ? `${formatQuantity(wstarVal, "lift")}${spreadText(mh.wstarSpreadMps, 'lift')}`
+            : (isLegacyOnlyEnsemble && mh.wstarMps != null
+                ? `<span class="muted" title="Legacy v1 ensemble diagnostic (v2 member derivation unavailable)">v1: ${formatQuantity(mh.wstarMps, "lift")}${spreadText(mh.wstarLegacySpreadMps, 'lift')}</span>`
+                : '–');
+
+        const uTopCell = isSparseAdapter
+          ? '<span class="muted" title="Surface forecast · thermal profile unavailable">Unavailable</span>'
+          : uTopVal != null
+            ? `${fmtFt(uTopVal)}${spreadText(mh.usableLiftSpreadM, 'elevation')}`
+            : (isLegacyOnlyEnsemble && mh.usableLiftTopM != null
+                ? `<span class="muted" title="Legacy v1 ensemble diagnostic (v2 member derivation unavailable)">v1: ${fmtFt(mh.usableLiftTopM)}${spreadText(mh.usableLiftLegacySpreadM, 'elevation')}</span>`
+                : '–');
+
+        const blTopCell = blTopVal != null
+          ? `${fmtFt(blTopVal)}${spreadText(mh.thermalTopSpreadM, 'elevation')}${mh.pblHeightM != null ? ` (${formatQuantity(mh.pblHeightM, "elevation")} AGL)` : ''}`
+          : (isLegacyOnlyEnsemble && mh.blTopM != null
+              ? `<span class="muted" title="Legacy v1 ensemble parcel top (v2 member derivation unavailable)">v1: ${fmtFt(mh.blTopM)}${spreadText(mh.blTopLegacySpreadM, 'elevation')}</span>`
+              : '–');
+
         const tr = document.createElement('tr');
         tr.innerHTML =
           `<td><strong>${mlabel}</strong></td>` +
@@ -804,10 +849,10 @@ async function main() {
           `<td>${mdata.modelElevationM != null ? formatQuantity(mdata.modelElevationM, "elevation") : '–'}</td>` +
           `<td>${mh.tempC != null ? formatQuantity(mh.tempC, "temperature", 1) : '–'}${mh.dewPointC != null ? ` / ${formatQuantity(mh.dewPointC, "temperature", 1)}` : ''}</td>` +
           `<td>${mh.windDirectionDeg != null ? `${compassPoint(mh.windDirectionDeg)} ` : ''}${mh.windSpeedMps != null ? `${formatQuantity(mh.windSpeedMps, "wind")}` : '–'}${mh.windGustMps != null ? ` (g ${formatQuantity(mh.windGustMps, "wind")})` : ''}</td>` +
-          `<td>${isSparseAdapter ? '<span class="muted" title="Surface forecast · thermal profile unavailable">Unavailable</span>' : (wstarVal != null ? formatQuantity(wstarVal, "lift") : '–')}</td>` +
-          `<td>${isSparseAdapter ? '<span class="muted" title="Surface forecast · thermal profile unavailable">Unavailable</span>' : fmtFt(uTopVal)}</td>` +
-          `<td>${fmtFt(blTopVal)}${mh.pblHeightM != null ? ` (${formatQuantity(mh.pblHeightM, "elevation")} AGL)` : ''}</td>` +
-          `<td>${fmtFt(mh.cloudBaseM)}${mh.cloudCoverPct != null ? ` (${Math.round(mh.cloudCoverPct)}%)` : ''}</td>`;
+          `<td>${wstarCell}</td>` +
+          `<td>${uTopCell}</td>` +
+          `<td>${blTopCell}</td>` +
+          `<td>${cloudLabel}</td>`;
         tbody.append(tr);
       }
     }

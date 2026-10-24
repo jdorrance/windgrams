@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
+import { SOARING_CONTRACT_VERSION } from '../soaring/science.mjs';
 
 export function isPublishedCase(root, caseId) {
   if (!/^[a-zA-Z0-9_-]+$/.test(caseId)) return false;
@@ -43,7 +44,7 @@ export function mergeRegionIndexes(primary, rrfs, isPublished) {
     if (merged.expandedCaseId && !isPublished(merged.expandedCaseId)) delete merged.expandedCaseId;
     return [merged];
   });
-  return { ...base, regions };
+  return { ...base, soaringContractVersion: SOARING_CONTRACT_VERSION, regions };
 }
 
 export function mergeSoaringRegionFiles(output) {

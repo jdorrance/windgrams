@@ -1,5 +1,5 @@
 import { convertQuantity, formatQuantity, getUnitSystem } from "./units.ts";
-import { publishedLift } from "./published-lift.ts";
+import { publishedEffectiveCloudLimit, publishedLift } from "./published-lift.ts";
 // One hour of a model profile as a sounding, and what it means for a pilot.
 //
 // The thermodynamics come from @azohra/meteo.briefing (the same lifted
@@ -70,7 +70,11 @@ export interface Sounding {
   boundaryLayerTopM: number | null;
   thermalVelocityMps: number | null;
   cloudBaseM: number | null;
+  /** Model-derived near-saturation ceiling proxy when distinct from surface LCL. */
+  effectiveCloudLimitM?: number | null;
   usableLiftTopM: number | null;
+  /** True when lifted-parcel buoyancy stays positive through the highest available level. */
+  thermalTopProfileLimited?: boolean;
   /** Surface-based CAPE the model published, J/kg. */
   capeJkg: number | null;
   inversions: Layer[];
@@ -136,8 +140,10 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
   const bl = scalar(d.boundaryLayerTopM);
   const usable = scalar(d.usableLiftTopM);
   const base = scalar(d.cloudBaseM);
+  const effLimit = scalar(publishedEffectiveCloudLimit(hour));
   const thermals = w !== null && w >= 0.1 && bl !== null;
   const zoneTop = thermals ? (usable ?? bl) : null;
+  const profileLimited = isThermalTopProfileLimited(parcel);
   return {
     validAt: hour.validAt,
     modelElevationM: zs,
@@ -147,7 +153,9 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
     boundaryLayerTopM: bl,
     thermalVelocityMps: w,
     cloudBaseM: base,
+    effectiveCloudLimitM: effLimit,
     usableLiftTopM: usable,
+    thermalTopProfileLimited: profileLimited,
     capeJkg: scalar(s.capeJkg),
     inversions: findStableLayers(points),
     cloudLayers: findCloudLayers(points),
@@ -209,6 +217,17 @@ export function thermalTop(parcel: ParcelSample[]): number | null {
     }
   }
   return rising ? parcel[parcel.length - 1].heightM : null;
+}
+
+/** True when a buoyant parcel reaches the top of the sampled profile without crossing to non-positive buoyancy. */
+export function isThermalTopProfileLimited(parcel: ParcelSample[]): boolean {
+  let rising = false;
+  for (let i = 1; i < parcel.length; i += 1) {
+    const b = parcel[i];
+    if (b.buoyancyC > 0) rising = true;
+    if (rising && b.buoyancyC <= 0) return false;
+  }
+  return rising && parcel.length > 1 && parcel[parcel.length - 1].buoyancyC > 0;
 }
 
 // ── interpolation (linear in log-pressure, as the chart draws) ──────────────
@@ -291,7 +310,10 @@ export function findStableLayers(points: SoundingPoint[]): Layer[] {
   return layers;
 }
 
-/** Layers where the air is within 1 °C of saturation: cloud is likely there. */
+/**
+ * Layers where the model column is within 1 °C of saturation (a model-derived
+ * near-saturation proxy for cloud layers, rather than an observed cloud base).
+ */
 export function findCloudLayers(points: SoundingPoint[]): Layer[] {
   const layers: Layer[] = [];
   points.forEach((p, i) => {
@@ -316,7 +338,7 @@ export function freezingLevel(points: SoundingPoint[]): number | null {
   return null;
 }
 
-// ── plain words ─────────────────────────────────────────────────────────────
+// ── plain words ────────────────────────────────────────────────────────────────
 
 export type Tone = "good" | "neutral" | "caution" | "warning";
 

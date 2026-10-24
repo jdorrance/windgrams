@@ -6,17 +6,17 @@ import {
   componentsToWind,
   mixingRatioKgKg,
   normalizeDegrees,
-  surfaceToBoundaryLayerShearMps,
-  usableLiftTopM,
   windToComponents,
 } from '@azohra/meteo.briefing/derive';
 import { deriveSiteForecast } from './vendor/derive-0.6.0.mjs';
 import { wind, storageCoordinates } from './grid.mjs';
 import { modelFor, semanticsFor, validAt } from './common.mjs';
 
-export const SOARING_CONTRACT_VERSION = '2.0.0';
+export const SOARING_CONTRACT_VERSION = '2.1.0';
 export const metrics = ['thermalVelocityMps', 'usableLiftTopM', 'boundaryLayerTopM', 'cloudBaseM', 'pblHeightM'];
 export const WXTOFLY_SINK_MPS = 225 * 0.00508; // 225 ft/min = 1.143 m/s (WxToFly windgram specification)
+export const LENSCHOW_PEAK_ZETA = 0.3125; // 5 / 16: exact maximum of 4 * zeta^(1/3) * (1 - 0.8 * zeta)
+export const LENSCHOW_F_MAX = 4 * Math.cbrt(LENSCHOW_PEAK_ZETA) * (1 - 0.8 * LENSCHOW_PEAK_ZETA); // 2.03581321244618
 export const v2LayerMetrics = [
   'resolvedThermalTopM',
   'thermalTopPlus1CM',
@@ -25,6 +25,7 @@ export const v2LayerMetrics = [
   'hcritWxtoflyM',
   'dryHcritM',
   'surfaceLclM',
+  'effectiveCloudLimitM',
   'mixedLayerLclM',
   'cuPotentialM',
   'odPotentialM',
@@ -61,13 +62,15 @@ export const v2LayerMetrics = [
 ];
 
 const RD_J_PER_KG_K = 287.05;
+const CPD_J_PER_KG_K = 1004.0;
+const LV_J_PER_KG = 2501000.0;
 const GRAVITY_MPS2 = 9.80665;
-const POISSON_KAPPA = 0.2854; // Rd / cpd
+const POISSON_KAPPA = 0.2854; // Rd / cpd for mixed-layer potential temperature
 const EPSILON = 0.622;
+const VIRTUAL_TEMP_DELTA = (1 - EPSILON) / EPSILON; // ~0.607717
 const MAGNUS_A = 17.625;
 const MAGNUS_B_C = 243.04;
 const MAGNUS_ES0_HPA = 6.1094;
-const SATURATED_DEPRESSION_C = 0.5;
 const finite = n => typeof n === 'number' && Number.isFinite(n);
 const round1 = n => (finite(n) ? Math.round(n * 10) / 10 : null);
 const round2 = n => (finite(n) ? Math.round(n * 100) / 100 : null);
@@ -115,34 +118,90 @@ export function dewPointFromMixingRatioC(mixingRatio, pressureHpa) {
 }
 
 /**
- * Physical Mixed-Layer LCL (DrJack `zblcl`, m MSL) without arbitrary scaling multipliers:
- * averages potential temperature θ and water-vapor mixing ratio r across the boundary
- * layer, references the mixed parcel to surface pressure, and lifts via Bolton's LCL.
+ * Physical Mixed-Layer LCL (DrJack `zblcl`, m MSL) using pressure-mass averages
+ * of potential temperature θ and water-vapor mixing ratio r across [terrainM, blTopM]
+ * with interpolated layer boundaries (consistent with MetPy's mixed-layer integration),
+ * clipped strictly at the actual layer top without including levels above shallow layers.
  */
 export function computeMixedLayerLclM(terrainM, surfaceTempC, surfaceDewPointC, levels, blTopM) {
-  if (!finite(terrainM) || !finite(surfaceTempC) || !finite(surfaceDewPointC) || !levels?.length) return null;
-  const firstLevel = levels[0];
-  const pSfcHpa = hypsometricSurfacePressureHpa(terrainM, surfaceTempC, firstLevel);
-  const capM = Math.max(blTopM ?? terrainM, firstLevel.heightM);
-  const blLevels = levels.filter(l => l.heightM <= capM);
-  const sampleLevels = blLevels.length > 0 ? blLevels : [firstLevel];
+  if (!finite(terrainM) || !finite(surfaceTempC) || !finite(surfaceDewPointC) || !Array.isArray(levels) || !levels.length) return null;
+  const validLevels = levels
+    .filter(l => l && finite(l.heightM) && l.heightM > terrainM && finite(l.pressureHpa) && l.pressureHpa > 0 && finite(l.temperatureC) && (finite(l.dewPointC) || finite(l.dewPointDepressionC)))
+    .sort((a, b) => a.heightM - b.heightM);
+  if (validLevels.length === 0) return null;
 
-  const nodes = [
-    { pressureHpa: pSfcHpa, temperatureC: surfaceTempC, dewPointC: Math.min(surfaceTempC, surfaceDewPointC) },
-    ...sampleLevels.map(l => {
-      const td = finite(l.dewPointC) ? l.dewPointC : l.temperatureC - (l.dewPointDepressionC ?? 0);
-      return { pressureHpa: l.pressureHpa, temperatureC: l.temperatureC, dewPointC: Math.min(l.temperatureC, td) };
+  const firstLevel = validLevels[0];
+  const pSfcHpa = hypsometricSurfacePressureHpa(terrainM, surfaceTempC, firstLevel);
+  const sfcDewC = Math.min(surfaceTempC, surfaceDewPointC);
+  const maxHeightM = validLevels[validLevels.length - 1].heightM;
+  const targetTopM = Math.min(Math.max(terrainM, finite(blTopM) ? blTopM : terrainM), maxHeightM);
+
+  if (targetTopM <= terrainM) {
+    const lclAglM = parcelLclAglM(surfaceTempC, sfcDewC);
+    return lclAglM == null ? null : Math.max(terrainM, terrainM + lclAglM);
+  }
+
+  const rawNodes = [
+    {
+      heightM: terrainM,
+      pressureHpa: pSfcHpa,
+      thetaK: (surfaceTempC + 273.15) * (1000 / pSfcHpa) ** POISSON_KAPPA,
+      mixingRatio: mixingRatioKgKg(sfcDewC, pSfcHpa),
+    },
+    ...validLevels.map(l => {
+      const td = Math.min(l.temperatureC, finite(l.dewPointC) ? l.dewPointC : l.temperatureC - l.dewPointDepressionC);
+      return {
+        heightM: l.heightM,
+        pressureHpa: l.pressureHpa,
+        thetaK: (l.temperatureC + 273.15) * (1000 / l.pressureHpa) ** POISSON_KAPPA,
+        mixingRatio: mixingRatioKgKg(td, l.pressureHpa),
+      };
     }),
   ];
 
-  let sumThetaK = 0;
-  let sumMixingRatio = 0;
-  for (const node of nodes) {
-    sumThetaK += (node.temperatureC + 273.15) * (1000 / node.pressureHpa) ** POISSON_KAPPA;
-    sumMixingRatio += mixingRatioKgKg(node.dewPointC, node.pressureHpa);
+  const clipped = [rawNodes[0]];
+  for (let i = 1; i < rawNodes.length; i += 1) {
+    const prev = rawNodes[i - 1];
+    const curr = rawNodes[i];
+    if (curr.heightM <= targetTopM) {
+      clipped.push(curr);
+      if (curr.heightM === targetTopM) break;
+    } else {
+      if (targetTopM > prev.heightM) {
+        const fh = (targetTopM - prev.heightM) / (curr.heightM - prev.heightM);
+        const pTop = prev.pressureHpa * Math.exp(fh * Math.log(curr.pressureHpa / prev.pressureHpa));
+        const fp = prev.pressureHpa !== curr.pressureHpa ? (prev.pressureHpa - pTop) / (prev.pressureHpa - curr.pressureHpa) : fh;
+        clipped.push({
+          heightM: targetTopM,
+          pressureHpa: pTop,
+          thetaK: prev.thetaK + fp * (curr.thetaK - prev.thetaK),
+          mixingRatio: prev.mixingRatio + fp * (curr.mixingRatio - prev.mixingRatio),
+        });
+      }
+      break;
+    }
   }
-  const meanThetaK = sumThetaK / nodes.length;
-  const meanMixingRatio = sumMixingRatio / nodes.length;
+
+  let totalDp = 0;
+  let sumThetaDp = 0;
+  let sumMixingRatioDp = 0;
+  for (let i = 0; i < clipped.length - 1; i += 1) {
+    const lower = clipped[i];
+    const upper = clipped[i + 1];
+    const dp = Math.max(0, lower.pressureHpa - upper.pressureHpa);
+    if (dp <= 0) continue;
+    totalDp += dp;
+    sumThetaDp += 0.5 * (lower.thetaK + upper.thetaK) * dp;
+    sumMixingRatioDp += 0.5 * (lower.mixingRatio + upper.mixingRatio) * dp;
+  }
+
+  if (totalDp <= 0) {
+    const lclAglM = parcelLclAglM(surfaceTempC, sfcDewC);
+    return lclAglM == null ? null : Math.max(terrainM, terrainM + lclAglM);
+  }
+
+  const meanThetaK = sumThetaDp / totalDp;
+  const meanMixingRatio = sumMixingRatioDp / totalDp;
   const mixedSurfaceTempC = meanThetaK * (pSfcHpa / 1000) ** POISSON_KAPPA - 273.15;
   const mixedSurfaceDewPointC = Math.min(mixedSurfaceTempC, dewPointFromMixingRatioC(meanMixingRatio, pSfcHpa));
   const lclAglM = parcelLclAglM(mixedSurfaceTempC, mixedSurfaceDewPointC);
@@ -150,11 +209,112 @@ export function computeMixedLayerLclM(terrainM, surfaceTempC, surfaceDewPointC, 
 }
 
 /**
- * Deardorff (1970) convective velocity scale W* (m/s) driven by surface virtual heat flux
- * and resolved boundary-layer depth (m). Uses the exact thermodynamic constants of v1
- * so v1 and v2 agree identically whenever resolvedDepthM equals v1 boundaryLayerDepthM.
+ * Integrates horizontal wind components (u, v) over geometric height z across [terrainM, blTopM]
+ * using the trapezoidal rule with interpolated layer boundaries, clipped strictly at the actual
+ * boundary-layer top without including free-tropospheric levels above shallow layers.
  */
-export function computeThermalVelocityMps(surfaceTemperatureC, sensibleHeatFluxWm2, latentHeatFluxWm2, boundaryLayerDepthM, firstPressureHpa) {
+export function computeBoundaryLayerWind(terrainM, surfaceWind, levels, blTopM, wind80m = null) {
+  if (!finite(terrainM) || !surfaceWind || !finite(surfaceWind.windSpeedMps) || !finite(surfaceWind.windDirectionDeg) || !Array.isArray(levels)) {
+    return null;
+  }
+  const validLevels = levels
+    .filter(l => l && finite(l.heightM) && l.heightM > terrainM && finite(l.windSpeedMps) && finite(l.windDirectionDeg))
+    .sort((a, b) => a.heightM - b.heightM);
+  const w80 = wind80m && finite(wind80m.windSpeedMps) && finite(wind80m.windDirectionDeg)
+    ? wind80m
+    : (finite(surfaceWind.wind80mSpeedMps) && finite(surfaceWind.wind80mDirectionDeg)
+        ? { windSpeedMps: surfaceWind.wind80mSpeedMps, windDirectionDeg: surfaceWind.wind80mDirectionDeg }
+        : null);
+  if (validLevels.length === 0 && !w80) return null;
+
+  const sfcComp = windToComponents(surfaceWind.windSpeedMps, surfaceWind.windDirectionDeg);
+  const rawWindNodes = [
+    { heightM: terrainM, ...sfcComp, count: 1 },
+    ...(w80 ? [{ heightM: terrainM + 80, ...windToComponents(w80.windSpeedMps, w80.windDirectionDeg), count: 1 }] : []),
+    ...validLevels.map(l => ({ heightM: l.heightM, ...windToComponents(l.windSpeedMps, l.windDirectionDeg), count: 1 })),
+  ].sort((a, b) => a.heightM - b.heightM);
+
+  const windNodes = [];
+  for (const node of rawWindNodes) {
+    const prev = windNodes[windNodes.length - 1];
+    if (prev && Math.abs(node.heightM - prev.heightM) <= 1e-6) {
+      const nextCount = prev.count + 1;
+      prev.uMps = (prev.uMps * prev.count + node.uMps) / nextCount;
+      prev.vMps = (prev.vMps * prev.count + node.vMps) / nextCount;
+      prev.count = nextCount;
+    } else {
+      windNodes.push({ ...node });
+    }
+  }
+
+  const maxHeightM = windNodes[windNodes.length - 1].heightM;
+  const targetTopM = Math.min(Math.max(terrainM, finite(blTopM) ? blTopM : terrainM), maxHeightM);
+
+  if (targetTopM <= terrainM) {
+    const w = componentsToWind(sfcComp.uMps, sfcComp.vMps);
+    return {
+      blMeanWindSpeedMps: w.speedMps,
+      blMeanWindDirDeg: normalizeDegrees(w.directionDeg),
+      blTopWindSpeedMps: w.speedMps,
+      blTopWindDirDeg: normalizeDegrees(w.directionDeg),
+      blWindShearMps: 0,
+    };
+  }
+
+  const clipped = [windNodes[0]];
+  for (let i = 1; i < windNodes.length; i += 1) {
+    const prev = windNodes[i - 1];
+    const curr = windNodes[i];
+    if (curr.heightM <= targetTopM) {
+      clipped.push(curr);
+      if (curr.heightM === targetTopM) break;
+    } else {
+      if (targetTopM > prev.heightM) {
+        const fh = (targetTopM - prev.heightM) / (curr.heightM - prev.heightM);
+        clipped.push({
+          heightM: targetTopM,
+          uMps: prev.uMps + fh * (curr.uMps - prev.uMps),
+          vMps: prev.vMps + fh * (curr.vMps - prev.vMps),
+        });
+      }
+      break;
+    }
+  }
+
+  let totalDz = 0;
+  let sumUDz = 0;
+  let sumVDz = 0;
+  for (let i = 0; i < clipped.length - 1; i += 1) {
+    const a = clipped[i];
+    const b = clipped[i + 1];
+    const dz = Math.max(0, b.heightM - a.heightM);
+    if (dz <= 0) continue;
+    totalDz += dz;
+    sumUDz += 0.5 * (a.uMps + b.uMps) * dz;
+    sumVDz += 0.5 * (a.vMps + b.vMps) * dz;
+  }
+
+  const meanU = totalDz > 0 ? sumUDz / totalDz : sfcComp.uMps;
+  const meanV = totalDz > 0 ? sumVDz / totalDz : sfcComp.vMps;
+  const topNode = clipped[clipped.length - 1];
+  const meanWind = componentsToWind(meanU, meanV);
+  const topWind = componentsToWind(topNode.uMps, topNode.vMps);
+  const blWindShearMps = Math.hypot(topNode.uMps - sfcComp.uMps, topNode.vMps - sfcComp.vMps);
+
+  return {
+    blMeanWindSpeedMps: meanWind.speedMps,
+    blMeanWindDirDeg: normalizeDegrees(meanWind.directionDeg),
+    blTopWindSpeedMps: topWind.speedMps,
+    blTopWindDirDeg: normalizeDegrees(topWind.directionDeg),
+    blWindShearMps,
+  };
+}
+
+/**
+ * Legacy v1/v2.0 fixed-density / first-level-pressure convective velocity scale W* (m/s).
+ * Retained for controlled sensitivity comparisons against the surface-density-consistent formulation.
+ */
+export function computeLegacyThermalVelocityMps(surfaceTemperatureC, sensibleHeatFluxWm2, latentHeatFluxWm2, boundaryLayerDepthM, firstPressureHpa) {
   if (!finite(boundaryLayerDepthM) || boundaryLayerDepthM <= 0 || !finite(firstPressureHpa) || firstPressureHpa <= 0) return 0;
   const surfaceTemperatureK = surfaceTemperatureC + 273.15;
   const virtualHeatFlux = (sensibleHeatFluxWm2 ?? 0) + 245268e-9 * surfaceTemperatureK * (latentHeatFluxWm2 ?? 0);
@@ -164,30 +324,100 @@ export function computeThermalVelocityMps(surfaceTemperatureC, sensibleHeatFluxW
 }
 
 /**
- * Evaluates usable-lift top (m MSL) for a given sink rate along the Lenschow & Stephens (1980)
- * convective updraft profile bounded strictly within [modelElevationM, resolvedThermalTopM].
- * Including normalized boundary-layer height nodes prevents sparse 9-level profiles (where
- * 925 hPa is above a shallow PBL top) from extrapolating usable lift above resolvedThermalTopM.
+ * Surface-density-consistent Deardorff (1970) / MacVean convective velocity scale W* (m/s):
+ *   w*^3 = (g * z_i / theta_v0) * (w' theta_v')_s
+ * Converts both the reference virtual temperature and kinematic virtual heat flux using the same
+ * surface-to-reference potential temperature factor (P_ref / P_sfc)^(Rd/cpd) so the arbitrary
+ * reference pressure cancels identically, and computes surface air density rho_sfc = P_sfc / (Rd * T_v0)
+ * from actual or hypsometric surface pressure rather than a fixed sea-level density or upper-level pressure.
  */
-export function computeUsableLiftTopV2M({ modelElevationM, resolvedThermalTopM, thermalVelocityV2Mps, cloudBaseM, levels }, sinkRateMps = 1.0) {
-  if (!finite(modelElevationM) || !finite(resolvedThermalTopM) || !finite(thermalVelocityV2Mps)) return null;
+export function computeThermalVelocityMps(surfaceTemperatureCOrOpts, sensibleHeatFluxWm2, latentHeatFluxWm2, boundaryLayerDepthM, surfacePressureHpa, options = {}) {
+  const opts = typeof surfaceTemperatureCOrOpts === 'object' && surfaceTemperatureCOrOpts !== null
+    ? surfaceTemperatureCOrOpts
+    : {
+        surfaceTemperatureC: surfaceTemperatureCOrOpts,
+        sensibleHeatFluxWm2,
+        latentHeatFluxWm2,
+        boundaryLayerDepthM,
+        surfacePressureHpa,
+        ...options,
+      };
+
+  const sfcTempC = opts.surfaceTemperatureC;
+  const depthM = opts.boundaryLayerDepthM;
+  const pSfcHpa = finite(opts.surfacePressureHpa) && opts.surfacePressureHpa > 0
+    ? opts.surfacePressureHpa
+    : (finite(opts.terrainM) && opts.firstLevel ? hypsometricSurfacePressureHpa(opts.terrainM, sfcTempC, opts.firstLevel) : null);
+  const pRefHpa = finite(opts.referencePressureHpa) && opts.referencePressureHpa > 0 ? opts.referencePressureHpa : 1000.0;
+
+  if (!finite(sfcTempC) || !finite(depthM) || depthM <= 0 || !finite(pSfcHpa) || pSfcHpa <= 0) return 0;
+
+  const sfcTempK = sfcTempC + 273.15;
+  const sfcDewC = finite(opts.surfaceDewPointC) ? Math.min(sfcTempC, opts.surfaceDewPointC) : null;
+  const r0 = sfcDewC !== null ? mixingRatioKgKg(sfcDewC, pSfcHpa) : 0;
+  const q0 = r0 / (1 + r0);
+  const tv0K = sfcTempK * ((1 + r0 / EPSILON) / (1 + r0));
+  const rhoSfcKgM3 = (pSfcHpa * 100) / (RD_J_PER_KG_K * tv0K);
+  const kappa = RD_J_PER_KG_K / CPD_J_PER_KG_K;
+  const exnerScale = (pRefHpa / pSfcHpa) ** kappa;
+  const thetaV0K = tv0K * exnerScale;
+
+  const kinematicSensibleFlux = (opts.sensibleHeatFluxWm2 ?? 0) / (rhoSfcKgM3 * CPD_J_PER_KG_K);
+  const kinematicMoistureFlux = (opts.latentHeatFluxWm2 ?? 0) / (rhoSfcKgM3 * LV_J_PER_KG);
+  const kinematicVirtualTempFlux = (1 + VIRTUAL_TEMP_DELTA * q0) * kinematicSensibleFlux + VIRTUAL_TEMP_DELTA * sfcTempK * kinematicMoistureFlux;
+  const kinematicVirtualThetaFlux = exnerScale * kinematicVirtualTempFlux;
+
+  if (kinematicVirtualThetaFlux <= 0) return 0;
+  return Math.cbrt((GRAVITY_MPS2 * depthM / thetaV0K) * kinematicVirtualThetaFlux);
+}
+
+export function lenschowNormalizedUpdraft(zeta) {
+  if (!finite(zeta) || zeta <= 0) return 0;
+  return 4 * Math.cbrt(zeta) * (1 - 0.8 * zeta);
+}
+
+/**
+ * Evaluates usable-lift top (m MSL) for a given sink rate along the Lenschow & Stephens (1980)
+ * convective updraft profile F(zeta) = 4 * zeta^(1/3) * (1 - 0.8 * zeta) bounded strictly within
+ * [modelElevationM, resolvedThermalTopM].
+ *
+ * Handles:
+ * 1. Lift below sink everywhere (W* * F_max < sinkRateMps -> null),
+ * 2. Cloud base below the first usable portion of the ascending branch (zeta_cap <= 0.3125 and
+ *    W* * F(zeta_cap) < sinkRateMps -> null),
+ * 3. Lift remaining usable all the way through the thermal top (W* * F(1) >= sinkRateMps -> effectiveCapM),
+ * 4. Monotone descending branch crossing on [0.3125, 1.0] capped by effectiveCapM.
+ */
+export function computeUsableLiftTopV2M({ modelElevationM, resolvedThermalTopM, thermalVelocityV2Mps, cloudBaseM }, sinkRateMps = 1.0) {
+  if (!finite(modelElevationM) || !finite(resolvedThermalTopM) || !finite(thermalVelocityV2Mps) || !finite(sinkRateMps) || sinkRateMps <= 0) {
+    return null;
+  }
   const depthM = resolvedThermalTopM - modelElevationM;
-  if (depthM <= 0 || thermalVelocityV2Mps * 2.02 < sinkRateMps) return null;
-  const fractions = [0.25, 0.3125, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-  const syntheticNodes = fractions.map(f => ({ heightM: modelElevationM + depthM * f }));
-  const nativeInsideBl = (levels ?? [])
-    .filter(l => finite(l.heightM) && l.heightM >= modelElevationM + depthM * 0.25 && l.heightM <= resolvedThermalTopM)
-    .map(l => ({ heightM: l.heightM }));
-  const boundedLevels = [...syntheticNodes, ...nativeInsideBl].sort((a, b) => a.heightM - b.heightM);
-  const rawTop = usableLiftTopM({
-    modelElevationM,
-    boundaryLayerTopM: resolvedThermalTopM,
-    thermalVelocityMps: thermalVelocityV2Mps,
-    cloudBaseM: finite(cloudBaseM) ? cloudBaseM : 99999,
-    levels: boundedLevels,
-  }, sinkRateMps);
-  if (rawTop == null) return null;
-  return Math.min(resolvedThermalTopM, rawTop);
+  if (depthM <= 0 || thermalVelocityV2Mps <= 0 || thermalVelocityV2Mps * LENSCHOW_F_MAX < sinkRateMps) return null;
+
+  const effectiveCapM = finite(cloudBaseM) ? Math.min(resolvedThermalTopM, cloudBaseM) : resolvedThermalTopM;
+  if (effectiveCapM <= modelElevationM) return null;
+
+  const zetaCap = (effectiveCapM - modelElevationM) / depthM;
+  if (zetaCap <= LENSCHOW_PEAK_ZETA) {
+    if (thermalVelocityV2Mps * lenschowNormalizedUpdraft(zetaCap) < sinkRateMps) return null;
+    return effectiveCapM;
+  }
+
+  const targetF = sinkRateMps / thermalVelocityV2Mps;
+  if (lenschowNormalizedUpdraft(1.0) >= targetF) {
+    return effectiveCapM;
+  }
+
+  let lo = LENSCHOW_PEAK_ZETA;
+  let hi = 1.0;
+  for (let step = 0; step < 60; step += 1) {
+    const mid = 0.5 * (lo + hi);
+    if (lenschowNormalizedUpdraft(mid) >= targetF) lo = mid;
+    else hi = mid;
+  }
+  const crossingM = modelElevationM + depthM * 0.5 * (lo + hi);
+  return Math.min(effectiveCapM, crossingM);
 }
 
 export function resolvedParcelDepthM(surfaceTemperatureC, sensibleHeatFluxWm2, latentHeatFluxWm2, pblHeightM, modelElevationM, levels, deltaTC = 0) {
@@ -317,31 +547,32 @@ export function deriveDiagnosticsV2(terrain, source, v1Hour, options = {}) {
   );
   const thermalTopPlus1CM = plus1DepthM > 0 ? terrain + plus1DepthM : null;
 
-  // Consistent v2 convective velocity scale W* computed from resolvedDepthM (NOT v1 depth)
-  const thermalVelocityV2Raw = computeThermalVelocityMps(
-    source.temperatureC,
-    source.sensibleHeatFluxWm2,
-    source.latentHeatFluxWm2,
-    resolvedDepthM,
-    levels[0].pressureHpa,
-  );
+  const pSfcHpa = hypsometricSurfacePressureHpa(terrain, source.temperatureC, levels[0]);
+  const thermalVelocityV2Raw = computeThermalVelocityMps({
+    surfaceTemperatureC: source.temperatureC,
+    surfaceDewPointC,
+    sensibleHeatFluxWm2: source.sensibleHeatFluxWm2,
+    latentHeatFluxWm2: source.latentHeatFluxWm2,
+    boundaryLayerDepthM: resolvedDepthM,
+    surfacePressureHpa: pSfcHpa,
+  });
   const thermalVelocityV2Mps = round2(thermalVelocityV2Raw) ?? 0;
 
-  // Physical Mixed-Layer LCL (zblcl) without arbitrary 0.85 scaling
-  const blTopForMixM = resolvedThermalTopM ?? (terrain + (source.pblHeightM ?? 300));
+  // Physical Mixed-Layer LCL (zblcl) integrated over pressure mass and clipped at actual layer top
+  const blTopForMixM = resolvedThermalTopM ?? (terrain + (source.pblHeightM ?? 0));
   const mixedLayerLclM = computeMixedLayerLclM(terrain, source.temperatureC, surfaceDewPointC, levels, blTopForMixM);
 
   const cuPotentialM = resolvedThermalTopM != null && surfaceLclM != null ? resolvedThermalTopM - surfaceLclM : null;
   const odPotentialM = resolvedThermalTopM != null && mixedLayerLclM != null ? resolvedThermalTopM - mixedLayerLclM : null;
 
-  const v2CloudBaseM = v1Hour.derived?.cloudBaseM ?? surfaceLclM;
+  const effectiveCloudLimitM = v1Hour.derived?.cloudBaseM ?? surfaceLclM;
 
   // Consistent v2 usable-lift diagnostics computed from resolvedThermalTopM and thermalVelocityV2Mps
   const usableLiftTopV2M = computeUsableLiftTopV2M({
     modelElevationM: terrain,
     resolvedThermalTopM,
     thermalVelocityV2Mps,
-    cloudBaseM: v2CloudBaseM,
+    cloudBaseM: effectiveCloudLimitM,
     levels,
   }, 1.0);
 
@@ -349,7 +580,7 @@ export function deriveDiagnosticsV2(terrain, source, v1Hour, options = {}) {
     modelElevationM: terrain,
     resolvedThermalTopM,
     thermalVelocityV2Mps,
-    cloudBaseM: v2CloudBaseM,
+    cloudBaseM: effectiveCloudLimitM,
     levels,
   }, WXTOFLY_SINK_MPS);
 
@@ -357,59 +588,26 @@ export function deriveDiagnosticsV2(terrain, source, v1Hour, options = {}) {
     modelElevationM: terrain,
     resolvedThermalTopM,
     thermalVelocityV2Mps,
-    cloudBaseM: 99999,
+    cloudBaseM: null,
     levels,
   }, 1.0);
 
-  // Boundary-layer mean wind & BL top wind & vector shear
-  const windNodes = [
-    { heightM: terrain, ...windToComponents(source.windSpeedMps, source.windDirectionDeg) },
-    ...(finite(source.wind80mSpeedMps) && finite(source.wind80mDirectionDeg)
-      ? [{ heightM: terrain + 80, ...windToComponents(source.wind80mSpeedMps, source.wind80mDirectionDeg) }]
-      : []),
-    ...levels.map(l => ({ heightM: l.heightM, ...windToComponents(l.windSpeedMps, l.windDirectionDeg) })),
-  ].sort((a, b) => a.heightM - b.heightM);
-
-  const targetTopM = resolvedThermalTopM ?? v1Hour.derived.boundaryLayerTopM ?? (terrain + (source.pblHeightM ?? 0));
-  let sumU = windNodes[0].uMps;
-  let sumV = windNodes[0].vMps;
-  let countW = 1;
-  for (const node of windNodes.slice(1)) {
-    if (node.heightM <= Math.max(targetTopM, levels[0].heightM)) {
-      sumU += node.uMps;
-      sumV += node.vMps;
-      countW += 1;
-    }
-  }
-  const meanU = sumU / countW;
-  const meanV = sumV / countW;
-  const blMeanWindSpeedMps = Math.hypot(meanU, meanV);
-  const blMeanWindDirDeg = normalizeDegrees((Math.atan2(-meanU, -meanV) * 180) / Math.PI);
-
-  // Interpolate wind at targetTopM
-  let topU = windNodes[windNodes.length - 1].uMps;
-  let topV = windNodes[windNodes.length - 1].vMps;
-  if (targetTopM <= windNodes[0].heightM) {
-    topU = windNodes[0].uMps;
-    topV = windNodes[0].vMps;
-  } else {
-    for (let k = 0; k < windNodes.length - 1; k++) {
-      if (targetTopM <= windNodes[k + 1].heightM) {
-        const frac = (targetTopM - windNodes[k].heightM) / Math.max(1, windNodes[k + 1].heightM - windNodes[k].heightM);
-        topU = windNodes[k].uMps + frac * (windNodes[k + 1].uMps - windNodes[k].uMps);
-        topV = windNodes[k].vMps + frac * (windNodes[k + 1].vMps - windNodes[k].vMps);
-        break;
-      }
-    }
-  }
-  const blTopWindSpeedMps = Math.hypot(topU, topV);
-  const blTopWindDirDeg = normalizeDegrees((Math.atan2(-topU, -topV) * 180) / Math.PI);
-  const blWindShearMps = surfaceToBoundaryLayerShearMps({
-    modelElevationM: terrain,
-    boundaryLayerTopM: targetTopM > terrain ? targetTopM : levels[0].heightM,
-    surfaceWind: { windSpeedMps: source.windSpeedMps, windDirectionDeg: source.windDirectionDeg },
+  // Height-weighted boundary-layer mean wind, BL top wind, and vector shear clipped at actual BL top
+  const targetTopM = resolvedThermalTopM ?? (terrain + (source.pblHeightM ?? 0));
+  const blWind = computeBoundaryLayerWind(
+    terrain,
+    { windSpeedMps: source.windSpeedMps, windDirectionDeg: source.windDirectionDeg },
     levels,
-  });
+    targetTopM,
+    finite(source.wind80mSpeedMps) && finite(source.wind80mDirectionDeg)
+      ? { windSpeedMps: source.wind80mSpeedMps, windDirectionDeg: source.wind80mDirectionDeg }
+      : null,
+  );
+  const blMeanWindSpeedMps = blWind?.blMeanWindSpeedMps ?? null;
+  const blMeanWindDirDeg = blWind?.blMeanWindDirDeg ?? null;
+  const blTopWindSpeedMps = blWind?.blTopWindSpeedMps ?? null;
+  const blTopWindDirDeg = blWind?.blTopWindDirDeg ?? null;
+  const blWindShearMps = blWind?.blWindShearMps ?? null;
   const bsRatioRaw = blWindShearMps != null ? buoyancyShearRatio(thermalVelocityV2Mps, Math.max(0.2, blWindShearMps)) : null;
 
   // Vertical velocities in geometric m/s
@@ -442,6 +640,7 @@ export function deriveDiagnosticsV2(terrain, source, v1Hour, options = {}) {
     hcritWxtoflyM: round1(hcritWxtoflyM),
     dryHcritM: round1(dryHcritM),
     surfaceLclM: round1(surfaceLclM),
+    effectiveCloudLimitM: round1(effectiveCloudLimitM),
     mixedLayerLclM: round1(mixedLayerLclM),
     cuPotentialM: round1(cuPotentialM),
     odPotentialM: round1(odPotentialM),

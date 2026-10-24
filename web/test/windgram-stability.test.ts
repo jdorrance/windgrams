@@ -4,7 +4,7 @@ afterEach(() => setUnitSystem("imperial"));
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast } from "@azohra/meteo.briefing/contract";
-import { buildWindgramView } from "../src/lib/windgram-view.ts";
+import { buildWindgramView, heightToY } from "../src/lib/windgram-view.ts";
 import { renderWindgramKey, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
 import { WINDGRAM_STABILITY, stabilityRange } from "../src/lib/windgram-stability.ts";
 
@@ -65,7 +65,6 @@ test("filled bands use signed degrees Celsius per 1,000 feet on both sides of ea
   }
 });
 
-
 test("lapse legend converts display boundaries without changing WxToFly physics", () => {
   const imperial = uniformLapseView(-2.7);
   assert.equal(stabilityRange(0), "≤ −5.4");
@@ -80,4 +79,63 @@ test("lapse legend converts display boundaries without changing WxToFly physics"
   assert.match(key, /&lt;4.63 m\/s/);
   assert.match(key, /0 °C freezing level/);
   assert.deepEqual(uniformLapseView(-2.7).fields, imperial.fields);
+});
+
+test("interval lapse rates stay constant within their source layer boundaries without displacing inversions", () => {
+  const profile = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")))!;
+  profile.site.modelElevationM = 0;
+  profile.hours = profile.hours.slice(0, 2).map((hour) => ({
+    ...hour,
+    surface: { ...hour.surface, temperatureC: 20, dewPointC: 0 },
+    levels: [
+      { pressureHpa: 950, heightM: 500, temperatureC: 15, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+      { pressureHpa: 900, heightM: 1000, temperatureC: 20, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+      { pressureHpa: 850, heightM: 1500, temperatureC: 15, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+    ],
+  }));
+  const view = buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 600 });
+  const x = view.left + view.plotWidth / 2;
+  const classesAtHeight = (z: number) => {
+    const y = heightToY(view, z);
+    return view.fields.filter((field) => paintsPoint(field.path, x, y)).map((field) => field.className);
+  };
+  // 0–500 m cools by 5 °C (−3.048 °C/1,000 ft: very-unstable); 400 m must NOT be painted as an inversion.
+  assert.deepEqual(classesAtHeight(400), ["meteo-gram-stab-very-unstable"]);
+  // 500–1,000 m warms by 5 °C (+3.048 °C/1,000 ft: strong-inversion); 900 m must NOT be painted as unstable.
+  assert.deepEqual(classesAtHeight(600), ["meteo-gram-stab-strong-inversion"]);
+  assert.deepEqual(classesAtHeight(900), ["meteo-gram-stab-strong-inversion"]);
+  // 1,000–1,500 m cools by 5 °C (−3.048 °C/1,000 ft: very-unstable).
+  assert.deepEqual(classesAtHeight(1100), ["meteo-gram-stab-very-unstable"]);
+});
+
+test("missing temperature intervals are not bridged vertically or blended into adjacent valid hour columns", () => {
+  const profile = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")))!;
+  profile.site.modelElevationM = 0;
+  // Hour 0: 0-500 m is strong inversion (+3.048 °C/1,000 ft), 500-1,500 m is missing (1,000 m temperature is NaN),
+  // and 1,500-2,000 m is very unstable (-3.048 °C/1,000 ft).
+  // Hour 1: 0-2,000 m is uniformly very unstable (-3.048 °C/1,000 ft).
+  profile.hours = profile.hours.slice(0, 2).map((hour, hourIdx) => ({
+    ...hour,
+    surface: { ...hour.surface, temperatureC: 20, dewPointC: 0 },
+    levels: [
+      { pressureHpa: 950, heightM: 500, temperatureC: hourIdx === 0 ? 25 : 15, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+      { pressureHpa: 900, heightM: 1000, temperatureC: (hourIdx === 0 ? NaN : 10) as number, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+      { pressureHpa: 850, heightM: 1500, temperatureC: 5, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+      { pressureHpa: 800, heightM: 2000, temperatureC: 0, dewPointC: -5, windSpeedMps: 3, windDirectionDeg: 180 },
+    ],
+  }));
+  const view = buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 600 });
+  const yMidGap = heightToY(view, 1000);
+  // Hour 0 column (inside missing 500-1,500 m gap) has no stability class and is masked by windgram-missing
+  const xHour0 = view.left + view.columnWidth * 0.5;
+  const classesHour0Gap = view.fields.filter((f) => paintsPoint(f.path, xHour0, yMidGap)).map((f) => f.className);
+  assert.deepEqual(classesHour0Gap, ["windgram-missing"]);
+
+  // Hour 1 column (both near the column boundary with Hour 0 and at Hour 1 center) must remain pure very-unstable
+  // without any bridged gradient from Hour 0's +3.048 inversion below 500 m bleeding into Hour 1.
+  for (const colFrac of [1.15, 1.5, 1.85]) {
+    const xHour1 = view.left + view.columnWidth * colFrac;
+    const classesHour1 = view.fields.filter((f) => paintsPoint(f.path, xHour1, yMidGap)).map((f) => f.className);
+    assert.deepEqual(classesHour1, ["meteo-gram-stab-very-unstable"], `Hour 1 column at fraction ${colFrac}`);
+  }
 });

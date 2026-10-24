@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { daytimeForecastHoursForCycle, buildLiveCaseSpec, buildLiveSoaring, initialRegionSidecars, loadRegionConfiguration, validateNativeRegions, enrichBundleWithSidecars, isRegionBundleCurrent, pruneSupersededBundles } from './build-live-soaring.mjs';
 import { mergeSoaringRegionFiles } from './merge-soaring-regions.mjs';
 import { collectGroup } from './seed-published.mjs';
+import { SOARING_CONTRACT_VERSION } from '../soaring/science.mjs';
 const sha = value => createHash('sha256').update(value).digest('hex');
 
 test('live daylight follows region, DST, and remaining hours rather than skipping today', () => {
@@ -24,7 +25,7 @@ test('live daylight follows region, DST, and remaining hours rather than skippin
   assert.equal(template.id,'archive-case');
 });
 
-test('RRFS sidecars remap changed model terrain and join equivalent valid-time formats', t => {
+test('RRFS sidecars remap changed model terrain, preserve GEPS scalar windDirectionDeg and legacy separation, and join equivalent valid-time formats', t => {
   const root = mkdtempSync(join(tmpdir(), 'rrfs-sidecars-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const staging = join(root, 'new'), output = join(root, 'soaring'), id = 'case-rrfs-live';
@@ -45,6 +46,11 @@ test('RRFS sidecars remap changed model terrain and join equivalent valid-time f
   for (const [model, hours] of Object.entries({
     nws: [{ validAt: '2026-10-23T14:00:00.000Z', temperatureC: 18 }],
     rrfs: [{ validAt, surface: { temperatureC: 19 }, derived: { thermalVelocityMps: 0.9 } }],
+    geps: [{
+      validAt,
+      surface: { temperatureC: { p10: 10, p50: 12, p90: 14 }, windSpeedMps: { p10: 2, p50: 4, p90: 7 }, windDirectionDeg: 209 },
+      derived: { thermalVelocityMps: { p10: 0.2, p50: 0.6, p90: 1.1 }, usableLiftTopM: { p10: 300, p50: 500, p90: 700 }, boundaryLayerTopM: { p10: 400, p50: 600, p90: 800 }, cloudBaseM: { p10: 900, p50: 1100, p90: 1300 } },
+    }],
     gfs: [{ validAt: '2026-10-22T14:00:00Z', surface: { temperatureC: 20 } }],
   })) {
     mkdirSync(join(root, model, 'sites'), { recursive: true });
@@ -63,6 +69,10 @@ test('RRFS sidecars remap changed model terrain and join equivalent valid-time f
   assert.equal(launch.models.nws.hours[0].validAt, validAt);
   assert.equal(launch.models.nws.hours[0].tempC, 18);
   assert.equal(launch.models.rrfs.hours[0].tempC, 19);
+  assert.equal(launch.models.geps.hours[0].windDirectionDeg, 209);
+  assert.equal(launch.models.geps.hours[0].wstarMps, 0.6);
+  assert.equal(launch.models.geps.hours[0].wstarV2Mps, null);
+  assert.equal(launch.models.geps.hours[0].usableLiftTopV2M, null);
   assert.equal(launch.models.gfs, undefined);
   assert.equal(launch.models.old, undefined);
   const section = JSON.parse(readFileSync(join(result, 'cross-section.json')));
@@ -72,16 +82,18 @@ test('RRFS sidecars remap changed model terrain and join equivalent valid-time f
   assert.equal(existsSync(join(result, 'verification.json')), false);
 });
 
-test('publication validates before replacing a pointer, preserves old clients, and drops stale sidecars', t => {
+test('publication validates before replacing a pointer, invalidates older contractVersion bundles, preserves old clients, and drops stale sidecars', t => {
   const root=mkdtempSync(join(tmpdir(),'live-soaring-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
   const out=join(root,'soaring'), id='case-live', ref='2026-10-23T00:00:00Z';
-  const make=(name,run=ref)=>{
+  const make=(name,run=ref,contractVersion=SOARING_CONTRACT_VERSION)=>{
     const dir=join(root,name);mkdirSync(dir,{recursive:true});
     const files={};
     for (const f of ['grid.geojson','profile.json','audit.json','f20.json']) {writeFileSync(join(dir,f),'{}\n');files[f]=sha('{}\n');}
-    const m={case:{id,referenceTime:run},hours:[{file:'f20.json',validAt:'2026-10-23T20:00:00Z'}],files};
+    const m={soaringContractVersion:contractVersion,case:{id,referenceTime:run},hours:[{file:'f20.json',validAt:'2026-10-23T20:00:00Z'}],files};
     writeFileSync(join(dir,'manifest.json'),JSON.stringify(m));return dir;
   };
+  enrichBundleWithSidecars(root,out,id,make('old-contract',ref,'2.0.0'),{});
+  assert.equal(isRegionBundleCurrent(out,id,ref),false,'a 2.0.0 bundle for the same run must be invalidated when contractVersion is 2.1.0');
   const first=enrichBundleWithSidecars(root,out,id,make('first'),{});
   const pointer=readFileSync(join(out,id,'index.json'),'utf8');
   assert.ok(isRegionBundleCurrent(out,id,ref));
@@ -158,11 +170,12 @@ test('a clean CI output builds both native RRFS regions from tracked geography a
   await assert.rejects(() => buildLiveSoaring({ output, model: 'rrfs', 'reference-time': '2026-10-23T12:00:00Z', 'validate-only': true }, dependencies), /Incomplete native rrfs/);
 });
 
-test('tracked region defaults fill a missing region without overwriting published customizations', t => {
+test('tracked region defaults fill a missing region and enforce current soaringContractVersion without overwriting published customizations', t => {
   const root = mkdtempSync(join(tmpdir(), 'rrfs-region-config-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  writeFileSync(join(root, 'regions.json'), JSON.stringify({ regions: [{ id: 'north-sound', name: 'Preserved name', caseId: 'north-sound-20261021-00z-rrfs-live' }] }));
+  writeFileSync(join(root, 'regions.json'), JSON.stringify({ soaringContractVersion: '2.0.0', regions: [{ id: 'north-sound', name: 'Preserved name', caseId: 'north-sound-20261021-00z-rrfs-live' }] }));
   const loaded = loadRegionConfiguration(root);
+  assert.equal(loaded.soaringContractVersion, SOARING_CONTRACT_VERSION);
   assert.equal(loaded.regions.find(region => region.id === 'north-sound').name, 'Preserved name');
   assert.equal(loaded.regions.find(region => region.id === 'north-sound').templateCaseId, 'north-sound-20261021-00z');
   assert.ok(loaded.regions.some(region => region.id === 'shenandoah-blue-ridge'));

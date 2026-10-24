@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { parseForecastManifest, parseSiteForecast } from '@azohra/meteo.briefing/contract';
+import { SOARING_CONTRACT_VERSION } from '../soaring/science.mjs';
 
 const finite = Number.isFinite;
 function requireValue(condition, message) { if (!condition) throw new Error(message); }
@@ -30,7 +31,7 @@ export function validateRrfsProfile(document, referenceTime, siteId, { horizon =
     requireValue(hour.levels.every(l => finite(l.heightM) && finite(l.temperatureC) && finite(l.dewPointC)
       && finite(l.windSpeedMps) && l.windSpeedMps >= 0 && finite(l.windDirectionDeg) && l.windDirectionDeg >= 0 && l.windDirectionDeg <= 360), `${at}: invalid upper-air field`);
     const v2 = hour.soaring;
-    requireValue(v2?.contractVersion === '2.0.0', `${at}: missing soaring postprocessing`);
+    requireValue(v2?.contractVersion === SOARING_CONTRACT_VERSION, `${at}: missing soaring postprocessing`);
     requireValue(finite(v2.thermalVelocityV2Mps) && v2.thermalVelocityV2Mps >= 0, `${at}: invalid thermal velocity`);
     for (const key of ['usableLiftTopV2M', 'hcritWxtoflyM', 'dryHcritM']) {
       if (v2[key] == null) continue;

@@ -2,7 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildCellSiteForecast, type ReplayManifest, type ReplayHour } from '../src/lib/soaring.ts';
-import { publishedLift, publishedWxtoflyLiftTop, parsePublishedProfileJson } from '../src/lib/published-lift.ts';
+import {
+  publishedEffectiveCloudLimit,
+  publishedLift,
+  publishedMixedLayerLcl,
+  publishedSurfaceLcl,
+  publishedWxtoflyLiftTop,
+  parsePublishedProfileJson,
+} from '../src/lib/published-lift.ts';
 import { buildWindgramView } from '../src/lib/windgram-view.ts';
 import { buildSounding, readSounding } from '../src/lib/skewt.ts';
 
@@ -28,9 +35,32 @@ test('every archived map hour agrees with the cell windgram and sounding, includ
     assert.equal(sounding.thermalVelocityMps, h.thermalVelocityV2Mps![0]);
     assert.equal(sounding.usableLiftTopM, h.usableLiftTopV2M![0]);
   }
-  assert.equal(view.hours[6].thermalVelocityMps, 0.85);
-  assert.equal(publishedLift(profile.hours[6]).usableLiftTopM, 465.5);
+  assert.equal(view.hours[6].thermalVelocityMps, 0.88);
+  assert.equal(publishedLift(profile.hours[6]).usableLiftTopM, 470.2);
   assert.doesNotMatch(readSounding(buildSounding(profile, profile.hours[6])!, 378.5).headline, /too weak to climb/);
+});
+
+test('P0-4: surface LCL, effective cloud limit, and mixed-layer LCL stay distinct when near-saturation caps usable lift', () => {
+  const rawProfile = structuredClone(golden);
+  rawProfile.hours[6].derived.cloudBaseM = 981;
+  rawProfile.hours[6].soaring = {
+    thermalVelocityV2Mps: 1.5,
+    usableLiftTopV2M: 981,
+    resolvedThermalTopM: 1800,
+    surfaceLclM: 2458,
+    effectiveCloudLimitM: 981,
+    mixedLayerLclM: 2150,
+  };
+  const parsed = parsePublishedProfileJson(JSON.stringify(rawProfile))!;
+  const h6 = parsed.hours[6];
+  assert.equal(publishedSurfaceLcl(h6), 2458, 'potential LCL retains surface LCL');
+  assert.equal(publishedLift(h6).cloudBaseM, 2458, 'publishedLift cloudBaseM preserves potential LCL marker');
+  assert.equal(publishedEffectiveCloudLimit(h6), 981, 'effectiveCloudLimitM exposes near-saturation ceiling proxy');
+  assert.equal(publishedMixedLayerLcl(h6), 2150);
+  const view = buildWindgramView(parsed, { timeZone: c.site.timeZone });
+  const potentialCloud = view.clouds.find(cloud => cloud.hourIndex === 6 && cloud.kind === 'potential');
+  assert.equal(potentialCloud?.baseM, 2458);
+  assert.equal(view.sampling[6].cloudCapped, true);
 });
 
 test('the WxToFly ceiling retains published scalar and ensemble values at the 225 ft/min threshold', () => {
@@ -77,7 +107,7 @@ test('cell profiles retain the source model and precipitation semantics', () => 
 });
 test('point loading retains published diagnostics and nulls without resurrecting baseline lift', () => {
   const rawProfile = structuredClone(golden);
-  rawProfile.hours[6].soaring = { thermalVelocityV2Mps: 0.85, usableLiftTopV2M: null, resolvedThermalTopM: 504.3, surfaceLclM: 1315 };
+  rawProfile.hours[6].soaring = { thermalVelocityV2Mps: 0.88, usableLiftTopV2M: null, resolvedThermalTopM: 504.3, surfaceLclM: 1315 };
   const parsed = parsePublishedProfileJson(JSON.stringify(rawProfile))!;
   assert.equal(publishedLift(parsed.hours[6]).usableLiftTopM, null);
   assert.equal(buildSounding(parsed, parsed.hours[6])!.usableLiftTopM, null);

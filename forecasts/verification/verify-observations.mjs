@@ -56,6 +56,64 @@ export const MATCHED_RAOB_SITE_PAIRS = Object.freeze([
   },
 ]);
 
+/**
+ * Computes the UTC [windowStartMs, windowEndMs] corresponding to local daytime hours
+ * (`startHourLocal`..`endHourLocal` inclusive, default 07:00–20:00 local time) on `localDate`
+ * in `timeZone`, respecting DST transitions instead of assuming a universal 14Z–03Z window.
+ */
+export function localDaytimeWindowMs(
+  localDate = '2026-10-21',
+  timeZone = 'America/Los_Angeles',
+  { startHourLocal = 7, endHourLocal = 20 } = {},
+) {
+  const anchorMs = Date.parse(`${localDate}T12:00:00Z`);
+  if (!Number.isFinite(anchorMs)) throw new Error(`Invalid localDate: ${localDate}`);
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    hourCycle: 'h23',
+  });
+  let startMs = null;
+  let endMs = null;
+  for (let offsetHours = -18; offsetHours <= 30; offsetHours += 1) {
+    const t = anchorMs + offsetHours * 3600000;
+    const parts = Object.fromEntries(fmt.formatToParts(new Date(t)).map(p => [p.type, p.value]));
+    const dateStr = `${parts.year}-${parts.month}-${parts.day}`;
+    const hourNum = Number(parts.hour);
+    if (dateStr === localDate && hourNum >= startHourLocal && hourNum <= endHourLocal) {
+      if (startMs === null || t < startMs) startMs = t;
+      if (endMs === null || t > endMs) endMs = t;
+    }
+  }
+  if (startMs === null || endMs === null) {
+    throw new Error(`Could not resolve local daytime window for ${localDate} in ${timeZone}`);
+  }
+  return {
+    localDate,
+    timeZone,
+    startHourLocal,
+    endHourLocal,
+    windowStartIso: new Date(startMs).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    windowEndIso: new Date(endMs).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    windowStartMs: startMs,
+    windowEndMs: endMs,
+  };
+}
+
+function findMatchingHour(hours, soundingValidAt) {
+  let matched = (hours ?? []).find(h => h.validAt === soundingValidAt);
+  if (!matched) {
+    matched = (hours ?? []).find(h => {
+      const dtMin = Math.abs(Date.parse(h.validAt) - Date.parse(soundingValidAt)) / 60000;
+      return dtMin <= OBSERVATION_MATCHING_RULES.raobNearInitMaxTimeDeltaMinutes;
+    });
+  }
+  return matched ?? null;
+}
+
 export function verifyModelAgainstRaob(dataRoot, modelSlug, pair, targetSoundingValidAt = '2026-10-21T00:00:00Z') {
   const raobPath = join(dataRoot, 'raob', 'sites', `${pair.siteSlug}.json`);
   const modelPath = join(dataRoot, modelSlug, 'sites', `${pair.siteSlug}.json`);
@@ -63,18 +121,31 @@ export function verifyModelAgainstRaob(dataRoot, modelSlug, pair, targetSounding
 
   const raobDoc = JSON.parse(readFileSync(raobPath, 'utf8'));
   const modelDoc = JSON.parse(readFileSync(modelPath, 'utf8'));
-  const sounding = (raobDoc.soundings ?? []).find(s => s.validAt === targetSoundingValidAt);
-  if (!sounding) return null;
+  const soundingsNewestFirst = [...(raobDoc.soundings ?? [])]
+    .filter(s => Number.isFinite(Date.parse(s?.validAt)))
+    .sort((a, b) => Date.parse(b.validAt) - Date.parse(a.validAt));
+  if (soundingsNewestFirst.length === 0) return null;
+
+  let sounding = null;
+  let matchedHour = null;
+  if (targetSoundingValidAt) {
+    sounding = soundingsNewestFirst.find(s => s.validAt === targetSoundingValidAt) ?? null;
+    if (!sounding) return null;
+    matchedHour = findMatchingHour(modelDoc.hours, sounding.validAt);
+  } else {
+    // Select the latest eligible observation that matches a forecast hour in the run
+    for (const candidate of soundingsNewestFirst) {
+      const hour = findMatchingHour(modelDoc.hours, candidate.validAt);
+      if (hour) {
+        sounding = candidate;
+        matchedHour = hour;
+        break;
+      }
+    }
+  }
+  if (!sounding || !matchedHour) return null;
 
   const referenceTime = modelDoc.run?.referenceTime ?? null;
-  let matchedHour = (modelDoc.hours ?? []).find(h => h.validAt === targetSoundingValidAt);
-  if (!matchedHour) {
-    matchedHour = (modelDoc.hours ?? []).find(h => {
-      const dtMin = Math.abs(Date.parse(h.validAt) - Date.parse(targetSoundingValidAt)) / 60000;
-      return dtMin <= OBSERVATION_MATCHING_RULES.raobNearInitMaxTimeDeltaMinutes;
-    });
-  }
-  if (!matchedHour) return null;
 
   const matchEval = evaluateRaobMatch({
     distanceKm: raobDoc.station?.distanceKm ?? 999,
@@ -146,10 +217,27 @@ export function verifyModelAgainstRaob(dataRoot, modelSlug, pair, targetSounding
   };
 }
 
-export function buildBlanchardCrossModelSpread(dataRoot) {
+export function buildBlanchardCrossModelSpread(
+  dataRoot,
+  {
+    localDate = '2026-10-21',
+    timeZone = 'America/Los_Angeles',
+    windowStartIso = null,
+    windowEndIso = null,
+  } = {},
+) {
   const models = ['hrrr-conus', 'rrfs', 'hrdps-continental', 'rdps', 'gdps', 'gfs', 'geps', 'ecmwf', 'nws'];
-  const windowStart = Date.parse('2026-10-21T14:00:00Z');
-  const windowEnd = Date.parse('2026-10-22T03:00:00Z');
+  const daytime = windowStartIso && windowEndIso
+    ? {
+        localDate,
+        timeZone,
+        windowStartIso,
+        windowEndIso,
+        windowStartMs: Date.parse(windowStartIso),
+        windowEndMs: Date.parse(windowEndIso),
+      }
+    : localDaytimeWindowMs(localDate, timeZone);
+  const { windowStartMs: windowStart, windowEndMs: windowEnd } = daytime;
   const rows = [];
 
   for (const model of models) {
@@ -161,22 +249,35 @@ export function buildBlanchardCrossModelSpread(dataRoot) {
       const t = Date.parse(h.validAt);
       return t >= windowStart && t <= windowEnd;
     });
+    const coverageSamples = windowHours.length;
+    const timestamps = windowHours.map(h => Date.parse(h.validAt)).filter(Number.isFinite).sort((a, b) => a - b);
+    const coverageSpanHours = timestamps.length >= 2 ? round1((timestamps[timestamps.length - 1] - timestamps[0]) / 3600000) : 0;
+    const status = coverageSamples > 0 ? 'available' : 'unavailable';
 
     if (model === 'geps') {
-      const wstars = windowHours.map(h => h.derived?.thermalVelocityMps?.p50).filter(finite);
-      const uTops = windowHours.map(h => h.derived?.usableLiftTopM?.p50).filter(finite);
+      const v2Wstars = windowHours.map(h => h.soaring?.thermalVelocityV2Mps?.p50).filter(finite);
+      const v2UTops = windowHours.map(h => h.soaring?.usableLiftTopV2M?.p50).filter(finite);
+      const legacyWstars = windowHours.map(h => h.derived?.thermalVelocityMps?.p50).filter(finite);
+      const legacyUTops = windowHours.map(h => h.derived?.usableLiftTopM?.p50).filter(finite);
       const winds = windowHours.map(h => h.surface?.windSpeedMps?.p50).filter(finite);
       const temps = windowHours.map(h => h.surface?.temperatureC?.p50).filter(finite);
+      const effClouds = windowHours.map(h => h.soaring?.effectiveCloudLimitM?.p50 ?? h.derived?.cloudBaseM?.p50).filter(finite);
       rows.push({
         model,
         modelKind: 'ensemble-percentiles',
         derivationRule: 'per-member-before-percentiles',
         referenceTime: doc.run?.referenceTime ?? null,
         modelElevationM: doc.site?.modelElevationM ?? null,
-        peakWstarV2Mps: wstars.length ? round2(Math.max(...wstars)) : null,
-        peakUsableLiftTopV2M: uTops.length ? round1(Math.max(...uTops)) : null,
-        meanWindSpeedMps: winds.length ? round2(winds.reduce((a, b) => a + b, 0) / winds.length) : null,
-        maxTempC: temps.length ? round1(Math.max(...temps)) : null,
+        coverageSamples,
+        coverageSpanHours,
+        status,
+        peakWstarV2Mps: coverageSamples > 0 && v2Wstars.length ? round2(Math.max(...v2Wstars)) : null,
+        peakUsableLiftTopV2M: coverageSamples > 0 && v2UTops.length ? round1(Math.max(...v2UTops)) : null,
+        peakLegacyWstarMps: coverageSamples > 0 && legacyWstars.length ? round2(Math.max(...legacyWstars)) : null,
+        peakLegacyUsableLiftTopM: coverageSamples > 0 && legacyUTops.length ? round1(Math.max(...legacyUTops)) : null,
+        minEffectiveCloudLimitM: coverageSamples > 0 && effClouds.length ? round1(Math.min(...effClouds)) : null,
+        meanWindSpeedMps: coverageSamples > 0 && winds.length ? round2(winds.reduce((a, b) => a + b, 0) / winds.length) : null,
+        maxTempC: coverageSamples > 0 && temps.length ? round1(Math.max(...temps)) : null,
       });
       continue;
     }
@@ -190,11 +291,14 @@ export function buildBlanchardCrossModelSpread(dataRoot) {
         modelKind: 'surface-or-sparse-adapter',
         referenceTime: doc.models?.surface?.run ?? doc.updateTime ?? doc.generatedAt ?? null,
         modelElevationM: doc.site?.gridElevationM ?? doc.grid?.elevationM ?? null,
+        coverageSamples,
+        coverageSpanHours,
+        status,
         peakWstarV2Mps: null,
         peakUsableLiftTopV2M: null,
-        minSurfaceLclM: lcls.length ? round1(Math.min(...lcls)) : null,
-        meanWindSpeedMps: winds.length ? round2(winds.reduce((a, b) => a + b, 0) / winds.length) : null,
-        maxTempC: temps.length ? round1(Math.max(...temps)) : null,
+        minSurfaceLclM: coverageSamples > 0 && lcls.length ? round1(Math.min(...lcls)) : null,
+        meanWindSpeedMps: coverageSamples > 0 && winds.length ? round2(winds.reduce((a, b) => a + b, 0) / winds.length) : null,
+        maxTempC: coverageSamples > 0 && temps.length ? round1(Math.max(...temps)) : null,
         unsupportedReason: doc.soaringMeta?.unsupportedReason ?? null,
       });
       continue;
@@ -203,32 +307,47 @@ export function buildBlanchardCrossModelSpread(dataRoot) {
     const wstarsV2 = windowHours.map(h => h.soaring?.thermalVelocityV2Mps).filter(finite);
     const uTopsV2 = windowHours.map(h => h.soaring?.usableLiftTopV2M).filter(finite);
     const rTopsV2 = windowHours.map(h => h.soaring?.resolvedThermalTopM).filter(finite);
+    const lcls = windowHours.map(h => h.soaring?.surfaceLclM).filter(finite);
+    const effClouds = windowHours.map(h => h.soaring?.effectiveCloudLimitM ?? h.derived?.cloudBaseM).filter(finite);
     const winds = windowHours.map(h => h.surface?.windSpeedMps).filter(finite);
     const temps = windowHours.map(h => h.surface?.temperatureC).filter(finite);
 
     rows.push({
       model,
       modelKind: 'deterministic-column',
-      contractVersion: doc.soaringMeta?.contractVersion ?? '2.0.0',
+      contractVersion: doc.soaringMeta?.contractVersion ?? '2.1.0',
       referenceTime: doc.run?.referenceTime ?? null,
       modelElevationM: doc.site?.modelElevationM ?? null,
-      peakWstarV2Mps: wstarsV2.length ? round2(Math.max(...wstarsV2)) : 0,
-      peakUsableLiftTopV2M: uTopsV2.length ? round1(Math.max(...uTopsV2)) : null,
-      peakResolvedThermalTopM: rTopsV2.length ? round1(Math.max(...rTopsV2)) : null,
-      meanWindSpeedMps: winds.length ? round2(winds.reduce((a, b) => a + b, 0) / winds.length) : null,
-      maxTempC: temps.length ? round1(Math.max(...temps)) : null,
+      coverageSamples,
+      coverageSpanHours,
+      status,
+      peakWstarV2Mps: coverageSamples > 0 && wstarsV2.length ? round2(Math.max(...wstarsV2)) : null,
+      peakUsableLiftTopV2M: coverageSamples > 0 && uTopsV2.length ? round1(Math.max(...uTopsV2)) : null,
+      peakResolvedThermalTopM: coverageSamples > 0 && rTopsV2.length ? round1(Math.max(...rTopsV2)) : null,
+      minSurfaceLclM: coverageSamples > 0 && lcls.length ? round1(Math.min(...lcls)) : null,
+      minEffectiveCloudLimitM: coverageSamples > 0 && effClouds.length ? round1(Math.min(...effClouds)) : null,
+      meanWindSpeedMps: coverageSamples > 0 && winds.length ? round2(winds.reduce((a, b) => a + b, 0) / winds.length) : null,
+      maxTempC: coverageSamples > 0 && temps.length ? round1(Math.max(...temps)) : null,
     });
   }
   return rows;
 }
 
-export function buildSkillReport(dataRoot) {
+export function buildSkillReport(
+  dataRoot,
+  {
+    targetSoundingValidAt = '2026-10-21T00:00:00Z',
+    evaluatedAt = '2026-10-22T12:00:00Z',
+    localDate = '2026-10-21',
+    timeZone = 'America/Los_Angeles',
+  } = {},
+) {
   const modelsToVerify = ['hrrr-conus', 'rrfs', 'rdps'];
   const matchedPairVerifications = [];
 
   for (const pair of MATCHED_RAOB_SITE_PAIRS) {
     for (const model of modelsToVerify) {
-      const res = verifyModelAgainstRaob(dataRoot, model, pair, '2026-10-21T00:00:00Z');
+      const res = verifyModelAgainstRaob(dataRoot, model, pair, targetSoundingValidAt);
       if (res && res.matched) matchedPairVerifications.push(res);
     }
   }
@@ -277,9 +396,11 @@ export function buildSkillReport(dataRoot) {
     referenceTime: '2026-10-21T00:00:00Z',
   });
 
+  const daytimeWindow = localDaytimeWindowMs(localDate, timeZone);
+
   return {
     schemaVersion: 2,
-    evaluatedAt: '2026-10-22T12:00:00Z',
+    evaluatedAt,
     matchingRules: OBSERVATION_MATCHING_RULES,
     promotionGates: {
       ...PROMOTION_GATES,
@@ -293,6 +414,7 @@ export function buildSkillReport(dataRoot) {
     },
     observationVerificationSkill: {
       note: 'True observation verification skill requires matched valid times and station-to-launch proximity <= 60 km. Model agreement alone is not skill.',
+      targetSoundingValidAt,
       matchedCount: matchedPairVerifications.length,
       byLeadTimeBucket: summarizeBuckets(byLeadTimeBucket),
       byRegime: summarizeBuckets(byRegime),
@@ -315,14 +437,15 @@ export function buildSkillReport(dataRoot) {
       ],
     },
     crossModelSpreadSummary: {
-      note: 'Cross-model spread measures inter-model disagreement and grid-elevation smoothing differences across Wa-Blanchard (2026-10-21 14Z–27Z), NOT observation verification skill. Unsupported ECMWF and NWS W* and usable-lift fields remain explicitly null.',
-      blanchardMultiModelComparison: buildBlanchardCrossModelSpread(dataRoot),
+      note: `Cross-model spread measures inter-model disagreement and grid-elevation smoothing differences across Wa-Blanchard (${daytimeWindow.localDate} ${daytimeWindow.startHourLocal}:00–${daytimeWindow.endHourLocal}:00 ${daytimeWindow.timeZone}, ${daytimeWindow.windowStartIso}–${daytimeWindow.windowEndIso}), NOT observation verification skill. Unsupported ECMWF and NWS W* and usable-lift fields remain explicitly null, and empty comparison windows report null rather than 0.`,
+      daytimeWindow,
+      blanchardMultiModelComparison: buildBlanchardCrossModelSpread(dataRoot, { localDate, timeZone }),
     },
   };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const dataRoot = resolve(process.argv[2] ?? join( fileURLToPath(new URL('..', import.meta.url)), 'data'));
+  const dataRoot = resolve(process.argv[2] ?? join(fileURLToPath(new URL('..', import.meta.url)), 'data'));
   const report = buildSkillReport(dataRoot);
   const outPath = fileURLToPath(new URL('./skill-report.json', import.meta.url));
   writeFileSync(outPath, JSON.stringify(report, null, 2) + '\n');

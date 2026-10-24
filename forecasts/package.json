@@ -6,6 +6,7 @@
   "description": "Forecast operator: builds soaring meteograms for each launch with @azohra/meteo.forecast",
   "scripts": {
     "check": "node scripts/check-sites.mjs",
+    "check:types": "tsc -p tsconfig.json",
     "test": "node --test",
     "nws": "node scripts/nws.mjs",
     "publish:sites": "node scripts/publish-sites.mjs",
@@ -27,5 +28,9 @@
     "@azohra/meteo.briefing": "0.6.2",
     "@azohra/meteo.forecast": "0.6.0",
     "@azohra/meteo.grib": "0.1.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
   }
 }

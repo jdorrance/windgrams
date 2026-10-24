@@ -106,6 +106,27 @@ test("hover snaps to each hour's usable-lift line regardless of pointer height",
   assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden");
 });
 
+test("inspection follows the view's units while the global preference differs", t => {
+  for (const unitSystem of ["metric", "imperial"] as const) {
+    setUnitSystem(unitSystem === "metric" ? "imperial" : "metric");
+    const view = buildWindgramView(liftProfile(), {
+      timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx: 390, unitSystem,
+    });
+    const h = inspector(t, view);
+    h.key("Home");
+    const agl = view.hours[0].usableLiftTopM! - view.ground.elevationM;
+    const expected = unitSystem === "metric"
+      ? `${Math.round(agl).toLocaleString("en-US")} m AGL`
+      : `${Math.round(agl / .3048).toLocaleString("en-US")} ft AGL`;
+    assert.equal(h.nodes["cursor-agl"].textContent, expected);
+    assert.match(h.attributes.get("aria-label")!, unitSystem === "metric" ? /m\/s/ : /kt/);
+    assert.match(h.attributes.get("aria-label")!, unitSystem === "metric" ? /°C/ : /°F/);
+    setUnitSystem(unitSystem);
+    h.key("Home");
+    assert.equal(h.nodes["cursor-agl"].textContent, expected);
+  }
+});
+
 test("unavailable daylight edges stay blank and cannot select a forecast hour", t => {
   const profile = liftProfile();
   Object.assign(profile.site, { latitude: 40.5913, longitude: 44.4741, timeZone: "Asia/Yerevan" });

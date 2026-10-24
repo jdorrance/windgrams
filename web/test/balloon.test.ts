@@ -23,6 +23,15 @@ test("the morning table lifted from the forecast high tops out near the NWS ther
   assert.ok(s.inversions.some((l) => l.grounded), "the valley inversion at dawn");
 });
 
+test("SRG decoding retains the recorded height, wind and pressure conversion precision", () => {
+  const sounding = srgSounding(SRG.observed!, 874, SRG.forecastMaxTempC)!;
+  // Frozen from the pre-extraction decoder, independently of the shared helpers.
+  const surface = sounding.points[0];
+  assert.equal(surface.heightM, 914.399970739201);
+  assert.equal(surface.windSpeedMps, 1.028888);
+  assert.equal(surface.pressureHpa, 908.1165961569312);
+});
+
 test("without a balloon file, the Soaring Forecast's own table and model hours are offered", () => {
   const list = choices(null, SRG, TZ);
   assert.deepEqual(list.map((c) => `${c.kind} ${c.validAt}`), [

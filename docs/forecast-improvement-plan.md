@@ -14,7 +14,9 @@ RRFS captures its own pressure and surface products. Hourly accumulation interva
 
 ## Calculations
 
-The implementation is [`forecasts/soaring/science.mjs`](../forecasts/soaring/science.mjs), contract version `2.1.0`.
+The implementation lives in [`forecasts/soaring/`](../forecasts/soaring/) (compatibility facade [`science.mjs`](../forecasts/soaring/science.mjs), backed by [`thermodynamics.mjs`](../forecasts/soaring/thermodynamics.mjs), [`convective-lift.mjs`](../forecasts/soaring/convective-lift.mjs), [`boundary-layer-wind.mjs`](../forecasts/soaring/boundary-layer-wind.mjs), [`terrain-adjustment.mjs`](../forecasts/soaring/terrain-adjustment.mjs), [`grid-kinematics.mjs`](../forecasts/soaring/grid-kinematics.mjs), [`diagnostics.mjs`](../forecasts/soaring/diagnostics.mjs), [`grib-column.mjs`](../forecasts/soaring/grib-column.mjs), [`audit-agreement.mjs`](../forecasts/soaring/audit-agreement.mjs), and [`model-comparison.mjs`](../forecasts/soaring/model-comparison.mjs)), contract version `2.1.0`.
+
+Physical constants, algorithm parameters (`DRY_ADIABATIC_LAPSE_C_PER_M = 0.0098` from `@azohra/meteo.briefing`, `RD_J_PER_KG_K = 287.05` in the soaring backend and `RD = 287.04` in `web/src/lib/skewt.ts` / `balloon.ts`), and product policy thresholds (`1.0 m/s` and `1.143 m/s` sink ceilings) are explicitly separated. The near-neutral first-layer parcel-depth discontinuity (`resolvedParcelDepthM` returning `0` when the lowest interval lapse rate falls within `[-0.0005, 0.001] °C/m` even if deeper layers are buoyant) is preserved by characterization tests during structural refactoring and tracked as a separate scientific follow-up.
 
 - `resolvedThermalTopM` follows a dry surface parcel through the captured temperature levels. A shallow crossing below the first level can use model PBL depth, capped at that level; the surface-flux fallback estimates shallow superadiabatic depth. The field is therefore a parcel/PBL estimate whose resolution depends on the input column.
 - `thermalVelocityV2Mps` is the surface-density-consistent Deardorff convective velocity scale $w_* = \left(\frac{g z_i}{\theta_{v0}} \overline{(w'\theta_v')_s}\right)^{1/3}$. Both the kinematic virtual heat flux and reference virtual potential temperature use the same surface-to-reference factor $(P_{\text{ref}}/P_{\text{sfc}})^{R_d/c_{pd}}$ (so $P_{\text{ref}}$ cancels identically) and surface air density $\rho_{\text{sfc}} = \frac{P_{\text{sfc}}}{R_d T_{v0}}$ derived from actual or hypsometric surface pressure rather than a fixed sea-level density or lowest upper-level pressure. `W*` describes convective air motion; net glider climb also depends on sink and position within a thermal.
@@ -53,7 +55,7 @@ One label is placed on each connected temperature contour when room is available
 
 ## Verification and retention
 
-`verification/history.mjs` keeps up to 120 rolling runs plus pinned cases. At four successful cycles per day, the rolling capacity is about 30 days. Regional live bundles have a separate 48-hour grace period for recently replaced content and invalidate cached bundles whenever `soaringContractVersion` changes.
+`verification/history.mjs` keeps up to 120 rolling runs plus pinned cases. At four successful cycles per day, the rolling capacity is about 30 days. The regional build cache retains superseded bundles for a 48-hour grace period. Pages keeps the current and most recently superseded bundle for each active regional case. Changes to `soaringContractVersion` invalidate cached builds.
 
 The sounding matcher prefers sites within 50 km and accepts a maximum separation of 60 km. It records exact-time matches separately from an initialization-near comparison within 60 minutes at lead time up to one hour. It reports elevation mismatch and compares 925, 850, 700 and 600 hPa where both sources have values.
 

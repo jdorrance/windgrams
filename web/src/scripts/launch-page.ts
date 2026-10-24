@@ -9,20 +9,26 @@ import { parseForecastManifestJson, parseModelCatalogueJson, parseSiteContextJso
 import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/meteo.briefing/contract";
 import { localDateKey, localHourOfDay, localInstantMs, runFreshness } from "@azohra/meteo.briefing/derive";
 import { loadDocument } from "@azohra/meteo.briefing/transport";
-import { buildWindgramView, windgramHours, type WindgramView } from "../lib/windgram-view.ts";
+import { windgramHours } from "../lib/windgram-view.ts";
 import { windgramViewport } from "../lib/windgram-viewport.ts";
-import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
-import { windWindow, compassPoint, type Launch } from "../lib/launches.ts";
-import { EcmwfChart, type EcmwfSiteDocument } from "../lib/ecmwf-chart.ts";
-import { NwsChart, type NwsHour } from "../lib/nws-chart.ts";
+import { windWindow, type Launch } from "../lib/launches.ts";
+import type { EcmwfSiteDocument } from "../lib/ecmwf-chart.ts";
 import { SkewTChart } from "../lib/skewt-chart.ts";
-import { buildSounding, readSounding, type Finding, type Tone } from "../lib/skewt.ts";
-import { choices as balloonChoices, readChoice, type Choice, type RaobDocument } from "../lib/balloon.ts";
-import { parseSrg, type Srg } from "../lib/srg.ts";
+import { buildSounding, readSounding } from "../lib/skewt.ts";
+import type { RaobDocument } from "../lib/balloon.ts";
 import { fetchWithRetry } from "../lib/http.ts";
 import { DATA_BASE } from "../lib/site.ts";
 import { formatQuantity, relativeTime } from "../lib/units.ts";
-import { Sunlight, type CloudSeries } from "./sunlight.ts";
+import { Sunlight } from "./sunlight.ts";
+import { createBalloonSection, renderFindingsList } from "./balloon-section.ts";
+import {
+  buildCloudSeriesForSunlight,
+  createNwsEcmwfSections,
+  type NwsOfficeDocument,
+  type NwsSiteDocument,
+} from "./nws-ecmwf-sections.ts";
+import { createWindgramController } from "./windgram-controller.ts";
+import { createPageLifecycle } from "./page-lifecycle.ts";
 
 // Short-range high-resolution models first, then regional, global, and the ensemble.
 
@@ -30,23 +36,6 @@ const HOUR_MS = 3_600_000;
 const DAY_START = 7;
 const DAY_END = 21;
 const DAYS = 7;
-
-interface NwsSiteDocument {
-  updateTime: string | null;
-  generatedAt: string;
-  grid: { office: string; x: number; y: number; elevationM: number | null };
-  pageUrl: string;
-  hours: NwsHour[];
-  periods: { name: string; startTime: string; isDaytime: boolean; shortForecast: string; detailedForecast: string }[];
-}
-
-interface NwsOfficeDocument {
-  office: string;
-  products: {
-    afd: { issuanceTime: string; text: string } | null;
-    srg: { issuanceTime: string; text: string } | null;
-  };
-}
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const launch = JSON.parse($("launch-config").textContent ?? "{}") as Launch;
@@ -61,6 +50,12 @@ const MODEL_ORDER = capabilities.models;
 const arc = windWindow(launch);
 let sample = false;
 let fullWindgramProfile = false;
+let resizeTimer = 0;
+const lifetime = createPageLifecycle({
+  onSuspend() { window.clearTimeout(resizeTimer); },
+  onRestore() { render(); },
+});
+const eventOptions = { signal: lifetime.signal };
 
 async function getJson<T>(path: string): Promise<T | null> {
   try {
@@ -110,7 +105,7 @@ function button(label: string, sub: string | null, pressed: boolean, disabled: b
   }
   b.setAttribute("aria-pressed", String(pressed));
   b.disabled = disabled;
-  b.addEventListener("click", onClick);
+  b.addEventListener("click", onClick, eventOptions);
   return b;
 }
 
@@ -135,16 +130,38 @@ const manifests = new Map<string, ForecastManifest>();
 const pendingProfiles = new Map<string, Promise<void>>();
 const profiles = new Map<string, { profile: SiteForecast; referenceTime: string; generatedAt: string; stale: boolean } | null>();
 let nws: NwsSiteDocument | null = null;
-let chart: NwsChart | null = null;
 let ecmwf: EcmwfSiteDocument | null = null;
 let skewt: SkewTChart | null = null;
-
 let skewtHours: SiteForecast["hours"] = [];
-let displayedWindgramTimes: string[] = [];
-let currentWindgramView: WindgramView | null = null;
-let ecmwfChart: EcmwfChart | null = null;
-let clearWindgramInspector: (() => void) | null = null;
+let modelSelectionToken = 0;
+
 const sunlight = new Sunlight(launch);
+const balloonSection = createBalloonSection({
+  launchName: launch.name,
+  timeZone: tz,
+  getLaunchElevationM: () => launchElevationM,
+});
+const nwsEcmwfSections = createNwsEcmwfSections({
+  launch,
+  arc,
+  timeZone: tz,
+  nwsEnabled: capabilities.nws,
+  inDay,
+});
+const windgramController = createWindgramController({
+  host: $("meteogram"),
+  axisHost: $("meteogram-height-axis"),
+  keyHost: $("meteogram-key"),
+  fullProfileButton: $("windgram-full-profile"),
+  diagnosticsHost: $("meteogram-diagnostics"),
+  detailsElement: $<HTMLDetailsElement>("meteogram-details"),
+});
+lifetime.onDispose(() => {
+  modelSelectionToken += 1;
+  windgramController.dispose();
+  balloonSection.dispose();
+  nwsEcmwfSections.dispose();
+});
 
 function persistSelection() {
   const url = new URL(location.href);
@@ -160,6 +177,7 @@ async function profileFor(slug: string) {
   if (!profiles.has(slug)) {
     if (!pendingProfiles.has(slug)) pendingProfiles.set(slug, (async () => {
       const loaded = await loadDocument({ guard: parsePublishedProfileJson, supportedSchemaVersion: 2, fetch: (url) => fetchWithRetry(url), baseUrl: DATA_BASE, modelSlug: slug, siteSlug: launch.slug }).catch(() => null);
+      if (lifetime.disposed) return;
       const valid = loaded && !('miss' in loaded) && loaded.document.model === slug && loaded.document.site.id === launch.slug;
       profiles.set(slug, valid ? {
         profile: loaded.document,
@@ -182,6 +200,7 @@ async function loadManifest(slug: string) {
     .then((r) => (r.ok ? r.text() : null))
     .catch(() => null);
   const manifest = text ? parseForecastManifestJson(text) : null;
+  if (lifetime.disposed) return;
   if (manifest && manifest.sites.some((s) => s.slug === launch.slug)) manifests.set(slug, manifest);
 }
 
@@ -203,16 +222,22 @@ function modelLabel(slug: string) {
 }
 
 async function selectModel(slug: string) {
+  if (lifetime.disposed) return;
+  const token = ++modelSelectionToken;
   model = slug;
   $("meteogram").classList.add("is-loading");
   render();
   await profileFor(slug);
-  if (model === slug) { $("meteogram").classList.remove("is-loading"); render(); }
+  if (token === modelSelectionToken && model === slug) {
+    $("meteogram").classList.remove("is-loading");
+    render();
+  }
 }
 
 // ── rendering ────────────────────────────────────────────────────────────
 
 function renderDayTabs() {
+  if (lifetime.disposed) return;
   const host = $("day-tabs");
   const restoreFocus = host.contains(document.activeElement);
   const scrollLeft = host.scrollLeft;
@@ -238,6 +263,7 @@ function renderDayTabs() {
 }
 
 function renderModelSelect(available: string[]) {
+  if (lifetime.disposed) return;
   const host = $<HTMLSelectElement>("model-select");
   host.replaceChildren(
     ...available.map((slug) => {
@@ -257,7 +283,7 @@ function renderModelSelect(available: string[]) {
   host.title = host.selectedOptions[0]?.textContent ?? "Forecast model";
 }
 
-$<HTMLSelectElement>("model-select").addEventListener("change", (event) => { manualModel = true; void selectModel((event.target as HTMLSelectElement).value); });
+$<HTMLSelectElement>("model-select").addEventListener("change", (event) => { manualModel = true; void selectModel((event.target as HTMLSelectElement).value); }, eventOptions);
 
 function selectedWindgramHours(profile: SiteForecast) {
   const { compact } = windgramViewport();
@@ -271,23 +297,12 @@ function selectedWindgramHours(profile: SiteForecast) {
 }
 
 function renderMeteogram() {
+  if (lifetime.disposed) return;
   const frame = $("meteogram");
   const meta = $("meteogram-meta");
   const title = $("meteogram-title");
-  const key = $("meteogram-key");
-  const diagnostics = $("meteogram-diagnostics");
-  const details = $("meteogram-details");
-  const axis = $("meteogram-height-axis");
-  clearWindgramInspector?.();
-  clearWindgramInspector = null;
-  key.replaceChildren();
-  diagnostics.replaceChildren();
-  axis.replaceChildren();
-  details.hidden = true;
-  axis.hidden = true;
+  windgramController.clear();
   $("windgram-full-profile").hidden = true;
-  displayedWindgramTimes = [];
-  currentWindgramView = null;
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
   title.textContent = entry
@@ -297,11 +312,14 @@ function renderMeteogram() {
   if (!loaded) {
     meta.textContent = "";
     const loading = model !== null ? !profiles.has(model) : modelsLoading;
-    frame.innerHTML = `<p class="chart-status">${loading ? "Loading forecast…" : "Forecast pending."}</p>`;
+    const statusP = document.createElement("p");
+    statusP.className = "chart-status";
+    statusP.textContent = loading ? "Loading forecast…" : "Forecast pending.";
+    frame.replaceChildren(statusP);
     if (!loading && model) {
       const retry = document.createElement('button');
       retry.type = 'button'; retry.className = 'button secondary'; retry.textContent = 'Retry forecast';
-      retry.addEventListener('click', () => { profiles.delete(model!); void selectModel(model!); });
+      retry.addEventListener('click', () => { profiles.delete(model!); void selectModel(model!); }, eventOptions);
       frame.append(retry);
     }
     return;
@@ -318,7 +336,7 @@ function renderMeteogram() {
   const hours = selectedWindgramHours(loaded.profile);
   if (hours.length === 0) {
     const other = MODEL_ORDER.find((slug) => slug !== model && covers(slug, day));
-    frame.innerHTML = "";
+    frame.replaceChildren();
     const p = document.createElement("p");
     p.className = "chart-status";
     p.textContent = `${modelLabel(model ?? "")} coverage ends before this day. `;
@@ -327,143 +345,35 @@ function renderMeteogram() {
       b.type = "button";
       b.className = "button secondary";
       b.textContent = `Show ${modelLabel(other)}`;
-      b.addEventListener("click", () => selectModel(other));
+      b.addEventListener("click", () => selectModel(other), eventOptions);
       p.appendChild(b);
     }
     frame.appendChild(p);
     return;
   }
 
-  const width = Math.max(frame.clientWidth || 640, 240);
-  const { compact, portrait, height } = windgramViewport();
-  const rangeButton = $("windgram-full-profile");
-  rangeButton.hidden = !compact;
-  rangeButton.setAttribute("aria-pressed", String(fullWindgramProfile));
-  const chartTop = frame.getBoundingClientRect().top + window.scrollY;
-  const view = buildWindgramView(loaded.profile, {
+  windgramController.render({
+    profile: loaded.profile,
     timeZone: tz,
     hours,
+    selectedValidAt,
+    fullProfile: fullWindgramProfile,
+    idPrefix: `mg-${launch.slug}`,
     launch: launchElevationM != null ? { name: launch.name, elevationM: launchElevationM } : null,
     launchWindows: arc ? [arc] : [],
     capabilities: entry?.capabilities,
-    widthPx: width,
-    compact,
-    heightRange: fullWindgramProfile ? "full" : "soaring",
-    heightPx: height,
-    maxHeightPx: compact && portrait ? height - chartTop - 16 : undefined,
+    constrainPortraitHeight: true,
+    cursorStyle: { fill: '#fff', fillOpacity: 0.06, stroke: '#203747' },
+    onSelectHour: validAt => {
+      const i = skewtHours.findIndex(h => h.validAt === validAt);
+      if (i >= 0) showSkewTHour(i);
+    },
   });
-  displayedWindgramTimes = view.hours.map(hour => hour.validAt);
-  currentWindgramView = view;
-  const selectedIndex = displayedWindgramTimes.indexOf(selectedValidAt ?? "");
-  if (selectedIndex >= 0) view.selectedHourIndex = selectedIndex;
-  frame.innerHTML = renderWindgramSvg(view, { idPrefix: `mg-${launch.slug}` });
-  diagnostics.innerHTML = renderWindgramDiagnosticsSvg(view, { idPrefix: `mg-details-${launch.slug}` });
-  key.innerHTML = renderWindgramKey();
-  details.hidden = false;
-  axis.replaceChildren();
-  axis.hidden = true;
-  clearWindgramInspector = mountWindgramInspector(frame, null, view, validAt => {
-    const i = skewtHours.findIndex(h => h.validAt === validAt);
-    if (i >= 0) showSkewTHour(i);
-  });
-  const marker = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  for (const [key, value] of Object.entries({ y: view.top, width: view.columnWidth, height: view.plotHeight, fill: '#fff', 'fill-opacity': .06, stroke: '#203747', 'stroke-width': 2, 'pointer-events': 'none', 'data-selected-hour': '' })) marker.setAttribute(key, String(value));
-  const chartSvg = frame.querySelector('svg')!;
-  chartSvg.insertBefore(marker, chartSvg.querySelector('[data-windgram-cursor]'));
-  frame.dataset.columnWidth = String(view.columnWidth);
-  frame.dataset.plotLeft = String(view.left);
-  frame.dataset.axisWidth = "0";
-  diagnostics.dataset.plotLeft = String(compact ? 102 : view.left);
-  // The main scene fits the mobile viewport. Detailed diagnostics retain
-  // their own wider geometry and can scroll independently.
-  for (const svg of [frame.querySelector("svg"), diagnostics.querySelector("svg")]) {
-    const box = svg?.viewBox.baseVal;
-    if (svg && box && box.width > 0) svg.style.width = `${box.width}px`;
-  }
-  updateHourMarker(true);
-  syncWindgramScroll(frame, diagnostics);
-}
-
-function renderNws() {
-  if (!capabilities.nws) return;
-  const meta = $("nws-meta");
-  const link = $("nws-link") as HTMLAnchorElement;
-  if (!nws) {
-    meta.textContent = "";
-    link.hidden = true;
-    $("nws-charts").innerHTML = `<p class="chart-status">NWS forecast pending.</p>`;
-    return;
-  }
-  meta.textContent = `Grid ${nws.grid.office} ${nws.grid.x},${nws.grid.y}${
-    nws.grid.elevationM != null ? ` (grid elevation ${formatQuantity(nws.grid.elevationM, "elevation")})` : ""
-  } · updated ${nws.updateTime ? relativeTime(nws.updateTime) : "–"}`;
-  link.href = nws.pageUrl;
-  link.hidden = false;
-  if (!chart) {
-    chart = new NwsChart($("nws-charts"), chartLaunch(), tz);
-  }
-  chart.setHours(nws.hours.filter((h) => inDay(h.validAt, day)));
-}
-
-/** The selected model's total cloud cover (ensemble median), for dimming the sunlight map. */
-function cloudsFor(slug: string | null): CloudSeries | null {
-  const loaded = slug ? profiles.get(slug) : null;
-  const entry = slug ? modelEntry(slug) : null;
-  if (!slug || !loaded) return null;
-  const points: CloudSeries["points"] = [];
-  for (const hour of loaded.profile.hours) {
-    const v = hour.surface.cloudCoverPercent;
-    const percent = typeof v === "number" ? v : v.p50;
-    if (percent != null) points.push({ ms: Date.parse(hour.validAt), fraction: percent / 100 });
-  }
-  return points.length ? { label: `${modelLabel(slug)}${entry ? ` ${formatQuantity(entry.gridKm, "resolution")}` : ""}`, points } : null;
-}
-
-const chartLaunch = () => ({
-  windMinMph: launch.windMinMph,
-  windMaxMph: launch.windMaxMph,
-  gustMaxMph: launch.gustMaxMph,
-  window: arc,
-  windowLabel: arc ? `${compassPoint(launch.facingDeg!)} ±${launch.windArcHalfWidthDeg}°` : "unknown",
-});
-
-function renderEcmwf() {
-  const meta = $("ecmwf-meta");
-  if (!ecmwf) {
-    meta.textContent = "";
-    $("ecmwf-charts").innerHTML = `<p class="chart-status">ECMWF forecast pending.</p>`;
-    return;
-  }
-  const run = ecmwf.models.surface.run ? `Run ${String(new Date(ecmwf.models.surface.run).getUTCHours()).padStart(2, "0")}Z · ` : "";
-  const grid = ecmwf.site.gridElevationM != null ? ` · grid point at ${formatQuantity(ecmwf.site.gridElevationM, "elevation")}` : "";
-  meta.textContent = `IFS ${formatQuantity(9, "resolution")} · ${run}fetched ${relativeTime(ecmwf.generatedAt)}${grid}`;
-  if (!ecmwfChart) ecmwfChart = new EcmwfChart($("ecmwf-charts"), chartLaunch(), tz);
-  ecmwfChart.setHours(ecmwf.hours.filter((h) => inDay(h.validAt, day)));
 }
 
 // ── Skew-T ────────────────────────────────────────────────────────────────
 
-const TONE_ICON: Record<Tone, string> = { good: "✓", neutral: "•", caution: "!", warning: "⚠" };
 const hourFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", timeZone: tz });
-
-function updateHourMarker(reveal = false) {
-  const i = displayedWindgramTimes.indexOf(selectedValidAt ?? "");
-  const frame = $('meteogram');
-  const marker = frame.querySelector('[data-selected-hour]');
-  marker?.setAttribute('visibility', i < 0 ? 'hidden' : 'visible');
-  if (i >= 0) {
-    if (currentWindgramView) currentWindgramView.selectedHourIndex = i;
-    const columnWidth = Number(frame.dataset.columnWidth);
-    const left = currentWindgramView!.hours[i].x - columnWidth / 2;
-    marker?.setAttribute('x', String(left));
-    const axisWidth = Number(frame.dataset.axisWidth);
-    if (reveal && axisWidth > 0) {
-      if (left < frame.scrollLeft + axisWidth) frame.scrollLeft = Math.max(0, left - axisWidth);
-      else if (left + columnWidth > frame.scrollLeft + frame.clientWidth) frame.scrollLeft = left + columnWidth - frame.clientWidth;
-    }
-  }
-  if (selectedValidAt) frame.dataset.validAt = selectedValidAt;
-}
 
 function renderConditions(hour: SiteForecast['hours'][number], index: number) {
   const label = hourFormat.format(new Date(hour.validAt));
@@ -478,21 +388,22 @@ function renderConditions(hour: SiteForecast['hours'][number], index: number) {
   $('forecast-hour-panel').dataset.validAt = hour.validAt;
   const conditions = launchConditions(hour, launch, launchElevationM);
   const host = $('forecast-conditions'); host.replaceChildren();
-  for (const [label, value] of conditions.values) {
+  for (const [lbl, value] of conditions.values) {
     const group = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
-    dt.textContent = label; dd.textContent = value; group.append(dt, dd); host.append(group);
+    dt.textContent = lbl; dd.textContent = value; group.append(dt, dd); host.append(group);
   }
   $('forecast-wind-note').textContent = conditions.issues.join(' · ');
   $('forecast-wind-note').hidden = !conditions.issues.length;
 }
 
 function showSkewTHour(index: number) {
+  if (lifetime.disposed) return;
   const loaded = model ? profiles.get(model) : null;
   const hour = skewtHours[index];
   if (!loaded || !hour) return;
   selectedValidAt = hour.validAt;
   renderConditions(hour, index);
-  updateHourMarker(true);
+  windgramController.select(selectedValidAt, true);
   $('skewt-chart').dataset.validAt = hour.validAt;
   persistSelection();
   const slider = $<HTMLInputElement>("skewt-hour");
@@ -511,99 +422,11 @@ function showSkewTHour(index: number) {
   }
   const reading = readSounding(sounding, launchElevationM);
   $("skewt-headline").textContent = reading.headline;
-  renderFindings(list, reading.findings);
-}
-
-function renderFindings(list: HTMLElement, findings: Finding[]) {
-  list.replaceChildren();
-  for (const f of findings) {
-    const li = document.createElement("li");
-    li.className = `finding finding-${f.tone}`;
-    const icon = document.createElement("span");
-    icon.className = "finding-icon";
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = TONE_ICON[f.tone];
-    const body = document.createElement("div");
-    const title = document.createElement("strong");
-    title.textContent = f.title;
-    const p = document.createElement("p");
-    p.textContent = f.text;
-    body.append(title, p);
-    li.append(icon, body);
-    list.appendChild(li);
-  }
-}
-
-// ── Weather balloon ───────────────────────────────────────────────────────
-
-let balloonChart: SkewTChart | null = null;
-let refreshBalloon: (() => void) | null = null;
-
-function legendItem(label: string, swatch: string) {
-  const li = document.createElement("li");
-  li.innerHTML = swatch;
-  li.appendChild(document.createTextNode(label));
-  return li;
-}
-
-function renderBalloon(doc: RaobDocument | null, srgText: string | null) {
-  let srg: Srg | null = null;
-  try {
-    srg = srgText ? parseSrg(srgText) : null;
-  } catch {
-    srg = null;
-  }
-  const list = balloonChoices(doc, srg, tz);
-  const root = $("balloon");
-  if (list.length === 0) {
-    refreshBalloon = null;
-    root.hidden = true;
-    return;
-  }
-  root.hidden = false;
-  const station = doc?.station;
-  $("balloon-title").textContent = `Weather balloon sounding · ${station?.name ?? "nearest station"}${station ? ` (${station.id})` : ""}`;
-  const day = new Intl.DateTimeFormat("en-US", { weekday: "short", hour: "numeric", timeZoneName: "short", timeZone: tz });
-  const hour = new Intl.DateTimeFormat("en-US", { hour: "numeric", timeZone: tz });
-  const tabs = $("balloon-tabs");
-
-  const show = (choice: Choice) => {
-    refreshBalloon = () => show(choice);
-    for (const b of tabs.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.id === choice.id));
-    if (!balloonChart) balloonChart = new SkewTChart($("balloon-chart"), { name: launch.name, elevationM: launchElevationM });
-    balloonChart.set(choice.sounding, { name: launch.name, elevationM: launchElevationM });
-    const reading = readChoice(choice, srg, launchElevationM, tz);
-    $("balloon-headline").textContent = reading.headline;
-    renderFindings($("balloon-findings"), reading.findings);
-    const legend = $("balloon-legend");
-    legend.replaceChildren(
-      legendItem("Temperature", `<span class="key-line" style="color:var(--series-2)"></span>`),
-      ...(choice.hasDewPoint ? [legendItem("Dew point", `<span class="key-line" style="color:var(--series-3)"></span>`)] : []),
-      legendItem(choice.start.source === "forecast-high" ? "Thermal from the forecast high" : "Rising thermal", `<span class="key-line key-dash"></span>`),
-      legendItem("Thermal zone", `<span class="key-swatch skewt-key-zone"></span>`),
-      legendItem("Inversion (lid)", `<span class="key-swatch skewt-key-lid"></span>`),
-    );
-    const when = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone: tz }).format(new Date(choice.validAt));
-    const utc = new Date(choice.validAt).toISOString().slice(0, 16).replace("T", " ") + " UTC";
-    const elevation = choice.sounding.modelElevationM;
-    $("balloon-meta").textContent =
-      choice.kind === "balloon" ? `Sounding valid ${when} · ${utc}` : `NWS model forecast for ${when}`;
-    $("balloon-note").textContent = choice.kind === "balloon"
-      ? `${station ? `${station.name} · ${formatQuantity(station.distanceKm, "distance")} from ${launch.name} · ` : ""}${formatQuantity(elevation, "elevation")} MSL. Observation cycle shown.${choice.hasDewPoint ? "" : " Humidity unavailable."}${choice.start.source === "forecast-high" ? " Parcel starts at station forecast high." : ""} NWS / Iowa Environmental Mesonet.`
-      : "NWS station model · temperature and wind · heights MSL. Humidity unavailable.";
-  };
-
-  tabs.replaceChildren(
-    ...list.map((choice) => {
-      const b = button(choice.kind === "balloon" ? day.format(new Date(choice.validAt)) : hour.format(new Date(choice.validAt)), choice.kind === "balloon" ? "balloon" : "NWS model", false, false, () => show(choice));
-      b.dataset.id = choice.id;
-      return b;
-    }),
-  );
-  show(list.findLast(choice => choice.kind === "balloon") ?? list[list.length - 1]);
+  renderFindingsList(list, reading.findings);
 }
 
 function renderSkewT() {
+  if (lifetime.disposed) return;
   const status = $("skewt-status");
   const body = $("skewt-body");
   const loaded = model ? profiles.get(model) : null;
@@ -620,7 +443,7 @@ function renderSkewT() {
     skewtHours = [];
     $("forecast-hour-panel").hidden = true;
     $("forecast-conditions-panel").hidden = true;
-    updateHourMarker();
+    windgramController.select(selectedValidAt);
     return;
   }
   status.hidden = true;
@@ -632,57 +455,36 @@ function renderSkewT() {
   showSkewTHour(matchingHourIndex(hours, selectedValidAt, tz));
 }
 
-$<HTMLInputElement>("skewt-hour").addEventListener("input", (e) => showSkewTHour(Number((e.target as HTMLInputElement).value)));
-$("skewt-best").addEventListener("click", () => showSkewTHour(peakLiftIndex(skewtHours, tz)));
+$<HTMLInputElement>("skewt-hour").addEventListener("input", (e) => showSkewTHour(Number((e.target as HTMLInputElement).value)), eventOptions);
+$("skewt-best").addEventListener("click", () => showSkewTHour(peakLiftIndex(skewtHours, tz)), eventOptions);
 
-$<HTMLInputElement>('forecast-hour').addEventListener('input', e => showSkewTHour(Number((e.target as HTMLInputElement).value)));
-$('forecast-hour-prev').addEventListener('click', () => showSkewTHour(Number($<HTMLInputElement>('forecast-hour').value) - 1));
-$('forecast-hour-next').addEventListener('click', () => showSkewTHour(Number($<HTMLInputElement>('forecast-hour').value) + 1));
-$('forecast-hour-peak').addEventListener('click', () => showSkewTHour(peakLiftIndex(skewtHours, tz)));
+$<HTMLInputElement>('forecast-hour').addEventListener('input', e => showSkewTHour(Number((e.target as HTMLInputElement).value)), eventOptions);
+$('forecast-hour-prev').addEventListener('click', () => showSkewTHour(Number($<HTMLInputElement>('forecast-hour').value) - 1), eventOptions);
+$('forecast-hour-next').addEventListener('click', () => showSkewTHour(Number($<HTMLInputElement>('forecast-hour').value) + 1), eventOptions);
+$('forecast-hour-peak').addEventListener('click', () => showSkewTHour(peakLiftIndex(skewtHours, tz)), eventOptions);
 
 function render() {
+  if (lifetime.disposed) return;
   persistSelection();
   renderDayTabs();
   renderModelSelect(MODEL_ORDER.filter((slug) => manifests.has(slug)));
   renderSkewT();
   renderMeteogram();
-  renderNws();
-  renderEcmwf();
-  sunlight.setDay(day, cloudsFor(model));
-}
-
-function renderText(office: NwsOfficeDocument | null) {
-  const list = $("nws-periods");
-  list.replaceChildren();
-  for (const period of nws?.periods ?? []) {
-    const li = document.createElement("li");
-    const h = document.createElement("h3");
-    h.textContent = period.name;
-    const p = document.createElement("p");
-    p.textContent = period.detailedForecast;
-    li.append(h, p);
-    list.appendChild(li);
-  }
-  if (!nws?.periods.length) list.innerHTML = `<li class="muted">Text forecast unavailable.</li>`;
-
-  const products = $("nws-products");
-  products.replaceChildren();
-  const add = (label: string, product: { issuanceTime: string; text: string } | null | undefined) => {
-    if (!product) return;
-    const details = document.createElement("details");
-    const summary = document.createElement("summary");
-    summary.textContent = `${label} · issued ${relativeTime(product.issuanceTime)}`;
-    const pre = document.createElement("pre");
-    pre.className = "product";
-    pre.textContent = product.text;
-    details.append(summary, pre);
-    products.appendChild(details);
-  };
-  add("Soaring Forecast", office?.products.srg);
-  add(`Area Forecast Discussion (NWS ${office?.office ?? ""})`, office?.products.afd);
+  nwsEcmwfSections.renderNws(nws, day);
+  nwsEcmwfSections.renderEcmwf(ecmwf, day);
+  sunlight.setDay(
+    day,
+    buildCloudSeriesForSunlight(
+      model,
+      model ? profiles.get(model) : null,
+      model ? modelEntry(model) : null,
+      model ? modelLabel(model) : "",
+    ),
+  );
 }
 
 async function chooseDefaultModel() {
+  if (lifetime.disposed) return;
   const candidates = MODEL_ORDER.filter(slug => manifests.has(slug) && profiles.get(slug) !== null);
   const choice = manualModel && model ? model : candidates.find(slug => covers(slug, day)) ?? candidates[0];
   if (!choice || (choice === model && (profiles.has(choice) || pendingProfiles.has(choice)))) return;
@@ -691,10 +493,12 @@ async function chooseDefaultModel() {
 }
 
 export async function start() {
+  if (lifetime.disposed) return;
   const raobPromise = capabilities.raob ? getJson<RaobDocument>(`raob/sites/${launch.slug}.json`) : Promise.resolve(null);
   const metadata = Promise.all([
-    getJson<unknown>('models.json').then(doc => { catalogue = doc ? parseModelCatalogueJson(JSON.stringify(doc)) : null; renderModelSelect(MODEL_ORDER.filter(slug => manifests.has(slug))); if (model && profiles.get(model)) renderMeteogram(); }),
+    getJson<unknown>('models.json').then(doc => { if (lifetime.disposed) return; catalogue = doc ? parseModelCatalogueJson(JSON.stringify(doc)) : null; renderModelSelect(MODEL_ORDER.filter(slug => manifests.has(slug))); if (model && profiles.get(model)) renderMeteogram(); }),
     getJson<unknown>('site-context.json').then(doc => {
+      if (lifetime.disposed) return;
       const context = doc ? parseSiteContextJson(JSON.stringify(doc)) : null;
       launchElevationM = context?.sites[launch.slug]?.elevation.elevationM ?? null;
       if (launchElevationM != null) {
@@ -704,36 +508,40 @@ export async function start() {
         $('launch-elevation-source').textContent = source ? `Terrain · ${source.product}${source.kind === 'surfaceModel' ? ' · surface includes vegetation' : ''}.` : 'Terrain elevation at launch coordinates.';
         $('launch-elevation-item').hidden = false;
       }
-      refreshBalloon?.();
+      balloonSection.refresh();
       if (model && profiles.get(model)) { renderSkewT(); renderMeteogram(); }
     }),
   ]);
   const nwsTask = (async () => {
     if (!capabilities.nws) return;
     nws = await getJson<NwsSiteDocument>(`nws/sites/${launch.slug}.json`);
-    renderDayTabs(); renderNws();
+    if (lifetime.disposed) return;
+    renderDayTabs(); nwsEcmwfSections.renderNws(nws, day);
     const office = nws ? await getJson<NwsOfficeDocument>(`nws/offices/${nws.grid.office}.json`) : null;
-    renderText(office);
+    nwsEcmwfSections.renderText(nws, office);
     const raob = await raobPromise;
-    renderBalloon(raob?.schemaVersion === 1 ? raob : null, office?.products.srg?.text ?? null);
+    balloonSection.render(raob?.schemaVersion === 1 ? raob : null, office?.products.srg?.text ?? null);
   })();
   const ecmwfTask = getJson<EcmwfSiteDocument>(`ecmwf/sites/${launch.slug}.json`).then(doc => {
-    ecmwf = doc?.schemaVersion === 1 ? doc : null; renderDayTabs(); renderEcmwf();
+    if (lifetime.disposed) return;
+    ecmwf = doc?.schemaVersion === 1 ? doc : null; renderDayTabs(); nwsEcmwfSections.renderEcmwf(ecmwf, day);
   });
   await Promise.all(MODEL_ORDER.map(async slug => {
     await loadManifest(slug);
+    if (lifetime.disposed) return;
     renderDayTabs(); renderModelSelect(MODEL_ORDER.filter(slug => manifests.has(slug)));
     await chooseDefaultModel();
   }));
+  if (lifetime.disposed) return;
   modelsLoading = false;
   if (model && !manifests.has(model)) { manualModel = false; model = null; }
   await chooseDefaultModel();
   render();
   await Promise.all([metadata, nwsTask, ecmwfTask]);
+  if (lifetime.disposed) return;
   if (sample) $('sample-notice').hidden = false;
 }
 
-let resizeTimer = 0;
 let viewport = windgramViewport();
 window.addEventListener("resize", () => {
   const next = windgramViewport();
@@ -741,36 +549,9 @@ window.addEventListener("resize", () => {
   viewport = next;
   clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(() => { renderDayTabs(); renderSkewT(); renderMeteogram(); }, 150);
-});
+}, eventOptions);
 $("windgram-full-profile").addEventListener("click", () => {
   fullWindgramProfile = !fullWindgramProfile;
   renderSkewT();
   renderMeteogram();
-});
-
-// Synchronize only when both charts scroll. A fitted mobile windgram keeps its
-// selected hours visible while the wider diagnostics pan independently.
-const syncedScrollPositions = new WeakMap<HTMLElement, number>();
-function syncWindgramScroll(from: HTMLElement, to: HTMLElement) {
-  const details = $<HTMLDetailsElement>("meteogram-details");
-  if (details.hidden || !details.open || to.clientWidth === 0) return;
-  if (from.scrollWidth <= from.clientWidth + 1 || to.scrollWidth <= to.clientWidth + 1) return;
-  const offset = Number(to.dataset.plotLeft ?? 0) - Number(from.dataset.plotLeft ?? 0);
-  const wanted = from.scrollLeft === 0 ? 0 : from.scrollLeft + offset;
-  const next = Math.max(0, Math.min(to.scrollWidth - to.clientWidth, wanted));
-  if (Math.abs(to.scrollLeft - next) < .5) return;
-  to.scrollLeft = next;
-  syncedScrollPositions.set(to, to.scrollLeft);
-}
-for (const [from, to] of [["meteogram", "meteogram-diagnostics"], ["meteogram-diagnostics", "meteogram"]]) {
-  $(from).addEventListener("scroll", () => {
-    const source = $(from);
-    const syncedPosition = syncedScrollPositions.get(source);
-    syncedScrollPositions.delete(source);
-    if (syncedPosition !== undefined && Math.abs(source.scrollLeft - syncedPosition) < .5) return;
-    syncWindgramScroll(source, $(to));
-  }, { passive: true });
-}
-$<HTMLDetailsElement>("meteogram-details").addEventListener("toggle", () => {
-  syncWindgramScroll($("meteogram"), $("meteogram-diagnostics"));
-});
+}, eventOptions);

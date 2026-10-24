@@ -28,9 +28,11 @@ The full capture is roughly 820 MB in ignored `forecasts/.soaring-cache/`. `--ca
 
 Replay verifies the cache and runs offline. A shared two-worker JPEG2000 pool decodes fields while regional samples are retained. Native Lambert-grid geometry supplies scanning order, cell centers, wind rotation and site sampling. Cells are included by center point, so boundary polygons can extend half a cell beyond the requested box.
 
-`vendor/derive-0.6.0.mjs` preserves the original pure derivation module and its MIT notice. V2 diagnostics are attached alongside it. Full-precision inputs are converted and derived before publication rounding; map and site values sample the same canonical cell.
+`vendor/derive-0.6.0.mjs` preserves the original pure derivation module and its MIT notice. V2 diagnostics are attached alongside it through the modular `forecasts/soaring/` domain modules (`thermodynamics.mjs`, `convective-lift.mjs`, `boundary-layer-wind.mjs`, `terrain-adjustment.mjs`, `grid-kinematics.mjs`, `diagnostics.mjs`, `grib-column.mjs`, and `audit-agreement.mjs`, re-exported via `science.mjs`). Full-precision inputs are converted and derived before publication rounding; map and site values sample the same canonical cell.
 
-Replay's `--output DIR` selects a destination `soaring/v1` directory. A staged bundle is verified and renamed into `bundles/<manifest-sha256>` before the case pointer changes. Source and implementation hashes identify its contents. Repeating the same code and cache yields the same bytes. The live-build wrapper separately prunes superseded bundles after its 48-hour grace period.
+Replay's `--output DIR` selects a destination `soaring/v1` directory. A staged bundle is verified and renamed into `bundles/<manifest-sha256>` before the case pointer changes. The implementation inventory covers the replay's local module dependencies; changing an extracted calculation module changes the bundle hash. Repeating the same code and cache yields the same bytes.
+
+The live-build wrapper prunes superseded bundles after a 48-hour grace period. Pages packaging then keeps the current and most recently superseded bundle for each active regional case. Historical cases remain available. The complete upload must fit the 1 GB Pages artifact limit.
 
 ## Bundle contents
 

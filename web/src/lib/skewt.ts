@@ -1,4 +1,4 @@
-import { convertQuantity, formatQuantity, getUnitSystem } from "./units.ts";
+import { convertQuantity, finiteScalar, formatQuantity, getUnitSystem, legacyMetresToFeet, mpsToMph } from "./units.ts";
 import { publishedEffectiveCloudLimit, publishedLift } from "./published-lift.ts";
 // One hour of a model profile as a sounding, and what it means for a pilot.
 //
@@ -13,18 +13,14 @@ import { lapseRateCPer1000Ft, parcelAscent, stabilityClass, windToComponents, co
 import { compassPoint } from "./launches.ts";
 
 type Hour = SiteForecast["hours"][number];
-type Value = number | { p50: number | null } | null | undefined;
+type Value = number | { p50: number | null; members?: number } | null | undefined;
 
 const G = 9.80665;
 const RD = 287.04;
-const FT = 3.28084;
-const MPH = 2.23694;
 
 /** Scalar value of a field: the number itself, or the ensemble median. */
 export function scalar(v: Value): number | null {
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (v && typeof v === "object" && typeof v.p50 === "number") return v.p50;
-  return null;
+  return finiteScalar(v);
 }
 
 export interface SoundingPoint {
@@ -354,7 +350,7 @@ export interface Reading {
   findings: Finding[];
 }
 
-export const feet = (m: number) => Math.round((m * FT) / 100) * 100;
+export const feet = (m: number) => Math.round(legacyMetresToFeet(m) / 100) * 100;
 const heightText = (m: number) => {
   const step = getUnitSystem() === "metric" ? 50 : 100;
   const height = convertQuantity(m, "elevation")!;
@@ -362,7 +358,7 @@ const heightText = (m: number) => {
 };
 const referenceHeightText = (m: number) => formatQuantity(m, "elevation");
 const speedText = (mps: number) => formatQuantity(mps, "wind");
-const windText = (w: { speedMps: number; directionDeg: number }) => (w.speedMps * MPH < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${speedText(w.speedMps)}`);
+const windText = (w: { speedMps: number; directionDeg: number }) => (mpsToMph(w.speedMps) < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${speedText(w.speedMps)}`);
 
 /** Thermal strength words for Deardorff's w* (m/s). */
 export function strengthWords(wStar: number | null): { word: string; tone: Tone } {

@@ -19,6 +19,7 @@ import {
   v2LayerMetrics,
 } from './science.mjs';
 import { assertRuntime, atomicWrite, concurrent, fileUrl, json, modelFor, readJson, semanticsFor, sha256, validAt, versionsFor } from './common.mjs';
+import { CONUS_REPLAY_INVENTORY, computeImplementationCodeHashes } from './inventory.mjs';
 
 function sameCaptureInputs(a, b) {
   return Boolean(
@@ -242,8 +243,7 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
     ...Object.fromEntries(hourly.map(h => [`f${h.forecastHour}.json`, h])),
   };
   const hashes = Object.fromEntries(Object.entries(files).map(([name, value]) => [name, sha256(json(value))]));
-  const sourceFiles = ['common.mjs', 'fields.mjs', 'grid.mjs', 'capture.mjs', 'science.mjs', 'replay.mjs', 'vendor/derive-0.6.0.mjs', '../scripts/lib/model-feeds.mjs'];
-  const codeHashes = Object.fromEntries(await Promise.all(sourceFiles.map(async name => [name, sha256(await readFile(new URL(name, import.meta.url)))])));
+  const codeHashes = computeImplementationCodeHashes(CONUS_REPLAY_INVENTORY);
   const manifest = {
     schemaVersion: 1,
     soaringContractVersion: SOARING_CONTRACT_VERSION,

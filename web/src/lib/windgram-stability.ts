@@ -1,4 +1,4 @@
-import { convertQuantity } from "./units.ts";
+import { convertQuantity, getUnitSystem, type UnitSystem } from "./units.ts";
 
 /** WxToFly's local lapse-rate scale, in °C per 1,000 ft.
  * Boundaries and interior RGB colors are taken from its published legend:
@@ -19,8 +19,8 @@ export const WINDGRAM_STABILITY = [
 export const WINDGRAM_STABLE_COLOR = WINDGRAM_STABILITY[5].color;
 
 /** Display boundaries only; the source scale and classification remain physical. */
-export function stabilityRange(index: number): string {
-  const value = (n: number) => Number(convertQuantity(n, "lapseRate")!.toFixed(2)).toLocaleString("en-US", { maximumFractionDigits: 2 }).replace("-", "−");
+export function stabilityRange(index: number, system: UnitSystem = getUnitSystem()): string {
+  const value = (n: number) => Number(convertQuantity(n, "lapseRate", system)!.toFixed(2)).toLocaleString("en-US", { maximumFractionDigits: 2 }).replace("-", "−");
   if (index === 0) return `≤ ${value(WINDGRAM_STABILITY[0].maxLapse)}`;
   if (index === WINDGRAM_STABILITY.length - 1) return `> ${value(WINDGRAM_STABILITY[index - 1].maxLapse)}`;
   return `${value(WINDGRAM_STABILITY[index - 1].maxLapse)} to ${value(WINDGRAM_STABILITY[index].maxLapse)}`;

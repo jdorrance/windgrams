@@ -31,7 +31,21 @@ import {
   metric,
   metrics,
   profileFor,
+  resolvedParcelDepthM,
 } from './science.mjs';
+import {
+  CONUS_REPLAY_INVENTORY,
+  ICON_REPLAY_INVENTORY,
+  computeImplementationCodeHashes,
+  verifyInventoryImportCoverage,
+} from './inventory.mjs';
+import {
+  extractEnsembleMedian,
+  extractEnsembleSpread,
+  extractModelMetadata,
+  normalizeLaunchComparisonHour,
+  summarizeModelWindowSpread,
+} from './model-comparison.mjs';
 import {
   deriveEnsembleSoaringDiagnostics,
   postprocessPointForecast,
@@ -538,4 +552,139 @@ test('pressure-level wind and vertical motion below terrain are unavailable', ()
   assert.equal(result.v2.wind925DirDeg,null);
   assert.equal(result.v2.w925Mps,null);
   assert.ok(result.v2.wind850SpeedMps!==null);
+});
+
+test('Stage 0: characterizes near-neutral first-layer parcel depth behavior and defined-domain physical invariants', () => {
+  const env = [
+    { heightM: 1000, temperatureC: 10 },
+    { heightM: 2000, temperatureC: 0 },
+    { heightM: 3000, temperatureC: -10 },
+  ];
+  // Preserved v2.1.0 baseline characterization: near-neutral first-layer denominator guard (denom <= 1e-5)
+  assert.equal(resolvedParcelDepthM(19.700, 100, 0, null, 0, env, 0), 1000);
+  assert.equal(resolvedParcelDepthM(19.795, 100, 0, null, 0, env, 0), 0);
+  assert.equal(resolvedParcelDepthM(19.805, 100, 0, null, 0, env, 0), 3000);
+  // When model PBL height is present, the PBL fallback branch avoids the heat-flux denominator guard
+  assert.equal(resolvedParcelDepthM(19.795, 100, 0, 650, 0, env, 0), 650);
+
+  // Defined-domain invariant 1: W* is nondecreasing with sensible heat flux for fixed valid inputs
+  let prevW = 0;
+  for (const hs of [0, 25, 75, 150, 300, 500]) {
+    const w = computeThermalVelocityMps({
+      surfaceTemperatureC: 22,
+      surfaceDewPointC: 10,
+      sensibleHeatFluxWm2: hs,
+      latentHeatFluxWm2: 40,
+      boundaryLayerDepthM: 1200,
+      surfacePressureHpa: 980,
+    });
+    assert.ok(w >= prevW);
+    prevW = w;
+  }
+
+  // Defined-domain invariant 2 & 3: increasing sink rate never raises a finite usable ceiling,
+  // and every finite usable ceiling is bounded by min(resolvedThermalTopM, effectiveCloudLimitM).
+  for (const wstar of [0.6, 0.85, 1.2, 2.0, 3.2]) {
+    for (const cloudCap of [null, 650, 1100, 1800]) {
+      const top08 = computeUsableLiftTopV2M({ modelElevationM: 200, resolvedThermalTopM: 1400, thermalVelocityV2Mps: wstar, cloudBaseM: cloudCap }, 0.8);
+      const top10 = computeUsableLiftTopV2M({ modelElevationM: 200, resolvedThermalTopM: 1400, thermalVelocityV2Mps: wstar, cloudBaseM: cloudCap }, 1.0);
+      const topWx = computeUsableLiftTopV2M({ modelElevationM: 200, resolvedThermalTopM: 1400, thermalVelocityV2Mps: wstar, cloudBaseM: cloudCap }, WXTOFLY_SINK_MPS);
+      const effectiveBound = cloudCap === null ? 1400 : Math.min(1400, cloudCap);
+      for (const top of [top08, top10, topWx]) {
+        if (top !== null) {
+          assert.ok(top >= 200 && top <= effectiveBound + 1e-9);
+        }
+      }
+      if (top10 !== null && top08 !== null) assert.ok(top10 <= top08 + 1e-9);
+      if (topWx !== null && top10 !== null) assert.ok(topWx <= top10 + 1e-9);
+    }
+  }
+});
+
+test('Stage 1 & 5: implementation inventories cover all relative imports and change hashes when any extracted module changes', () => {
+  const conusCoverage = verifyInventoryImportCoverage(CONUS_REPLAY_INVENTORY);
+  const iconCoverage = verifyInventoryImportCoverage(ICON_REPLAY_INVENTORY);
+  assert.ok(conusCoverage.verifiedFiles >= 15);
+  assert.ok(iconCoverage.verifiedFiles >= 15);
+
+  const baselineHashes = computeImplementationCodeHashes(CONUS_REPLAY_INVENTORY);
+  assert.ok(baselineHashes['thermodynamics.mjs']);
+  assert.ok(baselineHashes['convective-lift.mjs']);
+  assert.ok(baselineHashes['boundary-layer-wind.mjs']);
+  assert.ok(baselineHashes['diagnostics.mjs']);
+
+  const mutatedHashes = computeImplementationCodeHashes(CONUS_REPLAY_INVENTORY, relPath =>
+    relPath === 'thermodynamics.mjs' ? Buffer.from('// modified implementation\n') : Buffer.from(relPath),
+  );
+  const untouchedHashes = computeImplementationCodeHashes(CONUS_REPLAY_INVENTORY, relPath => Buffer.from(relPath));
+  assert.notEqual(mutatedHashes['thermodynamics.mjs'], untouchedHashes['thermodynamics.mjs']);
+});
+
+test('Stage 2: model-comparison normalizer preserves ensemble dropout, scalar wind direction, V2/legacy separation, and sparse adapters', () => {
+  // Zero-member ensemble dropout returns null rather than zero
+  assert.equal(extractEnsembleMedian({ members: 0, p10: null, p50: null, p90: null }), null);
+  assert.equal(extractEnsembleMedian({ members: 0, p10: 0, p50: 0, p90: 0 }), null);
+  assert.equal(extractEnsembleSpread({ members: 0, p10: 1, p90: 5 }), null);
+
+  // GEPS legacy-only hour preserves scalar windDirectionDeg (209 deg) and keeps V2 fields null
+  const gepsLegacyHour = normalizeLaunchComparisonHour('geps', {
+    validAt: '2026-10-21T21:00:00Z',
+    surface: {
+      temperatureC: { members: 20, p10: 10.1, p50: 12.4, p90: 14.2 },
+      dewPointC: { members: 20, p10: 4.0, p50: 6.1, p90: 8.0 },
+      windSpeedMps: { members: 20, p10: 2.1, p50: 4.5, p90: 7.3 },
+      windDirectionDeg: 209,
+      cloudCoverPercent: { members: 20, p10: 10, p50: 35, p90: 80 },
+    },
+    derived: {
+      thermalVelocityMps: { members: 20, p10: 0.4, p50: 1.1, p90: 1.6 },
+      usableLiftTopM: { members: 20, p10: 450, p50: 780, p90: 1120 },
+      boundaryLayerTopM: { members: 20, p10: 600, p50: 950, p90: 1300 },
+      cloudBaseM: { members: 20, p10: 900, p50: 1250, p90: 1600 },
+    },
+  });
+  assert.equal(gepsLegacyHour.windDirectionDeg, 209);
+  assert.equal(gepsLegacyHour.wstarV2Mps, null);
+  assert.equal(gepsLegacyHour.wstarSpreadMps, null);
+  assert.equal(gepsLegacyHour.wstarMps, 1.1);
+  assert.deepEqual(gepsLegacyHour.wstarLegacySpreadMps, { p10: 0.4, p90: 1.6 });
+
+  // Deterministic explicit V2 null vs absent V2
+  const detWithV2Null = normalizeLaunchComparisonHour('hrrr-conus', {
+    validAt: '2026-10-21T20:00:00Z',
+    surface: { temperatureC: 15, dewPointC: 8, windSpeedMps: 3, windDirectionDeg: 240 },
+    derived: { thermalVelocityMps: 1.06, usableLiftTopM: 724.5, boundaryLayerTopM: 778.9, cloudBaseM: 1315.0 },
+    soaring: { thermalVelocityV2Mps: 0.42, usableLiftTopV2M: null, resolvedThermalTopM: 480.0, surfaceLclM: 1315.3, effectiveCloudLimitM: 980.0 },
+  });
+  assert.equal(Object.hasOwn(detWithV2Null, 'usableLiftTopV2M'), true);
+  assert.equal(detWithV2Null.usableLiftTopV2M, null);
+  assert.equal(detWithV2Null.usableLiftTopM, 724.5);
+
+  const detWithoutV2 = normalizeLaunchComparisonHour('hrrr-conus', {
+    validAt: '2026-10-21T20:00:00Z',
+    surface: { temperatureC: 15, dewPointC: 8, windSpeedMps: 3, windDirectionDeg: 240 },
+    derived: { thermalVelocityMps: 1.06, usableLiftTopM: 724.5, boundaryLayerTopM: 778.9, cloudBaseM: 1315.0 },
+  });
+  assert.equal(Object.hasOwn(detWithoutV2, 'usableLiftTopV2M'), false);
+
+  // Sparse adapter keeps W* and usableLiftTop null
+  const ecmwfNorm = normalizeLaunchComparisonHour('ecmwf', {
+    validAt: '2026-10-21T20:00:00Z',
+    temperatureC: 16.2,
+    dewPointC: 7.4,
+    windSpeedMps: 3.8,
+    windDirectionDeg: 215,
+    soaring: { surfaceLclM: 1480.0, modelBlTopM: 920.0 },
+  });
+  assert.equal(ecmwfNorm.wstarMps, null);
+  assert.equal(ecmwfNorm.usableLiftTopM, null);
+  assert.equal(ecmwfNorm.surfaceLclM, 1480.0);
+  assert.equal(ecmwfNorm.blTopM, 920.0);
+
+  const meta = extractModelMetadata({ site: { gridElevationM: 386 }, models: { surface: { run: '2026-10-21T00:00:00Z' } } }, 'ecmwf');
+  assert.equal(meta.modelKind, 'surface-or-sparse-adapter');
+  assert.equal(meta.modelElevationM, 386);
+  const summary = summarizeModelWindowSpread('ecmwf', { site: { gridElevationM: 386 } }, []);
+  assert.equal(summary.status, 'unavailable');
+  assert.equal(summary.peakWstarV2Mps, null);
 });

@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "soaring/thermodynamics.mjs",
+    "soaring/convective-lift.mjs",
+    "soaring/boundary-layer-wind.mjs",
+    "soaring/terrain-adjustment.mjs",
+    "soaring/grid-kinematics.mjs",
+    "soaring/diagnostics.mjs",
+    "soaring/grib-column.mjs",
+    "soaring/audit-agreement.mjs",
+    "soaring/inventory.mjs",
+    "soaring/model-comparison.mjs",
+    "soaring/science.mjs"
+  ],
+  "exclude": [
+    "node_modules",
+    "data",
+    ".soaring-cache",
+    "soaring/vendor",
+    "soaring/fixtures"
+  ]
+}

@@ -1,6 +1,6 @@
 # Checks every change before it reaches main. Uses no secrets and never
 # publishes the dataset, so it also runs on pull requests.
-#   forecasts: frozen install, sites.json validation, unit tests, an engine dry
+#   forecasts: frozen install, sites.json validation, type checks, unit tests, an engine dry
 #              run for each model, and a live NWS fetch without publishing
 #   web:       unit tests, type checks, the sample dataset (validated against
 #              the meteo contract), and a production build of the site
@@ -54,6 +54,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Validate sites.json
         run: pnpm run check
+      - name: Backend type checks
+        run: pnpm run check:types
       - name: Unit tests
         run: pnpm test
       - name: Engine dry run

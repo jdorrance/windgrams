@@ -16,6 +16,7 @@ import {
   vectorWindErrorMps,
 } from './history.mjs';
 import { postprocessPointForecast } from '../soaring/point-postprocess.mjs';
+import { summarizeModelWindowSpread } from '../soaring/model-comparison.mjs';
 
 const finite = n => typeof n === 'number' && Number.isFinite(n);
 const round2 = n => (finite(n) ? Math.round(n * 100) / 100 : null);
@@ -249,86 +250,7 @@ export function buildBlanchardCrossModelSpread(
       const t = Date.parse(h.validAt);
       return t >= windowStart && t <= windowEnd;
     });
-    const coverageSamples = windowHours.length;
-    const timestamps = windowHours.map(h => Date.parse(h.validAt)).filter(Number.isFinite).sort((a, b) => a - b);
-    const coverageSpanHours = timestamps.length >= 2 ? round1((timestamps[timestamps.length - 1] - timestamps[0]) / 3600000) : 0;
-    const status = coverageSamples > 0 ? 'available' : 'unavailable';
-
-    if (model === 'geps') {
-      const v2Wstars = windowHours.map(h => h.soaring?.thermalVelocityV2Mps?.p50).filter(finite);
-      const v2UTops = windowHours.map(h => h.soaring?.usableLiftTopV2M?.p50).filter(finite);
-      const legacyWstars = windowHours.map(h => h.derived?.thermalVelocityMps?.p50).filter(finite);
-      const legacyUTops = windowHours.map(h => h.derived?.usableLiftTopM?.p50).filter(finite);
-      const winds = windowHours.map(h => h.surface?.windSpeedMps?.p50).filter(finite);
-      const temps = windowHours.map(h => h.surface?.temperatureC?.p50).filter(finite);
-      const effClouds = windowHours.map(h => h.soaring?.effectiveCloudLimitM?.p50 ?? h.derived?.cloudBaseM?.p50).filter(finite);
-      rows.push({
-        model,
-        modelKind: 'ensemble-percentiles',
-        derivationRule: 'per-member-before-percentiles',
-        referenceTime: doc.run?.referenceTime ?? null,
-        modelElevationM: doc.site?.modelElevationM ?? null,
-        coverageSamples,
-        coverageSpanHours,
-        status,
-        peakWstarV2Mps: coverageSamples > 0 && v2Wstars.length ? round2(Math.max(...v2Wstars)) : null,
-        peakUsableLiftTopV2M: coverageSamples > 0 && v2UTops.length ? round1(Math.max(...v2UTops)) : null,
-        peakLegacyWstarMps: coverageSamples > 0 && legacyWstars.length ? round2(Math.max(...legacyWstars)) : null,
-        peakLegacyUsableLiftTopM: coverageSamples > 0 && legacyUTops.length ? round1(Math.max(...legacyUTops)) : null,
-        minEffectiveCloudLimitM: coverageSamples > 0 && effClouds.length ? round1(Math.min(...effClouds)) : null,
-        meanWindSpeedMps: coverageSamples > 0 && winds.length ? round2(winds.reduce((a, b) => a + b, 0) / winds.length) : null,
-        maxTempC: coverageSamples > 0 && temps.length ? round1(Math.max(...temps)) : null,
-      });
-      continue;
-    }
-
-    if (model === 'ecmwf' || model === 'nws') {
-      const winds = windowHours.map(h => h.windSpeedMps).filter(finite);
-      const temps = windowHours.map(h => h.temperatureC).filter(finite);
-      const lcls = windowHours.map(h => h.soaring?.surfaceLclM).filter(finite);
-      rows.push({
-        model,
-        modelKind: 'surface-or-sparse-adapter',
-        referenceTime: doc.models?.surface?.run ?? doc.updateTime ?? doc.generatedAt ?? null,
-        modelElevationM: doc.site?.gridElevationM ?? doc.grid?.elevationM ?? null,
-        coverageSamples,
-        coverageSpanHours,
-        status,
-        peakWstarV2Mps: null,
-        peakUsableLiftTopV2M: null,
-        minSurfaceLclM: coverageSamples > 0 && lcls.length ? round1(Math.min(...lcls)) : null,
-        meanWindSpeedMps: coverageSamples > 0 && winds.length ? round2(winds.reduce((a, b) => a + b, 0) / winds.length) : null,
-        maxTempC: coverageSamples > 0 && temps.length ? round1(Math.max(...temps)) : null,
-        unsupportedReason: doc.soaringMeta?.unsupportedReason ?? null,
-      });
-      continue;
-    }
-
-    const wstarsV2 = windowHours.map(h => h.soaring?.thermalVelocityV2Mps).filter(finite);
-    const uTopsV2 = windowHours.map(h => h.soaring?.usableLiftTopV2M).filter(finite);
-    const rTopsV2 = windowHours.map(h => h.soaring?.resolvedThermalTopM).filter(finite);
-    const lcls = windowHours.map(h => h.soaring?.surfaceLclM).filter(finite);
-    const effClouds = windowHours.map(h => h.soaring?.effectiveCloudLimitM ?? h.derived?.cloudBaseM).filter(finite);
-    const winds = windowHours.map(h => h.surface?.windSpeedMps).filter(finite);
-    const temps = windowHours.map(h => h.surface?.temperatureC).filter(finite);
-
-    rows.push({
-      model,
-      modelKind: 'deterministic-column',
-      contractVersion: doc.soaringMeta?.contractVersion ?? '2.1.0',
-      referenceTime: doc.run?.referenceTime ?? null,
-      modelElevationM: doc.site?.modelElevationM ?? null,
-      coverageSamples,
-      coverageSpanHours,
-      status,
-      peakWstarV2Mps: coverageSamples > 0 && wstarsV2.length ? round2(Math.max(...wstarsV2)) : null,
-      peakUsableLiftTopV2M: coverageSamples > 0 && uTopsV2.length ? round1(Math.max(...uTopsV2)) : null,
-      peakResolvedThermalTopM: coverageSamples > 0 && rTopsV2.length ? round1(Math.max(...rTopsV2)) : null,
-      minSurfaceLclM: coverageSamples > 0 && lcls.length ? round1(Math.min(...lcls)) : null,
-      minEffectiveCloudLimitM: coverageSamples > 0 && effClouds.length ? round1(Math.min(...effClouds)) : null,
-      meanWindSpeedMps: coverageSamples > 0 && winds.length ? round2(winds.reduce((a, b) => a + b, 0) / winds.length) : null,
-      maxTempC: coverageSamples > 0 && temps.length ? round1(Math.max(...temps)) : null,
-    });
+    rows.push(summarizeModelWindowSpread(model, doc, windowHours));
   }
   return rows;
 }

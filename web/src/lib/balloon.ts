@@ -1,4 +1,4 @@
-import { formatQuantity } from './units.ts';
+import { feetPerMinuteToMps, legacyFeetToMetres, formatQuantity, legacyKnotsToMps, mpsToMph } from './units.ts';
 // Weather-balloon soundings as Skew-T soundings, read for pilots.
 //
 // Three sources, all for the upper-air station nearest the launch:
@@ -20,9 +20,6 @@ import {
 import type { Srg, SrgProfile } from "./srg.ts";
 import { compassPoint } from "./launches.ts";
 
-const FT = 3.28084;
-const MPH = 2.23694;
-const KT = 0.514444;
 const G = 9.80665;
 const RD = 287.04;
 /** Display ceiling: the flyable band and a margin (about 21,000 ft). */
@@ -111,13 +108,13 @@ export function balloonSounding(sounding: RaobDocument["soundings"][number], sta
 
 /** A Soaring Forecast table (balloon or model hour) as a sounding: heights in feet, pressure from the hypsometric equation. */
 export function srgSounding(profile: SrgProfile, stationElevationM: number, startC: number | null): Sounding | null {
-  const rows = profile.rows.filter((r) => r.heightFt / FT >= stationElevationM - 30);
+  const rows = profile.rows.filter((r) => legacyFeetToMetres(r.heightFt) >= stationElevationM - 30);
   if (rows.length < 5) return null;
   // Surface pressure from the standard atmosphere; a few hPa off changes nothing visible.
-  let p = 1013.25 * (1 - 2.25577e-5 * (rows[0].heightFt / FT)) ** 5.25588;
+  let p = 1013.25 * (1 - 2.25577e-5 * legacyFeetToMetres(rows[0].heightFt)) ** 5.25588;
   const points: SoundingPoint[] = [];
   rows.forEach((r, i) => {
-    const z = r.heightFt / FT;
+    const z = legacyFeetToMetres(r.heightFt);
     if (i > 0) {
       const below = points[i - 1];
       p *= Math.exp((-G * (z - below.heightM)) / (RD * ((below.temperatureC + r.temperatureC) / 2 + 273.15)));
@@ -127,7 +124,7 @@ export function srgSounding(profile: SrgProfile, stationElevationM: number, star
       heightM: z,
       temperatureC: r.temperatureC,
       dewPointC: Number.NaN,
-      windSpeedMps: r.windSpeedKt === null ? null : r.windSpeedKt * KT,
+      windSpeedMps: r.windSpeedKt === null ? null : legacyKnotsToMps(r.windSpeedKt),
       windDirectionDeg: r.windDirectionDeg,
       surface: i === 0,
     });
@@ -164,7 +161,7 @@ export function choices(doc: RaobDocument | null, srg: Srg | null, timeZone: str
       hasDewPoint: sounding.hasDewPoint,
     });
   }
-  const elevationM = (srg?.stationElevationFt ?? 0) / FT || doc?.station.elevationM || 0;
+  const elevationM = legacyFeetToMetres(srg?.stationElevationFt ?? 0) || doc?.station.elevationM || 0;
   // A flight the archive does not have (or no balloon file at all): use the
   // Soaring Forecast's own copy of it.
   if (srg?.observed && elevationM && !out.some((c) => Date.parse(c.validAt) === Date.parse(srg.observed!.validAt))) {
@@ -199,6 +196,33 @@ function eveningText(s: Sounding, top: number, choice: Choice, time: Intl.DateTi
   return `${time.format(new Date(choice.validAt))} station parcel: ${f(choice.start.temperatureC)} surface · top ${referenceHeight(top)}.`;
 }
 
+function formatThermalLead(
+  s: Sounding,
+  top: number,
+  station: number,
+  choice: Choice,
+  fromHigh: boolean,
+  profileLimited: boolean,
+  time: Intl.DateTimeFormat,
+): string {
+  if (profileLimited) {
+    if (fromHigh) {
+      return `Forecast high ${f(choice.start.temperatureC)} · parcel buoyant through profile top ${referenceHeight(top)} (≥ ${ftText(top - station)} above station · ceiling unresolved).`;
+    }
+    if (choice.kind === "model") {
+      return `NWS ${time.format(new Date(choice.validAt))} · surface ${f(choice.start.temperatureC)} · parcel buoyant through profile top ${referenceHeight(top)} (ceiling unresolved).`;
+    }
+    return eveningText(s, top, choice, time);
+  }
+  if (fromHigh) {
+    return `Forecast high ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)} · ${ftText(top - station)} above station.`;
+  }
+  if (choice.kind === "model") {
+    return `NWS ${time.format(new Date(choice.validAt))} · surface ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)}.`;
+  }
+  return eveningText(s, top, choice, time);
+}
+
 function liWords(li: number): { text: string; tone: Finding["tone"] } {
   if (li >= 3) return { text: "Very stable aloft", tone: "good" };
   if (li >= 0) return { text: "Stable aloft", tone: "good" };
@@ -222,19 +246,8 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
 
   // Thermals
   if (top !== null) {
-    const lead = profileLimited
-      ? fromHigh
-        ? `Forecast high ${f(choice.start.temperatureC)} · parcel buoyant through profile top ${referenceHeight(top)} (≥ ${ftText(top - station)} above station · ceiling unresolved).`
-        : choice.kind === "model"
-          ? `NWS ${time.format(new Date(choice.validAt))} · surface ${f(choice.start.temperatureC)} · parcel buoyant through profile top ${referenceHeight(top)} (ceiling unresolved).`
-          : eveningText(s, top, choice, time)
-      : fromHigh
-        ? `Forecast high ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)} · ${ftText(top - station)} above station.`
-        : choice.kind === "model"
-          ? `NWS ${time.format(new Date(choice.validAt))} · surface ${f(choice.start.temperatureC)} · parcel top ${referenceHeight(top)}.`
-          : eveningText(s, top, choice, time);
-    let text = lead;
-    if (fromHigh && srg?.maxThermalHeightFt) text += ` NWS top ${ftText(srg.maxThermalHeightFt / FT)}${srg.maxLiftFpm ? ` · lift ${formatQuantity(srg.maxLiftFpm / 196.850394, "lift")}` : ""}.`;
+    let text = formatThermalLead(s, top, station, choice, fromHigh, profileLimited, time);
+    if (fromHigh && srg?.maxThermalHeightFt) text += ` NWS top ${ftText(legacyFeetToMetres(srg.maxThermalHeightFt))}${srg.maxLiftFpm ? ` · lift ${formatQuantity(feetPerMinuteToMps(srg.maxLiftFpm), "lift")}` : ""}.`;
     const tone = fromHigh && srg?.soaringIndex ? SOARING_TONE[srg.soaringIndex.toLowerCase()] ?? "neutral" : "neutral";
     findings.push({ key: "thermals", title: fromHigh && srg?.soaringIndex ? `Thermals: ${srg.soaringIndex}` : "Thermals", text, tone });
   } else {
@@ -316,7 +329,7 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
 
   // Wind
   const at = (z: number) => windAtHeight(s.points, z);
-  const words = (w: { speedMps: number; directionDeg: number } | null) => (!w ? "–" : w.speedMps * MPH < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${formatQuantity(w.speedMps, "wind")}`);
+  const words = (w: { speedMps: number; directionDeg: number } | null) => (!w ? "–" : mpsToMph(w.speedMps) < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${formatQuantity(w.speedMps, "wind")}`);
   const heights = [launchM ?? station + 600, top ?? station + 2000];
   const [low, high2] = heights.map(at);
   const wind = [`${referenceHeight(heights[0])}: ${low ? words(low) : "unavailable"}.`];

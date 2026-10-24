@@ -11,6 +11,7 @@ import { capture } from '../soaring/capture.mjs';
 import { replay } from '../soaring/replay.mjs';
 import { modelFor } from '../soaring/common.mjs';
 import { SOARING_CONTRACT_VERSION } from '../soaring/science.mjs';
+import { COMPARISON_MODEL_ORDER, extractModelMetadata, normalizeLaunchComparisonHour } from '../soaring/model-comparison.mjs';
 import { greatCircleDistanceKm } from '@azohra/meteo.grib';
 import { isPublishedCase } from './merge-soaring-regions.mjs';
 import { regionSupportsModel, regionIndexName } from './lib/model-coverage.mjs';
@@ -204,7 +205,7 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
     for (const launch of launchesDoc.launches ?? []) {
       launch.models = {};
       const slug = launch.slug;
-      for (const mslug of ['hrrr-conus', 'rrfs', 'icon-eu', 'hrdps-continental', 'rdps', 'gdps', 'gfs', 'geps', 'ecmwf', 'nws']) {
+      for (const mslug of COMPARISON_MODEL_ORDER) {
         const mp = join(dataRoot, mslug, 'sites', `${slug}.json`);
         if (!existsSync(mp)) continue;
         const mdoc = JSON.parse(readFileSync(mp, 'utf8'));
@@ -214,95 +215,11 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
           return hour ? { ...hour, validAt: v } : null;
         }).filter(Boolean);
         if (matchedHours.length === 0) continue;
+        const meta = extractModelMetadata(mdoc, mslug);
         launch.models[mslug] = {
           referenceTime: mdoc.run?.referenceTime ?? mdoc.models?.surface?.run ?? mdoc.updateTime ?? null,
-          modelElevationM: mdoc.site?.modelElevationM ?? mdoc.site?.gridElevationM ?? mdoc.grid?.elevationM ?? null,
-          hours: matchedHours.map(mh => {
-            if (mslug === 'geps') {
-              const s = mh.soaring ?? null;
-              const d = mh.derived ?? {};
-              const rawWindDir = mh.surface?.windDirectionDeg;
-              const windDirectionDeg = typeof rawWindDir === 'number' && Number.isFinite(rawWindDir)
-                ? rawWindDir
-                : (rawWindDir?.p50 ?? null);
-              const spreadOf = dist => dist && (dist.p10 != null || dist.p90 != null)
-                ? { p10: dist.p10 ?? null, p90: dist.p90 ?? null }
-                : null;
-              const effCloudDist = s?.effectiveCloudLimitM ?? d.cloudBaseM;
-              return {
-                validAt: mh.validAt,
-                tempC: mh.surface?.temperatureC?.p50 ?? null,
-                tempSpreadC: spreadOf(mh.surface?.temperatureC),
-                dewPointC: mh.surface?.dewPointC?.p50 ?? null,
-                windSpeedMps: mh.surface?.windSpeedMps?.p50 ?? null,
-                windSpeedSpreadMps: spreadOf(mh.surface?.windSpeedMps),
-                windDirectionDeg,
-                windGustMps: mh.surface?.windGustMps?.p50 ?? null,
-                cloudCoverPct: mh.surface?.cloudCoverPercent?.p50 ?? null,
-                pblHeightM: null,
-                sensibleHeatWm2: mh.surface?.sensibleHeatFluxWm2?.p50 ?? null,
-                // Preserve legacy GEPS member-derived diagnostics distinctly from V2 fields
-                wstarMps: d.thermalVelocityMps?.p50 ?? null,
-                wstarLegacySpreadMps: spreadOf(d.thermalVelocityMps),
-                usableLiftTopM: d.usableLiftTopM?.p50 ?? null,
-                usableLiftLegacySpreadM: spreadOf(d.usableLiftTopM),
-                blTopM: d.boundaryLayerTopM?.p50 ?? null,
-                blTopLegacySpreadM: spreadOf(d.boundaryLayerTopM),
-                // Populate V2 fields only when member-level V2 diagnostics were derived
-                wstarV2Mps: s?.thermalVelocityV2Mps?.p50 ?? null,
-                wstarSpreadMps: spreadOf(s?.thermalVelocityV2Mps),
-                usableLiftTopV2M: s?.usableLiftTopV2M?.p50 ?? null,
-                usableLiftSpreadM: spreadOf(s?.usableLiftTopV2M),
-                resolvedThermalTopM: s?.resolvedThermalTopM?.p50 ?? null,
-                thermalTopSpreadM: spreadOf(s?.resolvedThermalTopM),
-                surfaceLclM: s?.surfaceLclM?.p50 ?? null,
-                effectiveCloudLimitM: effCloudDist?.p50 ?? null,
-                cloudLimitSpreadM: spreadOf(effCloudDist),
-                cloudBaseM: d.cloudBaseM?.p50 ?? null,
-              };
-            }
-            if (mslug === 'ecmwf' || mslug === 'nws') {
-              return {
-                validAt: mh.validAt,
-                tempC: mh.temperatureC ?? null,
-                dewPointC: mh.dewPointC ?? mh.dewpointC ?? null,
-                windSpeedMps: mh.windSpeedMps ?? null,
-                windDirectionDeg: mh.windDirectionDeg ?? null,
-                windGustMps: mh.windGustMps ?? null,
-                cloudCoverPct: mh.cloudCoverPercent ?? mh.skyCoverPct ?? null,
-                pblHeightM: mh.boundaryLayerHeightM ?? mh.mixingHeightM ?? null,
-                sensibleHeatWm2: null,
-                wstarMps: null,
-                usableLiftTopM: null,
-                blTopM: mh.soaring?.modelBlTopM ?? null,
-                surfaceLclM: mh.soaring?.surfaceLclM ?? null,
-                effectiveCloudLimitM: null,
-                cloudBaseM: mh.soaring?.surfaceLclM ?? null,
-              };
-            }
-            const s = mh.soaring ?? {};
-            return {
-              validAt: mh.validAt,
-              tempC: mh.surface?.temperatureC ?? null,
-              dewPointC: mh.surface?.dewPointC ?? null,
-              windSpeedMps: mh.surface?.windSpeedMps ?? null,
-              windDirectionDeg: mh.surface?.windDirectionDeg ?? null,
-              windGustMps: mh.surface?.windGustMps ?? null,
-              cloudCoverPct: mh.surface?.cloudCoverPercent ?? null,
-              pblHeightM: mh.surface?.pblHeightM ?? null,
-              sensibleHeatWm2: mh.surface?.sensibleHeatFluxWm2 ?? null,
-              wstarMps: mh.derived?.thermalVelocityMps ?? null,
-              usableLiftTopM: mh.derived?.usableLiftTopM ?? null,
-              ...(Object.hasOwn(s, 'thermalVelocityV2Mps') ? { wstarV2Mps: s.thermalVelocityV2Mps ?? null, usableLiftTopV2M: s.usableLiftTopV2M ?? null, resolvedThermalTopM: s.resolvedThermalTopM ?? null } : {}),
-              hcritWxtoflyM: s.hcritWxtoflyM ?? null,
-              surfaceLclM: s.surfaceLclM ?? null,
-              effectiveCloudLimitM: s.effectiveCloudLimitM ?? mh.derived?.cloudBaseM ?? null,
-              mixedLayerLclM: s.mixedLayerLclM ?? null,
-              experimentalTerrain: s.experimental?.terrainAdjustment ?? null,
-              blTopM: mh.derived?.boundaryLayerTopM ?? null,
-              cloudBaseM: s.surfaceLclM ?? mh.derived?.cloudBaseM ?? null,
-            };
-          }),
+          modelElevationM: meta.modelElevationM,
+          hours: matchedHours.map(mh => normalizeLaunchComparisonHour(mslug, mh)),
         };
       }
     }

@@ -7,6 +7,7 @@ import { greatCircleDistanceKm } from '@azohra/meteo.grib';
 import { deriveIconProfile, ICON_SEMANTICS } from '../scripts/lib/icon-eu.mjs';
 import { SOARING_CONTRACT_VERSION, metrics, v2LayerMetrics, metric, assertAgreement } from './science.mjs';
 import { json, sha256, versionsFor } from './common.mjs';
+import { ICON_REPLAY_INVENTORY, computeImplementationCodeHashes } from './inventory.mjs';
 
 export function iconRegionalDocuments(acquired, region, sites, context, { includeNativeLevels = true, onCellProfile = () => {} } = {}) {
   const primary = sites.find(site => site.slug === region.primarySite);
@@ -95,7 +96,7 @@ export function iconRegionalDocuments(acquired, region, sites, context, { includ
     units: { thermalVelocityMps: 'm/s', thermalVelocityV2Mps: 'm/s', usableLiftTopM: 'm MSL', usableLiftTopV2M: 'm MSL',
       sensibleHeatFluxWm2: 'W/m²', latentHeatFluxWm2: 'W/m²', precipitationMmHr: 'mm/hr', nativePressure: 'hPa', nativeHeight: 'm MSL' },
     hours: hourly.map(hour => ({ forecastHour: hour.forecastHour, validAt: hour.validAt, file: `f${hour.forecastHour}.json` })),
-    codeHashes: Object.fromEntries(['./icon-replay.mjs', './science.mjs', '../scripts/lib/icon-eu.mjs', '../scripts/lib/icon-decode.py'].map(name => [name, sha256(readFileSync(new URL(name, import.meta.url)))])),
+    codeHashes: computeImplementationCodeHashes(ICON_REPLAY_INVENTORY),
     files: Object.fromEntries(Object.entries(files).map(([name, value]) => [name, sha256(json(value))])),
   };
   return { manifest, files, profile, hourly };

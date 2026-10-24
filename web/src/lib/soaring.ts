@@ -1,5 +1,6 @@
-import { convertQuantity, formatQuantity, getUnitSystem, unitLabel, type QuantityKind, type UnitSystem } from './units.ts';
+import { convertQuantity, feetToMetres, formatQuantity, getUnitSystem, mphToMps, unitLabel, type QuantityKind, type UnitSystem } from './units.ts';
 import type { SiteForecast } from '@azohra/meteo.briefing/contract';
+export * from './soaring-contracts.ts';
 
 export const DEFAULT_CASE = 'north-sound-20261021-00z';
 export type Layer =
@@ -171,10 +172,10 @@ const thermalColors = ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'];
 const cloudColors = ['#f4f8fa', '#d1dde6', '#9fb4c7', '#6c849c', '#3c4f66'];
 const verticalColors = ['#3b6998', '#a8c6df', '#f4f8fa', '#e8bc52', '#c44935'];
 const cloudBaseColors = ['#7c689c', '#6999b3', '#289b9c', '#e8bc52', '#c44935'];
-const topStops = [0, 1000, 2000, 5000, 10000].map(ft => ft * .3048);
-const depthStops = [0, 1500, 3000, 6000, 10000].map(ft => ft * .3048);
-const cloudStops = [500, 2000, 4000, 7000, 11000].map(ft => ft * .3048);
-const windStops = [0, 5, 12, 20, 30].map(mph => mph * .44704);
+const topStops = [0, 1000, 2000, 5000, 10000].map(feetToMetres);
+const depthStops = [0, 1500, 3000, 6000, 10000].map(feetToMetres);
+const cloudStops = [500, 2000, 4000, 7000, 11000].map(feetToMetres);
+const windStops = [0, 5, 12, 20, 30].map(mphToMps);
 const definitions: LayerDefinition[] = [
   { id: 'thermalVelocityV2Mps', name: 'Thermal strength', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Convective velocity w* · resolved thermal depth.' },
   { id: 'usableLiftTopV2M', name: 'Usable lift top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Sink threshold: ' },
@@ -439,17 +440,20 @@ export function localTime(validAt: string, timeZone: string) {
   }).format(new Date(validAt));
 }
 
-export function displayMetric(value: number | null | undefined, layer: Layer, status: Quality = 'valid') {
+export function displayMetric(value: number | null | undefined, layer: Layer, status: Quality = 'valid', system: UnitSystem = getUnitSystem()) {
   if (status === 'missing') return 'Unavailable';
   if (status === 'insufficient-levels') return 'Insufficient vertical coverage';
   if (value === undefined) return 'Unavailable';
   if (value === null) {
-    if (layer === 'usableLiftTopM' || layer === 'usableLiftTopV2M') return `Below ${formatQuantity(1, 'lift')} sink threshold`;
-    if (layer === 'hcritWxtoflyM') return `Below ${formatQuantity(1.143, 'lift')} sink threshold`;
+    if (layer === 'usableLiftTopM' || layer === 'usableLiftTopV2M') return `Below ${formatQuantity(1, 'lift', undefined, system)} sink threshold`;
+    if (layer === 'hcritWxtoflyM') return `Below ${formatQuantity(1.143, 'lift', undefined, system)} sink threshold`;
     if (layer === 'resolvedThermalTopM') return 'Stable';
     return 'Unavailable';
   }
-  return LAYER_SPECS[layer]?.format(value) ?? String(value);
+  const definition = definitions.find(def => def.id === layer);
+  if (!definition) return String(value);
+  if (!definition.kind) return LAYER_SPECS[layer].format(value);
+  return formatQuantity(value, definition.kind, undefined, system) + (definition.datum ? ` ${definition.datum}` : '');
 }
 
 export function selectedState(manifest: ReplayManifest, hours: ReplayHour[], requested: number) {

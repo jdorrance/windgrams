@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { parseSiteForecast, type SiteForecast } from "@azohra/meteo.briefing/contract";
 import { dewPointC, relativeHumidityPercent } from "@azohra/meteo.briefing/derive";
 import { buildWindgramView, heightToY, readWindgram, visibleHeightAnchors, visibleWindgramHourIndices, yToHeight } from "../src/lib/windgram-view.ts";
-import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramHeightAxisSvg, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
+import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramHeightAxisSvg, renderWindgramKey, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
 
 const fixture = (name = "convective-cycle") => {
   const profile = parseSiteForecast(JSON.parse(readFileSync(new URL(`../dev-data-src/${name}.profile.json`, import.meta.url), "utf8")));
@@ -725,4 +725,33 @@ test("metric windgram labels and feathers change while physical fields and coord
   assert.match(details, />hPa<\/text>/);
   assert.match(details, />mm\/h<\/text>/);
   assert.doesNotMatch(details, /inHg|in\/h/);
+});
+
+test("a view retains its explicit units across rendering and later preference changes", () => {
+  const source = steadyProfile(3);
+  for (const unitSystem of ["imperial", "metric"] as const) {
+    const other = unitSystem === "metric" ? "imperial" : "metric";
+    setUnitSystem(other);
+    const view = buildWindgramView(source, {
+      timeZone: "Etc/UTC", compact: true, widthPx: 390, unitSystem,
+      launch: { name: "Launch", elevationM: 1000 },
+    });
+    assert.equal(view.unitSystem, unitSystem);
+    const render = () => [
+      renderWindgramSvg(view), renderWindgramHeightAxisSvg(view),
+      renderWindgramDiagnosticsSvg(view), renderWindgramKey(view.unitSystem),
+    ];
+    const before = render();
+    assert.match(before[0], unitSystem === "metric" ? /Sfc °C/ : /Sfc °F/);
+    assert.match(before[0], unitSystem === "metric" ? /Launch · 1,000 m MSL/ : /Launch · 3,281 ft MSL/);
+    assert.match(before[3], unitSystem === "metric" ? /≤ −9\.84<\/span>/ : /≤ −5\.4<\/span>/);
+    assert.match(before[2], unitSystem === "metric" ? />hPa<\/text>/ : />inHg<\/text>/);
+    setUnitSystem(unitSystem);
+    assert.deepEqual(render(), before, "global preference cannot relabel an existing scene");
+    const same = buildWindgramView(source, {
+      timeZone: "Etc/UTC", compact: true, widthPx: 390,
+      launch: { elevationM: 1000, name: "Launch" },
+    });
+    assert.deepEqual(view.contours, same.contours, "explicit units govern the contour intervals too");
+  }
 });

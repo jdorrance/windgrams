@@ -105,12 +105,12 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
 
       <section aria-labelledby="windgram-heading">
         <h2 id="windgram-heading">Windgram</h2>
-        <p id="windgram-subtitle" class="muted">Select an hour to update the map and sounding.</p>
+        <p id="windgram-subtitle" class="muted">Hover or tap for height AGL. Select an hour to update the map and sounding.</p>
         <div class="windgram-viewport">
           <div id="replay-windgram" class="replay-chart" tabindex="0" role="group" aria-label="Windgram. Click a column or use left and right arrows to select an hour."></div>
           <div id="replay-height-axis" class="windgram-height-axis" hidden aria-hidden="true"></div>
         </div>
-        <button id="windgram-full-profile" class="windgram-range" type="button" aria-pressed="false" aria-controls="replay-windgram" title="All heights" hidden>Full profile</button>
+        <button id="windgram-full-profile" class="windgram-range" type="button" aria-pressed="false" aria-controls="replay-windgram" title="All heights" hidden><span class="windgram-range-track" aria-hidden="true"></span>Full height</button>
         <div id="windgram-key"></div>
       </section>
 

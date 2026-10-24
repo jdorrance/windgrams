@@ -38,7 +38,12 @@ const station = stationEntry && (() => {
         <h1 id="launch-title">{launch.name}</h1>
         <span class="forecast-facing">{facing}-facing</span>
       </div>
-      <button class="forecast-info-button" type="button" popovertarget="launch-info">Launch info</button>
+      <div class="forecast-heading-actions">
+        <button class="forecast-run-button" type="button" popovertarget="forecast-info" aria-label="Forecast details" title="Forecast date and model run">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7" r=".8" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="forecast-info-button" type="button" popovertarget="launch-info">Launch info</button>
+      </div>
     </header>
     <div class="forecast-toolbar">
       <span class="sr-only" id="day-label">Forecast day</span>
@@ -48,18 +53,13 @@ const station = stationEntry && (() => {
         <select id="model-select" disabled><option>Loading models…</option></select>
       </label>
     </div>
-    <div class="forecast-context">
-      <span id="forecast-date"></span>
-      <span id="meteogram-meta"></span>
-    </div>
-    <div id="forecast-hour-panel" class="forecast-hour-panel" hidden>
-      <div class="forecast-hour-controls">
-        <button id="forecast-hour-prev" type="button" aria-label="Previous forecast hour">←</button>
-        <label for="forecast-hour">Hour <output id="forecast-hour-label" for="forecast-hour"></output></label>
-        <input id="forecast-hour" type="range" min="0" max="0" value="0" step="1" />
-        <button id="forecast-hour-next" type="button" aria-label="Next forecast hour">→</button>
-        <button id="forecast-hour-peak" type="button" title="Peak forecast w*">Strongest thermals</button>
+    <div class="forecast-run-panel" id="forecast-info" popover role="dialog" aria-labelledby="forecast-info-title">
+      <div class="card-head">
+        <h2 id="forecast-info-title">Forecast details</h2>
+        <button class="forecast-run-button" type="button" popovertarget="forecast-info" popovertargetaction="hide" aria-label="Close forecast details" autofocus>×</button>
       </div>
+      <p id="forecast-date"></p>
+      <p id="meteogram-meta"></p>
     </div>
     <h2 class="sr-only" id="meteogram-title">Soaring meteogram</h2>
     <p id="sample-notice" class="notice sample" hidden>
@@ -74,7 +74,16 @@ const station = stationEntry && (() => {
       </div>
       <div class="windgram-height-axis" id="meteogram-height-axis" aria-hidden="true" hidden></div>
     </div>
-    <button id="windgram-full-profile" class="windgram-range" type="button" aria-pressed="false" aria-controls="meteogram" title="All heights" hidden>Full profile</button>
+    <div id="forecast-hour-panel" class="forecast-hour-panel" hidden>
+      <div class="forecast-hour-controls">
+        <label for="forecast-hour">Hour <output id="forecast-hour-label" for="forecast-hour"></output></label>
+        <button id="windgram-full-profile" class="windgram-range" type="button" aria-pressed="false" aria-controls="meteogram" title="All heights" hidden><span class="windgram-range-track" aria-hidden="true"></span>Full height</button>
+        <button id="forecast-hour-prev" type="button" aria-label="Previous forecast hour">←</button>
+        <input id="forecast-hour" type="range" min="0" max="0" value="0" step="1" />
+        <button id="forecast-hour-next" type="button" aria-label="Next forecast hour">→</button>
+        <button id="forecast-hour-peak" type="button" title="Peak forecast w*">Strongest thermals</button>
+      </div>
+    </div>
     <div id="forecast-conditions-panel" class="forecast-hour-panel" hidden>
       <dl id="forecast-conditions" class="forecast-conditions"></dl>
       <p id="forecast-wind-note" class="forecast-wind-note" hidden></p>
@@ -87,6 +96,7 @@ const station = stationEntry && (() => {
     <details class="windgram-guide">
       <summary>Chart details</summary>
       <p>Time left to right · height MSL. Launch elevation uses terrain at the saved coordinates.</p>
+      <p>Hover or tap for height AGL. Tap outside to clear. Reference: launch terrain, or model terrain where launch elevation is unavailable.</p>
       <p>Colours: lapse rate, smoothed between layers and hours. Red/orange: rapid cooling aloft. Grey: inversion. Cyan line: freezing; snowflakes: lowest freezing level.</p>
       <p>Wind barbs point toward the wind source. Feather values follow the selected units. Faint barbs: interpolated levels. Tap a column or use arrow keys to select an hour.</p>
       <p>White hatching: RH &gt;94%. Pale bands: model cloud ≥30%. Cloud outlines: potential condensation level. Compare with thermal reach.</p>

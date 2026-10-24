@@ -492,7 +492,7 @@ details[open] > summary {
 .forecast-heading,
 .forecast-identity,
 .forecast-toolbar,
-.forecast-context {
+.forecast-heading-actions {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -506,6 +506,32 @@ details[open] > summary {
 
 .forecast-identity {
   gap: 12px;
+}
+
+.forecast-heading-actions {
+  gap: 4px;
+}
+
+.forecast-run-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.forecast-run-button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .forecast-heading h1 {
@@ -538,6 +564,7 @@ details[open] > summary {
 
 .forecast-toolbar {
   gap: 12px;
+  margin-bottom: 8px;
 }
 
 .forecast-days {
@@ -601,17 +628,15 @@ details[open] > summary {
   font-weight: 600;
 }
 
-.forecast-context {
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0 12px;
-  margin: 6px 0;
-  color: var(--ink-3);
-  font-size: 11px;
+.forecast-run-panel p {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.forecast-context #forecast-date {
-  color: var(--ink-2);
+.forecast-run-panel #forecast-date {
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -628,7 +653,7 @@ details[open] > summary {
 }
 
 .forecast-hour-controls label {
-  grid-column: 1 / -1;
+  grid-column: 1 / 4;
   grid-row: 1;
   font-size: 13px;
   font-weight: 600;
@@ -696,7 +721,8 @@ details[open] > summary {
   margin: 8px 0;
 }
 
-.launch-info-panel {
+.launch-info-panel,
+.forecast-run-panel {
   inset: 58px max(16px, calc((100vw - 1088px) / 2)) auto auto;
   width: min(410px, calc(100vw - 32px));
   max-height: calc(100dvh - 90px);
@@ -710,7 +736,8 @@ details[open] > summary {
   box-shadow: 0 12px 36px rgb(0 0 0 / 18%);
 }
 
-.launch-info-panel::backdrop {
+.launch-info-panel::backdrop,
+.forecast-run-panel::backdrop {
   background: rgb(0 0 0 / 8%);
 }
 
@@ -829,22 +856,58 @@ details[open] > summary {
   border-radius: 8px;
 }
 
-.windgram-range {
-  margin-top: 6px;
-  min-height: 44px;
-  padding: 6px 12px;
-  border: 1px solid var(--axis);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
+.windgram-range,
+.forecast-hour-controls .windgram-range {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 2px 0;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-2);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.windgram-range[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--surface);
+.windgram-range[hidden] {
+  display: none;
+}
+
+.forecast-hour-controls .windgram-range {
+  grid-column: 4;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.windgram-range-track {
+  width: 26px;
+  height: 16px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--axis);
+}
+
+.windgram-range-track::after {
+  content: "";
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.windgram-range[aria-pressed="true"] .windgram-range-track {
+  background: var(--accent);
+}
+
+.windgram-range[aria-pressed="true"] .windgram-range-track::after {
+  transform: translateX(10px);
 }
 
 .windgram-viewport > .windgram-height-axis {

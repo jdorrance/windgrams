@@ -6,7 +6,7 @@ import { baseMap, onMapReady } from './map.ts';
 import { DATA_BASE } from '../lib/site.ts';
 import { buildWindgramView, windgramHours } from '../lib/windgram-view.ts';
 import { windgramViewport } from '../lib/windgram-viewport.ts';
-import { renderWindgramSvg, renderWindgramKey } from '../lib/windgram-chart.ts';
+import { mountWindgramInspector, renderWindgramSvg, renderWindgramKey } from '../lib/windgram-chart.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
 import { SkewTChart } from '../lib/skewt-chart.ts';
 import { compassPoint } from '../lib/launches.ts';
@@ -440,6 +440,7 @@ async function main() {
     launch: { elevationM: manifest.case.launchElevation.elevationM, name: `${manifest.case.site.name} launch` },
   });
   let cursor: SVGRectElement | null = null;
+  let clearWindgramInspector: (() => void) | null = null;
 
   function windgramLaunch(cellIdx: number) {
     const matchedLaunch = launchForCell(cellIdx);
@@ -460,6 +461,7 @@ async function main() {
 
     const rebuilt = currentWindgramCell !== cellIdx || currentWindgramLayout !== layout;
     if (rebuilt) {
+      clearWindgramInspector?.();
       currentWindgramCell = cellIdx;
       currentWindgramLayout = layout;
       currentView = buildWindgramView(activeProfile, {
@@ -492,20 +494,16 @@ async function main() {
       })) {
         cursor.setAttribute(key, String(value));
       }
-      svg.append(cursor);
-      svg.addEventListener('click', event => {
-        if (currentView.compact && event.clientX - windgramHost.getBoundingClientRect().left < currentView.left) return;
-        const matrix = svg.getScreenCTM();
-        if (!matrix) return;
-        const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-        const clickedIdx = Math.max(0, Math.min(currentView.hours.length - 1, Math.floor((point.x - currentView.left) / currentView.columnWidth)));
-        const clickedHour = hours.find(hour => hour.validAt === currentView.hours[clickedIdx]?.validAt);
+      svg.insertBefore(cursor, svg.querySelector('[data-windgram-cursor]'));
+      clearWindgramInspector = mountWindgramInspector(windgramHost, null, currentView, validAt => {
+        const clickedHour = hours.find(hour => hour.validAt === validAt);
         if (!clickedHour) return;
         requested = clickedHour.forecastHour;
         update();
       });
     }
     const displayedHour = currentView.hours.find(hour => hour.validAt === hours[index]?.validAt);
+    currentView.selectedHourIndex = Math.max(0, currentView.hours.findIndex(hour => hour === displayedHour));
     cursor?.setAttribute('visibility', displayedHour ? 'visible' : 'hidden');
     if (cursor && displayedHour) {
       const left = displayedHour.x - currentView.columnWidth / 2;
@@ -613,6 +611,8 @@ async function main() {
     if (cellForecast) {
       renderActiveCellWindgram(cellForecast, selectedCell, index);
     } else {
+      clearWindgramInspector?.();
+      clearWindgramInspector = null;
       currentWindgramCell = -1;
       currentWindgramHour = -1;
       cursor = null;
@@ -1050,12 +1050,6 @@ async function main() {
     update();
   });
   el('select-blanchard').addEventListener('click', () => selectCell(manifest.siteCell, manifest.case.site.slug));
-  el('replay-windgram').addEventListener('keydown', event => {
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      event.preventDefault();
-      move(event.key === 'ArrowLeft' ? -1 : 1);
-    }
-  });
   let resizeTimer = 0;
   let viewport = windgramViewport();
   window.addEventListener('resize', () => {

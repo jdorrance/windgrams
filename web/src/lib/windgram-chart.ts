@@ -43,6 +43,9 @@ const STYLES = `
 .windgram .wg-inspector { pointer-events: none; }
 .windgram .wg-inspector line { stroke: #14223f; stroke-width: 1; stroke-dasharray: 3 4; }
 .windgram .wg-inspector circle { fill: none; stroke: #17253e; stroke-width: 2; }
+.windgram .wg-inspector-back { fill: #182c43; fill-opacity: .96; stroke: #fff; stroke-opacity: .7; stroke-width: .75; }
+.windgram .wg-inspector-agl { fill: #fff; font-size: 15px; font-weight: 750; }
+.windgram .wg-inspector-msl { fill: #e4edf4; font-size: 10px; }
 .windgram-compact .wg-hour, .windgram-compact .wg-lift, .windgram-compact .wg-temperature { font-size: 12px; }
 .windgram-compact .wg-axis-feet, .windgram-compact .wg-surface-temp { font-size: 11px; }
 ${WINDGRAM_STABILITY.map(({ className, color }) => `.windgram .meteo-gram-stab-${className} { fill: ${color}; }`).join("\n")}
@@ -270,7 +273,7 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
     parts.push(text(view.width / 2, view.bottom + 59, `Wind ${unitLabel("barbWind")} · temperature ${unitLabel("temperature")}${view.ensemble ? " · median" : ""}`, 'text-anchor="middle" class="wg-axis-unit"'));
     parts.push(text(view.width / 2, view.bottom + 73, view.timeZone, 'text-anchor="middle" class="wg-axis-unit"'));
   } else parts.push(text(view.left + view.plotWidth / 2, view.bottom + 75, `${view.timeZone} · wind ${unitLabel("barbWind")} · temperature ${unitLabel("temperature")}${view.ensemble ? " · ensemble median" : ""}`, 'text-anchor="middle" class="wg-axis-unit"'));
-  parts.push(`<g class="wg-inspector" data-windgram-cursor="" visibility="hidden"><line data-cursor-vertical=""/><line data-cursor-horizontal=""/><circle data-cursor-point="" r="7"/></g>`);
+  parts.push(`<g class="wg-inspector" data-windgram-cursor="" visibility="hidden" aria-hidden="true"><line data-cursor-vertical=""/><line data-cursor-horizontal=""/><circle data-cursor-point="" r="7"/><g data-cursor-readout=""><rect data-cursor-back="" height="47" rx="6" class="wg-inspector-back"/><text x="10" y="20" data-cursor-agl="" class="wg-inspector-agl"/><text x="10" y="36" data-cursor-msl="" class="wg-inspector-msl"/></g></g>`);
   const first = view.hours[0], last = view.hours[view.hours.length - 1];
   const description = `Windgram${first ? ` ${first.label}–${last.label}` : ""} · ${view.timeZone}. Height ${unitLabel("elevation")} MSL. Wind feathers ${unitLabel("barbWind")}. Temperature ${unitLabel("temperature")}. Lift ${unitLabel("lift")}. Crosshatching: RH >94%. Pale bands: model cloud. Outlined clouds: potential LCL. Paragliders: ${formatQuantity(1.143, "lift")} sink. ${view.ensemble ? "Ensemble median and uncertainty." : ""}`;
   return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(view.width)} ${fmt(view.height)}" role="img" aria-labelledby="${id}-title ${id}-description" class="windgram${view.compact ? " windgram-compact" : ""}"><title id="${id}-title">Wind, temperature and clouds by hour and altitude</title><desc id="${id}-description">${escape(description)}</desc>${parts.join("\n")}</svg>`;
@@ -339,13 +342,18 @@ export function renderWindgramKey(): string {
 export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement | null, view: WindgramView, onSelectHour?: (validAt: string) => void): () => void {
   const svg = host.querySelector<SVGSVGElement>("svg.windgram");
   if (!svg || !view.hours.length) return () => {};
+  const ownerDocument = host.ownerDocument;
   const cursor = svg.querySelector<SVGGElement>("[data-windgram-cursor]");
   const vertical = svg.querySelector<SVGLineElement>("[data-cursor-vertical]");
   const horizontal = svg.querySelector<SVGLineElement>("[data-cursor-horizontal]");
   const point = svg.querySelector<SVGCircleElement>("[data-cursor-point]");
+  const callout = svg.querySelector<SVGGElement>("[data-cursor-readout]");
+  const calloutBack = svg.querySelector<SVGRectElement>("[data-cursor-back]");
+  const aglLabel = svg.querySelector<SVGTextElement>("[data-cursor-agl]");
+  const mslLabel = svg.querySelector<SVGTextElement>("[data-cursor-msl]");
   const originalAttributes = new Map(["tabindex", "role", "aria-label", "aria-describedby"].map((key) => [key, host.getAttribute(key)]));
   const readoutAttributes = new Map(["role", "aria-live", "aria-atomic"].map((key) => [key, readout?.getAttribute(key) ?? null]));
-  const interactionLabel = "Interactive windgram. Left and right arrows change hour; up and down arrows change altitude. Escape clears the selection.";
+  const interactionLabel = "Interactive windgram. Hover or tap for AGL height. Left and right arrows change hour; up and down arrows change altitude. Escape clears the selection.";
   host.tabIndex = 0;
   host.setAttribute("role", "group");
   host.setAttribute("aria-label", interactionLabel);
@@ -357,8 +365,14 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement |
   if (readout) readout.textContent = instructions;
   let active: { hourIndex: number; heightM: number } | null = null;
   let pinned = false;
-  let pointerStart: { x: number; y: number; id: number } | null = null;
+  let pointerStart: { x: number; y: number; id: number; moved: boolean } | null = null;
   let lastText = "";
+  const clear = () => {
+    pinned = false; active = null; lastText = "";
+    cursor?.setAttribute("visibility", "hidden");
+    if (readout) readout.textContent = instructions;
+    else host.setAttribute("aria-label", interactionLabel);
+  };
 
   const update = (hourIndex: number, heightM: number, keyboard = false) => {
     const reading = readWindgram(view, hourIndex, heightM);
@@ -369,8 +383,33 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement |
     attr(horizontal, { x1: view.left, x2: view.left + view.plotWidth, y1: y, y2: y });
     attr(point, { cx: x, cy: y });
     cursor?.setAttribute("visibility", "visible");
+    const aglText = `${formatQuantity(reading.heightAglM, "elevation")} AGL`;
+    const mslText = `${formatQuantity(reading.heightM, "elevation")} MSL · ${view.ground.source} ref`;
+    if (aglLabel) aglLabel.textContent = aglText;
+    if (mslLabel) mslLabel.textContent = mslText;
+    // Keep the card visible while the page or the wide desktop chart is scrolled.
+    let visibleLeft = view.left, visibleRight = view.left + view.plotWidth;
+    let visibleTop = view.top, visibleBottom = view.bottom;
+    const matrix = svg.getScreenCTM();
+    if (matrix) {
+      const bounds = host.getBoundingClientRect(), inverse = matrix.inverse();
+      const viewport = ownerDocument?.defaultView;
+      const topLeft = new DOMPoint(Math.max(0, bounds.left), Math.max(0, bounds.top)).matrixTransform(inverse);
+      const bottomRight = new DOMPoint(Math.min(viewport?.innerWidth ?? Infinity, bounds.right), Math.min(viewport?.innerHeight ?? Infinity, bounds.bottom)).matrixTransform(inverse);
+      visibleLeft = Math.max(visibleLeft, topLeft.x);
+      visibleRight = Math.min(visibleRight, bottomRight.x);
+      visibleTop = Math.max(visibleTop, topLeft.y);
+      visibleBottom = Math.min(visibleBottom, bottomRight.y);
+    }
+    const padding = 4, calloutHeight = 47;
+    const labelWidth = Math.max(aglLabel?.getComputedTextLength?.() ?? aglText.length * 9, mslLabel?.getComputedTextLength?.() ?? mslText.length * 5.5) + 20;
+    const calloutWidth = Math.min(labelWidth, Math.max(0, visibleRight - visibleLeft - padding * 2));
+    const calloutX = Math.max(visibleLeft + padding, Math.min(x + 12 + calloutWidth <= visibleRight - padding ? x + 12 : x - 12 - calloutWidth, visibleRight - calloutWidth - padding));
+    const calloutY = Math.max(visibleTop + padding, Math.min(y - calloutHeight - 12 >= visibleTop + padding ? y - calloutHeight - 12 : y + 12, visibleBottom - calloutHeight - padding));
+    callout?.setAttribute("transform", `translate(${fmt(calloutX)} ${fmt(calloutY)})`);
+    attr(calloutBack, { width: calloutWidth });
     const when = new Intl.DateTimeFormat("en-US", { timeZone: view.timeZone, weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(new Date(reading.validAt));
-    const title = `${when} · ${formatQuantity(reading.heightM, "elevation")} MSL`;
+    const title = `${when} · ${aglText} · ${mslText}`;
     const values = [reading.temperatureF == null ? "Temperature unavailable" : `${formatQuantity((reading.temperatureF - 32) / 1.8, "temperature", 1)}`,
       reading.speedKt == null ? "Wind unavailable" : reading.speedKt < .1 ? "Calm" : `${barbSpeed(reading.speedKt)}${reading.directionDeg == null ? "" : ` from ${degrees(reading.directionDeg)}`}`,
       reading.speedKt == null ? null : reading.interpolated ? "Interpolated" : "Model level",
@@ -400,25 +439,25 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement |
     }
   };
   const location = (event: PointerEvent) => {
-    if (view.compact && event.clientX < host.getBoundingClientRect().left + view.left) return null;
     const matrix = svg.getScreenCTM();
     if (!matrix) return null;
     const position = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
     if (position.x < view.left || position.x > view.left + view.plotWidth || position.y < view.top || position.y > view.bottom) return null;
     const hourIndex = Math.max(0, Math.min(view.hours.length - 1, Math.floor((position.x - view.left) / view.columnWidth)));
-    const nearest = view.barbs.filter((barb) => barb.hourIndex === hourIndex).sort((a, b) => Math.abs(a.y - position.y) - Math.abs(b.y - position.y))[0];
-    return { hourIndex, heightM: nearest && Math.abs(nearest.y - position.y) < 9 ? nearest.heightM : yToHeight(view, position.y) };
+    return { hourIndex, heightM: yToHeight(view, position.y) };
   };
   const onMove = (event: PointerEvent) => {
+    if (pointerStart?.id === event.pointerId && Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 10) pointerStart.moved = true;
     if (event.pointerType !== "mouse" || pinned) return;
     const p = location(event);
     if (p) update(p.hourIndex, p.heightM);
+    else cursor?.setAttribute("visibility", "hidden");
   };
-  const onDown = (event: PointerEvent) => { pointerStart = { x: event.clientX, y: event.clientY, id: event.pointerId }; };
+  const onDown = (event: PointerEvent) => { if (event.isPrimary !== false) pointerStart = { x: event.clientX, y: event.clientY, id: event.pointerId, moved: false }; };
   const onUp = (event: PointerEvent) => {
     const start = pointerStart;
     pointerStart = null;
-    if (!start || start.id !== event.pointerId || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) return;
+    if (!start || start.moved || start.id !== event.pointerId || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) return;
     const p = location(event);
     if (!p) return;
     pinned = true;
@@ -427,19 +466,17 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement |
   };
   const onCancel = () => { pointerStart = null; };
   const onLeave = () => { if (!pinned) cursor?.setAttribute("visibility", "hidden"); };
+  const onOutsideDown = (event: Event) => { if (pinned && !host.contains(event.target as Node)) clear(); };
   const onKey = (event: KeyboardEvent) => {
     if (event.key === "Escape") {
-      pinned = false; active = null; lastText = "";
-      cursor?.setAttribute("visibility", "hidden");
-      if (readout) readout.textContent = instructions;
-      else host.setAttribute("aria-label", interactionLabel);
+      clear();
       return;
     }
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
     pinned = true;
     let hourIndex = active?.hourIndex ?? view.selectedHourIndex;
-    let heightM = active?.heightM ?? view.launch?.heightM ?? view.floorM;
+    let heightM = active?.heightM ?? Math.max(view.ground.elevationM, view.floorM);
     if (event.key === "ArrowLeft") hourIndex = Math.max(0, hourIndex - 1);
     if (event.key === "ArrowRight") hourIndex = Math.min(view.hours.length - 1, hourIndex + 1);
     if (event.key === "Home") hourIndex = 0;
@@ -456,6 +493,7 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement |
   host.addEventListener("pointercancel", onCancel);
   host.addEventListener("pointerleave", onLeave);
   host.addEventListener("keydown", onKey);
+  ownerDocument?.addEventListener("pointerdown", onOutsideDown);
   return () => {
     host.removeEventListener("pointermove", onMove);
     host.removeEventListener("pointerdown", onDown);
@@ -463,6 +501,7 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement |
     host.removeEventListener("pointercancel", onCancel);
     host.removeEventListener("pointerleave", onLeave);
     host.removeEventListener("keydown", onKey);
+    ownerDocument?.removeEventListener("pointerdown", onOutsideDown);
     for (const [name, value] of originalAttributes) value === null ? host.removeAttribute(name) : host.setAttribute(name, value);
     for (const [name, value] of readoutAttributes) value === null ? readout?.removeAttribute(name) : readout?.setAttribute(name, value);
     cursor?.setAttribute("visibility", "hidden");

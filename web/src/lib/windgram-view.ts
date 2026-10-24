@@ -37,6 +37,8 @@ export interface WindgramView {
   freezing: { x: number; y: number; hourIndex: number }[];
   wings: { x: number; y: number; heightM: number; hourIndex: number }[]; series: WindgramSeries[];
   launch: { y: number; heightM: number; label: string } | null;
+  /** Ground reference for AGL readings, independent of the displayed height range. */
+  ground: { elevationM: number; source: "launch" | "model" };
   diagnostics: readonly MetricStrip[]; diagnosticLeft: number; diagnosticColumnWidth: number;
   sampling: readonly HourSampling[]; selectedHourIndex: number;
   compact: boolean; ensemble: boolean; sourceNote: string | null;
@@ -53,6 +55,7 @@ export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "lau
 };
 export interface WindgramReading {
   hourIndex: number; validAt: string; heightM: number;
+  heightAglM: number;
   temperatureF: number | null; speedKt: number | null; directionDeg: number | null;
   interpolated: boolean; gustKt: number | null; cloud: CloudEvidence | null;
 }
@@ -687,6 +690,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const ensemble = (profile.run.members ?? 0) > 1 || hours.some((h) => typeof h.surface.temperatureC === "object" && h.surface.temperatureC !== null);
   const view: WindgramView = {
     width: left + plotWidth + right, height: bottom + (compact ? 82 : 86), left, top, plotWidth, plotHeight, bottom, columnWidth, floorM, topM,
+    ground: { elevationM: scalar(options.launch?.elevationM) ?? modelFloorM, source: scalar(options.launch?.elevationM) === null ? "model" : "launch" },
     timeZone: options.timeZone, anchors, sampling, compact, ensemble, sourceNote: scene.smokeSource ? `Smoke: ${scene.smokeSource.model} · run ${scene.smokeSource.referenceTime}` : null,
     displayInterpolationNote: "Colours interpolate between layer centres and forecast hours. Contours and faint barbs interpolate between model levels.",
     hours: hours.map((h, i) => {
@@ -846,7 +850,7 @@ export function readWindgram(view: WindgramView, hourIndex: number, heightM: num
   const u = sample ? sampleHeight(sample.windU, z) : null, v = sample ? sampleHeight(sample.windV, z) : null;
   const wind = u !== null && v !== null ? componentsToWind(u, v) : null;
   const cloud = view.clouds.find((c) => c.hourIndex === index && (c.kind === "potential" ? Math.abs(z - c.baseM) < 25 : z >= c.baseM && z <= c.topM));
-  return { hourIndex: index, validAt: view.hours[index]?.validAt ?? "", heightM: z,
+  return { hourIndex: index, validAt: view.hours[index]?.validAt ?? "", heightM: z, heightAglM: z - view.ground.elevationM,
     temperatureF: t === null ? null : fahrenheit(t), speedKt: wind === null ? null : wind.speedMps * KT, directionDeg: wind?.directionDeg ?? null,
     interpolated: !sample?.temperatureC.some((n) => Math.abs(n.altitudeM - z) < 5), gustKt: view.hours[index]?.gustKt ?? null, cloud: cloud?.kind ?? null };
 }

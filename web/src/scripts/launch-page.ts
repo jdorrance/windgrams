@@ -8,7 +8,7 @@ import { parseForecastManifestJson, parseModelCatalogueJson, parseSiteContextJso
 import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/meteo.briefing/contract";
 import { localDateKey, localHourOfDay, localInstantMs, runFreshness } from "@azohra/meteo.briefing/derive";
 import { loadDocument } from "@azohra/meteo.briefing/transport";
-import { buildWindgramView, windgramHours } from "../lib/windgram-view.ts";
+import { buildWindgramView, windgramHours, type WindgramView } from "../lib/windgram-view.ts";
 import { windgramViewport } from "../lib/windgram-viewport.ts";
 import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
 import { windWindow, compassPoint, type Launch } from "../lib/launches.ts";
@@ -133,6 +133,7 @@ let skewt: SkewTChart | null = null;
 
 let skewtHours: SiteForecast["hours"] = [];
 let displayedWindgramTimes: string[] = [];
+let currentWindgramView: WindgramView | null = null;
 let ecmwfChart: EcmwfChart | null = null;
 let clearWindgramInspector: (() => void) | null = null;
 const sunlight = new Sunlight(launch);
@@ -274,6 +275,7 @@ function renderMeteogram() {
   axis.hidden = true;
   $("windgram-full-profile").hidden = true;
   displayedWindgramTimes = [];
+  currentWindgramView = null;
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
   title.textContent = entry
@@ -339,6 +341,9 @@ function renderMeteogram() {
     maxHeightPx: compact && portrait ? height - chartTop - 16 : undefined,
   });
   displayedWindgramTimes = view.hours.map(hour => hour.validAt);
+  currentWindgramView = view;
+  const selectedIndex = displayedWindgramTimes.indexOf(selectedValidAt ?? "");
+  if (selectedIndex >= 0) view.selectedHourIndex = selectedIndex;
   frame.innerHTML = renderWindgramSvg(view, { idPrefix: `mg-${launch.slug}` });
   diagnostics.innerHTML = renderWindgramDiagnosticsSvg(view, { idPrefix: `mg-details-${launch.slug}` });
   key.innerHTML = renderWindgramKey();
@@ -351,7 +356,8 @@ function renderMeteogram() {
   });
   const marker = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   for (const [key, value] of Object.entries({ y: view.top, width: view.columnWidth, height: view.plotHeight, fill: '#fff', 'fill-opacity': .06, stroke: '#203747', 'stroke-width': 2, 'pointer-events': 'none', 'data-selected-hour': '' })) marker.setAttribute(key, String(value));
-  frame.querySelector('svg')!.append(marker);
+  const chartSvg = frame.querySelector('svg')!;
+  chartSvg.insertBefore(marker, chartSvg.querySelector('[data-windgram-cursor]'));
   frame.dataset.columnWidth = String(view.columnWidth);
   frame.dataset.plotLeft = String(view.left);
   frame.dataset.axisWidth = "0";
@@ -433,6 +439,7 @@ function updateHourMarker(reveal = false) {
   const marker = frame.querySelector('[data-selected-hour]');
   marker?.setAttribute('visibility', i < 0 ? 'hidden' : 'visible');
   if (i >= 0) {
+    if (currentWindgramView) currentWindgramView.selectedHourIndex = i;
     const columnWidth = Number(frame.dataset.columnWidth);
     const left = Number(frame.dataset.plotLeft) + i * columnWidth;
     marker?.setAttribute('x', String(left));

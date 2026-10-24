@@ -39,8 +39,11 @@ test("mobile brackets sunrise and sunset in every season", () => {
   ] as const) {
     const profile = profileAt(date, range(start, end));
     const visible = expected(date, first, last);
-    assert.deepEqual(times(windgramHours(profile, options)), visible, date);
-    assert.deepEqual(times(buildWindgramView(profile, options).hours), visible, "chart and controls share the window");
+    for (const heightRange of ["soaring", "full"] as const) {
+      const selected = { ...options, heightRange };
+      assert.deepEqual(times(windgramHours(profile, selected)), visible, `${date} ${heightRange}`);
+      assert.deepEqual(times(buildWindgramView(profile, selected).hours), visible, "chart and controls share the window");
+    }
   }
 });
 
@@ -99,7 +102,7 @@ test("local date selection crosses UTC midnight and its timezone takes precedenc
   const hours = { dateKey: "2026-09-30", timeZone: "America/Boise" };
   const selected = { ...options, timeZone: "Etc/UTC", hours };
   assert.deepEqual(times(windgramHours(profile, selected)), expected("2026-09-30", 13, 26));
-  assert.deepEqual(times(windgramHours(profile, { ...selected, heightRange: "full" })), expected("2026-09-30", 6, 29));
+  assert.deepEqual(times(windgramHours(profile, { ...selected, heightRange: "full" })), expected("2026-09-30", 13, 26));
 });
 
 test("DST transition days use their local calendar date", () => {
@@ -115,9 +118,20 @@ test("multi-date regional profiles retain a contiguous interval including overni
   assert.deepEqual(times(windgramHours(profile, options)), expected("2026-09-30", 13, 50));
 });
 
-test("desktop and Full profile retain every supplied hour", () => {
+test("Full profile expands heights while retaining the daylight hours and column positions", () => {
   const profile = profileAt();
-  for (const overrides of [{ compact: false }, { compact: undefined }, { heightRange: "full" as const }]) {
+  const focused = buildWindgramView(profile, options);
+  const full = buildWindgramView(profile, { ...options, heightRange: "full" });
+  assert.deepEqual(times(full.hours), times(focused.hours));
+  assert.deepEqual(full.hours.map(hour => hour.x), focused.hours.map(hour => hour.x));
+  assert.equal(full.floorM, profile.site.modelElevationM);
+  assert.ok(full.floorM < focused.floorM);
+  assert.ok(full.topM > focused.topM);
+});
+
+test("desktop retains every supplied hour", () => {
+  const profile = profileAt();
+  for (const overrides of [{ compact: false }, { compact: undefined }, { compact: false, heightRange: "full" as const }]) {
     assert.deepEqual(windgramHours(profile, { ...options, ...overrides }), profile.hours);
   }
 });

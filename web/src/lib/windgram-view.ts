@@ -44,7 +44,7 @@ export interface WindgramView {
 }
 export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "launch" | "launchWindows" | "capabilities" | "widthPx"> & {
   compact?: boolean;
-  /** Compact charts show daylight and soaring heights; desktop keeps the full profile. */
+  /** Vertical extent only; both compact views use daylight hours. Desktop keeps all heights. */
   heightRange?: "soaring" | "full";
   /** Available viewport height; compact charts reserve room for page controls. */
   heightPx?: number;
@@ -608,7 +608,7 @@ export function windgramHours(profile: SiteForecast, options: WindgramOptions): 
   const selected = Array.isArray(window) ? new Set(window.map((h) => h.validAt)) : null;
   const dayWindow = window && !Array.isArray(window) && "dateKey" in window ? window : null;
   const hours = profile.hours.filter((h) => (!selected || selected.has(h.validAt)) && (!dayWindow || localDateKey(h.validAt, dayWindow.timeZone) === dayWindow.dateKey));
-  if (!options.compact || options.heightRange === "full" || hours.length < 2) return hours;
+  if (!options.compact || hours.length < 2) return hours;
   const times = hours.map(hour => Date.parse(hour.validAt));
   const { latitude, longitude } = profile.site;
   if (times.some(time => !Number.isFinite(time)) || !Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return hours;

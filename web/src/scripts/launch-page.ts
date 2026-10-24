@@ -176,7 +176,7 @@ async function loadManifest(slug: string) {
   if (manifest && manifest.sites.some((s) => s.slug === launch.slug)) manifests.set(slug, manifest);
 }
 
-/** Published coverage of the selected day; mobile includes early dawn and full-day view. */
+/** Published coverage of the selected day; mobile includes early dawn. */
 function covers(slug: string, dateKey: string) {
   const m = manifests.get(slug);
   if (!m) return false;

@@ -612,16 +612,18 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const plotHeight = compact && options.maxHeightPx !== undefined
     ? Math.min(preferredPlotHeight, Math.max(80, options.maxHeightPx - top - 82)) : preferredPlotHeight;
   const bottom = top + plotHeight;
-  const floorM = profile.site.modelElevationM;
+  const modelFloorM = profile.site.modelElevationM;
+  const focused = compact && options.heightRange !== "full";
+  const floorM = focused ? Math.max(modelFloorM, scalar(options.launch?.elevationM) ?? modelFloorM) : modelFloorM;
   const grouped = new Map<number, number[]>();
   for (const h of hours) for (const l of h.levels) {
     const p = scalar(l.pressureHpa), z = scalar(l.heightM);
-    if (p !== null && z !== null && z > floorM + 5) grouped.set(p, [...(grouped.get(p) ?? []), z]);
+    if (p !== null && z !== null && z > modelFloorM + 5) grouped.set(p, [...(grouped.get(p) ?? []), z]);
   }
   const levelAnchors = [...grouped].map(([pressureHpa, zs]) => ({ pressureHpa, heightM: median(zs) })).sort((a, b) => a.heightM - b.heightM)
     .filter((a, i, all) => i === 0 || a.heightM > all[i - 1].heightM + 5);
-  const highest = Math.max(floorM + 800, ...hours.flatMap((h) => h.levels.map((l) => scalar(l.heightM) ?? floorM)), options.launch?.elevationM ?? floorM);
-  const fullTopM = highest + (highest - floorM) * 0.04;
+  const highest = Math.max(modelFloorM + 800, ...hours.flatMap((h) => h.levels.map((l) => scalar(l.heightM) ?? modelFloorM)), scalar(options.launch?.elevationM) ?? modelFloorM);
+  const fullTopM = highest + (highest - modelFloorM) * 0.04;
   // Use the whole displayed day, rather than the selected hour, so the scale
   // stays fixed while scrubbing. High potential LCLs do not imply usable lift.
   const liftTops = hours.flatMap((hour) => [publishedLift(hour).usableLiftTopM, publishedWxtoflyLiftTop(hour)]
@@ -630,22 +632,24 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
       const upper = value && typeof value === "object" && "p75" in value ? scalar(value.p75) : null;
       return [middle, upper].filter((z): z is number => z !== null);
     }));
-  const peakM = Math.max(floorM, options.launch?.elevationM ?? floorM, ...liftTops);
-  const focusedTopM = Math.ceil(Math.max(floorM + 1000, peakM + Math.max(500, (peakM - floorM) * .25)) / 250) * 250;
+  const peakM = Math.max(modelFloorM, scalar(options.launch?.elevationM) ?? modelFloorM, ...liftTops);
+  const focusedTopM = Math.ceil(Math.max(modelFloorM + 1000, peakM + Math.max(500, (peakM - modelFloorM) * .25)) / 250) * 250;
   const strengths = hours.map(hour => scalar(publishedLift(hour).thermalVelocityMps));
   const calmDay = strengths.length > 0 && strengths.every(value => value === 0);
-  const topM = compact && options.heightRange !== "full" && (liftTops.length || calmDay)
+  const topM = focused && (liftTops.length || calmDay)
     ? Math.min(fullTopM, focusedTopM) : fullTopM;
-  const baseAnchors = [{ pressureHpa: null as number | null, heightM: floorM }, ...levelAnchors];
+  const baseAnchors = [{ pressureHpa: null as number | null, heightM: modelFloorM }, ...levelAnchors];
   // A short headroom segment leaves the top native wind barb inside the frame.
   const span = Math.max(1, baseAnchors.length - 1) + 0.35;
   const fullAnchors: HeightAnchor[] = baseAnchors.map((a, i) => ({ ...a, y: bottom - plotHeight * i / span }));
   fullAnchors.push({ pressureHpa: null, heightM: fullTopM, y: top });
-  const croppedY = heightToY({ anchors: fullAnchors, floorM, topM: fullTopM, top, bottom }, topM);
-  const anchors: HeightAnchor[] = fullAnchors.filter(a => a.heightM < topM)
-    .map(a => ({ ...a, y: bottom - (bottom - a.y) * plotHeight / (bottom - croppedY) }));
+  const fullScale = { anchors: fullAnchors, floorM: modelFloorM, topM: fullTopM, top, bottom };
+  const croppedTopY = heightToY(fullScale, topM), croppedBottomY = heightToY(fullScale, floorM);
+  const anchors: HeightAnchor[] = [{ pressureHpa: null, heightM: floorM, y: bottom },
+    ...fullAnchors.filter(a => a.heightM > floorM && a.heightM < topM)
+      .map(a => ({ ...a, y: bottom - (croppedBottomY - a.y) * plotHeight / (croppedBottomY - croppedTopY) }))];
   anchors.push({ pressureHpa: null, heightM: topM, y: top });
-  const sampling = hours.map((h) => hourSampling(h, floorM));
+  const sampling = hours.map((h) => hourSampling(h, modelFloorM));
   // The library remains the authority for diagnostic semantics and units.
   const diagnosticColumnWidth = compact ? Math.max(44, columnWidth) : columnWidth;
   const diagnosticPlotWidth = diagnosticColumnWidth * Math.max(1, hours.length);
@@ -681,7 +685,10 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const fieldNodes = sampling.map((s) => {
     if (!s.lapseCPer1000Ft.some((n) => Number.isFinite(n.value))) return [];
     const displayNodes = stabilityDisplayNodes(s.lapseCPer1000Ft);
-    const nodes = displayNodes.filter(n => n.altitudeM <= topM);
+    const nodes = displayNodes.filter(n => n.altitudeM >= floorM && n.altitudeM <= topM);
+    if (displayNodes[0].altitudeM < floorM && displayNodes.at(-1)!.altitudeM >= floorM && nodes[0]?.altitudeM !== floorM) {
+      nodes.unshift({ altitudeM: floorM, value: sampleHeight(displayNodes, floorM) ?? NaN });
+    }
     if (nodes.length && nodes.at(-1)!.altitudeM < topM && displayNodes.at(-1)!.altitudeM > topM) {
       nodes.push({ altitudeM: topM, value: sampleHeight(displayNodes, topM) ?? NaN });
     }
@@ -750,7 +757,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     const freezing = crossings(sample.temperatureC, 0)[0];
     if (freezing !== undefined && freezing >= floorM && freezing <= topM) view.freezing.push({ x, y: y(freezing), hourIndex: i });
     const modelCloud = h.levels.map((l) => ({ altitudeM: scalar(l.heightM) ?? NaN, value: scalar(l.cloudFractionPercent) ?? NaN }))
-      .filter((n) => Number.isFinite(n.altitudeM) && n.altitudeM >= floorM).sort((a, b) => a.altitudeM - b.altitudeM);
+      .filter((n) => Number.isFinite(n.altitudeM) && n.altitudeM >= modelFloorM).sort((a, b) => a.altitudeM - b.altitudeM);
     // Humidity hatching remains independent of model cloud fraction: either
     // source can identify a layer the other misses.
     for (const [kind, nodes, threshold] of [

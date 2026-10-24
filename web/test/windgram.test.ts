@@ -487,6 +487,9 @@ test("mobile soaring range enlarges weak lift, preserves readings, and restores 
   const options = { timeZone: "Etc/UTC", compact: true, widthPx: 390, heightPx: 780, launch: { elevationM: floor + 300 } };
   const focused = buildWindgramView(profile, options);
   const full = buildWindgramView(profile, { ...options, heightRange: "full" });
+  assert.equal(focused.floorM, options.launch.elevationM);
+  assert.equal(full.floorM, floor);
+  assert.equal(focused.launch?.y, focused.bottom, "launch marks the lower edge of the focused chart");
   assert.ok(focused.topM < full.topM - 1000);
   assert.ok(focused.topM >= floor + 1400, "headroom above every displayed hour's usable lift");
   assert.ok(focused.topM < floor + 2000, "high potential cloud base and BL top do not force a tall scale");
@@ -497,19 +500,78 @@ test("mobile soaring range enlarges weak lift, preserves readings, and restores 
   const visibleLift = (view: typeof focused) => (view.bottom - heightToY(view, floor + 900)) / view.plotHeight;
   assert.ok(visibleLift(focused) > .5);
   assert.ok(visibleLift(focused) > visibleLift(full));
-  for (let z = floor; z < focused.topM; z += 50) {
+  for (let z = focused.floorM; z < focused.topM; z += 50) {
     close(yToHeight(focused, heightToY(focused, z)), z, .01);
     assert.deepEqual(readWindgram(focused, 0, z), readWindgram(full, 0, z));
   }
-  assert.ok(focused.barbs.every(barb => barb.heightM <= focused.topM));
+  assert.ok(focused.barbs.every(barb => barb.heightM >= focused.floorM && barb.heightM <= focused.topM));
+  assert.ok(focused.barbs.every(barb => !barb.surface), "model surface winds stay below the launch crop");
+  assert.ok(full.barbs.some(barb => barb.surface), "full profile restores the model surface wind");
   assert.ok(focused.freezing.length === 0, "freezing above the crop stays outside the chart");
   assert.ok(focused.clouds.length === 0, "high potential cloud stays outside the chart");
   assert.ok(!focused.contours.some(contour => contour.temperatureF === 24), "upper isotherms cannot pile up on the chart edge");
   assert.doesNotMatch(renderWindgramSvg(focused), /NaN|Infinity|undefined/);
   const desktop = buildWindgramView(profile, { ...options, compact: false });
+  assert.equal(desktop.floorM, floor);
   assert.equal(desktop.topM, full.topM);
+  assert.deepEqual(desktop.sampling, full.sampling);
   const highLaunch = buildWindgramView(profile, { ...options, launch: { elevationM: floor + 2000 } });
   assert.ok(highLaunch.launch && highLaunch.topM >= floor + 2500);
+});
+
+test("launch cropping preserves clouds crossing launch and colours down to the chart floor", () => {
+  const profile = smoothTemperatureProfile(3);
+  const floor = profile.site.modelElevationM;
+  const launchM = (profile.hours[0].levels[0].heightM + profile.hours[0].levels[1].heightM) / 2;
+  for (const hour of profile.hours) {
+    hour.derived.usableLiftTopM = floor + 600;
+    hour.surface.dewPointC = hour.surface.temperatureC;
+    for (const level of hour.levels) {
+      level.dewPointC = level.temperatureC;
+      level.cloudFractionPercent = 100;
+    }
+  }
+  const options = { timeZone: "Etc/UTC", compact: true, widthPx: 390, heightPx: 780, launch: { elevationM: launchM } };
+  const focused = buildWindgramView(profile, options);
+  const full = buildWindgramView(profile, { ...options, heightRange: "full" });
+  assert.equal(focused.floorM, launchM);
+  for (const kind of ["model", "humidity"] as const) {
+    const cloud = focused.clouds.find(cloud => cloud.hourIndex === 0 && cloud.kind === kind);
+    const original = full.clouds.find(cloud => cloud.hourIndex === 0 && cloud.kind === kind);
+    assert.ok(cloud && original);
+    assert.ok(cloud.baseM < launchM && cloud.topM > focused.topM, `${kind} layer crosses both crop boundaries`);
+    assert.equal(cloud.baseM, original.baseM, "cloud evidence retains its source height");
+    assert.equal(cloud.topM, original.topM);
+    const band = focused.cloudBands.find(band => band.kind === kind);
+    assert.ok(band);
+    close(band.y, focused.top);
+    close(band.y + band.height, focused.bottom);
+  }
+  assert.ok(focused.fields.every(field => field.className !== "windgram-missing"), "cropping complete data creates no missing area");
+  const fill = focused.fields.find(field => field.className === "meteo-gram-stab-conditional");
+  assert.ok(fill?.path, "the uniform lapse-rate colour remains visible");
+  const ys = [...fill.path.matchAll(/[ML]-?[\d.]+[ ,](-?[\d.]+)/g)].map(match => Number(match[1]));
+  close(Math.min(...ys), focused.top, .1);
+  close(Math.max(...ys), focused.bottom, .1);
+  assert.deepEqual(readWindgram(focused, 0, launchM + 10), readWindgram(full, 0, launchM + 10));
+  assert.doesNotMatch(renderWindgramSvg(focused), /NaN|Infinity|undefined/);
+});
+
+test("mobile focus retains model terrain without a launch above it", () => {
+  const profile = smoothTemperatureProfile(3);
+  const floor = profile.site.modelElevationM;
+  for (const hour of profile.hours) hour.derived.usableLiftTopM = floor + 600;
+  const options = { timeZone: "Etc/UTC", compact: true, widthPx: 390, heightPx: 780 };
+  const noLaunch = buildWindgramView(profile, options);
+  for (const elevationM of [floor - 250, floor]) {
+    const view = buildWindgramView(profile, { ...options, launch: { elevationM } });
+    assert.equal(view.floorM, floor, "a lower launch cannot invent a profile below model terrain");
+    assert.equal(view.topM, noLaunch.topM);
+    assert.deepEqual(view.sampling, noLaunch.sampling);
+    assert.ok(view.barbs.some(barb => barb.surface));
+  }
+  assert.equal(noLaunch.floorM, floor);
+  assert.ok(noLaunch.barbs.some(barb => barb.surface));
 });
 
 test("mobile range handles zero lift, missing diagnostics, strong days and ensemble spread", () => {

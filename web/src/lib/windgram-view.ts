@@ -33,6 +33,8 @@ export interface WindgramView {
   width: number; height: number; left: number; top: number; plotWidth: number;
   plotHeight: number; bottom: number; columnWidth: number; floorM: number; topM: number;
   timeZone: string; anchors: HeightAnchor[]; hours: WindgramHour[];
+  /** Daylight axis includes empty columns outside the selected run's coverage. */
+  timeAxis: { validAt: string; label: string; x: number; hourIndex: number | null }[];
   fields: { className: string; path: string }[];
   contours: TemperatureContour[]; barbs: WindgramBarb[]; clouds: WindgramCloud[];
   cloudBands: { x: number; y: number; width: number; height: number; kind: CloudEvidence; coverPercent: number | null }[];
@@ -141,7 +143,7 @@ export function visibleHeightAnchors(view: Pick<WindgramView, "anchors" | "top" 
 }
 
 /** Thin only display marks, keeping both ends of the complete forecast visible. */
-export function visibleWindgramHourIndices(view: Pick<WindgramView, "hours" | "compact">, minimumSpacingPx = 34): number[] {
+export function visibleWindgramHourIndices(view: { hours: readonly { x: number }[]; compact: boolean }, minimumSpacingPx = 34): number[] {
   if (!view.compact) return view.hours.map((_, i) => i);
   const selected: number[] = [];
   for (const [i, hour] of view.hours.entries()) {
@@ -604,6 +606,21 @@ function moistLayers(nodes: readonly FieldNode[], threshold: number) {
   return layers;
 }
 
+function daylightSpan(profile: SiteForecast, hours: readonly ProfileHour[], timeZone: string) {
+  const { latitude, longitude } = profile.site;
+  if (!hours.length || hours.some(hour => !Number.isFinite(Date.parse(hour.validAt)))
+    || !Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return null;
+  const daylight = (validAt: string) => {
+    const dateKey = localDateKey(validAt, timeZone);
+    // Resolve both midnights locally: DST days can have 23 or 25 hours.
+    return sunriseSunset(localInstantMs(dateKey, 0, timeZone), localInstantMs(dateKey, 24, timeZone), latitude, longitude);
+  };
+  const firstDay = daylight(hours[0].validAt);
+  const lastDay = localDateKey(hours[0].validAt, timeZone) === localDateKey(hours.at(-1)!.validAt, timeZone)
+    ? firstDay : daylight(hours.at(-1)!.validAt);
+  return firstDay && lastDay ? { sunrise: firstDay.sunrise, sunset: lastDay.sunset } : null;
+}
+
 /** Sunrise through sunset, bracketed by available forecast samples.
  * A multi-day profile stays contiguous so its controls retain their time indices.
  * Polar days/nights and forecasts outside daylight retain the supplied hours.
@@ -615,19 +632,10 @@ export function windgramHours(profile: SiteForecast, options: WindgramOptions): 
   const hours = profile.hours.filter((h) => (!selected || selected.has(h.validAt)) && (!dayWindow || localDateKey(h.validAt, dayWindow.timeZone) === dayWindow.dateKey));
   if (!options.compact || hours.length < 2) return hours;
   const times = hours.map(hour => Date.parse(hour.validAt));
-  const { latitude, longitude } = profile.site;
-  if (times.some(time => !Number.isFinite(time)) || !Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return hours;
   const timeZone = dayWindow?.timeZone ?? options.timeZone;
-  const daylight = (validAt: string) => {
-    const dateKey = localDateKey(validAt, timeZone);
-    // Resolve both midnights locally: DST days can have 23 or 25 hours.
-    return sunriseSunset(localInstantMs(dateKey, 0, timeZone), localInstantMs(dateKey, 24, timeZone), latitude, longitude);
-  };
-  const firstDay = daylight(hours[0].validAt);
-  const lastDay = localDateKey(hours[0].validAt, timeZone) === localDateKey(hours.at(-1)!.validAt, timeZone)
-    ? firstDay : daylight(hours.at(-1)!.validAt);
-  if (!firstDay || !lastDay) return hours;
-  const start = firstDay.sunrise, end = lastDay.sunset;
+  const daylight = daylightSpan(profile, hours, timeZone);
+  if (!daylight) return hours;
+  const start = daylight.sunrise, end = daylight.sunset;
   if (times.at(-1)! < start || times[0] > end) return hours;
   const first = Math.max(0, times.findLastIndex(time => time <= start));
   const last = times.findIndex(time => time >= end);
@@ -642,10 +650,20 @@ export function windgramDayHours(profile: SiteForecast, validAt: string, timeZon
 export function buildWindgramView(profile: SiteForecast, options: WindgramOptions): WindgramView {
   const hours = windgramHours(profile, options);
   const compact = options.compact ?? false;
+  const dayWindow = options.hours && !Array.isArray(options.hours) && "dateKey" in options.hours ? options.hours : null;
+  const daylight = compact ? daylightSpan(profile, hours, dayWindow?.timeZone ?? options.timeZone) : null;
+  const steps = profile.hours.slice(1).map((hour, i) => Date.parse(hour.validAt) - Date.parse(profile.hours[i].validAt)).filter(step => step > 0);
+  const cadence = steps.length ? median(steps) : 3_600_000;
+  const firstTime = Date.parse(hours[0]?.validAt ?? ""), lastTime = Date.parse(hours.at(-1)?.validAt ?? "");
+  const overlapsDaylight = daylight && firstTime <= daylight.sunset && lastTime >= daylight.sunrise;
+  const before = overlapsDaylight ? Math.max(0, Math.ceil((firstTime - daylight.sunrise) / cadence)) : 0;
+  const after = overlapsDaylight ? Math.max(0, Math.ceil((daylight.sunset - lastTime) / cadence)) : 0;
+  const columnCount = Math.max(1, before + hours.length + after);
   const left = compact ? 52 : 102, right = compact ? 8 : 88, top = compact ? 70 : 65;
   const availableWidth = Math.max(1, (options.widthPx ?? 1000) - left - right);
-  const columnWidth = compact ? availableWidth / Math.max(1, hours.length) : Math.max(48, availableWidth / Math.max(1, hours.length));
-  const plotWidth = columnWidth * Math.max(1, hours.length);
+  const columnWidth = compact ? availableWidth / columnCount : Math.max(48, availableWidth / columnCount);
+  const plotWidth = columnWidth * columnCount;
+  const dataLeft = left + before * columnWidth;
   const preferredPlotHeight = compact ? clamp((options.heightPx ?? 720) - 260, 160, 440) : clamp(plotWidth * 0.8, 680, 1100);
   const plotHeight = compact && options.maxHeightPx !== undefined
     ? Math.min(preferredPlotHeight, Math.max(80, options.maxHeightPx - top - 82)) : preferredPlotHeight;
@@ -721,17 +739,26 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     ground: { elevationM: scalar(options.launch?.elevationM) ?? modelFloorM, source: scalar(options.launch?.elevationM) === null ? "model" : "launch" },
     timeZone: options.timeZone, anchors, sampling, compact, ensemble, sourceNote: scene.smokeSource ? `Smoke: ${scene.smokeSource.model} · run ${scene.smokeSource.referenceTime}` : null,
     displayInterpolationNote: "Colours interpolate between layer centres and forecast hours. Contours and faint barbs interpolate between model levels.",
+    timeAxis: [],
     hours: hours.map((h, i) => {
       const temp = scalar(h.surface.temperatureC), gust = scalar(h.surface.windGustMps), direction = scalar(h.surface.windDirectionDeg);
       const arcs = options.launchWindows;
       const inWindWindow = direction === null || !arcs?.length ? null : arcs.some((arc) => arc.fromDeg <= arc.toDeg ? direction >= arc.fromDeg && direction <= arc.toDeg : direction >= arc.fromDeg || direction <= arc.toDeg);
-      return { validAt: h.validAt, label: labelTime.format(new Date(h.validAt)).replace(/\s/g, "").replace("AM", "a").replace("PM", "p"), x: left + columnWidth * (i + 0.5),
+      return { validAt: h.validAt, label: labelTime.format(new Date(h.validAt)).replace(/\s/g, "").replace("AM", "a").replace("PM", "p"), x: dataLeft + columnWidth * (i + 0.5),
         temperatureF: temp === null ? null : fahrenheit(temp), usableLiftTopM: scalar(publishedLift(h).usableLiftTopM), thermalVelocityMps: scalar(publishedLift(h).thermalVelocityMps), gustKt: gust === null ? null : gust * KT, inWindWindow };
     }),
     fields: [], contours: [], barbs: [], clouds: [], cloudBands: [], freezing: [], wings: [], series: [], launch: null,
     diagnostics: alignedDiagnostics(scene.strips.filter((s) => s.key !== "thermalStrength"), scene.hourValidAts, hours, scene.scales.plotLeft, diagnosticColumnWidth), diagnosticLeft: scene.scales.plotLeft, diagnosticColumnWidth,
     selectedHourIndex: hours.reduce((best, h, i) => (scalar(publishedLift(h).thermalVelocityMps) ?? -1) > (scalar((hours[best] ? publishedLift(hours[best]).thermalVelocityMps : null)) ?? -1) ? i : best, 0),
   };
+  const emptyTick = (time: number, column: number) => ({ validAt: new Date(time).toISOString(),
+    label: labelTime.format(new Date(time)).replace(/\s/g, "").replace("AM", "a").replace("PM", "p"),
+    x: left + columnWidth * (column + 0.5), hourIndex: null });
+  view.timeAxis = [
+    ...Array.from({ length: before }, (_, i) => emptyTick(firstTime - (before - i) * cadence, i)),
+    ...view.hours.map(({ validAt, label, x }, hourIndex) => ({ validAt, label, x, hourIndex })),
+    ...Array.from({ length: after }, (_, i) => emptyTick(lastTime + (i + 1) * cadence, before + hours.length + i)),
+  ];
   if (!hours.length) return view;
   const y = (z: number) => heightToY(view, z);
   if (options.launch && options.launch.elevationM >= floorM && options.launch.elevationM <= topM) view.launch = {
@@ -759,10 +786,10 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     gaps,
     floorM: 0,
     topM: plotHeight,
-    plotLeft: left,
+    plotLeft: dataLeft,
     plotTop: top,
     plotBottom: bottom,
-    plotWidth,
+    plotWidth: hours.length * columnWidth,
     banding: {
       breakpoints: WINDGRAM_STABILITY.slice(0, -1).map((c) => c.maxLapse),
       classNames: WINDGRAM_STABILITY.map((c) => `meteo-gram-stab-${c.className}`),
@@ -784,17 +811,17 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
       if (missingSpan && Math.abs(missingSpan.topY - baseY) < 0.05) missingSpan.topY = topY;
       else {
         if (missingSpan && missingSpan.baseY > missingSpan.topY) {
-          view.fields.push({ className: "windgram-missing", path: `M${left + i * columnWidth},${missingSpan.topY}h${columnWidth}v${missingSpan.baseY - missingSpan.topY}h-${columnWidth}Z` });
+          view.fields.push({ className: "windgram-missing", path: `M${dataLeft + i * columnWidth},${missingSpan.topY}h${columnWidth}v${missingSpan.baseY - missingSpan.topY}h-${columnWidth}Z` });
         }
         missingSpan = { baseY, topY };
       }
     }
     if (missingSpan && missingSpan.baseY > missingSpan.topY) {
-      view.fields.push({ className: "windgram-missing", path: `M${left + i * columnWidth},${missingSpan.topY}h${columnWidth}v${missingSpan.baseY - missingSpan.topY}h-${columnWidth}Z` });
+      view.fields.push({ className: "windgram-missing", path: `M${dataLeft + i * columnWidth},${missingSpan.topY}h${columnWidth}v${missingSpan.baseY - missingSpan.topY}h-${columnWidth}Z` });
     }
     // Mask any truncated top extension above the highest valid node.
     const missingHeight = validNodes.length ? bottom - highestValidAlt - top : plotHeight;
-    if (missingHeight > 0) view.fields.push({ className: "windgram-missing", path: `M${left + i * columnWidth},${top}h${columnWidth}v${missingHeight}h-${columnWidth}Z` });
+    if (missingHeight > 0) view.fields.push({ className: "windgram-missing", path: `M${dataLeft + i * columnWidth},${top}h${columnWidth}v${missingHeight}h-${columnWidth}Z` });
   });
   for (const i of gaps) view.fields.push({ className: "windgram-missing", path: `M${view.hours[i - 1].x + 1},${top}h${columnWidth - 2}v${plotHeight}h-${columnWidth - 2}Z` });
   view.contours = temperatureContours(view);

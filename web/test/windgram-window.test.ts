@@ -166,7 +166,7 @@ test("daylight clipping is idempotent and preserves source hours and diagnostics
   assert.deepEqual(times(buildWindgramView(profile, { ...options, hours: selected }).hours), times(selected));
 });
 
-test("a 78-hour ICON run provides three complete Armenian daylight windows", () => {
+test("a 00Z 78-hour ICON run provides three complete Armenian daylight windows", () => {
   const profile = profileAt("2026-10-24", range(1, 78));
   profile.model = "icon-eu";
   Object.assign(profile.site, { latitude: 40.294048, longitude: 44.697437, timeZone: "Asia/Yerevan" });
@@ -179,6 +179,93 @@ test("a 78-hour ICON run provides three complete Armenian daylight windows", () 
     assert.equal(focused[0].validAt, `${dateKey}T03:00:00.000Z`);
     assert.equal(focused.at(-1)!.validAt, `${dateKey}T15:00:00.000Z`);
   }
+});
+
+function aparanProfile(hours = range(7, 84)) {
+  const profile = profileAt("2026-10-24", hours);
+  profile.model = "icon-eu";
+  profile.run.referenceTime = "2026-10-24T06:00:00Z";
+  Object.assign(profile.site, { latitude: 40.5913, longitude: 44.4741, timeZone: "Asia/Yerevan" });
+  return profile;
+}
+
+test("a 06Z ICON run keeps the first day's sunrise axis while its forecast starts at 11am", () => {
+  const profile = aparanProfile(), original = structuredClone(profile);
+  const selected = { ...options, timeZone: "Asia/Yerevan", hours: { dateKey: "2026-10-24", timeZone: "Asia/Yerevan" }, widthPx: 390 };
+  const focused = buildWindgramView(profile, { ...selected, heightRange: "soaring" });
+  const full = buildWindgramView(profile, { ...selected, heightRange: "full" });
+  assert.deepEqual(times(focused.timeAxis), expected("2026-10-24", 3, 15), "7am–7pm brackets Aparan's 7:23am sunrise and 6:09pm sunset");
+  assert.deepEqual(focused.timeAxis.map(tick => tick.hourIndex), [null, null, null, null, ...range(0, 8)]);
+  assert.deepEqual(times(focused.hours), expected("2026-10-24", 7, 15), "unavailable morning hours have no forecast values");
+  assert.deepEqual(focused.timeAxis, full.timeAxis, "full height retains the daylight axis");
+  assert.deepEqual(focused.hours.map(hour => hour.x), full.hours.map(hour => hour.x));
+  assert.equal(focused.sampling.length, focused.hours.length);
+  for (const [index, hour] of focused.hours.entries()) {
+    const tick = focused.timeAxis[index + 4];
+    assert.equal(tick.validAt, hour.validAt);
+    assert.equal(tick.x, hour.x);
+    assert.ok(Math.abs(hour.x - focused.left - focused.columnWidth * (index + 4.5)) < 1e-8);
+  }
+  const dataLeft = focused.hours[0].x - focused.columnWidth / 2;
+  const dataRight = focused.hours.at(-1)!.x + focused.columnWidth / 2;
+  const forecastPaths = [...focused.fields.filter(field => field.className !== "windgram-missing"), ...focused.contours, ...focused.series];
+  const forecastX = forecastPaths.flatMap(({ path }) => [...path.matchAll(/[ML](-?[\d.]+)[ ,]/g)].map(match => Number(match[1])));
+  assert.ok(forecastX.length > 0);
+  assert.ok(forecastX.every(x => x >= dataLeft - .1 && x <= dataRight + .1), "colour fields, contours and lift lines stay inside actual forecast coverage");
+  assert.deepEqual(profile, original, "axis padding leaves the source run unchanged");
+  const regional = windgramDayHours(profile, "2026-10-24T09:00:00Z", "Asia/Yerevan");
+  assert.equal(regional[0], profile.hours[0]);
+  const regionalView = buildWindgramView(profile, { ...selected, hours: regional });
+  assert.deepEqual(regionalView.timeAxis, focused.timeAxis, "preselected regional hours preserve the same morning gap");
+});
+
+test("the same 06Z ICON run has a complete middle day and an unavailable final afternoon", () => {
+  const profile = aparanProfile();
+  const selected = { ...options, timeZone: "Asia/Yerevan", widthPx: 390 };
+  const middle = buildWindgramView(profile, { ...selected, hours: { dateKey: "2026-10-25", timeZone: "Asia/Yerevan" } });
+  assert.deepEqual(times(middle.timeAxis), expected("2026-10-25", 3, 15));
+  assert.deepEqual(middle.timeAxis.map(tick => tick.hourIndex), range(0, 12));
+  assert.deepEqual(times(middle.hours), times(middle.timeAxis));
+  const last = buildWindgramView(profile, { ...selected, hours: { dateKey: "2026-10-27", timeZone: "Asia/Yerevan" } });
+  assert.deepEqual(times(last.timeAxis), expected("2026-10-27", 3, 15));
+  assert.deepEqual(times(last.hours), expected("2026-10-27", 3, 12));
+  assert.deepEqual(last.timeAxis.map(tick => tick.hourIndex), [...range(0, 9), null, null, null]);
+  assert.equal(last.sampling.length, 10);
+});
+
+test("a single daylight profile keeps a full axis without manufacturing other source hours", () => {
+  const profile = aparanProfile([9]);
+  const view = buildWindgramView(profile, { ...options, timeZone: "Asia/Yerevan" });
+  assert.deepEqual(times(view.timeAxis), expected("2026-10-24", 3, 15));
+  assert.deepEqual(times(view.hours), expected("2026-10-24", 9, 9));
+  assert.equal(view.sampling.length, 1);
+  assert.deepEqual(view.timeAxis.filter(tick => tick.hourIndex !== null).map(tick => tick.hourIndex), [0]);
+  assert.equal(view.timeAxis[6].x, view.hours[0].x);
+});
+
+test("daylight edge padding follows three-hour source cadence", () => {
+  const profile = aparanProfile(range(9, 84, 3));
+  const view = buildWindgramView(profile, { ...options, timeZone: "Asia/Yerevan", hours: { dateKey: "2026-10-24", timeZone: "Asia/Yerevan" } });
+  assert.deepEqual(times(view.timeAxis), expected("2026-10-24", 3, 15, 3));
+  assert.deepEqual(view.timeAxis.map(tick => tick.hourIndex), [null, null, 0, 1, 2]);
+  assert.deepEqual(times(view.hours), expected("2026-10-24", 9, 15, 3));
+});
+
+test("padding daylight edges preserves a missing interior profile", () => {
+  const profile = aparanProfile(range(7, 84).filter(hour => hour !== 10));
+  const before = structuredClone(profile);
+  const selected = { ...options, timeZone: "Asia/Yerevan", hours: { dateKey: "2026-10-24", timeZone: "Asia/Yerevan" } };
+  const sourceHours = windgramHours(profile, selected);
+  const view = buildWindgramView(profile, selected);
+  assert.deepEqual(times(view.hours), expected("2026-10-24", 7, 15).filter(time => time !== timestamp("2026-10-24", 10)));
+  assert.equal(view.timeAxis[0].validAt, timestamp("2026-10-24", 3));
+  assert.equal(view.timeAxis.at(-1)!.validAt, timestamp("2026-10-24", 15));
+  assert.equal(view.sampling.length, sourceHours.length);
+  for (const tick of view.timeAxis) if (tick.hourIndex !== null) {
+    assert.equal(tick.validAt, sourceHours[tick.hourIndex].validAt);
+    assert.equal(tick.x, view.hours[tick.hourIndex].x);
+  }
+  assert.deepEqual(profile, before);
 });
 
 test('regional charts select the middle local day without losing source hour identity', () => {

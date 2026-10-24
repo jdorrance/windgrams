@@ -454,7 +454,7 @@ function updateHourMarker(reveal = false) {
   if (i >= 0) {
     if (currentWindgramView) currentWindgramView.selectedHourIndex = i;
     const columnWidth = Number(frame.dataset.columnWidth);
-    const left = Number(frame.dataset.plotLeft) + i * columnWidth;
+    const left = currentWindgramView!.hours[i].x - columnWidth / 2;
     marker?.setAttribute('x', String(left));
     const axisWidth = Number(frame.dataset.axisWidth);
     if (reveal && axisWidth > 0) {

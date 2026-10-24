@@ -106,6 +106,44 @@ test("hover snaps to each hour's usable-lift line regardless of pointer height",
   assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden");
 });
 
+test("unavailable daylight edges stay blank and cannot select a forecast hour", t => {
+  const profile = liftProfile();
+  Object.assign(profile.site, { latitude: 40.5913, longitude: 44.4741, timeZone: "Asia/Yerevan" });
+  profile.hours = profile.hours.slice(0, 3).map((hour, index) => ({ ...hour, validAt: `2026-10-24T${String(9 + index).padStart(2, "0")}:00:00.000Z` }));
+  const view = buildWindgramView(profile, { timeZone: "Asia/Yerevan", compact: true, widthPx: 390, heightRange: "full" });
+  const h = inspector(t, view), y = (view.top + view.bottom) / 2;
+  assert.equal(view.timeAxis[0].label, "7a");
+  assert.equal(view.timeAxis.at(-1)!.label, "7p");
+  assert.equal(view.timeAxis[0].hourIndex, null);
+  assert.equal(view.timeAxis.at(-1)!.hourIndex, null);
+  const rendered = renderWindgramSvg(view);
+  assert.match(rendered, /Windgram 7a–7p/, "accessible description uses the complete daylight extent");
+  assert.match(rendered, />7a</);
+  assert.match(rendered, />7p</);
+  assert.equal([...rendered.matchAll(/data-forecast-unavailable=""/g)].length, 2, "both unavailable edges receive the missing-data treatment");
+  for (const tick of [view.timeAxis[0], view.timeAxis.at(-1)!]) {
+    h.pointer("pointermove", view.hours[0].x, y);
+    assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "visible");
+    h.pointer("pointermove", tick.x, y);
+    assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden", "hovering an unavailable edge hides the forecast reading");
+    h.pointer("pointerdown", tick.x, y, "touch");
+    h.pointer("pointerup", tick.x, y, "touch");
+    assert.deepEqual(h.selected, [], "an unavailable edge cannot select the nearest real forecast");
+  }
+  h.key("Home");
+  assert.deepEqual(h.selected, [view.hours[0].validAt]);
+  close(Number(h.nodes["cursor-point"].getAttribute("cx")), view.hours[0].x);
+  h.key("ArrowRight");
+  assert.equal(h.selected.at(-1), view.hours[1].validAt);
+  h.key("End");
+  assert.equal(h.selected.at(-1), view.hours.at(-1)!.validAt);
+  h.key("Escape");
+  h.pointer("pointerdown", view.hours[0].x, y, "touch");
+  h.pointer("pointerup", view.hours[0].x, y, "touch");
+  assert.equal(h.selected.at(-1), view.hours[0].validAt, "a tap at the shifted first source column selects that source hour");
+  close(Number(h.nodes["cursor-point"].getAttribute("cx")), view.hours[0].x);
+});
+
 test("touch pins the lift ceiling; dragging, cancellation and Escape leave scrolling and clearing intact", t => {
   const profile = liftProfile(), ground = profile.site.modelElevationM + 300;
   profile.hours[0].derived.usableLiftTopM = ground - 100;

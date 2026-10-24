@@ -32,6 +32,7 @@ const STYLES = `
 .windgram .wg-temperature-back { fill: #6968bf; stroke: #fff; stroke-opacity: .12; stroke-width: .6; }
 .windgram .wg-temperature-freezing { fill: #d4ffff; }
 .windgram .wg-launch { fill: #fff; font-size: 11px; font-weight: 650; paint-order: stroke; stroke: #5b567f; stroke-width: 3px; stroke-linejoin: round; }
+.windgram .wg-unavailable { fill: #fff; font-size: 10px; font-weight: 650; paint-order: stroke; stroke: #77758f; stroke-width: 3px; }
 .windgram .wg-barb { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
 .windgram .wg-barb-native { opacity: 1; }
 .windgram .wg-barb-interpolated { opacity: .72; }
@@ -206,7 +207,7 @@ function displayedBarbs(view: WindgramView, hourIndices: Set<number>): WindgramB
 export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: string } = {}): string {
   const id = identifier(options.idPrefix ?? "windgram");
   const right = view.left + view.plotWidth;
-  const visibleHours = new Set(visibleWindgramHourIndices(view));
+  const visibleHours = new Set(visibleWindgramHourIndices({ hours: view.timeAxis, compact: view.compact }));
   const glyphHours = new Set<number>();
   for (const [i, hour] of view.hours.entries()) {
     if (!view.compact || (hour.x >= view.left + 20 && hour.x <= right - 20
@@ -225,11 +226,20 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
     `<g clip-path="url(#${id}-plot)"><rect x="${view.left}" y="${view.top}" width="${fmt(view.plotWidth)}" height="${fmt(view.plotHeight)}" fill="${WINDGRAM_STABLE_COLOR}"/>`,
   ];
   for (const field of view.fields) parts.push(`<path d="${escape(field.path)}" class="${escape(field.className)}" fill-rule="evenodd"${field.className === "windgram-missing" ? ` fill="url(#${id}-missing)"` : ""}/>`);
+  const firstData = view.hours[0], lastData = view.hours.at(-1);
+  const uncovered = firstData && lastData ? [
+    { x: view.left, width: firstData.x - view.columnWidth / 2 - view.left },
+    { x: lastData.x + view.columnWidth / 2, width: right - lastData.x - view.columnWidth / 2 },
+  ].filter(span => span.width > .01) : [];
+  for (const span of uncovered) {
+    parts.push(`<rect x="${fmt(span.x)}" y="${view.top}" width="${fmt(span.width)}" height="${fmt(view.plotHeight)}" fill="url(#${id}-missing)" data-forecast-unavailable=""><title>Forecast unavailable for these hours in this run</title></rect>`);
+    if (span.width >= 64) parts.push(text(span.x + span.width / 2, view.top + view.plotHeight / 2, "Unavailable", 'text-anchor="middle" class="wg-unavailable"'));
+  }
   for (const band of view.cloudBands) {
     const label = band.kind === "humidity" ? "Relative humidity above 94%: likely cloud layer" : "Model cloud fraction at least 30%";
     parts.push(`<rect x="${fmt(band.x)}" y="${fmt(band.y)}" width="${fmt(band.width)}" height="${fmt(band.height)}" fill="${band.kind === "humidity" ? `url(#${id}-humidity)` : "#fff"}"${band.kind === "model" ? ' opacity=".2"' : ""} data-cloud-band="${band.kind}"><title>${label}</title></rect>`);
   }
-  for (const hour of view.hours) parts.push(`<line x1="${fmt(hour.x)}" x2="${fmt(hour.x)}" y1="${view.top}" y2="${fmt(view.bottom)}" class="wg-hourline"/>`);
+  for (const hour of view.timeAxis) parts.push(`<line x1="${fmt(hour.x)}" x2="${fmt(hour.x)}" y1="${view.top}" y2="${fmt(view.bottom)}" class="wg-hourline"/>`);
   for (const anchor of view.anchors) parts.push(`<line x1="${view.left}" x2="${fmt(right)}" y1="${fmt(anchor.y)}" y2="${fmt(anchor.y)}" class="wg-grid"/>`);
   for (const series of view.series) {
     if (series.bandPath) parts.push(`<path d="${escape(series.bandPath)}" fill="${escape(series.color)}" opacity=".16" data-ensemble-band="${escape(series.key)}"/>`);
@@ -257,16 +267,17 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
     parts.push(`<path d="M${fmt(right)} ${fmt(anchor.y)}h5" stroke="#fff" stroke-width="1"/>`);
     parts.push(text(right + 10, anchor.y + 4, altitude(anchor.heightM), 'class="wg-axis-feet"'));
   }
-  for (const [hourIndex, hour] of view.hours.entries()) {
-    parts.push(`<line x1="${fmt(hour.x)}" x2="${fmt(hour.x)}" y1="${fmt(view.bottom)}" y2="${fmt(view.bottom + 5)}" stroke="#fff"/>`);
-    if (hour.inWindWindow !== null) parts.push(hour.inWindWindow
+  for (const [axisIndex, tick] of view.timeAxis.entries()) {
+    const hour = tick.hourIndex === null ? null : view.hours[tick.hourIndex];
+    parts.push(`<line x1="${fmt(tick.x)}" x2="${fmt(tick.x)}" y1="${fmt(view.bottom)}" y2="${fmt(view.bottom + 5)}" stroke="#fff"/>`);
+    if (hour && hour.inWindWindow !== null) parts.push(hour.inWindWindow
       ? `<path d="M${fmt(hour.x)} ${fmt(view.bottom + 9)}l4 7h-8Z" fill="#afffb1"><title>Surface wind direction is in the launch window</title></path>`
       : `<circle cx="${fmt(hour.x)}" cy="${fmt(view.bottom + 13)}" r="3" fill="none" stroke="#ffe1cf" stroke-width="1.3"><title>Surface wind direction is outside the launch window</title></circle>`);
-    if (!visibleHours.has(hourIndex)) continue;
-    if (view.compact) parts.push(text(hour.x, 17, hour.label, 'text-anchor="middle" class="wg-hour wg-hour-top"'));
-    parts.push(text(hour.x, view.compact ? 38 : 36, hour.thermalVelocityMps == null ? "—" : `${Number(convertQuantity(hour.thermalVelocityMps, "lift")!.toFixed(getUnitSystem() === "metric" ? 1 : 0))}`, 'text-anchor="middle" class="wg-lift"'));
-    parts.push(text(hour.x, view.bottom + (view.compact ? 27 : 35), hour.label, 'text-anchor="middle" class="wg-hour"'));
-    parts.push(text(hour.x, view.bottom + (view.compact ? 42 : 53), hour.temperatureF == null ? "—" : `${Math.round(temperature(hour.temperatureF))}°`, 'text-anchor="middle" class="wg-surface-temp"'));
+    if (!visibleHours.has(axisIndex)) continue;
+    if (view.compact) parts.push(text(tick.x, 17, tick.label, 'text-anchor="middle" class="wg-hour wg-hour-top"'));
+    parts.push(text(tick.x, view.compact ? 38 : 36, hour?.thermalVelocityMps == null ? "—" : `${Number(convertQuantity(hour.thermalVelocityMps, "lift")!.toFixed(getUnitSystem() === "metric" ? 1 : 0))}`, 'text-anchor="middle" class="wg-lift"'));
+    parts.push(text(tick.x, view.bottom + (view.compact ? 27 : 35), tick.label, 'text-anchor="middle" class="wg-hour"'));
+    parts.push(text(tick.x, view.bottom + (view.compact ? 42 : 53), hour?.temperatureF == null ? "—" : `${Math.round(temperature(hour.temperatureF))}°`, 'text-anchor="middle" class="wg-surface-temp"'));
   }
   parts.push(text(view.left - (view.compact ? 8 : 10), view.bottom + (view.compact ? 42 : 53), `${view.compact ? "Sfc" : "Surface"} ${unitLabel("temperature")}`, 'text-anchor="end" class="wg-axis-unit"'));
   if (view.compact) {
@@ -274,8 +285,9 @@ export function renderWindgramSvg(view: WindgramView, options: { idPrefix?: stri
     parts.push(text(view.width / 2, view.bottom + 73, view.timeZone, 'text-anchor="middle" class="wg-axis-unit"'));
   } else parts.push(text(view.left + view.plotWidth / 2, view.bottom + 75, `${view.timeZone} · wind ${unitLabel("barbWind")} · temperature ${unitLabel("temperature")}${view.ensemble ? " · ensemble median" : ""}`, 'text-anchor="middle" class="wg-axis-unit"'));
   parts.push(`<g class="wg-inspector" data-windgram-cursor="" visibility="hidden" aria-hidden="true"><line data-cursor-vertical=""/><line data-cursor-horizontal=""/><circle data-cursor-point="" r="7"/><g data-cursor-readout=""><rect data-cursor-back="" height="47" rx="6" class="wg-inspector-back"/><text x="10" y="20" data-cursor-agl="" class="wg-inspector-agl"/><text x="10" y="36" data-cursor-msl="" class="wg-inspector-msl"/></g></g>`);
-  const first = view.hours[0], last = view.hours[view.hours.length - 1];
-  const description = `Windgram${first ? ` ${first.label}–${last.label}` : ""} · ${view.timeZone}. Height ${unitLabel("elevation")} MSL. Wind feathers ${unitLabel("barbWind")}. Temperature ${unitLabel("temperature")}. Lift ${unitLabel("lift")}. Crosshatching: RH >94%. Pale bands: model cloud. Outlined clouds: potential LCL. Paragliders: ${formatQuantity(1.143, "lift")} sink. ${view.ensemble ? "Ensemble median and uncertainty." : ""}`;
+  const first = view.timeAxis[0], last = view.timeAxis.at(-1)!;
+  const coverage = uncovered.length && firstData && lastData ? ` Forecast available ${firstData.label}–${lastData.label}; hatched hours unavailable.` : "";
+  const description = `Windgram${first ? ` ${first.label}–${last.label}` : ""} · ${view.timeZone}.${coverage} Height ${unitLabel("elevation")} MSL. Wind feathers ${unitLabel("barbWind")}. Temperature ${unitLabel("temperature")}. Lift ${unitLabel("lift")}. Crosshatching: RH >94%. Pale bands: model cloud. Outlined clouds: potential LCL. Paragliders: ${formatQuantity(1.143, "lift")} sink. ${view.ensemble ? "Ensemble median and uncertainty." : ""}`;
   return `<svg xmlns="${SVG_NS}" viewBox="0 0 ${fmt(view.width)} ${fmt(view.height)}" role="img" aria-labelledby="${id}-title ${id}-description" class="windgram${view.compact ? " windgram-compact" : ""}"><title id="${id}-title">Wind, temperature and clouds by hour and altitude</title><desc id="${id}-description">${escape(description)}</desc>${parts.join("\n")}</svg>`;
 }
 
@@ -453,7 +465,9 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement |
     if (!matrix) return null;
     const position = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
     if (position.x < view.left || position.x > view.left + view.plotWidth || position.y < view.top || position.y > view.bottom) return null;
-    const hourIndex = Math.max(0, Math.min(view.hours.length - 1, Math.floor((position.x - view.left) / view.columnWidth)));
+    const dataLeft = view.hours[0].x - view.columnWidth / 2;
+    const hourIndex = Math.floor((position.x - dataLeft) / view.columnWidth);
+    if (hourIndex < 0 || hourIndex >= view.hours.length) return null;
     return { hourIndex };
   };
   const onMove = (event: PointerEvent) => {

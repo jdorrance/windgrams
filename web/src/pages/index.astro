@@ -1,5 +1,4 @@
 ---
-import Unit from "../components/Unit.astro";
 import Base from "../layouts/Base.astro";
 import { launches } from "../lib/catalog.ts";
 import { href } from "../lib/site.ts";
@@ -31,11 +30,6 @@ const groups = regions.map((region) => ({
             {group.launches.map((launch) => (
               <a class="card launch-card" href={href(`launches/${launch.slug}`)}>
                 <h3>{launch.name}</h3>
-                <ul class="facts">
-                  <li>
-                    <Unit kind="wind" value={launch.windMinMph * .44704} numberOnly />–<Unit kind="wind" value={launch.windMaxMph * .44704} />
-                  </li>
-                </ul>
               </a>
             ))}
         </div>

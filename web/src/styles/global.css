@@ -430,10 +430,6 @@ details[open] > summary {
   font-size: 17px;
 }
 
-.launch-card .facts {
-  font-size: 14px;
-}
-
 .map {
   height: 360px;
   border-radius: var(--radius);

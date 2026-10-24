@@ -8,7 +8,7 @@ import { parseForecastManifestJson, parseModelCatalogueJson, parseSiteContextJso
 import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/meteo.briefing/contract";
 import { localDateKey, localHourOfDay, localInstantMs, runFreshness } from "@azohra/meteo.briefing/derive";
 import { loadDocument } from "@azohra/meteo.briefing/transport";
-import { buildWindgramView } from "../lib/windgram-view.ts";
+import { buildWindgramView, windgramHours } from "../lib/windgram-view.ts";
 import { windgramViewport } from "../lib/windgram-viewport.ts";
 import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from "../lib/windgram-chart.ts";
 import { windWindow, compassPoint, type Launch } from "../lib/launches.ts";
@@ -132,6 +132,7 @@ let ecmwf: EcmwfSiteDocument | null = null;
 let skewt: SkewTChart | null = null;
 
 let skewtHours: SiteForecast["hours"] = [];
+let displayedWindgramTimes: string[] = [];
 let ecmwfChart: EcmwfChart | null = null;
 let clearWindgramInspector: (() => void) | null = null;
 const sunlight = new Sunlight(launch);
@@ -242,6 +243,16 @@ function renderModelSelect(available: string[]) {
 
 $<HTMLSelectElement>("model-select").addEventListener("change", (event) => { manualModel = true; void selectModel((event.target as HTMLSelectElement).value); });
 
+function selectedWindgramHours(profile: SiteForecast) {
+  return windgramHours(profile, {
+    timeZone: tz,
+    hours: profile.hours.filter(hour => inDay(hour.validAt, day)),
+    compact: windgramViewport().compact,
+    heightRange: fullWindgramProfile ? "full" : "soaring",
+    launch: launchElevationM != null ? { elevationM: launchElevationM } : null,
+  });
+}
+
 function renderMeteogram() {
   const frame = $("meteogram");
   const meta = $("meteogram-meta");
@@ -258,6 +269,7 @@ function renderMeteogram() {
   details.hidden = true;
   axis.hidden = true;
   $("windgram-full-profile").hidden = true;
+  displayedWindgramTimes = [];
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
   title.textContent = entry
@@ -285,7 +297,7 @@ function renderMeteogram() {
     freshness === "stale" ? " · older than expected" : freshness === "delayed" ? " · newer run is late" : ""
   }${loaded.stale ? " · update in progress" : ""}`;
 
-  const hours = loaded.profile.hours.filter((h) => inDay(h.validAt, day));
+  const hours = selectedWindgramHours(loaded.profile);
   if (hours.length === 0) {
     const other = MODEL_ORDER.find((slug) => slug !== model && covers(slug, day));
     frame.innerHTML = "";
@@ -322,6 +334,7 @@ function renderMeteogram() {
     heightPx: height,
     maxHeightPx: compact && portrait ? height - chartTop - 16 : undefined,
   });
+  displayedWindgramTimes = view.hours.map(hour => hour.validAt);
   frame.innerHTML = renderWindgramSvg(view, { idPrefix: `mg-${launch.slug}` });
   diagnostics.innerHTML = renderWindgramDiagnosticsSvg(view, { idPrefix: `mg-details-${launch.slug}` });
   key.innerHTML = renderWindgramKey();
@@ -411,7 +424,7 @@ const TONE_ICON: Record<Tone, string> = { good: "✓", neutral: "•", caution: 
 const hourFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", timeZone: tz });
 
 function updateHourMarker(reveal = false) {
-  const i = skewtHours.findIndex(h => h.validAt === selectedValidAt);
+  const i = displayedWindgramTimes.indexOf(selectedValidAt ?? "");
   const frame = $('meteogram');
   const marker = frame.querySelector('[data-selected-hour]');
   marker?.setAttribute('visibility', i < 0 ? 'hidden' : 'visible');
@@ -571,7 +584,7 @@ function renderSkewT() {
   const body = $("skewt-body");
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
-  const hours = loaded ? loaded.profile.hours.filter((h) => inDay(h.validAt, day)) : [];
+  const hours = loaded ? selectedWindgramHours(loaded.profile) : [];
   if (!loaded || hours.length === 0) {
     body.hidden = true;
     status.hidden = false;
@@ -668,7 +681,7 @@ export async function start() {
         $('launch-elevation-item').hidden = false;
       }
       refreshBalloon?.();
-      if (model && profiles.get(model)) { renderMeteogram(); renderSkewT(); }
+      if (model && profiles.get(model)) { renderSkewT(); renderMeteogram(); }
     }),
   ]);
   const nwsTask = (async () => {
@@ -702,15 +715,16 @@ window.addEventListener("resize", () => {
   if (next === viewport) return;
   viewport = next;
   clearTimeout(resizeTimer);
-  resizeTimer = window.setTimeout(renderMeteogram, 150);
+  resizeTimer = window.setTimeout(() => { renderSkewT(); renderMeteogram(); }, 150);
 });
 $("windgram-full-profile").addEventListener("click", () => {
   fullWindgramProfile = !fullWindgramProfile;
+  renderSkewT();
   renderMeteogram();
 });
 
 // Synchronize only when both charts scroll. A fitted mobile windgram keeps its
-// complete day visible while the wider diagnostics pan independently.
+// selected hours visible while the wider diagnostics pan independently.
 const syncedScrollPositions = new WeakMap<HTMLElement, number>();
 function syncWindgramScroll(from: HTMLElement, to: HTMLElement) {
   const details = $<HTMLDetailsElement>("meteogram-details");

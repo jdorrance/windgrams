@@ -4,7 +4,7 @@ import { Marker, type GeoJSONSource, type ExpressionSpecification } from 'maplib
 import { parseSiteForecast, type SiteForecast } from '@azohra/meteo.briefing/contract';
 import { baseMap, onMapReady } from './map.ts';
 import { DATA_BASE } from '../lib/site.ts';
-import { buildWindgramView } from '../lib/windgram-view.ts';
+import { buildWindgramView, windgramHours } from '../lib/windgram-view.ts';
 import { windgramViewport } from '../lib/windgram-viewport.ts';
 import { renderWindgramSvg, renderWindgramKey } from '../lib/windgram-chart.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
@@ -432,6 +432,8 @@ async function main() {
   let currentWindgramLayout = '';
   let currentWindgramHour = -1;
   let fullWindgramProfile = false;
+  let firstVisibleHour = 0;
+  let lastVisibleHour = hours.length - 1;
   let currentView = buildWindgramView(blanchardProfile, {
     timeZone: manifest.case.site.timeZone,
     widthPx: 1100,
@@ -439,18 +441,22 @@ async function main() {
   });
   let cursor: SVGRectElement | null = null;
 
+  function windgramLaunch(cellIdx: number) {
+    const matchedLaunch = launchForCell(cellIdx);
+    return matchedLaunch && matchedLaunch.launchElevationM != null
+      ? { elevationM: matchedLaunch.launchElevationM, name: `${matchedLaunch.name} launch` }
+      : cellIdx === manifest.siteCell
+        ? { elevationM: manifest.case.launchElevation.elevationM, name: `${manifest.case.site.name} launch` }
+        : null;
+  }
+
   function renderActiveCellWindgram(activeProfile: SiteForecast, cellIdx: number, index: number) {
     const { compact, height: heightPx } = windgramViewport();
     el('windgram-full-profile').hidden = !compact;
     el('windgram-full-profile').setAttribute('aria-pressed', String(fullWindgramProfile));
     const widthPx = compact ? Math.max(windgramHost.clientWidth || 320, 240) : 1100;
-    const layout = compact ? `compact:${widthPx}:${heightPx}:${fullWindgramProfile}` : 'desktop';
-    const matchedLaunch = launchForCell(cellIdx);
-    const launchMeta = matchedLaunch && matchedLaunch.launchElevationM != null
-      ? { elevationM: matchedLaunch.launchElevationM, name: `${matchedLaunch.name} launch` }
-      : cellIdx === manifest.siteCell
-        ? { elevationM: manifest.case.launchElevation.elevationM, name: `${manifest.case.site.name} launch` }
-        : null;
+    const launchMeta = windgramLaunch(cellIdx);
+    const layout = `${compact ? `compact:${widthPx}:${heightPx}:${fullWindgramProfile}` : 'desktop'}:${launchMeta?.elevationM}:${launchMeta?.name}`;
 
     const rebuilt = currentWindgramCell !== cellIdx || currentWindgramLayout !== layout;
     if (rebuilt) {
@@ -476,7 +482,7 @@ async function main() {
       for (const [key, value] of Object.entries({
         y: currentView.top,
         height: currentView.plotHeight,
-        width: currentView.plotWidth / hours.length,
+        width: currentView.columnWidth,
         fill: '#237e81',
         'fill-opacity': 0.08,
         stroke: '#237e81',
@@ -492,13 +498,17 @@ async function main() {
         const matrix = svg.getScreenCTM();
         if (!matrix) return;
         const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-        const clickedIdx = Math.max(0, Math.min(hours.length - 1, Math.floor((point.x - currentView.left) / (currentView.plotWidth / hours.length))));
-        requested = hours[clickedIdx].forecastHour;
+        const clickedIdx = Math.max(0, Math.min(currentView.hours.length - 1, Math.floor((point.x - currentView.left) / currentView.columnWidth)));
+        const clickedHour = hours.find(hour => hour.validAt === currentView.hours[clickedIdx]?.validAt);
+        if (!clickedHour) return;
+        requested = clickedHour.forecastHour;
         update();
       });
     }
-    if (cursor && currentView.hours[index]) {
-      const left = currentView.hours[index].x - currentView.columnWidth / 2;
+    const displayedHour = currentView.hours.find(hour => hour.validAt === hours[index]?.validAt);
+    cursor?.setAttribute('visibility', displayedHour ? 'visible' : 'hidden');
+    if (cursor && displayedHour) {
+      const left = displayedHour.x - currentView.columnWidth / 2;
       cursor.setAttribute('x', String(left));
       if (windgramHost.scrollWidth > windgramHost.clientWidth + 1 && (rebuilt || currentWindgramHour !== index)) {
         const right = left + currentView.columnWidth;
@@ -559,16 +569,33 @@ async function main() {
   let ready = false;
   let drawnHour: ReplayHour | undefined, drawnLayer: Layer | undefined, drawnBarbs: boolean | undefined;
   function update() {
-    const state = selectedState(manifest, hours, requested), { hour, index } = state;
-    requested = hour.forecastHour;
-    slider.value = String(index);
-    slider.setAttribute('aria-valuetext', state.validLabel);
-    prev.disabled = index === 0;
-    next.disabled = index === hours.length - 1;
-    set('replay-valid', state.validLabel);
     const properties = grid.features[selectedCell].properties;
     const matchedLaunch = launchForCell(selectedCell);
     const activeLabel = matchedLaunch?.name ?? (selectedCell === manifest.siteCell ? manifest.case.site.name : 'Selected location');
+    if (!profileCache.has(selectedCell)) {
+      if (profileCache.size >= 32) profileCache.delete(profileCache.keys().next().value!);
+      profileCache.set(selectedCell, buildCellSiteForecast(manifest, hours, selectedCell, properties, activeLabel));
+    }
+    const cellForecast = profileCache.get(selectedCell);
+    const visibleHours = cellForecast ? windgramHours(cellForecast, {
+      timeZone: manifest.case.site.timeZone,
+      compact: windgramViewport().compact,
+      heightRange: fullWindgramProfile ? 'full' : 'soaring',
+      launch: windgramLaunch(selectedCell),
+    }) : [];
+    firstVisibleHour = Math.max(0, hours.findIndex(hour => hour.validAt === visibleHours[0]?.validAt));
+    const lastIndex = hours.findIndex(hour => hour.validAt === visibleHours.at(-1)?.validAt);
+    lastVisibleHour = lastIndex < firstVisibleHour ? hours.length - 1 : lastIndex;
+    requested = Math.max(hours[firstVisibleHour].forecastHour, Math.min(hours[lastVisibleHour].forecastHour, requested));
+    const state = selectedState(manifest, hours, requested), { hour, index } = state;
+    requested = hour.forecastHour;
+    slider.min = String(firstVisibleHour);
+    slider.max = String(lastVisibleHour);
+    slider.value = String(index);
+    slider.setAttribute('aria-valuetext', state.validLabel);
+    prev.disabled = index === firstVisibleHour;
+    next.disabled = index === lastVisibleHour;
+    set('replay-valid', state.validLabel);
     set('cell-title', activeLabel);
     set(
       'cell-location',
@@ -580,11 +607,6 @@ async function main() {
       launchSelect.value = matchedLaunch?.slug ?? '';
     }
 
-    if (!profileCache.has(selectedCell)) {
-      if (profileCache.size >= 32) profileCache.delete(profileCache.keys().next().value!);
-      profileCache.set(selectedCell, buildCellSiteForecast(manifest, hours, selectedCell, properties, activeLabel));
-    }
-    const cellForecast = profileCache.get(selectedCell);
     set('windgram-heading', `${activeLabel} · Windgram`);
     set('sounding-heading', `${activeLabel} · Sounding`);
     set('sounding-valid', state.validLabel);
@@ -966,7 +988,7 @@ async function main() {
 
   function move(delta: number) {
     const index = selectedState(manifest, hours, requested).index;
-    requested = hours[Math.max(0, Math.min(hours.length - 1, index + delta))].forecastHour;
+    requested = hours[Math.max(firstVisibleHour, Math.min(lastVisibleHour, index + delta))].forecastHour;
     update();
   }
 
@@ -983,7 +1005,7 @@ async function main() {
         playBtn.textContent = '⏸ Pause';
         playTimer = window.setInterval(() => {
           const idx = selectedState(manifest, hours, requested).index;
-          requested = hours[(idx + 1) % hours.length].forecastHour;
+          requested = hours[idx >= lastVisibleHour ? firstVisibleHour : idx + 1].forecastHour;
           update();
         }, 900);
       }

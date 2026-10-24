@@ -43,7 +43,7 @@ export interface WindgramView {
 }
 export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "launch" | "launchWindows" | "capabilities" | "widthPx"> & {
   compact?: boolean;
-  /** Compact charts default to the soaring layer; desktop keeps the full profile. */
+  /** Compact charts focus on soaring hours and heights; desktop keeps the full profile. */
   heightRange?: "soaring" | "full";
   /** Available viewport height; compact charts reserve room for page controls. */
   heightPx?: number;
@@ -598,11 +598,30 @@ function moistLayers(nodes: readonly FieldNode[], threshold: number) {
   return layers;
 }
 
-export function buildWindgramView(profile: SiteForecast, options: WindgramOptions): WindgramView {
+/** First-to-last usable thermal lift, with an hour of context on each side.
+ * Keep actual bracketing samples for coarse forecasts and retain lulls inside
+ * the window. Unknown diagnostics and days without a window retain all hours.
+ */
+export function windgramHours(profile: SiteForecast, options: WindgramOptions): ProfileHour[] {
   const window = options.hours;
   const selected = Array.isArray(window) ? new Set(window.map((h) => h.validAt)) : null;
   const dayWindow = window && !Array.isArray(window) && "dateKey" in window ? window : null;
   const hours = profile.hours.filter((h) => (!selected || selected.has(h.validAt)) && (!dayWindow || localDateKey(h.validAt, dayWindow.timeZone) === dayWindow.dateKey));
+  if (!options.compact || options.heightRange === "full" || hours.length < 2) return hours;
+  const floorM = Math.max(profile.site.modelElevationM, scalar(options.launch?.elevationM) ?? profile.site.modelElevationM);
+  const times = hours.map(hour => Date.parse(hour.validAt));
+  const lifts = hours.map(hour => publishedLift(hour));
+  if (times.some(time => !Number.isFinite(time)) || lifts.some(lift => scalar(lift.usableLiftTopM) === null && scalar(lift.thermalVelocityMps) === null)) return hours;
+  const usable = lifts.flatMap((lift, i) => (scalar(lift.usableLiftTopM) ?? -Infinity) > floorM ? [i] : []);
+  if (!usable.length) return hours;
+  const start = times[usable[0]] - 3_600_000, end = times[usable.at(-1)!] + 3_600_000;
+  const first = Math.max(0, times.findLastIndex(time => time <= start));
+  const last = times.findIndex(time => time >= end);
+  return hours.slice(first, last < 0 ? hours.length : last + 1);
+}
+
+export function buildWindgramView(profile: SiteForecast, options: WindgramOptions): WindgramView {
+  const hours = windgramHours(profile, options);
   const compact = options.compact ?? false;
   const left = compact ? 52 : 102, right = compact ? 8 : 88, top = compact ? 70 : 65;
   const availableWidth = Math.max(1, (options.widthPx ?? 1000) - left - right);

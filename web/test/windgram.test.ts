@@ -595,7 +595,7 @@ test("mobile range handles zero lift, missing diagnostics, strong days and ensem
 });
 
 test("compact charts thin display marks, retain first and last hours, and keep diagnostics independently readable", () => {
-  const view = buildWindgramView(fixture(), { timeZone: "Etc/UTC", compact: true, widthPx: 375, heightPx: 667 });
+  const view = buildWindgramView(fixture(), { timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx: 375, heightPx: 667 });
   const svg = renderWindgramSvg(view);
   const axis = renderWindgramHeightAxisSvg(view);
   const altitudeLabels = (markup: string) => [...markup.matchAll(/<text[^>]*class="wg-axis-feet"[^>]*>[^<]*<\/text>/g)].map((match) => match[0]);

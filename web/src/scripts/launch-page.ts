@@ -243,6 +243,8 @@ function renderModelSelect(available: string[]) {
   );
   host.disabled = available.length === 0;
   if (!available.length) host.add(new Option("No models available", ""));
+  $("model-selected-name").textContent = host.value ? host.value.split("-")[0].toUpperCase() : "—";
+  host.title = host.selectedOptions[0]?.textContent ?? "Forecast model";
 }
 
 $<HTMLSelectElement>("model-select").addEventListener("change", (event) => { manualModel = true; void selectModel((event.target as HTMLSelectElement).value); });

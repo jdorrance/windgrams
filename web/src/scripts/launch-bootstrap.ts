@@ -13,6 +13,8 @@ void import('./launch-page.ts').then(({ start }) => start()).catch(error => {
   const select = document.getElementById('model-select') as HTMLSelectElement;
   if (select.options[0]?.textContent === 'Loading models…') {
     select.replaceChildren(new Option('Models unavailable', ''));
+    select.title = 'Models unavailable';
+    document.getElementById('model-selected-name')!.textContent = '—';
   }
 });
 

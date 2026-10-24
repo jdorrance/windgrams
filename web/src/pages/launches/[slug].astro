@@ -51,6 +51,10 @@ const station = stationEntry && (() => {
       <label class="forecast-model">
         <span class="sr-only">Forecast model</span>
         <select id="model-select" disabled><option>Loading models…</option></select>
+        <span class="forecast-model-value" aria-hidden="true">
+          <span id="model-selected-name">…</span>
+          <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 4.5 3 3 3-3"/></svg>
+        </span>
       </label>
     </div>
     <div class="forecast-run-panel" id="forecast-info" popover role="dialog" aria-labelledby="forecast-info-title">

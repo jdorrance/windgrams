@@ -25,6 +25,8 @@ export interface WindgramSeries {
 }
 export interface WindgramHour {
   validAt: string; label: string; x: number; temperatureF: number | null;
+  /** Published ceiling in metres MSL, shared by the blue line and its readout. */
+  usableLiftTopM: number | null;
   thermalVelocityMps: number | null; gustKt: number | null; inWindWindow: boolean | null;
 }
 export interface WindgramView {
@@ -698,7 +700,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
       const arcs = options.launchWindows;
       const inWindWindow = direction === null || !arcs?.length ? null : arcs.some((arc) => arc.fromDeg <= arc.toDeg ? direction >= arc.fromDeg && direction <= arc.toDeg : direction >= arc.fromDeg || direction <= arc.toDeg);
       return { validAt: h.validAt, label: labelTime.format(new Date(h.validAt)).replace(/\s/g, "").replace("AM", "a").replace("PM", "p"), x: left + columnWidth * (i + 0.5),
-        temperatureF: temp === null ? null : fahrenheit(temp), thermalVelocityMps: scalar(publishedLift(h).thermalVelocityMps), gustKt: gust === null ? null : gust * KT, inWindWindow };
+        temperatureF: temp === null ? null : fahrenheit(temp), usableLiftTopM: scalar(publishedLift(h).usableLiftTopM), thermalVelocityMps: scalar(publishedLift(h).thermalVelocityMps), gustKt: gust === null ? null : gust * KT, inWindWindow };
     }),
     fields: [], contours: [], barbs: [], clouds: [], cloudBands: [], freezing: [], wings: [], series: [], launch: null,
     diagnostics: alignedDiagnostics(scene.strips.filter((s) => s.key !== "thermalStrength"), scene.hourValidAts, hours, scene.scales.plotLeft, diagnosticColumnWidth), diagnosticLeft: scene.scales.plotLeft, diagnosticColumnWidth,
@@ -819,9 +821,9 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     ["usableLiftTopM", `Usable lift · ${formatQuantity(1, "lift")} sink`, "#134ac4", null],
     ["cloudBaseM", "Potential cloud base", "#426173", "2 5"],
   ] as const) {
-    const value = (h: ProfileHour) => scalar(publishedLift(h)[key]);
+    const value = (h: ProfileHour, i: number) => key === "usableLiftTopM" ? view.hours[i].usableLiftTopM : scalar(publishedLift(h)[key]);
     const points = hours.flatMap((h, i): (Point | null)[] => {
-      const z = value(h);
+      const z = value(h, i);
       const point = z === null || z < floorM || z > topM ? null : { x: view.hours[i].x, y: y(z) };
       return gaps.has(i) ? [null, point] : [point];
     });

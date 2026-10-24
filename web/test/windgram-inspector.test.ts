@@ -2,17 +2,27 @@ import { afterEach, test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast } from "@azohra/meteo.briefing/contract";
-import { buildWindgramView, heightToY, readWindgram, yToHeight, type WindgramView } from "../src/lib/windgram-view.ts";
+import { buildWindgramView, heightToY, readWindgram, type WindgramView } from "../src/lib/windgram-view.ts";
 import { mountWindgramInspector, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
 import { setUnitSystem } from "../src/lib/units.ts";
 
-afterEach(() => setUnitSystem("imperial"));
+const originalDOMPoint = globalThis.DOMPoint;
+afterEach(() => {
+  setUnitSystem("imperial");
+  if (originalDOMPoint) globalThis.DOMPoint = originalDOMPoint;
+  else Reflect.deleteProperty(globalThis, "DOMPoint");
+});
 const source = () => {
   const profile = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")));
   assert.ok(profile);
   return profile;
 };
 const close = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < .01, `${actual} ≈ ${expected}`);
+const liftProfile = () => {
+  const profile = source();
+  for (const [i, hour] of profile.hours.entries()) hour.derived.usableLiftTopM = profile.site.modelElevationM + 600 + i * 50;
+  return profile;
+};
 
 test("AGL uses launch ground in either height range, including launch below model terrain", () => {
   const profile = source(), terrain = profile.site.modelElevationM;
@@ -33,14 +43,12 @@ test("AGL uses launch ground in either height range, including launch below mode
 });
 
 function inspector(t: TestContext, view: WindgramView) {
-  const originalDOMPoint = globalThis.DOMPoint;
   class Point {
     x: number; y: number;
     constructor(x = 0, y = 0) { this.x = x; this.y = y; }
     matrixTransform(matrix: { scale: number; offsetX?: number; offsetY?: number }) { return new Point(this.x * matrix.scale + (matrix.offsetX ?? 0), this.y * matrix.scale + (matrix.offsetY ?? 0)); }
   }
   globalThis.DOMPoint = Point as unknown as typeof DOMPoint;
-  t.after(() => { if (originalDOMPoint) globalThis.DOMPoint = originalDOMPoint; else Reflect.deleteProperty(globalThis, "DOMPoint"); });
   const element = () => {
     const attributes = new Map<string, string>();
     return { attributes, textContent: "", setAttribute: (key: string, value: string) => attributes.set(key, value), getAttribute: (key: string) => attributes.get(key) ?? null };
@@ -67,21 +75,25 @@ function inspector(t: TestContext, view: WindgramView) {
     host.dispatchEvent(event);
     assert.equal(event.defaultPrevented, false, "pointer inspection leaves native scrolling available");
   };
-  const key = (key: string) => { const event = new Event("keydown", { cancelable: true }); Object.assign(event, { key }); host.dispatchEvent(event); };
+  const key = (key: string) => { const event = new Event("keydown", { cancelable: true }); Object.assign(event, { key }); host.dispatchEvent(event); return event; };
   return { nodes, host, bounds, matrix, selected, pointer, key, cleanup, attributes, ownerDocument };
 }
 
-test("hover reports the exact cursor altitude and keeps the compact height readout inside the plot", t => {
-  const profile = source();
+test("hover snaps to each hour's usable-lift line regardless of pointer height", t => {
+  const profile = liftProfile();
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx: 320, launch: { elevationM: profile.site.modelElevationM + 200 } });
   assert.match(renderWindgramSvg(view), /data-cursor-agl/);
   const h = inspector(t, view);
-  const barb = view.barbs.find(barb => barb.y > view.top + 15 && barb.y < view.bottom - 15)!;
-  const y = barb.y + 3, z = yToHeight(view, y);
-  h.pointer("pointermove", view.hours[barb.hourIndex].x, y);
-  assert.equal(h.nodes["cursor-agl"].textContent, `${Math.round((z - view.ground.elevationM) / .3048).toLocaleString("en-US")} ft AGL`);
-  assert.equal(h.nodes["cursor-msl"].textContent, `${Math.round(z / .3048).toLocaleString("en-US")} ft MSL`);
-  close(Number(h.nodes["cursor-point"].getAttribute("cy")), y);
+  for (const hour of view.hours) for (const pointerY of [view.top + 1, (view.top + view.bottom) / 2, view.bottom - 1]) {
+    const z = hour.usableLiftTopM!;
+    h.pointer("pointermove", hour.x, pointerY);
+    assert.equal(h.nodes["cursor-agl"].textContent, `${Math.round((z - view.ground.elevationM) / .3048).toLocaleString("en-US")} ft AGL`);
+    assert.equal(h.nodes["cursor-msl"].textContent, `${Math.round(z / .3048).toLocaleString("en-US")} ft MSL`);
+    close(Number(h.nodes["cursor-point"].getAttribute("cx")), hour.x);
+    close(Number(h.nodes["cursor-point"].getAttribute("cy")), heightToY(view, z));
+    close(Number(h.nodes["cursor-horizontal"].getAttribute("y1")), heightToY(view, z));
+    assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "visible");
+  }
   assert.deepEqual(h.selected, [], "hover does not change the selected forecast hour");
   for (const x of [view.left + 1, view.left + view.plotWidth - 1]) for (const y of [view.top + 1, view.bottom - 1]) {
     h.pointer("pointermove", x, y);
@@ -94,10 +106,11 @@ test("hover reports the exact cursor altitude and keeps the compact height reado
   assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden");
 });
 
-test("touch taps pin signed AGL; dragging, cancellation and Escape leave scrolling and clearing intact", t => {
-  const profile = source(), ground = profile.site.modelElevationM + 300;
+test("touch pins the lift ceiling; dragging, cancellation and Escape leave scrolling and clearing intact", t => {
+  const profile = liftProfile(), ground = profile.site.modelElevationM + 300;
+  profile.hours[0].derived.usableLiftTopM = ground - 100;
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 700, launch: { elevationM: ground } });
-  const h = inspector(t, view), x = view.hours[0].x, y = heightToY(view, ground - 100);
+  const h = inspector(t, view), x = view.hours[0].x, y = view.top + 20;
   h.pointer("pointerdown", x, y, "touch");
   h.pointer("pointermove", x, y + 30, "touch");
   h.pointer("pointerup", x, y, "touch");
@@ -114,6 +127,11 @@ test("touch taps pin signed AGL; dragging, cancellation and Escape leave scrolli
   assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "visible");
   h.key("ArrowRight");
   assert.equal(h.selected.at(-1), view.hours[1].validAt);
+  close(Number(h.nodes["cursor-point"].getAttribute("cy")), heightToY(view, view.hours[1].usableLiftTopM!));
+  const selectedCount = h.selected.length, pinnedY = h.nodes["cursor-point"].getAttribute("cy");
+  for (const key of ["ArrowUp", "ArrowDown"]) assert.equal(h.key(key).defaultPrevented, false, "vertical arrows retain native scrolling");
+  assert.equal(h.selected.length, selectedCount);
+  assert.equal(h.nodes["cursor-point"].getAttribute("cy"), pinnedY);
   h.key("Escape");
   assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden");
   h.pointer("pointerdown", x, y, "touch");
@@ -131,7 +149,7 @@ test("touch taps pin signed AGL; dragging, cancellation and Escape leave scrolli
 });
 
 test("callout stays in the visible viewport when the page or chart is scrolled", t => {
-  const view = buildWindgramView(source(), { timeZone: "Etc/UTC", widthPx: 1000 });
+  const view = buildWindgramView(liftProfile(), { timeZone: "Etc/UTC", widthPx: 1000 });
   const h = inspector(t, view);
   h.bounds.left = 180; h.bounds.right = 480;
   h.matrix.offsetY = -view.top - 200;
@@ -142,7 +160,7 @@ test("callout stays in the visible viewport when the page or chart is scrolled",
   const [x, y] = h.nodes["cursor-readout"].getAttribute("transform")!.match(/[\d.]+/g)!.map(Number);
   const width = Number(h.nodes["cursor-back"].getAttribute("width"));
   assert.ok(x >= 180 && x + width <= 480.01, "card fits the horizontally visible plot");
-  assert.ok(y + h.matrix.offsetY > 8, "card moves below a hover near the screen top");
+  assert.ok(y + h.matrix.offsetY >= 0, "card stays below the visible plot top");
   assert.ok(y + h.matrix.offsetY + 47 <= 300);
   h.pointer("pointermove", 350, 290);
   const lowerY = Number(h.nodes["cursor-readout"].getAttribute("transform")!.match(/[\d.]+/g)![1]);
@@ -151,14 +169,92 @@ test("callout stays in the visible viewport when the page or chart is scrolled",
 
 test("metric inspection and a scaled chart preserve physical height and model-ground fallback", t => {
   setUnitSystem("metric");
-  const profile = source();
+  const profile = liftProfile();
+  profile.hours[0].derived.usableLiftTopM = profile.site.modelElevationM + 200;
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 390 });
   const h = inspector(t, view);
   h.matrix.scale = .75;
   h.bounds.right = view.width * .75;
-  const altitude = view.ground.elevationM + 200;
-  h.pointer("pointermove", view.hours[0].x * .75, heightToY(view, altitude) * .75);
+  h.pointer("pointermove", view.hours[0].x * .75, (view.top + 1) * .75);
   assert.equal(h.nodes["cursor-agl"].textContent, "200 m AGL");
+  close(Number(h.nodes["cursor-point"].getAttribute("cy")), heightToY(view, view.ground.elevationM + 200));
   assert.match(h.nodes["cursor-msl"].textContent, /m MSL · model ref$/);
   assert.doesNotMatch(h.attributes.get("aria-label")!, /\bft\b/);
+});
+
+test("missing or clipped lift ceilings hide heights while taps and keys still select hours", t => {
+  const profile = liftProfile();
+  const floor = profile.site.modelElevationM;
+  profile.hours[1].derived.usableLiftTopM = null;
+  profile.hours[2].derived.usableLiftTopM = floor - 1;
+  profile.hours[3].derived.usableLiftTopM = 20_000;
+  const view = buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 700 });
+  const h = inspector(t, view), pointerY = (view.top + view.bottom) / 2;
+  for (const index of [1, 2, 3]) {
+    h.pointer("pointermove", view.hours[0].x, pointerY);
+    assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "visible");
+    const hour = view.hours[index];
+    h.pointer("pointermove", hour.x, pointerY);
+    assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden", "a missing ceiling never inherits a stale height or clamps to the plot edge");
+    assert.doesNotMatch(h.attributes.get("aria-label")!, /\d[\d,]* ft (AGL|MSL)/);
+    h.pointer("pointerdown", hour.x, pointerY, "touch");
+    h.pointer("pointerup", hour.x, pointerY, "touch");
+    assert.equal(h.selected.at(-1), hour.validAt);
+    assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden");
+    h.key("Escape");
+  }
+  h.key("Home");
+  assert.equal(h.selected.at(-1), view.hours[0].validAt);
+  assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "visible");
+  for (const index of [1, 2, 3]) {
+    h.key("ArrowRight");
+    assert.equal(h.selected.at(-1), view.hours[index].validAt);
+    assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden");
+  }
+  h.key("ArrowRight");
+  assert.equal(h.selected.at(-1), view.hours[4].validAt);
+  assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "visible");
+  h.key("End");
+  assert.equal(h.selected.at(-1), view.hours.at(-1)!.validAt);
+  h.key("ArrowLeft");
+  assert.equal(h.selected.at(-1), view.hours.at(-2)!.validAt);
+});
+
+test("focused cropping hides a ceiling below launch; full height keeps its signed launch AGL", t => {
+  const profile = liftProfile(), launchM = profile.site.modelElevationM + 300;
+  profile.hours[0].derived.usableLiftTopM = launchM - 100;
+  const options = { timeZone: "Etc/UTC", widthPx: 390, compact: true, launch: { elevationM: launchM } };
+  const focused = buildWindgramView(profile, options), full = buildWindgramView(profile, { ...options, heightRange: "full" });
+  const focusedInspector = inspector(t, focused), fullInspector = inspector(t, full);
+  focusedInspector.pointer("pointermove", focused.hours[0].x, focused.bottom - 1);
+  assert.equal(focusedInspector.nodes["windgram-cursor"].getAttribute("visibility"), "hidden");
+  fullInspector.pointer("pointermove", full.hours[0].x, full.top + 1);
+  assert.equal(fullInspector.nodes["cursor-agl"].textContent, "-328 ft AGL");
+  close(Number(fullInspector.nodes["cursor-point"].getAttribute("cy")), heightToY(full, launchM - 100));
+  focusedInspector.pointer("pointermove", focused.hours[1].x, focused.top + 1);
+  fullInspector.pointer("pointermove", full.hours[1].x, full.bottom - 1);
+  assert.equal(focusedInspector.nodes["cursor-agl"].textContent, fullInspector.nodes["cursor-agl"].textContent);
+  assert.equal(focusedInspector.nodes["cursor-msl"].textContent, fullInspector.nodes["cursor-msl"].textContent);
+});
+
+test("inspection uses published V2 ceilings and ensemble medians, preserving unavailable values", t => {
+  const profile = liftProfile();
+  const median = profile.site.modelElevationM + 800;
+  Object.assign(profile.hours[0], { soaring: { thermalVelocityV2Mps: 2, usableLiftTopV2M: null } });
+  Object.assign(profile.hours[1], { soaring: { thermalVelocityV2Mps: 2, usableLiftTopV2M: { p25: median - 200, p50: median, p75: median + 300 } } });
+  Object.assign(profile.hours[2], { soaring: { thermalVelocityV2Mps: 2, usableLiftTopV2M: { p25: median - 200, p50: null, p75: median + 300 } } });
+  Object.assign(profile.hours[3], { soaring: { thermalVelocityV2Mps: 2, usableLiftTopV2M: median + 100, hcritWxtoflyM: median - 150 } });
+  const view = buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 700 });
+  assert.deepEqual(view.hours.slice(0, 4).map(hour => hour.usableLiftTopM), [null, median, null, median + 100]);
+  const h = inspector(t, view);
+  for (const index of [0, 2]) {
+    h.pointer("pointermove", view.hours[index].x, view.top + 1);
+    assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden", "a missing V2 ceiling stays missing despite the legacy diagnostic");
+  }
+  for (const [index, height] of [[1, median], [3, median + 100]]) {
+    h.pointer("pointermove", view.hours[index].x, view.bottom - 1);
+    assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "visible");
+    close(Number(h.nodes["cursor-point"].getAttribute("cy")), heightToY(view, height));
+    assert.equal(h.nodes["cursor-agl"].textContent, `${Math.round((height - view.ground.elevationM) / .3048).toLocaleString("en-US")} ft AGL`);
+  }
 });

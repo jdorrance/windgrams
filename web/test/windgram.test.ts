@@ -669,7 +669,9 @@ test("keyboard hour selection and cleanup work without a visible inspector reado
     removeAttribute: (key: string) => attributes.delete(key),
     tabIndex: -1,
   });
-  const view = viewOf(steadyProfile());
+  const profile = steadyProfile();
+  for (const hour of profile.hours) hour.derived.usableLiftTopM = profile.site.modelElevationM + 600;
+  const view = viewOf(profile);
   const selected: string[] = [];
   const cleanup = mountWindgramInspector(host as unknown as HTMLElement, null, view, (validAt) => selected.push(validAt));
   const key = (value: string) => {

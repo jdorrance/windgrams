@@ -2,7 +2,6 @@
 import Unit from "../components/Unit.astro";
 import Base from "../layouts/Base.astro";
 import { launches } from "../lib/catalog.ts";
-import { compassPoint } from "../lib/launches.ts";
 import { href } from "../lib/site.ts";
 const markers = launches.map((l) => ({ slug: l.slug, name: l.name, latitude: l.latitude, longitude: l.longitude }));
 const regions: string[] = [];
@@ -33,9 +32,6 @@ const groups = regions.map((region) => ({
               <a class="card launch-card" href={href(`launches/${launch.slug}`)}>
                 <h3>{launch.name}</h3>
                 <ul class="facts">
-                  <li>
-                    Faces <strong>{compassPoint(launch.facingDeg)}</strong>
-                  </li>
                   <li>
                     <Unit kind="wind" value={launch.windMinMph * .44704} numberOnly />–<Unit kind="wind" value={launch.windMaxMph * .44704} />
                   </li>

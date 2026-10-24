@@ -384,7 +384,7 @@ export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement |
     attr(point, { cx: x, cy: y });
     cursor?.setAttribute("visibility", "visible");
     const aglText = `${formatQuantity(reading.heightAglM, "elevation")} AGL`;
-    const mslText = `${formatQuantity(reading.heightM, "elevation")} MSL · ${view.ground.source} ref`;
+    const mslText = `${formatQuantity(reading.heightM, "elevation")} MSL${view.ground.source === "model" ? " · model ref" : ""}`;
     if (aglLabel) aglLabel.textContent = aglText;
     if (mslLabel) mslLabel.textContent = mslText;
     // Keep the card visible while the page or the wide desktop chart is scrolled.

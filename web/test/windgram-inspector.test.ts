@@ -71,7 +71,7 @@ function inspector(t: TestContext, view: WindgramView) {
   return { nodes, host, bounds, matrix, selected, pointer, key, cleanup, attributes, ownerDocument };
 }
 
-test("hover reports the exact cursor altitude, labels the ground reference and stays inside the plot", t => {
+test("hover reports the exact cursor altitude and keeps the compact height readout inside the plot", t => {
   const profile = source();
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx: 320, launch: { elevationM: profile.site.modelElevationM + 200 } });
   assert.match(renderWindgramSvg(view), /data-cursor-agl/);
@@ -80,7 +80,7 @@ test("hover reports the exact cursor altitude, labels the ground reference and s
   const y = barb.y + 3, z = yToHeight(view, y);
   h.pointer("pointermove", view.hours[barb.hourIndex].x, y);
   assert.equal(h.nodes["cursor-agl"].textContent, `${Math.round((z - view.ground.elevationM) / .3048).toLocaleString("en-US")} ft AGL`);
-  assert.match(h.nodes["cursor-msl"].textContent, /ft MSL · launch ref$/);
+  assert.equal(h.nodes["cursor-msl"].textContent, `${Math.round(z / .3048).toLocaleString("en-US")} ft MSL`);
   close(Number(h.nodes["cursor-point"].getAttribute("cy")), y);
   assert.deepEqual(h.selected, [], "hover does not change the selected forecast hour");
   for (const x of [view.left + 1, view.left + view.plotWidth - 1]) for (const y of [view.top + 1, view.bottom - 1]) {

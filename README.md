@@ -43,8 +43,8 @@ pnpm build
 ```
 
 `check` covers types, package boundaries and public declarations. `test:consumer`
-installs the packed libraries in a separate project and runs an example against
-their public APIs. Browser tests use local fixtures; install Chromium once with
+installs the packed libraries in a separate project and checks their public APIs.
+Browser tests use local fixtures; install Chromium once with
 `pnpm --dir web exec playwright install chromium`.
 
 See [development](docs/toolkit-development.md) for builds, coverage and CI, and

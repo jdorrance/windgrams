@@ -87,6 +87,8 @@ const normalizedColumnSchema = z.object({
   column: columnSchema, modelElevationM: finite, provenance: provenanceSchema,
 });
 export type NormalizedColumnRecord = z.infer<typeof normalizedColumnSchema>;
+/** Build input only; source references are additionally checked by the runtime validator. */
+export function columnWireSchema(): unknown { return z.toJSONSchema(normalizedColumnSchema, { io: 'input' }); }
 
 /** A diagnostic value, or a reason the calculation could not produce one. */
 export type DiagnosticResult<T> =

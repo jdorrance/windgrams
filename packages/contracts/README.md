@@ -38,9 +38,16 @@ measurement.
   catalogues, manifests, grids, forecast hours and supporting documents.
   Grid and audit validation throw on invalid input; the optional-document
   validators return `null`.
+- [`@windgrams/contracts/fields`](src/fields.ts) describes regional field units,
+  height references and availability. It also converts an MSL height to AGL
+  against an explicitly compatible ground datum, preserving negative clearance.
+
+`@windgrams/contracts/wire-schemas.json` contains structural JSON Schemas generated
+from the same runtime schemas at build time. Use these for another language's
+document reader. Runtime validators also check relationships between fields,
+including cell-array lengths and model identity; the schema alone cannot express
+all of those checks.
 
 Column parsers return the accepted object itself, including extra metadata and
 native arrays, or `null` on invalid input. The [public exports](src/index.ts)
-include the shared forecast types. See the
-[consumer example](../../examples/consumer/README.md) for parsing, publication
-and chart rendering together.
+include the shared forecast types.

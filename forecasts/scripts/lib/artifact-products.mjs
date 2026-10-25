@@ -69,7 +69,9 @@ export function regionalProduct(root, caseId, models) {
   }
   for (const [name, expected] of Object.entries(manifest.files)) {
     if (!/^[a-zA-Z0-9.-]+$/.test(name) || !/^[a-f0-9]{64}$/.test(expected) || digest(join(bundle, name)) !== expected) throw new Error(`${caseId}: corrupt regional file ${name}`);
+    if (manifest.fileBytes && manifest.fileBytes[name] !== lstatSync(join(bundle, name)).size) throw new Error(`${caseId}: incorrect regional byte inventory: ${name}`);
   }
+  if (manifest.fileBytes && Object.keys(manifest.fileBytes).some(name => !manifest.files[name])) throw new Error(`${caseId}: unexpected regional byte inventory entry`);
   const grid = validateReplayGrid(readJson(join(bundle, 'grid.geojson')), manifest.cellCount);
   const audit = validateReplayAudit(readJson(join(bundle, 'audit.json')));
   if (audit.mapProfileAgreement.exact !== true || audit.mapProfileAgreement.hours !== hours.length) throw new Error(`${caseId}: incomplete regional agreement audit`);
@@ -89,7 +91,9 @@ export function regionalProduct(root, caseId, models) {
   checkProfile('profile.json');
   if (manifest.cellProfiles) for (const feature of grid.features) {
     const name = manifest.cellProfiles.replace('{index}', String(feature.properties.cellIndex));
-    if (!manifest.files[name]) throw new Error(`${caseId}: missing regional cell profile ${name}`);
+    // The file inventory declares complete columns. A cell with an incomplete
+    // horizon may still have useful map values; its profile remains unavailable.
+    if (!manifest.files[name]) continue;
     checkProfile(name, feature.properties.gridIndex);
   }
   const launches = validateLaunchesDoc(readJson(join(bundle, 'launches.json'))), section = validateCrossSectionDoc(readJson(join(bundle, 'cross-section.json')));

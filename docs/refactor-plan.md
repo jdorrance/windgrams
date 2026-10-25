@@ -19,7 +19,7 @@ Surface 19.805°C → resolved depth 3,000 m
 
 The first-layer fallback returns zero when the dry-adiabatic lapse plus the surface-to-first-level environmental lapse is ≤0.00001°C/m. [Characterization tests](../forecasts/soaring/soaring.test.mjs) reproduce the threshold behavior and the separate branch that uses PBL depth. Its frequency and effect in operational forecasts still need measurement.
 
-A correction needs an independently derived neutral-layer limit, tests on both sides of the threshold, and coverage of the PBL and heat-flux fallback branches. An archived-column comparison should show how often the correction changes thermal depth and downstream lift ceilings. The correction should also specify its method version and whether forecasts from the same initialization need rebuilding.
+A correction needs an independently derived neutral-layer limit, tests on both sides of the threshold, and coverage of the PBL and heat-flux fallback branches. An archived-column comparison should show how often the correction changes thermal depth and downstream lift ceilings. The correction should also specify its method version and whether forecasts from the same initialization need rezt.building.
 
 ## Numerical compatibility
 

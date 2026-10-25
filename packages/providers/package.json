@@ -26,6 +26,10 @@
       "types": "./dist/icon.d.ts",
       "default": "./dist/icon.js"
     },
+    "./area": {
+      "types": "./dist/area.d.ts",
+      "default": "./dist/area.js"
+    },
     "./build-inventory.json": "./dist/build-inventory.json",
     "./terrain-policy": {
       "types": "./dist/terrain-policy.d.ts",

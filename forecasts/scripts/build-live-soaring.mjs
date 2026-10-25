@@ -228,6 +228,9 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
     manifest.files['launches.json'] = sha256(bytes);
   }
 
+  // Sidecars are added after replay. Inventory their final stored bytes together
+  // with the immutable hourly/profile objects before selecting this generation.
+  manifest.fileBytes = Object.fromEntries(Object.keys(manifest.files).map(name => [name, statSync(join(newBundleDir, name)).size]));
   verifyBundle(newBundleDir, manifest);
   const manifestBytes = Buffer.from(`${JSON.stringify(manifest)}\n`);
   const finalBundleHash = sha256(manifestBytes);

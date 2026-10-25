@@ -1,8 +1,9 @@
-// A custom provider, file-backed dataset and two charts built from the installed packages.
+// Smoke test: acquire, derive, publish, read and render through installed packages.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parsePublishedProfileJson } from '@windgrams/contracts/published-lift';
+import { fieldDefinition, heightAboveGround } from '@windgrams/contracts/fields';
 import type { AcquisitionAdapter, ModelDescriptor, ProcessedProfileResult, SelectedRun } from '@windgrams/providers';
 import { postprocessPointForecast } from '@windgrams/soaring/compatibility';
 import { deriveProduct, fileStore, publishImmutableFiles, packageBuildHashes, mergeRegionCatalogues } from '@windgrams/pipeline';
@@ -13,6 +14,10 @@ import { coversPoint } from '@windgrams/geography';
 
 const original = parsePublishedProfileJson(readFileSync(new URL('./profile.json', import.meta.url), 'utf8'));
 assert.ok(original, 'the retained input fixture must satisfy the published profile contract');
+assert.equal(fieldDefinition('usableLiftTopM').heightReference, 'MSL');
+assert.equal(heightAboveGround(2500, 'EGM96', {
+  kind: 'model', elevationM: 1600, verticalDatum: 'EGM96', source: 'fixture',
+})?.heightM, 900);
 const profileFixture = { ...original, model: 'portable-model' };
 const schedule = profileFixture.hours.map(hour => (Date.parse(hour.validAt) - Date.parse(profileFixture.run.referenceTime)) / 3_600_000);
 const pressureLevels = profileFixture.hours[0].levels.map(level => {

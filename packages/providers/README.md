@@ -28,13 +28,56 @@ async function acquireHrrr(referenceTime: string, sites: readonly SiteLocation[]
 
 This writes the model's files and returns validated profiles plus their manifest.
 The profiles already contain upstream-derived fields. Choose any additional
-diagnostics before publishing them; the [consumer example](../../examples/consumer/README.md)
-shows that step.
+diagnostics with [`@windgrams/soaring`](../soaring/README.md) before publishing them.
 
 `maxSteps` is a positive count of entries in the adapter's forecast schedule.
 For an hourly schedule beginning at hour 1, a limit of 6 selects hours 1–6. Requests use
 ISO UTC timestamps. Adapters reject missing core data and mismatched runs, sites
 or forecast hours; optional diagnostic values can be `null`.
+
+## Native areas
+
+The ICON area adapter selects native cells inside caller-supplied bounds and
+returns one normalized column per cell and forecast hour:
+
+```ts
+import { createIconAreaAdapter } from '@windgrams/providers/area';
+
+const adapter = createIconAreaAdapter();
+const area = await adapter.acquire({
+  run: {
+    provider: adapter.model.provider,
+    model: adapter.model.id,
+    product: adapter.model.sourceProducts[0],
+    referenceTime: '2026-10-25T06:00:00Z',
+  },
+  bounds: [44.5, 40.2, 44.9, 40.5],
+  forecastHours: [1, 2, 3],
+  fields: ['windSpeedMps', 'levels'],
+  cacheDir: './forecast-cache',
+});
+
+console.log(area.cells, area.hours[0].columns);
+```
+
+Bounds use `[west, south, east, north]`. A cell is included when its centre falls
+inside the bounds; its polygon retains the native edges. Each hourly `columns`
+array follows `cells`, with `null` for an unavailable column. Records retain
+source, field and native-grid provenance alongside the normalized weather.
+
+`fields` declares the capabilities your calculation needs. Unsupported names
+throw before acquisition; the result contains complete normalized columns, and
+optional measurements can still be absent. Forecast hours must be unique,
+ascending integers from 1 to 78. Supply an `AbortSignal` to cancel downloads and
+stop the decoder. ICON extraction supports up to 12,000 native cells per request
+and uses the [same Python setup](../../forecasts/docs/operations.md#icon-eu) as
+point acquisition.
+
+The [area types](src/area-types.ts) also describe the interface for another area
+adapter. ICON is the current implementation; HRRR/RRFS regional acquisition
+lives in the forecast application. The ICON result's `native` member lets that
+application reuse the acquisition for point and regional publication. Optional
+`sites` supplied to the adapter retain their additional support cells there.
 
 ## Other feeds and custom adapters
 

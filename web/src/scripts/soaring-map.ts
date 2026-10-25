@@ -1,3 +1,4 @@
+import { readRegionalField } from '@windgrams/contracts/fields';
 import { Marker, type ExpressionSpecification, type GeoJSONSource, type GeoJSONSourceSpecification, type Map as MapLibreMap } from 'maplibre-gl';
 import { formatQuantity } from '../lib/units.ts';
 import { windBarbImage, windBarbs } from '../lib/map-wind.ts';
@@ -22,25 +23,6 @@ export interface SoaringMapState {
   showBarbs: boolean;
   selectedCell: number;
 }
-
-const LIFT_TOP_LAYERS = new Set<Layer>([
-  'usableLiftTopV2M',
-  'usableLiftTopM',
-  'hcritWxtoflyM',
-  'dryHcritM',
-  'resolvedThermalTopM',
-]);
-
-const QUALITY_SENSITIVE_LAYERS = new Set<Layer>([
-  'thermalVelocityV2Mps',
-  'thermalVelocityMps',
-  'usableLiftTopV2M',
-  'usableLiftTopM',
-  'resolvedThermalTopM',
-  'boundaryLayerTopM',
-  'hcritWxtoflyM',
-  'dryHcritM',
-]);
 
 export function createSoaringMap(options: SoaringMapOptions) {
   const { host, bbox, grid, siteCell, site, launches, crossSectionDoc, onSelectCell } = options;
@@ -88,34 +70,23 @@ export function createSoaringMap(options: SoaringMapOptions) {
     drawnLayer = layer;
     drawnBarbs = showBarbs;
     const spec = LAYER_SPECS[layer] ?? LAYER_SPECS.thermalVelocityV2Mps;
-    const liftTopLayer = LIFT_TOP_LAYERS.has(layer);
-    const qualitySensitive = QUALITY_SENSITIVE_LAYERS.has(layer);
-    const arr = (hour[layer] as (number | null)[] | undefined) ?? [];
 
     const data = {
       ...grid,
-      features: grid.features.map((f, i) => ({
-        ...f,
-        properties: {
-          ...f.properties,
-          quality:
-            arr[i] === undefined
-              ? 'missing'
-              : qualitySensitive
-                ? hour.status[i]
-                : arr[i] === null
-                  ? 'missing'
-                  : 'valid',
-          value: arr[i] === null || arr[i] === undefined ? null : arr[i]! * spec.scale,
-        },
-      })),
+      features: grid.features.map((f, i) => {
+        const reading = readRegionalField(hour, layer, i);
+        return { ...f, properties: { ...f.properties,
+          quality: reading.status === 'insufficient-profile' ? 'insufficient-levels' : reading.status === 'valid' ? 'valid' : 'missing',
+          value: reading.value === null ? null : reading.value * spec.scale,
+        } };
+      }),
     };
     (map.getSource('lift') as GeoJSONSource | undefined)?.setData(data as GeoJSONSourceSpecification['data']);
     const expression = [
       'case',
       ['==', ['get', 'quality'], 'missing'], '#9ca3af',
       ['==', ['get', 'quality'], 'insufficient-levels'], '#9573b2',
-      ['==', ['get', 'value'], null], liftTopLayer ? '#e5d9bd' : '#9ca3af',
+      ['==', ['get', 'value'], null], '#9ca3af',
       ['interpolate', ['linear'], ['coalesce', ['get', 'value'], 0], ...spec.stops.flatMap((v, i) => [v, spec.colors[i]])],
     ] as ExpressionSpecification;
     map.setPaintProperty('lift-fill', 'fill-color', expression);

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import { parseFields, parseIdx } from '@azohra/meteo.grib';
 import { capture, inspectField } from './capture.mjs';
 import { replay, verifyCapture } from './replay.mjs';
@@ -74,7 +75,7 @@ test('RRFS real-header fixture captures and replays offline, rejects rain time e
   const out = await replay(c, cache, join(root, 'output'), { log: quiet });
   const manifest = await readJson(join(out.path, 'manifest.json'));
   const profile = await readJson(join(out.path, 'profile.json'));
-  const hour = await readJson(join(out.path, 'f8.json'));
+  const hour = JSON.parse(gunzipSync(await readFile(join(out.path, manifest.hours[0].file))));
   assert.equal(manifest.model, 'rrfs');
   assert.equal(profile.model, 'rrfs');
   assert.equal(profile.semantics.precipitation, 'windowMeanRate');
@@ -82,4 +83,9 @@ test('RRFS real-header fixture captures and replays offline, rejects rain time e
   assert.equal(out.audit.mapProfileAgreement.exact, true);
   assert.equal(out.audit.publishedProfileComparison.applicable, false);
   assert.equal(hour.precipitationMmHr[manifest.siteCell], profile.hours[0].surface.precipitationMmHr);
+  assert.equal(hour.levelsByPressure, undefined);
+  const cell = JSON.parse(gunzipSync(await readFile(join(out.path, `cell-${manifest.siteCell}.json.gz`))));
+  assert.deepEqual(cell.hours, profile.hours, 'cell shard preserves the already-derived profile exactly');
+  assert.equal(cell.source.gridIndex, out.audit.sampledCell.index);
+  for (const [name, bytes] of Object.entries(manifest.fileBytes)) assert.equal((await readFile(join(out.path, name))).byteLength, bytes, name);
 });

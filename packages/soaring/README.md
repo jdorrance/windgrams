@@ -42,6 +42,5 @@ and lift heights unchanged.
 [`@windgrams/soaring/compatibility`](src/compatibility.ts) postprocesses existing
 point profiles and supports sparse NWS/ECMWF documents, ensemble members and
 cross-model summaries. Ensemble diagnostics are calculated per member before
-percentiles are aggregated. See the
-[consumer example](../../examples/consumer/README.md) for point-profile
-postprocessing, or the [public types](src/types.ts) for all diagnostic fields.
+percentiles are aggregated. The [public types](src/types.ts) describe all
+diagnostic fields.

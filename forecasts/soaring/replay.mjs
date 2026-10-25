@@ -18,7 +18,7 @@ import {
   profileFor,
   v2LayerMetrics,
 } from './science.mjs';
-import { assertRuntime, atomicWrite, concurrent, fileUrl, json, modelFor, readJson, semanticsFor, sha256, validAt, versionsFor } from './common.mjs';
+import { assertRuntime, atomicWrite, concurrent, encodeBundleFile, fileUrl, json, modelFor, readJson, semanticsFor, sha256, validAt, versionsFor } from './common.mjs';
 import { CONUS_REPLAY_INVENTORY, computeImplementationCodeHashes } from './inventory.mjs';
 
 function sameCaptureInputs(a, b) {
@@ -85,7 +85,8 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
   };
   let terrain, site;
   const hourly = [], profileHours = [], siteRaw = [], audits = [];
-  const pLevels = c.pressureLevels ?? [925, 900, 875, 850, 800, 750, 700, 650, 600];
+  // Reuse each derived column for its cell profile; no second scientific pass.
+  const cellHours = region.cells.map(() => []), cellSites = [];
   try {
     terrain = await decode(terrainRecord, c.terrainForecastHour);
     for (const source of capture.sources.slice(1)) {
@@ -93,7 +94,6 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
       const conv10m = computeNativeGridConvergence(grid, region.cells, decoded.u ?? [], decoded.v ?? []);
       const above925 = values => (values ?? []).map((v, i) => terrain[i] != null && decoded['925.HGT']?.[i] > terrain[i] + 20 ? v : null);
       const conv925 = computeNativeGridConvergence(grid, region.cells, above925(decoded['925.UGRD']), above925(decoded['925.VGRD']));
-      const levelsByPressure = Object.fromEntries(pLevels.map(p => [String(p), { h: [], t: [], td: [], ws: [], wd: [], vv: [] }]));
       const result = {
         forecastHour: source.hour,
         validAt: validAt(c, source.hour),
@@ -103,7 +103,6 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
         sfcT: [],
         sfcTd: [],
         mslp: [],
-        levelsByPressure,
         status: [],
         levelCount: [],
         ceilingReached: [],
@@ -129,17 +128,10 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
         result.sfcT.push(converted ? round1(converted.temperatureC) : null);
         result.sfcTd.push(converted ? round1(converted.temperatureC - converted.dewPointDepressionC) : null);
         result.mslp.push(converted ? round1(converted.seaLevelPressureHpa) : null);
-        const byP = new Map((converted?.levels ?? []).map(l => [l.pressureHpa, l]));
-        for (const p of pLevels) {
-          const lv = byP.get(p);
-          const bucket = levelsByPressure[String(p)];
-          bucket.h.push(lv ? round1(lv.heightM) : null);
-          bucket.t.push(lv ? round1(lv.temperatureC) : null);
-          bucket.td.push(lv ? round1(lv.temperatureC - lv.dewPointDepressionC) : null);
-          bucket.ws.push(lv ? round2(lv.windSpeedMps) : null);
-          bucket.wd.push(lv ? round1(lv.windDirectionDeg) : null);
-          bucket.vv.push(lv && lv.verticalVelocityPaS != null ? round2(lv.verticalVelocityPaS) : null);
-        }
+        if (derived.hour && cellHours[i]) {
+          cellHours[i].push({ ...derived.hour, soaring: v2 });
+          cellSites[i] = derived.site;
+        } else cellHours[i] = null;
         result.status.push(derived.status); result.levelCount.push(derived.levelCount); result.ceilingReached.push(derived.ceilingReached);
         if (i === region.siteCell) {
           if (!derived.hour) throw new Error(`${c.site.name} f${source.hour} has ${derived.status}; refusing incomplete profile`);
@@ -240,9 +232,22 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
     'profile.json': profile,
     'audit.json': audit,
     'blanchard-raw.json': { provenance: `Decoded NOAA ${modelFor(c) === 'rrfs' ? 'RRFS' : 'HRRR'} values before conversion/rounding`, grid, cell: region.cells[region.siteCell], terrain: terrain[region.siteCell], hours: siteRaw },
-    ...Object.fromEntries(hourly.map(h => [`f${h.forecastHour}.json`, h])),
+    ...Object.fromEntries(hourly.map(h => [`f${h.forecastHour}.json.gz`, h])),
   };
-  const hashes = Object.fromEntries(Object.entries(files).map(([name, value]) => [name, sha256(json(value))]));
+  const encoded = new Map(Object.entries(files).map(([name, value]) => [name, encodeBundleFile(name, value)]));
+  for (let i = 0; i < region.cells.length; i++) {
+    if (!cellHours[i] || cellHours[i].length !== hourly.length) continue;
+    const cell = region.cells[i];
+    const cellSite = i === region.siteCell ? site : { ...cellSites[i], id: `cell-${cell.index}`,
+      name: cell.id, latitude: cell.latitude, longitude: cell.longitude };
+    const cellProfile = { ...profileFor(c, cellSite, cellHours[i], capture.capturedAt),
+      source: { gridIndex: cell.index, latitude: cell.latitude, longitude: cell.longitude } };
+    assertAgreement(cellProfile, hourly, i);
+    const name = `cell-${i}.json.gz`;
+    encoded.set(name, encodeBundleFile(name, cellProfile));
+    cellHours[i] = null;
+  }
+  const hashes = Object.fromEntries([...encoded].map(([name, bytes]) => [name, sha256(bytes)]));
   const codeHashes = computeImplementationCodeHashes(CONUS_REPLAY_INVENTORY);
   const manifest = {
     schemaVersion: 1,
@@ -275,17 +280,19 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
       cloudCoverPercent: '%', lowCloudPercent: '%', midCloudPercent: '%', highCloudPercent: '%',
       precipitationMmHr: 'mm/hr', capeJkg: 'J/kg', cinJkg: 'J/kg',
     },
-    hours: hourly.map(h => ({ forecastHour: h.forecastHour, validAt: h.validAt, file: `f${h.forecastHour}.json` })),
+    hours: hourly.map(h => ({ forecastHour: h.forecastHour, validAt: h.validAt, file: `f${h.forecastHour}.json.gz` })),
+    cellProfiles: 'cell-{index}.json.gz',
     files: hashes,
+    fileBytes: Object.fromEntries([...encoded].map(([name, bytes]) => [name, bytes.byteLength])),
   };
-  files['manifest.json'] = manifest;
+  encoded.set('manifest.json', Buffer.from(json(manifest)));
   const bundle = sha256(json(manifest));
   await mkdir(output, { recursive: true });
   const staging = join(output, `.staging-${randomUUID()}`);
   const destination = join(output, c.id, 'bundles', bundle);
   await mkdir(staging);
   try {
-    for (const [name, value] of Object.entries(files)) await atomicWrite(join(staging, name), json(value));
+    for (const [name, bytes] of encoded) await atomicWrite(join(staging, name), bytes);
     if (!profileFor(c, profile.site, (await readJson(join(staging, 'profile.json'))).hours, capture.capturedAt)) throw new Error('Invalid serialized profile');
     for (const [name, hash] of Object.entries(hashes)) if (sha256(await readFile(join(staging, name))) !== hash) throw new Error(`Staged checksum mismatch: ${name}`);
     await mkdir(join(output, c.id, 'bundles'), { recursive: true });

@@ -43,6 +43,8 @@ const manifestSchema = z.object({
   schemaVersion: z.literal(1), model: text.optional(), semantics: forecastSemanticsSchema.optional(),
   soaringContractVersion: text.optional(), capturedAt: timestamp, cellCount: index.positive(),
   files: z.record(relativeFile, text).optional(), cellProfiles: z.literal('cell-{index}.json.gz').optional(),
+  /** Exact stored bytes, before HTTP content decoding; keys match files. */
+  fileBytes: z.record(relativeFile, index).optional(),
   siteCell: index,
   case: z.object({
     id: text, model: text.optional(), referenceTime: timestamp, bbox, sinkMps: finite,
@@ -67,6 +69,11 @@ const catalogueSchema = z.object({
   schemaVersion: z.literal(1), soaringContractVersion: text, generatedAt: timestamp,
   trialRegionId: text, regions: z.array(regionSchema),
 });
+/** Build input only; runtime validators also enforce cross-field invariants. */
+export function regionalWireSchemas(): Record<string, unknown> {
+  return Object.fromEntries(Object.entries({ manifest: manifestSchema, hour: hourSchema, catalogue: catalogueSchema })
+    .map(([name, schema]) => [name, z.toJSONSchema(schema, { io: 'input' })]));
+}
 export type RegionDescriptor = z.infer<typeof regionSchema>;
 export type RegionCatalogue = z.infer<typeof catalogueSchema>;
 

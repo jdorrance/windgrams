@@ -50,6 +50,4 @@ concurrent writers and multi-pointer updates behave.
 An overlay can update entries for its declared model, including a custom model
 ID. [`packProvider`](src/artifacts.ts) selects files for a provider artifact.
 
-The [consumer example](../../examples/consumer/README.md) shows a custom adapter,
-diagnostic strategy, file publication and HTTP read in one program. The
-[public exports](src/index.ts) link to the remaining helpers.
+The [public exports](src/index.ts) link to the remaining helpers.

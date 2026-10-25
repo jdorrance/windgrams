@@ -36,12 +36,29 @@ Supply a custom `fetch` to add credentials or use a different transport.
 
 ## Regional maps
 
-`readRegional` handles JSON and gzip files and returns `unknown`. Validate the
-result with [`@windgrams/contracts/regional`](../contracts/README.md).
-[`createReplayProfileCache`](src/regional.ts) then loads cell profiles for one
-manifest, checking their model, run, grid cell and hours. It shares in-flight
-requests and keeps eight profiles by default. Create a new cache when the
-manifest changes; pass a reader with your cancellation signal.
+`/dataset` opens one immutable run and samples native cells at forecast times.
+It discovers published regions, reads map hours and loads point profiles on
+request. Queries preserve the requested position/time and identify the selected
+cell/time. Missing coverage, missing fields and insufficient profiles remain
+explicit. Values keep their published units and height references.
+
+Start with the [dataset types](src/dataset-types.ts), then the
+[query example and scope rules](docs/regional.md).
+
+## Saved forecasts
+
+`/offline` plans a download, verifies file sizes and SHA-256 hashes, then commits
+it atomically. Interrupted downloads resume from verified files. `/offline-browser`
+provides IndexedDB storage with a cross-tab lock. Native hosts provide the byte
+store, transport and hashing implementations they need.
+
+The host owns forecast-age notices, storage quotas, app-shell caching, basemaps
+and location permissions. See the [storage contract](src/offline-types.ts) and
+[download lifecycle](docs/offline.md).
+
+For lower-level access, `readRegional` returns unvalidated JSON, and
+[`createReplayProfileCache`](src/regional.ts) caches profile shards for an
+existing manifest.
 
 The [`/http` helpers](src/http.ts) are also available separately. Requests get up
 to three attempts with a 15-second timeout per attempt by default. Cancellation

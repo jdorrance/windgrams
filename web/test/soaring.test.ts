@@ -165,8 +165,8 @@ test('zero, unavailable, insufficient levels, and no usable lift have distinct l
   assert.equal(displayMetric(null,'thermalVelocityMps'),'Unavailable');
   assert.equal(displayMetric(null,'thermalVelocityV2Mps'),'Unavailable');
   assert.equal(displayMetric(null,'thermalVelocityMps','insufficient-levels'),'Insufficient vertical coverage');
-  assert.match(displayMetric(null,'usableLiftTopM'),/Below 197 ft\/min sink threshold/);
-  assert.match(displayMetric(null,'usableLiftTopV2M'),/Below 197 ft\/min sink threshold/);
+  assert.match(displayMetric(null,'usableLiftTopM'),/Unavailable/);
+  assert.match(displayMetric(null,'usableLiftTopV2M'),/Unavailable/);
   assert.equal(displayMetric(724.5,'usableLiftTopM'),'2,377 ft MSL');
   assert.equal(displayMetric(465.5,'usableLiftTopV2M'),'1,527 ft MSL');
   assert.equal(displayMetric(981,'effectiveCloudLimitM'),'3,219 ft MSL');
@@ -261,14 +261,14 @@ test('map values, units, references, and sink diagnostics switch together', () =
   assert.equal(displayMetric(1000, 'usableLiftTopV2M'), '1,000 m MSL');
   assert.equal(displayMetric(1000, 'pblHeightM'), '1,000 m AGL');
   assert.equal(displayMetric(25.4, 'precipitationMmHr'), '25.4 mm/h');
-  assert.equal(displayMetric(null, 'usableLiftTopV2M'), 'Below 1.00 m/s sink threshold');
-  assert.equal(displayMetric(null, 'hcritWxtoflyM'), 'Below 1.14 m/s sink threshold');
+  assert.equal(displayMetric(null, 'usableLiftTopV2M'), 'Unavailable');
+  assert.equal(displayMetric(null, 'hcritWxtoflyM'), 'Unavailable');
   assert.equal(LAYER_SPECS.w925Mps.legend, 'Pressure level: 925 hPa');
   assert.equal(LAYER_SPECS.hcritWxtoflyM.legend, 'WxToFly sink threshold: 1.14 m/s');
   assert.doesNotMatch(Object.values(LAYER_SPECS).map(spec => `${spec.label} ${spec.legend} ${spec.format(1)}`).join(' '), /\bft\b|mph|inHg|\bin\/h/);
 });
 
-test('omitted map ceiling diagnostics remain unavailable while supplied nulls retain their meaning', () => {
+test('omitted and null map ceilings remain unavailable without an explicit diagnostic cause', () => {
   for (const system of ['imperial', 'metric'] as const) {
     setUnitSystem(system);
     for (const layer of ['usableLiftTopM', 'usableLiftTopV2M', 'hcritWxtoflyM', 'resolvedThermalTopM'] as const) {
@@ -276,8 +276,8 @@ test('omitted map ceiling diagnostics remain unavailable while supplied nulls re
       assert.equal(displayMetric(null, layer, 'missing'), 'Unavailable');
       assert.equal(displayMetric(null, layer, 'insufficient-levels'), 'Insufficient vertical coverage');
     }
-    assert.equal(displayMetric(null, 'resolvedThermalTopM'), 'Stable');
-    assert.match(displayMetric(null, 'hcritWxtoflyM'), /^Below /);
+    assert.equal(displayMetric(null, 'resolvedThermalTopM'), 'Unavailable');
+    assert.equal(displayMetric(null, 'hcritWxtoflyM'), 'Unavailable');
   }
 });
 

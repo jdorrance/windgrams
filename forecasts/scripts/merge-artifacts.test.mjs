@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { gzipSync } from 'node:zlib';
 import { mergeArtifacts } from './merge-artifacts.mjs';
 import { regionalProduct } from './lib/artifact-products.mjs';
 import { preparePublication } from './prepare-publication.mjs';
@@ -15,7 +16,8 @@ const sites = [site], referenceTime = sourceProfile.run.referenceTime;
 const generatedAt = '2026-10-24T12:00:00Z';
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const bytes = document => JSON.stringify(document) + '\n';
-function write(path, document) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, bytes(document)); }
+const encodedFile = (name, document) => name.endsWith('.gz') ? gzipSync(bytes(document)) : Buffer.from(bytes(document));
+function write(path, document) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, encodedFile(path, document)); }
 function workspace(t) { const root = mkdtempSync(join(tmpdir(), 'merge-products-')); t.after(() => rmSync(root, { recursive: true, force: true })); return root; }
 function point(root, { run = referenceTime, generated = generatedAt } = {}) {
   const profile = structuredClone(sourceProfile); profile.run.referenceTime = run;
@@ -46,7 +48,7 @@ function regional(root, caseId = 'test-rrfs-live', { run = referenceTime, genera
     case: { id: caseId, model: 'rrfs', referenceTime: run, forecastHours: [1, 2], bbox: [-123, 48, -122, 49], sinkMps: 1, site, launchElevation: { elevationM: 378.5 } },
     cellCount: 1, siteCell: 0, hours: profile.hours.map((hour, i) => ({ forecastHour: i + 1, validAt: hour.validAt, file: `f${i + 1}.json` })) };
   edit({ manifest, files });
-  manifest.files = Object.fromEntries(Object.entries(files).map(([name, document]) => [name, hash(bytes(document))]));
+  manifest.files = Object.fromEntries(Object.entries(files).map(([name, document]) => [name, hash(encodedFile(name, document))]));
   const manifestBytes = bytes(manifest), id = hash(manifestBytes), bundle = `bundles/${id}`, directory = join(root, 'soaring/v1', caseId, bundle);
   for (const [name, document] of Object.entries(files)) write(join(directory, name), document);
   write(join(directory, 'manifest.json'), manifest);
@@ -67,6 +69,32 @@ function terrain(root) {
       terrain: { source: 'glo30', elevationM, slopeDeg: 10, aspectDeg: 180, relief: [{ radiusKm: 1, minM: 100, maxM: 500, percentile: 50 }] },
       landCover: { source: 'worldcover2021', atLaunch: 'grassland', fractions: [{ radiusKm: 1, byClass: { grassland: 1 } }] } } } });
 }
+
+test('regional profile inventory declares availability and validates every supplied cell identity', t => {
+  for (const include of [false, true]) {
+    const root = workspace(t);
+    const built = regional(root, 'test-rrfs-live', { edit: ({ manifest, files }) => {
+      manifest.cellProfiles = 'cell-{index}.json.gz';
+      if (include) files['cell-0.json.gz'] = { ...files['profile.json'], source: { gridIndex: 0 } };
+    } });
+    assert.doesNotThrow(() => regionalProduct(join(root, 'soaring/v1'), built.caseId, ['rrfs']));
+  }
+  const root = workspace(t);
+  const built = regional(root, 'test-rrfs-live', { edit: ({ manifest, files }) => {
+    manifest.cellProfiles = 'cell-{index}.json.gz';
+    files['cell-0.json.gz'] = { ...files['profile.json'], source: { gridIndex: 999 } };
+  } });
+  assert.throws(() => regionalProduct(join(root, 'soaring/v1'), built.caseId, ['rrfs']), /profile differs from manifest/);
+});
+
+test('regional publication rejects an incorrect download byte inventory', t => {
+  const root = workspace(t);
+  const built = regional(root, 'test-rrfs-live', { edit: ({ manifest, files }) => {
+    manifest.fileBytes = Object.fromEntries(Object.entries(files).map(([name, value]) => [name, encodedFile(name, value).byteLength]));
+    manifest.fileBytes['profile.json']++;
+  } });
+  assert.throws(() => regionalProduct(join(root, 'soaring/v1'), built.caseId, ['rrfs']), /byte inventory/);
+});
 
 test('complete point candidates replace by initialization, repair invalid equal runs and retain newer valid issues', t => {
   const root = workspace(t), incoming = join(root, 'incoming'), source = join(incoming, 'data-rrfs'), output = join(root, 'data');

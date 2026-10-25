@@ -15,6 +15,10 @@ for (const { directory, manifest } of buildOrder(process.argv.slice(2))) {
   }
   const result = spawnSync(process.execPath, [tsc, '-p', resolve(directory, 'tsconfig.json')], { stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status ?? 1);
+  if (manifest.name === '@windgrams/contracts') {
+    const schemas = spawnSync(process.execPath, [resolve(directory, 'scripts/build-schemas.mjs')], { stdio: 'inherit' });
+    if (schemas.status !== 0) process.exit(schemas.status ?? 1);
+  }
   for (const file of filesIn(resolve(directory, 'src'))) {
     // TypeScript emits JS and declarations; runtime assets retain their relative paths.
     if (/\.(?:[cm]?[jt]s|tsx)$/.test(file)) continue;

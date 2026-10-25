@@ -1,3 +1,5 @@
+import { reconstructRegionalCellProfile } from '@windgrams/data-client/dataset';
+import { fieldDefinition } from '@windgrams/contracts/fields';
 import { convertQuantity, feetToMetres, formatQuantity, getUnitSystem, mphToMps, unitLabel, type QuantityKind, type UnitSystem } from './units.ts';
 import type { SiteForecast } from '@azohra/meteo.briefing/contract';
 import { containsPolygon, distanceKm, validPosition as validCoordinates } from '@windgrams/geography';
@@ -6,7 +8,7 @@ import { replayModel as explicitReplayModel, type Quality, type ReplayHour, type
 import legacyReplayModels from '../../../forecasts/soaring/legacy-replay-models.json' with { type: 'json' };
 export type { Grid, Cell, Quality, LevelArrays, ReplayHour, ReplayManifest, RegionDescriptor, RegionCatalogue } from '@windgrams/contracts/regional';
 
-function legacyReplayModel(caseId: string): string | undefined {
+export function legacyReplayModel(caseId: string): string | undefined {
   return Object.hasOwn(legacyReplayModels, caseId)
     ? legacyReplayModels[caseId as keyof typeof legacyReplayModels] : undefined;
 }
@@ -62,8 +64,8 @@ export interface LayerSpec {
 }
 
 type LayerDefinition = {
-  id: Layer; name: string; group: string; stops: number[]; colors: string[];
-  kind?: QuantityKind; datum?: string; unit?: string; note: string;
+  id: Layer; group: string; stops: number[]; colors: string[];
+  kind?: QuantityKind; unit?: string; note: string;
 };
 const thermalColors = ['#f4f8fa', '#c3e1e9', '#289b9c', '#e8bc52', '#c44935'];
 const cloudColors = ['#f4f8fa', '#d1dde6', '#9fb4c7', '#6c849c', '#3c4f66'];
@@ -74,31 +76,31 @@ const depthStops = [0, 1500, 3000, 6000, 10000].map(feetToMetres);
 const cloudStops = [500, 2000, 4000, 7000, 11000].map(feetToMetres);
 const windStops = [0, 5, 12, 20, 30].map(mphToMps);
 const definitions: LayerDefinition[] = [
-  { id: 'thermalVelocityV2Mps', name: 'Thermal strength', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Thermal strength (w*) calculated over the estimated thermal depth.' },
-  { id: 'usableLiftTopV2M', name: 'Usable lift top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Sink threshold: ' },
-  { id: 'hcritWxtoflyM', name: 'Paraglider ceiling', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'WxToFly sink threshold: ' },
-  { id: 'dryHcritM', name: 'Dry thermal lift top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Dry parcel estimate.' },
-  { id: 'resolvedThermalTopM', name: 'Thermal top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: depthStops, colors: thermalColors, note: 'Estimated top of the buoyant thermal layer.' },
-  { id: 'thermalVelocityMps', name: 'Thermal strength · legacy', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Earlier parcel method.' },
-  { id: 'usableLiftTopM', name: 'Usable lift top · legacy', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Sink threshold: ' },
-  { id: 'boundaryLayerTopM', name: 'Parcel top · legacy', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: depthStops, colors: thermalColors, note: 'Earlier parcel method.' },
-  { id: 'pblHeightM', name: 'Mixing depth', group: 'Thermals', kind: 'elevation', datum: 'AGL', stops: [0,250,500,1000,2000], colors: thermalColors, note: 'Model boundary-layer depth.' },
-  { id: 'sensibleHeatFluxWm2', name: 'Surface heating', group: 'Thermals', unit: 'W/m²', stops: [-30,0,50,150,300], colors: ['#6b8ea4','#f4f8fa','#c3e1e9','#e8bc52','#c44935'], note: 'Positive values show heating; negative values show cooling.' },
-  { id: 'surfaceLclM', name: 'Potential cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Height where a rising parcel of surface air would reach saturation.' },
-  { id: 'effectiveCloudLimitM', name: 'Effective cloud limit', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Estimated cloud limit from nearly saturated model layers.' },
-  { id: 'mixedLayerLclM', name: 'Mixed-layer cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Condensation height after mixing air through the lower layer.' },
-  { id: 'cuPotentialM', name: 'Cumulus potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#289b9c','#1a5f7a'], note: 'Thermal top minus surface condensation height. Positive values suggest cumulus may form.' },
-  { id: 'odPotentialM', name: 'Spreadout potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#7c689c','#4a356b'], note: 'Thermal top minus mixed-layer condensation height. Positive values suggest cloud may spread out.' },
-  { id: 'cloudCoverPercent', name: 'Cloud cover', group: 'Clouds / rain', unit: '%', stops: [0,25,50,75,100], colors: cloudColors, note: 'Total cloud fraction.' },
-  { id: 'lowCloudPercent', name: 'Low cloud', group: 'Clouds / rain', unit: '%', stops: [0,25,50,75,100], colors: cloudColors, note: 'Low-level cloud fraction.' },
-  { id: 'precipitationMmHr', name: 'Rain', group: 'Clouds / rain', kind: 'rainRate', stops: [0,.2,1,3,8], colors: ['#f4f8fa','#b3cde3','#6497b1','#005b96','#03396c'], note: 'Precipitation rate.' },
-  { id: 'capeJkg', name: 'CAPE', group: 'Clouds / rain', unit: 'J/kg', stops: [0,50,200,500,1000], colors: thermalColors, note: 'Energy available to a buoyant rising parcel.' },
-  { id: 'wind10mSpeedMps', name: 'Surface wind', group: 'Wind', kind: 'wind', stops: windStops, colors: thermalColors, note: 'Wind at model surface.' },
-  { id: 'blMeanWindSpeedMps', name: 'Average boundary-layer wind', group: 'Wind', kind: 'wind', stops: windStops, colors: thermalColors, note: 'Boundary-layer mean wind.' },
-  { id: 'blWindShearMps', name: 'Wind shear', group: 'Wind', kind: 'wind', stops: [0,2,4,7,12], colors: thermalColors, note: 'Vector wind change across the boundary layer.' },
-  { id: 'buoyancyShearRatio', name: 'Thermal strength / shear', group: 'Wind', stops: [0,.15,.35,.7,1.2], colors: ['#c44935','#e8bc52','#c3e1e9','#289b9c','#1b6d6e'], note: 'w* divided by vector shear.' },
-  { id: 'w925Mps', name: 'Vertical air motion', group: 'Lift / convergence', kind: 'lift', stops: [-.3,-.1,0,.1,.3], colors: verticalColors, note: 'Pressure level: ' },
-  { id: 'convergence10mX1e5', name: 'Surface convergence', group: 'Lift / convergence', unit: '×10⁻⁵ s⁻¹', stops: [-100,-30,0,30,100], colors: verticalColors, note: 'Blue: divergence · gold/red: convergence.' },
+  { id: 'thermalVelocityV2Mps', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Thermal strength (w*) calculated over the estimated thermal depth.' },
+  { id: 'usableLiftTopV2M', group: 'Thermals', kind: 'elevation', stops: topStops, colors: thermalColors, note: 'Sink threshold: ' },
+  { id: 'hcritWxtoflyM', group: 'Thermals', kind: 'elevation', stops: topStops, colors: thermalColors, note: 'WxToFly sink threshold: ' },
+  { id: 'dryHcritM', group: 'Thermals', kind: 'elevation', stops: topStops, colors: thermalColors, note: 'Dry parcel estimate.' },
+  { id: 'resolvedThermalTopM', group: 'Thermals', kind: 'elevation', stops: depthStops, colors: thermalColors, note: 'Estimated top of the buoyant thermal layer.' },
+  { id: 'thermalVelocityMps', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Earlier parcel method.' },
+  { id: 'usableLiftTopM', group: 'Thermals', kind: 'elevation', stops: topStops, colors: thermalColors, note: 'Sink threshold: ' },
+  { id: 'boundaryLayerTopM', group: 'Thermals', kind: 'elevation', stops: depthStops, colors: thermalColors, note: 'Earlier parcel method.' },
+  { id: 'pblHeightM', group: 'Thermals', kind: 'elevation', stops: [0,250,500,1000,2000], colors: thermalColors, note: 'Model boundary-layer depth.' },
+  { id: 'sensibleHeatFluxWm2', group: 'Thermals', unit: 'W/m²', stops: [-30,0,50,150,300], colors: ['#6b8ea4','#f4f8fa','#c3e1e9','#e8bc52','#c44935'], note: 'Positive values show heating; negative values show cooling.' },
+  { id: 'surfaceLclM', group: 'Clouds / rain', kind: 'elevation', stops: cloudStops, colors: cloudBaseColors, note: 'Height where a rising parcel of surface air would reach saturation.' },
+  { id: 'effectiveCloudLimitM', group: 'Clouds / rain', kind: 'elevation', stops: cloudStops, colors: cloudBaseColors, note: 'Estimated cloud limit from nearly saturated model layers.' },
+  { id: 'mixedLayerLclM', group: 'Clouds / rain', kind: 'elevation', stops: cloudStops, colors: cloudBaseColors, note: 'Condensation height after mixing air through the lower layer.' },
+  { id: 'cuPotentialM', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#289b9c','#1a5f7a'], note: 'Thermal top minus surface condensation height. Positive values suggest cumulus may form.' },
+  { id: 'odPotentialM', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#7c689c','#4a356b'], note: 'Thermal top minus mixed-layer condensation height. Positive values suggest cloud may spread out.' },
+  { id: 'cloudCoverPercent', group: 'Clouds / rain', unit: '%', stops: [0,25,50,75,100], colors: cloudColors, note: 'Total cloud fraction.' },
+  { id: 'lowCloudPercent', group: 'Clouds / rain', unit: '%', stops: [0,25,50,75,100], colors: cloudColors, note: 'Low-level cloud fraction.' },
+  { id: 'precipitationMmHr', group: 'Clouds / rain', kind: 'rainRate', stops: [0,.2,1,3,8], colors: ['#f4f8fa','#b3cde3','#6497b1','#005b96','#03396c'], note: 'Precipitation rate.' },
+  { id: 'capeJkg', group: 'Clouds / rain', unit: 'J/kg', stops: [0,50,200,500,1000], colors: thermalColors, note: 'Energy available to a buoyant rising parcel.' },
+  { id: 'wind10mSpeedMps', group: 'Wind', kind: 'wind', stops: windStops, colors: thermalColors, note: 'Wind at model surface.' },
+  { id: 'blMeanWindSpeedMps', group: 'Wind', kind: 'wind', stops: windStops, colors: thermalColors, note: 'Boundary-layer mean wind.' },
+  { id: 'blWindShearMps', group: 'Wind', kind: 'wind', stops: [0,2,4,7,12], colors: thermalColors, note: 'Vector wind change across the boundary layer.' },
+  { id: 'buoyancyShearRatio', group: 'Wind', stops: [0,.15,.35,.7,1.2], colors: ['#c44935','#e8bc52','#c3e1e9','#289b9c','#1b6d6e'], note: 'w* divided by vector shear.' },
+  { id: 'w925Mps', group: 'Lift / convergence', kind: 'lift', stops: [-.3,-.1,0,.1,.3], colors: verticalColors, note: 'Pressure level: ' },
+  { id: 'convergence10mX1e5', group: 'Lift / convergence', unit: '×10⁻⁵ s⁻¹', stops: [-100,-30,0,30,100], colors: verticalColors, note: 'Blue: divergence · gold/red: convergence.' },
 ];
 
 /** Display scales convert together; their physical color thresholds stay fixed. */
@@ -107,11 +109,13 @@ export const LAYER_SPECS = Object.defineProperties({}, Object.fromEntries(defini
   get(): LayerSpec {
     const scale = def.kind ? convertQuantity(1, def.kind)! : 1;
     const unit = def.kind ? unitLabel(def.kind) : def.unit;
-    const suffix = def.datum ? ` ${def.datum}` : '';
+    const definition = fieldDefinition(def.id);
+    const datum = definition.heightReference === 'model-AGL' ? 'AGL' : definition.heightReference;
+    const suffix = datum ? ` ${datum}` : '';
     const note = ['usableLiftTopV2M', 'usableLiftTopM'].includes(def.id) ? formatQuantity(1, 'lift')
       : def.id === 'hcritWxtoflyM' ? formatQuantity(1.143, 'lift')
       : def.id === 'w925Mps' ? formatQuantity(925, 'pressure') : '';
-    return { id: def.id, label: `${def.name}${unit ? ` · ${unit}${suffix}` : ''}`, group: def.group,
+    return { id: def.id, label: `${definition.label}${unit ? ` · ${unit}${suffix}` : ''}`, group: def.group,
       scale, stops: def.stops.map(value => value * scale), colors: def.colors, legend: def.note + note,
       format: value => (def.kind ? formatQuantity(value, def.kind) : `${value.toLocaleString('en-US', {maximumFractionDigits: 2})}${unit ? ` ${unit}` : ''}`) + suffix };
   },
@@ -339,16 +343,12 @@ export function displayMetric(value: number | null | undefined, layer: Layer, st
   if (status === 'missing') return 'Unavailable';
   if (status === 'insufficient-levels') return 'Insufficient vertical coverage';
   if (value === undefined) return 'Unavailable';
-  if (value === null) {
-    if (layer === 'usableLiftTopM' || layer === 'usableLiftTopV2M') return `Below ${formatQuantity(1, 'lift', undefined, system)} sink threshold`;
-    if (layer === 'hcritWxtoflyM') return `Below ${formatQuantity(1.143, 'lift', undefined, system)} sink threshold`;
-    if (layer === 'resolvedThermalTopM') return 'Stable';
-    return 'Unavailable';
-  }
+  if (value === null) return 'Unavailable';
   const definition = definitions.find(def => def.id === layer);
   if (!definition) return String(value);
   if (!definition.kind) return LAYER_SPECS[layer].format(value);
-  return formatQuantity(value, definition.kind, undefined, system) + (definition.datum ? ` ${definition.datum}` : '');
+  const reference = fieldDefinition(layer).heightReference;
+  return formatQuantity(value, definition.kind, undefined, system) + (reference ? ` ${reference === 'model-AGL' ? 'AGL' : reference}` : '');
 }
 
 export function selectedState(manifest: ReplayManifest, hours: ReplayHour[], requested: number) {
@@ -367,104 +367,11 @@ export function selectedState(manifest: ReplayManifest, hours: ReplayHour[], req
   };
 }
 
-/**
- * Reconstructs a profile from published cell arrays, without deriving new physics.
- * An incomplete column is unavailable; never substitute another location or invented weather.
- */
+/** Adapt historical model identity at the application boundary. */
 export function buildCellSiteForecast(
-  manifest: ReplayManifest,
-  hours: ReplayHour[],
-  cellIndex: number,
+  manifest: ReplayManifest, hours: ReplayHour[], cellIndex: number,
   cellProps: { id: string; gridIndex: number; latitude: number; longitude: number; modelElevationM: number | null },
   customName?: string,
 ): SiteForecast | null {
-  const elev = cellProps.modelElevationM;
-  if (elev === null) return null;
-  const siteHours: SiteForecast['hours'] = [];
-  for (const h of hours) {
-    if (h.status[cellIndex] !== 'valid') return null;
-    const levels: (SiteForecast['hours'][number]['levels'][number] & { heightM: number })[] = [];
-    const columns = h.levelsByModel
-      ? Object.values(h.levelsByModel).map(la => ({ p: la.p[cellIndex], la }))
-      : (manifest.case.pressureLevels ?? Object.keys(h.levelsByPressure ?? {}).map(Number))
-        .flatMap(p => h.levelsByPressure?.[String(p)] ? [{ p, la: h.levelsByPressure[String(p)] }] : []);
-    for (const { p, la } of columns) {
-      const hm = la.h[cellIndex], tc = la.t[cellIndex], tdc = la.td[cellIndex], ws = la.ws[cellIndex], wd = la.wd[cellIndex];
-      if ([p, hm, tc, tdc, ws, wd].some(value => value == null || !Number.isFinite(value)) || p! <= 0) continue;
-      if (hm! <= elev + 20) continue;
-      const lv: (typeof levels)[number] = {
-        pressureHpa: p!,
-        heightM: hm!,
-        temperatureC: tc!,
-        dewPointC: tdc!,
-        windSpeedMps: ws!,
-        windDirectionDeg: wd!,
-      };
-      const vv = la.vv?.[cellIndex];
-      if (vv != null && Number.isFinite(vv)) lv.verticalVelocityPaS = vv;
-      levels.push(lv);
-    }
-    levels.sort((a, b) => a.heightM - b.heightM);
-    const surfaceKeys = {
-      seaLevelPressureHpa: 'mslp', temperatureC: 'sfcT', dewPointC: 'sfcTd',
-      windSpeedMps: 'wind10mSpeedMps', windDirectionDeg: 'wind10mDirDeg',
-      cloudCoverPercent: 'cloudCoverPercent', precipitationMmHr: 'precipitationMmHr',
-      sensibleHeatFluxWm2: 'sensibleHeatFluxWm2', latentHeatFluxWm2: 'latentHeatFluxWm2',
-    } as const;
-    const entries = Object.entries(surfaceKeys).map(([key, source]) => [key, h[source]?.[cellIndex]] as const);
-    if (entries.some(([, value]) => value == null || !Number.isFinite(value)) || levels.length < 2
-        || h.thermalVelocityMps[cellIndex] == null || h.cloudBaseM[cellIndex] == null) return null;
-    const surface = Object.fromEntries(entries) as SiteForecast['hours'][number]['surface'];
-    if (h.windGustMps?.[cellIndex] != null) surface.windGustMps = h.windGustMps[cellIndex]!;
-    if (h.capeJkg?.[cellIndex] != null) surface.capeJkg = h.capeJkg[cellIndex]!;
-    if (h.cinJkg?.[cellIndex] != null) surface.cinJkg = h.cinJkg[cellIndex]!;
-    if (h.pblHeightM[cellIndex] != null) surface.pblHeightM = h.pblHeightM[cellIndex]!;
-    if (h.lowCloudPercent?.[cellIndex] != null) surface.lowCloudPercent = h.lowCloudPercent[cellIndex]!;
-    if (h.midCloudPercent?.[cellIndex] != null) surface.midCloudPercent = h.midCloudPercent[cellIndex]!;
-    if (h.highCloudPercent?.[cellIndex] != null) surface.highCloudPercent = h.highCloudPercent[cellIndex]!;
-
-    const soaring = h.thermalVelocityV2Mps ? {
-      thermalVelocityV2Mps: h.thermalVelocityV2Mps[cellIndex],
-      usableLiftTopV2M: h.usableLiftTopV2M?.[cellIndex] ?? null,
-      hcritWxtoflyM: h.hcritWxtoflyM?.[cellIndex] ?? null,
-      resolvedThermalTopM: h.resolvedThermalTopM?.[cellIndex] ?? null,
-      surfaceLclM: h.surfaceLclM?.[cellIndex] ?? null,
-      effectiveCloudLimitM: h.effectiveCloudLimitM?.[cellIndex] ?? h.cloudBaseM[cellIndex] ?? null,
-      mixedLayerLclM: h.mixedLayerLclM?.[cellIndex] ?? null,
-    } : undefined;
-    siteHours.push({
-      ...(soaring ? { soaring } : {}),
-      validAt: h.validAt,
-      surface,
-      levels,
-      derived: {
-        boundaryLayerTopM: h.boundaryLayerTopM[cellIndex],
-        thermalVelocityMps: h.thermalVelocityMps[cellIndex]!,
-        cloudBaseM: h.cloudBaseM[cellIndex]!,
-        usableLiftTopM: h.usableLiftTopM[cellIndex],
-      },
-    });
-  }
-  const model = replayModel(manifest);
-  // Older published HRRR/RRFS/ICON bundles predate explicit semantics. New
-  // providers must supply their own interval semantics instead of inheriting HRRR.
-  const semantics = manifest.semantics ?? (['rrfs', 'icon-eu'].includes(model)
-    ? { gust: 'instant' as const, precipitation: 'windowMeanRate' as const }
-    : model === 'hrrr-conus' ? { gust: 'instant' as const, precipitation: 'instantRate' as const, smoke: 'radiativelyCoupled' as const } : null);
-  if (!semantics) return null;
-  return {
-    schemaVersion: 2,
-    model,
-    run: { referenceTime: manifest.case.referenceTime, generatedAt: manifest.capturedAt },
-    site: {
-      id: `cell-${cellProps.gridIndex}`,
-      name: customName ?? `Cell ${cellProps.gridIndex}`,
-      latitude: cellProps.latitude,
-      longitude: cellProps.longitude,
-      modelElevationM: elev,
-      timeZone: manifest.case.site.timeZone,
-    },
-    semantics,
-    hours: siteHours,
-  };
+  return reconstructRegionalCellProfile(normalizeReplayManifest(manifest), hours, cellIndex, cellProps, customName);
 }

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { rrfsBase } from '../scripts/lib/model-feeds.mjs';
 
 export const versions = Object.freeze({ forecast: '0.6.0', briefing: '0.6.2', grib: '0.1.4', algorithm: 'hrrr-baseline-0.6.0-v1' });
@@ -15,6 +16,10 @@ export const semanticsFor = c => modelFor(c) === 'icon-eu' ? { gust: 'hourMax', 
 export const versionsFor = c => modelFor(c) === 'hrrr-conus' ? versions : { ...versions, algorithm: `${modelFor(c)}-regional-0.6.0-v1` };
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 export const json = value => JSON.stringify(value) + '\n';
+export function encodeBundleFile(name, value) {
+  const bytes = Buffer.from(json(value));
+  return name.endsWith('.gz') ? gzipSync(bytes, { level: 9 }) : bytes;
+}
 export const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
 export async function assertRuntime(c) {
   modelFor(c);

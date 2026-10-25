@@ -42,16 +42,17 @@ export function writeRegionalFixture(outputRoot, source) {
   const hash = value => createHash('sha256').update(value).digest('hex');
   json('manifest.json', {
     schemaVersion: 1, model, semantics: profile.semantics, capturedAt: profile.run.generatedAt, cellCount: 1, siteCell: 0,
-    cellProfiles: 'cell-{index}.json.gz', files: Object.fromEntries([...files].map(([file, bytes]) => [file, hash(bytes)])),
+    cellProfiles: 'cell-{index}.json.gz', fileBytes: Object.fromEntries([...files].map(([file, bytes]) => [file, Buffer.byteLength(bytes)])), files: Object.fromEntries([...files].map(([file, bytes]) => [file, hash(bytes)])),
     case: { id: caseId, model, referenceTime: profile.run.referenceTime, bbox, sinkMps: 1,
       site: { slug, name: `${name} · synthetic fixture`, latitude, longitude, timeZone }, launchElevation: { elevationM: modelElevationM } },
     versions: { algorithm: 'synthetic-ui-fixture' }, hours,
   }, validateReplayManifest);
-  const bundle = `bundles/${hash([...files].map(([file, bytes]) => `${file}:${hash(bytes)}`).join('\n'))}`;
+  const manifestSha256 = hash(files.get('manifest.json'));
+  const bundle = `bundles/${manifestSha256}`;
   const root = join(outputRoot, 'soaring/v1', caseId);
   mkdirSync(join(root, bundle), { recursive: true });
   for (const [file, bytes] of files) writeFileSync(join(root, bundle, file), bytes);
-  writeFileSync(join(root, 'index.json'), JSON.stringify({ bundle }));
+  writeFileSync(join(root, 'index.json'), JSON.stringify({ schemaVersion: 1, caseId, bundle, manifestSha256 }));
   const catalogue = { schemaVersion: 1, soaringContractVersion: 'synthetic-ui-fixture', generatedAt: profile.run.generatedAt,
     trialRegionId: 'synthetic-region', regions: [{ id: 'synthetic-region', name: 'Synthetic regional fixture', status: 'active-verified-trial',
       caseId, nativeModels: [{ model, caseId }], timeZone, morningBriefingLocalHour: 8, bbox, primarySite: slug,

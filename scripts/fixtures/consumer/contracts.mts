@@ -1,8 +1,13 @@
-// Compile-time examples of accepted API calls and expected type errors.
+// Compile-time checks against installed package declarations.
 import type { SiteForecast } from '@windgrams/contracts';
+import { fieldDefinition, heightAboveGround, type FieldValue } from '@windgrams/contracts/fields';
+import type { ReplayHour } from '@windgrams/contracts/regional';
 import type { Position } from '@windgrams/geography';
 import { buildWindgramView, readWindgram, type WindgramOptions, type WindgramView } from '@windgrams/windgram/scene';
 import { createForecastClient } from '@windgrams/data-client';
+import { openRegionalDataset, type RegionalSampleRequest } from '@windgrams/data-client/dataset';
+import { createSnapshotRepository, type SnapshotObjectStore } from '@windgrams/data-client/offline';
+import { createBrowserSnapshotStore } from '@windgrams/data-client/offline-browser';
 import { modelDescriptor } from '@windgrams/providers/registry';
 import { createLegacyAdapter, type ProcessedProfileResult } from '@windgrams/providers';
 
@@ -42,3 +47,21 @@ await import('@windgrams/windgram/dist/windgram-geometry.js');
 // @ts-expect-error This package has no /compat entry.
 await import('@windgrams/windgram/compat');
 void [hostPosition, fabricatedScene, assertedRegion];
+
+declare const hour: ReplayHour;
+const request: RegionalSampleRequest = { position, validAt: hour.validAt, fields: ['usableLiftTopM'] };
+const dataset = await openRegionalDataset({ baseUrl: '/data', caseId: 'test-region' });
+const sample = await dataset.sample(request);
+const value: FieldValue | undefined = sample.values.usableLiftTopM;
+const definition = fieldDefinition('usableLiftTopM');
+const height = heightAboveGround(2500, 'EGM96', {
+  kind: 'terrain', elevationM: 1600, verticalDatum: 'EGM96', source: 'test-dem',
+});
+// @ts-expect-error Regional queries accept published fields only.
+dataset.sample({ ...request, fields: ['windyLayer'] });
+// @ts-expect-error Height conversion requires a compatible ground datum.
+heightAboveGround(2500, 'EGM96', { kind: 'terrain', elevationM: 1600, source: 'test-dem' });
+declare const store: SnapshotObjectStore;
+const saved = await createSnapshotRepository({ store }).open('flight');
+const browserStore: SnapshotObjectStore & { close(): Promise<void> } = createBrowserSnapshotStore('test');
+void [value, definition, height, saved, browserStore];

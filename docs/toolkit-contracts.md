@@ -29,6 +29,10 @@ The TypeScript compiler emits JavaScript and declarations together. Runtime
 schemas define the types of validated documents. Edit those sources when an API
 changes; `dist/` is generated output.
 
+Contracts also emits `wire-schemas.json` from those schemas for non-TypeScript
+readers. Its structural checks complement the runtime validators' cross-field
+checks. Units and field meanings live in `@windgrams/contracts/fields`.
+
 `pnpm check` checks declarations, exports, package dependencies and boundary rules,
 including unintended package-owned `any` types. `pnpm test:consumer` compiles and
 runs an external example against the packed libraries. It also checks that
@@ -38,8 +42,9 @@ private imports and invalid inputs fail to compile. See
 ## Terminology
 
 - **Position:** latitude and longitude in degrees, with east-positive longitude.
-- **Coverage:** a model's geographic footprint. Native cells determine which
-  requested positions can actually be sampled.
+- **Provider coverage:** the geographic footprint available from a model source.
+- **Dataset coverage:** the native cells included in one published product.
+  Sampling returns a gap when a requested position falls outside those cells.
 - **Run:** a model initialization. Acquisition and publication have their own
   timestamps.
 - **Freshness:** the age of a run and how much forecast coverage remains at a
@@ -48,6 +53,8 @@ private imports and invalid inputs fail to compile. See
 - **Column:** atmospheric samples at one position and valid time.
 - **Profile:** a published forecast containing multiple hours for one site and
   model.
+- **Snapshot:** a verified local copy of selected files from one immutable bundle.
+  Its scope and original run times remain explicit after reopening offline.
 - **Diagnostic:** a calculated weather quantity, with its method and availability.
 - **Scene:** a chart prepared for rendering and inspection through the public API.
 - **Native resolution:** the spacing of the source grid.

@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { gzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 import worker, { type Env } from "../worker/index.ts";
 
 /** In-memory dataset store. Conditional requests are handled by serveData, not the store. */
-function fakeBucket(objects: Record<string, { body: string; contentType: string; cacheControl?: string }>) {
+function fakeBucket(objects: Record<string, { body: string | Uint8Array; contentType: string; cacheControl?: string }>) {
   const requested: string[] = [];
   return {
     requested,
@@ -66,6 +68,24 @@ test('serves compressed regional profiles through the dataset-store route', asyn
   assert.equal(response.headers.get('content-type'), 'application/gzip');
   assert.equal(await response.text(), 'compressed profile');
   assert.deepEqual(bucket.requested, [key]);
+});
+
+test('regional grid and gzip objects preserve the exact bytes used by offline inventories', async () => {
+  const root = 'soaring/v1/example-live/bundles/abc123';
+  const grid = Buffer.from('{"type":"FeatureCollection","features":[]}\n');
+  const hour = gzipSync('{"validAt":"2026-10-25T12:00:00Z"}\n');
+  const bucket = fakeBucket({
+    [`${root}/grid.geojson`]: { body: grid, contentType: 'application/geo+json' },
+    [`${root}/f1.json.gz`]: { body: hour, contentType: 'application/gzip' },
+  });
+  for (const [name, bytes] of [['grid.geojson', grid], ['f1.json.gz', hour]] as const) {
+    const response = await worker.fetch(request(`/data/${root}/${name}`), env(bucket));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-encoding'), null, 'gzip files stay objects, without transparent decompression');
+    const actual = new Uint8Array(await response.arrayBuffer());
+    assert.equal(actual.byteLength, bytes.byteLength);
+    assert.equal(createHash('sha256').update(actual).digest('hex'), createHash('sha256').update(bytes).digest('hex'));
+  }
 });
 
 test("rejects keys outside the dataset shape without touching the store", async () => {

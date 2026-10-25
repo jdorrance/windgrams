@@ -186,11 +186,11 @@ test('regional summary and detail rows share explicit units despite the global p
     assert.equal(metric.detailCells.wstarText, '1.00 m/s');
     assert.equal(metric.detailCells.usableLiftTopText, '1,000 m');
     hour.usableLiftTopV2M![0] = null;
-    assert.equal(buildRegionalLaunchTableRows([launch], hour, 0, 'metric')[0].simpleReadings[1], 'Below 1.00 m/s sink threshold');
+    assert.equal(buildRegionalLaunchTableRows([launch], hour, 0, 'metric')[0].simpleReadings[1], 'Unavailable');
     setUnitSystem('metric');
     const imperial = buildRegionalLaunchTableRows([launch], hour, 0, 'imperial')[0];
     assert.equal(imperial.simpleReadings[0], '197 ft/min');
-    assert.equal(imperial.simpleReadings[1], 'Below 197 ft/min sink threshold');
+    assert.equal(imperial.simpleReadings[1], 'Unavailable');
   } finally {
     setUnitSystem('imperial');
   }

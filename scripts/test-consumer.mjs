@@ -1,6 +1,6 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { root, packages } from './workspace.mjs';
@@ -24,8 +24,9 @@ try {
   writeFileSync(join(consumer, 'package.json'), JSON.stringify({ name: 'independent-weather-consumer', private: true, type: 'module', dependencies, pnpm: { overrides: dependencies } }, null, 2));
   // This is a separate install, with registry dependencies cached after workspace setup.
   run([pnpm, 'install', '--prefer-offline', '--ignore-scripts', '--config.manage-package-manager-versions=false'], consumer);
-  cpSync(join(root, 'examples/consumer/run.mts'), join(consumer, 'run.mts'));
-  cpSync(join(root, 'examples/consumer/contracts.mts'), join(consumer, 'contracts.mts'));
+  for (const file of ['run.mts', 'contracts.mts']) {
+    cpSync(join(root, 'scripts/fixtures/consumer', file), join(consumer, file));
+  }
   const typeImports = packages.flatMap(pkg => Object.entries(pkg.manifest.exports)
     .filter(([, target]) => typeof target === 'object' && target.types)
     .map(([entry]) => pkg.manifest.name + (entry === '.' ? '' : entry.slice(1))));
@@ -45,7 +46,24 @@ try {
   const esbuildPath = require.resolve('esbuild', { paths: [dirname(vite)] });
   const { build } = await import(esbuildPath);
   const browserEntry = join(consumer, 'browser.mjs');
-  writeFileSync(browserEntry, `export * from '@windgrams/contracts';\nexport * from '@windgrams/data-client';\nexport * from '@windgrams/windgram/scene';\nexport * from '@windgrams/windgram/svg/external';\nimport '@windgrams/windgram/styles.css';\nexport * from '@windgrams/windgram/dom';\nimport * as registry from '@windgrams/providers/registry';\nimport * as terrainPolicy from '@windgrams/providers/terrain-policy';\nexport { registry, terrainPolicy };\n`);
+  const browserEntries = {
+    contracts: '@windgrams/contracts',
+    fields: '@windgrams/contracts/fields',
+    regional: '@windgrams/contracts/regional',
+    client: '@windgrams/data-client',
+    dataset: '@windgrams/data-client/dataset',
+    offline: '@windgrams/data-client/offline',
+    browserStore: '@windgrams/data-client/offline-browser',
+    scene: '@windgrams/windgram/scene',
+    svg: '@windgrams/windgram/svg/external',
+    dom: '@windgrams/windgram/dom',
+    registry: '@windgrams/providers/registry',
+    terrainPolicy: '@windgrams/providers/terrain-policy',
+  };
+  writeFileSync(browserEntry, [
+    ...Object.entries(browserEntries).map(([name, entry]) => `export * as ${name} from '${entry}';`),
+    "import '@windgrams/windgram/styles.css';",
+  ].join('\n'));
   const bundle = await build({ entryPoints: [browserEntry], bundle: true, platform: 'browser', format: 'esm', outdir: join(consumer, 'bundle'), write: false, metafile: true });
   const forbidden = Object.keys(bundle.metafile.inputs).filter(path =>
     /(?:@windgrams\/pipeline|meteo\.forecast|meteo\.grib|icon-decode)/.test(path)

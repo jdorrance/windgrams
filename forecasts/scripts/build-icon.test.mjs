@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { buildIconDataset, ensureArmeniaTerrain, validateIconDataset } from './build-icon.mjs';
 import { buildLiveSoaring } from './build-live-soaring.mjs';
 import { normalizeIconExtract } from './lib/icon-eu.mjs';
+import { createIconAreaAdapter } from '@windgrams/providers/area';
 import { engineTerrain as T, GLO90_SOURCE } from './terrain.mjs';
 
 const read = path => JSON.parse(readFileSync(path, 'utf8'));
@@ -30,12 +31,12 @@ const context = {
 // transect coordinates. This fixture tests publication, not geographical skill.
 function acquisitionFixture() {
   const source = normalizeIconExtract(raw), points = [...sites, ...sidecars.crossSection.nodes];
-  const cells = points.map((point, index) => ({ ...source.cells[0], index, id: `synthetic-publication-cell-${index}`,
+  const cells = points.map((point, index) => ({ ...source.cells[0], index, cellIndex: index, id: `synthetic-publication-cell-${index}`,
     latitude: point.latitude, longitude: point.longitude,
     corners: [[point.longitude - 0.002, point.latitude - 0.002], [point.longitude + 0.002, point.latitude - 0.002], [point.longitude, point.latitude + 0.002]],
   }));
   return { ...source, cells, siteCells: Object.fromEntries(sites.map((site, index) => [site.slug, index])),
-    grid: { ...source.grid, uuid: 'synthetic-publication-geometry', pointCount: cells.length },
+    grid: { ...source.grid, uuid: 'synthetic-publication-geometry', geometrySource: { ...source.grid.geometrySource, uuid: 'synthetic-publication-geometry' }, pointCount: cells.length },
     provenance: { ...source.provenance, fixtureDescription: 'Real captured Hatis column repeated at synthetic publication test cells' },
     hours: source.hours.map(hour => ({ ...hour, sources: cells.map(() => structuredClone(hour.sources[0])) })),
   };
@@ -54,7 +55,14 @@ function digests(root, prefix = '') {
 const build = (output, acquired = acquisitionFixture(), terrain = context) => buildIconDataset({ output, sites, acquired, context: terrain, expectedHours: [7], log() {} });
 
 test('all Armenian launches publish together with native agreement and complete region sidecars', async t => {
-  const output = temporary(t), result = await build(output);
+  const output = temporary(t), native = acquisitionFixture();
+  const adapter = createIconAreaAdapter({ sites, acquire: async () => native });
+  const region = read(new URL('../soaring/regions.json', import.meta.url)).regions.find(region => region.id === 'armenia');
+  const area = await adapter.acquire({
+    run: { provider: 'DWD', model: 'icon-eu', product: adapter.model.sourceProducts[0], referenceTime: native.referenceTime },
+    bounds: region.bbox, forecastHours: [7], cacheDir: '/unused', fields: ['levels'],
+  });
+  const result = await build(output, area.native);
   assert.equal(sites.length, 40);
   assert.equal(result.sites, sites.length);
   assert.deepEqual(validateIconDataset(output, sites, { expectedHours: [7] }), result);

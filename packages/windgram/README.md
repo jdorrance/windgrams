@@ -46,5 +46,3 @@ uses model terrain.
 The SVG modules also render height axes, diagnostics, keys and wind barbs.
 [`/format`](src/format.ts) provides unit conversions and labels, while
 [`/scene`](src/scene.ts) includes daylight filtering and height projection.
-The [consumer example](../../examples/consumer/README.md) renders the same
-forecast in metric and imperial units.

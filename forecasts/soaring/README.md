@@ -41,4 +41,13 @@ Map, windgram and sounding read the published lift diagnostics. The paraglider s
 
 Before a new bundle becomes active, validation checks its files, forecast hours and agreement between map and profile values. The case pointer then selects the completed immutable bundle. Pages retains the current and previous bundle for each active case, along with historical cases.
 
+New HRRR, RRFS and ICON bundles publish compressed scalar map hours and separate
+`cell-{index}.json.gz` profiles. A cell file appears in `manifest.files` only when
+its complete profile is available. The same manifest records each stored file's
+SHA-256 and `fileBytes`, including final launch and transect sidecars. Clients can
+save selected hours and cells through the [offline client](../../packages/data-client/README.md#saved-forecasts).
+Serve compressed objects as `application/gzip`, preserving their bytes until the
+client has verified them. Existing immutable bundles remain readable in their
+original format.
+
 The [operator checks](../README.md#checks) and [website checks](../../web/README.md#checks) cover calculations, publication and rendering. Replaying a fixture establishes reproducibility; [matched observations](../verification/README.md) are needed to measure forecast error.

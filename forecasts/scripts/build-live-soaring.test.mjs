@@ -74,6 +74,9 @@ test('RRFS sidecars remap changed model terrain, preserve GEPS scalar windDirect
     crossSection: { caseId: 'old-case', nodes: [{ latitude: 48.6101, longitude: -122.39, modelElevationM: 220, gridIndex: 7, cellIndex: 10, distanceKm: 72, waypointLabel: 'Ridge' }] },
   });
   const launches = JSON.parse(readFileSync(join(result, 'launches.json')));
+  const publishedManifest = JSON.parse(readFileSync(join(result, 'manifest.json')));
+  assert.deepEqual(Object.keys(publishedManifest.fileBytes).sort(), Object.keys(publishedManifest.files).sort());
+  for (const [name, bytes] of Object.entries(publishedManifest.fileBytes)) assert.equal(readFileSync(join(result, name)).byteLength, bytes, name);
   const launch = launches.launches[0];
   assert.equal(launches.caseId, id); assert.equal(launches.model, 'rrfs'); assert.equal(launches.raob, undefined);
   assert.equal(launch.modelElevationM, 342); assert.equal(launch.gridIndex, 101); assert.equal(launch.cellIndex, 0);

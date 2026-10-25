@@ -6,7 +6,7 @@ import { packages, filesIn, buildOrder, root } from './workspace.mjs';
 const allowed = {
   contracts: [], geography: [], meteorology: ['contracts'], soaring: ['contracts', 'meteorology'],
   providers: ['contracts', 'geography'], pipeline: ['contracts', 'geography', 'meteorology', 'soaring', 'providers'],
-  'data-client': ['contracts'], windgram: ['contracts', 'geography', 'meteorology'],
+  'data-client': ['contracts', 'geography'], windgram: ['contracts', 'geography', 'meteorology'],
 };
 const server = new Set(['providers', 'pipeline']);
 const errors = [];

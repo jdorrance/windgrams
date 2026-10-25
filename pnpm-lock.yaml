@@ -72,6 +72,9 @@ importers:
       '@windgrams/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@windgrams/geography':
+        specifier: workspace:*
+        version: link:../geography
 
   packages/geography: {}
 

@@ -77,7 +77,11 @@ test('native bundle retains checksummed files and a reproducible manifest', t =>
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const result = writeIconRegionalBundle(normalizeIconExtract(raw), region, sites, context, root);
   assert.equal(result.dir.endsWith(sha256(json(result.manifest))), true);
-  for (const [name, digest] of Object.entries(result.manifest.files)) assert.equal(sha256(readFileSync(join(result.dir, name))), digest, name);
+  for (const [name, digest] of Object.entries(result.manifest.files)) {
+    const bytes = readFileSync(join(result.dir, name));
+    assert.equal(sha256(bytes), digest, name);
+    assert.equal(result.manifest.fileBytes[name], bytes.byteLength, name);
+  }
   assert.equal(result.manifest.cellProfiles, 'cell-{index}.json.gz');
   const metrics = JSON.parse(gunzipSync(readFileSync(join(result.dir, result.manifest.hours[0].file))).toString('utf8'));
   assert.ok(result.manifest.hours[0].file.endsWith('.json.gz'));

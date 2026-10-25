@@ -1,0 +1,60 @@
+import type { FieldDefinition, RegionalField } from '../field-types.js';
+
+const height = (label: string, requiresProfile = false, sinkMps?: number): FieldDefinition =>
+  ({ label, unit: 'm', heightReference: 'MSL', requiresProfile, ...(sinkMps === undefined ? {} : { sinkMps }) });
+const value = (label: string, unit: FieldDefinition['unit'], requiresProfile = false): FieldDefinition =>
+  ({ label, unit, requiresProfile });
+
+export const fieldDefinitions: Readonly<Record<RegionalField, FieldDefinition>> = {
+  thermalVelocityMps: value('Thermal strength · legacy', 'm/s', true),
+  usableLiftTopM: height('Usable lift top · legacy', true, 1),
+  boundaryLayerTopM: height('Parcel top · legacy', true),
+  cloudBaseM: height('Cloud base · legacy'),
+  pblHeightM: { label: 'Mixing depth', unit: 'm', heightReference: 'model-AGL' },
+  resolvedThermalTopM: height('Thermal top', true),
+  thermalTopPlus1CM: height('Thermal top · +1 °C', true),
+  thermalVelocityV2Mps: value('Thermal strength', 'm/s', true),
+  usableLiftTopV2M: height('Usable lift top', true, 1),
+  hcritWxtoflyM: height('Paraglider ceiling', true, 1.143),
+  dryHcritM: height('Dry thermal lift top', true, 1),
+  surfaceLclM: height('Potential cloud base'),
+  effectiveCloudLimitM: height('Effective cloud limit'),
+  mixedLayerLclM: height('Mixed-layer cloud base'),
+  cuPotentialM: value('Cumulus potential', 'm'),
+  odPotentialM: value('Spreadout potential', 'm'),
+  blMeanWindSpeedMps: value('Average boundary-layer wind', 'm/s'),
+  blMeanWindDirDeg: value('Average boundary-layer wind direction', '°'),
+  blTopWindSpeedMps: value('Boundary-layer top wind', 'm/s'),
+  blTopWindDirDeg: value('Boundary-layer top wind direction', '°'),
+  blWindShearMps: value('Wind shear', 'm/s'),
+  buoyancyShearRatio: value('Thermal strength / shear', '1'),
+  wind10mSpeedMps: value('Surface wind', 'm/s'),
+  wind10mDirDeg: value('Surface wind direction', '°'),
+  wind80mSpeedMps: value('80 m wind', 'm/s'),
+  wind80mDirDeg: value('80 m wind direction', '°'),
+  windGustMps: value('Gusts', 'm/s'),
+  wind925SpeedMps: value('925 hPa wind', 'm/s'),
+  wind925DirDeg: value('925 hPa wind direction', '°'),
+  wind850SpeedMps: value('850 hPa wind', 'm/s'),
+  wind850DirDeg: value('850 hPa wind direction', '°'),
+  maxUpwardVelocityMps: value('Maximum grid-scale ascent', 'm/s'),
+  minDownwardVelocityMps: value('Maximum grid-scale descent', 'm/s'),
+  w925Mps: value('925 hPa vertical air motion', 'm/s'),
+  w850Mps: value('850 hPa vertical air motion', 'm/s'),
+  convergence10mX1e5: value('Surface convergence', '10⁻⁵ s⁻¹'),
+  convergence925X1e5: value('925 hPa convergence', '10⁻⁵ s⁻¹'),
+  sensibleHeatFluxWm2: value('Surface heating', 'W/m²'),
+  latentHeatFluxWm2: value('Latent heat flux', 'W/m²'),
+  cloudCoverPercent: value('Cloud cover', '%'),
+  lowCloudPercent: value('Low cloud', '%'),
+  midCloudPercent: value('Middle cloud', '%'),
+  highCloudPercent: value('High cloud', '%'),
+  precipitationMmHr: value('Rain', 'mm/h'),
+  capeJkg: value('CAPE', 'J/kg'),
+  cinJkg: value('CIN', 'J/kg'),
+  sfcT: value('Surface temperature', '°C'),
+  sfcTd: value('Surface dew point', '°C'),
+  mslp: value('Sea-level pressure', 'hPa'),
+};
+for (const definition of Object.values(fieldDefinitions)) Object.freeze(definition);
+

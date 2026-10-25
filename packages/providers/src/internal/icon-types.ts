@@ -27,6 +27,6 @@ export interface IconAcquisition {
   provenance: IconCaptureProvenance & { sourceObjects: IconSourceObject[] };
   hours: { forecastHour: number; validAt: string; sources: Array<AtmosphericColumn | null> }[];
 }
-export interface IconAcquireOptions { referenceTime?: string; forecastHours?: readonly number[]; sites?: readonly SiteLocation[]; bbox?: IconBounds | Bounds; cacheDir: string; python?: string; concurrency?: number; maxDownloadBytes?: number; extractPath?: string; acquisitionPath?: string; log?: (line: string) => void }
+export interface IconAcquireOptions { referenceTime?: string; forecastHours?: readonly number[]; sites?: readonly SiteLocation[]; bbox?: IconBounds | Bounds; cacheDir: string; signal?: AbortSignal; python?: string; concurrency?: number; maxDownloadBytes?: number; extractPath?: string; acquisitionPath?: string; log?: (line: string) => void }
 
 export type IconExtract = IconExtractBase & ({ records: Record<string, IconExtractRecord>; recordManifest?: Record<string, Omit<IconExtractRecord, 'values'>>; recordFiles?: Record<string, string> } | { records?: undefined; recordManifest: Record<string, Omit<IconExtractRecord, 'values'>>; recordFiles: Record<string, string> });

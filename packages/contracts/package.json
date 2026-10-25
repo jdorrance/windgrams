@@ -22,6 +22,11 @@
       "types": "./dist/published-lift.d.ts",
       "import": "./dist/published-lift.js"
     },
+    "./fields": {
+      "types": "./dist/fields.d.ts",
+      "import": "./dist/fields.js"
+    },
+    "./wire-schemas.json": "./dist/wire-schemas.json",
     "./build-inventory.json": "./dist/build-inventory.json"
   },
   "scripts": {

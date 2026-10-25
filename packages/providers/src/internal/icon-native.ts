@@ -43,8 +43,10 @@ export function iconFieldUrl(field: string, referenceTime: string, forecastHour:
 }
 
 /** Main runs keep the three-day horizon stable while short intermediate cycles arrive. */
-export async function discoverIconRun({ now = new Date(), fetchFn = fetch, lastForecastHour = 78 }: { now?: Date; fetchFn?: typeof fetch; lastForecastHour?: number } = {}): Promise<{ referenceTime: string; forecastHours: number; completionUrls: string[] }> {
-  const response = await fetchFn(`${ICON_BASE}HSURF/r/`, { signal: AbortSignal.timeout(15_000) });
+export async function discoverIconRun({ now = new Date(), fetchFn = fetch, lastForecastHour = 78, signal }: { now?: Date; fetchFn?: typeof fetch; lastForecastHour?: number; signal?: AbortSignal } = {}): Promise<{ referenceTime: string; forecastHours: number; completionUrls: string[] }> {
+  signal?.throwIfAborted();
+  const requestSignal = () => signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+  const response = await fetchFn(`${ICON_BASE}HSURF/r/`, { signal: requestSignal() });
   if (!response.ok) throw new Error(`ICON run inventory HTTP ${response.status}`);
   const text = await response.text();
   const candidates = [...text.matchAll(/href="(\d{4}-\d\d-\d\dT\d\d(?:%3A|:)00)\/"/gi)]
@@ -52,9 +54,11 @@ export async function discoverIconRun({ now = new Date(), fetchFn = fetch, lastF
     .filter(run => Number.isFinite(Date.parse(run)) && new Date(run).getUTCHours() % 6 === 0 && Date.parse(run) <= +now)
     .sort((a, b) => Date.parse(b) - Date.parse(a));
   for (const referenceTime of candidates) {
+    signal?.throwIfAborted();
     const urls = [iconFieldUrl('T', referenceTime, lastForecastHour, 74), iconFieldUrl('P', referenceTime, lastForecastHour, 45),
       iconFieldUrl('TOT_PREC', referenceTime, lastForecastHour), iconFieldUrl('ASHFL_S', referenceTime, lastForecastHour)];
-    const probes = await Promise.allSettled(urls.map(url => fetchFn(url, { method: 'HEAD', signal: AbortSignal.timeout(15_000) })));
+    const probes = await Promise.allSettled(urls.map(url => fetchFn(url, { method: 'HEAD', signal: requestSignal() })));
+    signal?.throwIfAborted();
     if (probes.every(probe => probe.status === 'fulfilled' && probe.value.ok)) return { referenceTime: iconReferenceTime(referenceTime), forecastHours: lastForecastHour, completionUrls: urls };
   }
   throw new Error('ICON-EU has no complete main run; keep the last published forecast');
@@ -221,8 +225,9 @@ export function readIconAcquisition(path: string): IconAcquisition {
 /** Download once per region/run, retain extracted arrays and checksummed provenance. */
 export async function acquireIcon({ referenceTime, forecastHours = ICON_FORECAST_HOURS, sites = [], bbox,
   cacheDir, python = process.env.ICON_PYTHON ?? 'python3', concurrency = 8, maxDownloadBytes = 16_000_000_000,
-  extractPath, acquisitionPath, log = console.log }: IconAcquireOptions): Promise<IconAcquisition> {
-  referenceTime = iconReferenceTime(referenceTime ?? (await discoverIconRun()).referenceTime);
+  extractPath, acquisitionPath, signal, log = console.log }: IconAcquireOptions): Promise<IconAcquisition> {
+  signal?.throwIfAborted();
+  referenceTime = iconReferenceTime(referenceTime ?? (await discoverIconRun({ signal })).referenceTime);
   if (!forecastHours.length || forecastHours.some((h, i) => !Number.isInteger(h) || h < 1 || h > 78 || (i && h <= forecastHours[i-1]))) {
     throw new Error('ICON forecast hours must be unique ascending integers from 1 to 78');
   }
@@ -237,11 +242,19 @@ export async function acquireIcon({ referenceTime, forecastHours = ICON_FORECAST
   try {
     await new Promise<void>((resolvePromise, reject) => {
       const child = spawn(python, [fileURLToPath(new URL('./icon-decode.py', import.meta.url)), request], { stdio: ['ignore', 'pipe', 'pipe'] });
+      const abort = () => { child.kill('SIGTERM'); };
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) abort();
       let errors = '';
       child.stdout.on('data', chunk => log(chunk.toString().trim()));
       child.stderr.on('data', chunk => { errors += chunk; log(chunk.toString().trim()); });
-      child.on('error', reject);
-      child.on('close', code => code === 0 ? resolvePromise() : reject(new Error(errors.trim() || `ICON decoder exit ${code}`)));
+      child.on('error', error => { signal?.removeEventListener('abort', abort); reject(error); });
+      child.on('close', code => {
+        signal?.removeEventListener('abort', abort);
+        if (signal?.aborted) reject(signal.reason);
+        else if (code === 0) resolvePromise();
+        else reject(new Error(errors.trim() || `ICON decoder exit ${code}`));
+      });
     });
     const acquired = normalizeIconExtract(parseIconExtract(JSON.parse(readFileSync(output, 'utf8'))));
     if (acquisitionPath) writeIconAcquisition(acquisitionPath, acquired);

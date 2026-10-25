@@ -1,6 +1,6 @@
 import { formatQuantity, getUnitSystem } from '../lib/units.ts';
-import { createReplayProfileCache, readRegionalJson } from '../lib/regional-data.ts';
-import { parsePublishedProfileJson } from '../lib/published-lift.ts';
+import { readRegionalJson } from '../lib/regional-data.ts';
+import { openRegionalDataset } from '@windgrams/data-client/dataset';
 import { parseModelCatalogue, type SiteForecast } from '@azohra/meteo.briefing/contract';
 import { localDateKey } from '@azohra/meteo.briefing/derive';
 import { DATA_BASE } from '../lib/site.ts';
@@ -19,36 +19,32 @@ import {
 } from '../lib/launch-comparison.ts';
 import {
   validateRegionCatalogue,
-  validateReplayManifest,
-  validateReplayHour,
   validateCrossSectionDoc,
   validateLaunchesDoc,
   validateReplayAudit,
-  validateReplayGrid,
   validateVerificationDoc,
 } from '../lib/soaring-contracts.ts';
 import {
   LAYER_SPECS,
   PRIMARY_LAYERS,
-  availableReplayLayers,
   refreshReplayLayerLabels,
-  buildCellSiteForecast,
   crossSectionHeightScale,
   displayMetric,
   defaultReplayQuery,
   forecastHourAtValidTime,
   historicalLabel,
+  legacyReplayModel,
   modelLabel,
   nativeModels,
-  normalizeReplayManifest,
   regionForCase,
   replayLocation,
-  replayModel,
   replaySelection,
-  selectedState,
+  hourIndex,
+  localTime,
   setReplaySelectionQuery,
   type Layer,
   type RegionCatalogue,
+  type ReplayHour,
 } from '../lib/soaring.ts';
 import { createSoaringMap } from './soaring-map.ts';
 import { createKeyedAsyncLoader, createWindgramController } from './windgram-controller.ts';
@@ -86,24 +82,17 @@ async function main() {
     onRestore() { if (initialized) update(); },
   });
   const eventOptions = { signal: lifetime.signal };
-  const read = (url: string) => readRegionalJson(url, { signal: lifetime.signal });
   const modelCatalogue = readOptional(`${DATA_BASE.replace(/\/$/, '')}/models.json`, parseModelCatalogue, lifetime.signal);
   set('map-barb-units', getUnitSystem() === 'metric' ? '· 2.5 / 5 / 25 m/s' : '· 5 / 10 / 50 kt');
   const regionsCatalogue = await readOptional<RegionCatalogue>(`${DATA_BASE.replace(/\/$/, '')}/soaring/v1/regions.json`, validateRegionCatalogue, lifetime.signal);
   if (lifetime.disposed) return;
   const query = defaultReplayQuery(window.location.search, regionsCatalogue);
   const location = replayLocation(query.toString(), DATA_BASE);
-  const pointer = await read(`${location.root}/index.json`);
+  const dataset = await openRegionalDataset({ baseUrl: DATA_BASE, caseId: location.caseId, model: legacyReplayModel(location.caseId), signal: lifetime.signal });
   if (lifetime.disposed) return;
-  if (pointer === null || typeof pointer !== 'object' || !('bundle' in pointer) || typeof pointer.bundle !== 'string' || !/^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)) throw new Error('Invalid replay bundle pointer');
-  const root = `${location.root}/${pointer.bundle}`;
-  const parsedManifest = validateReplayManifest(await read(`${root}/manifest.json`));
-  if (lifetime.disposed) return;
-  if (!parsedManifest || parsedManifest.schemaVersion !== 1 || parsedManifest.case.id !== location.caseId) throw new Error('Replay manifest mismatch');
-  const manifest = normalizeReplayManifest(parsedManifest);
-  const activeModel = replayModel(manifest);
-  if (activeModel === 'unknown') throw new Error('Regional forecast is missing its model identity.');
-  if (!manifest.hours.length) throw new Error('Regional forecast has no published hours.');
+  const { manifest, grid } = dataset;
+  const root = dataset.identity.bundleUrl;
+  const activeModel = dataset.identity.model;
   const catalogue = await modelCatalogue;
   if (lifetime.disposed) return;
   const freshnessNotice = createFreshnessNotice(el('replay-freshness'), () => ({
@@ -118,41 +107,24 @@ async function main() {
     manifest.files && !Object.hasOwn(manifest.files, name)
       ? Promise.resolve<T | null>(null)
       : readOptional<T>(`${root}/${name}`, validate, lifetime.signal);
-  const [rawGrid, profileData, rawAudit, hours, launchesDoc, crossSectionDoc, verificationDoc] = await Promise.all([
-    read(`${root}/grid.geojson`),
-    read(`${root}/profile.json`),
-    read(`${root}/audit.json`),
-    Promise.all(manifest.hours.map(async h => {
-      const hour = validateReplayHour(await read(`${root}/${h.file}`), manifest.cellCount);
-      if (!hour || hour.validAt !== h.validAt || hour.forecastHour !== h.forecastHour) throw new Error('Regional hour differs from its manifest');
-      return hour;
-    })),
-    optionalBundle('launches.json', validateLaunchesDoc),
-    optionalBundle('cross-section.json', validateCrossSectionDoc),
-    optionalBundle('verification.json', validateVerificationDoc),
-  ]);
-  if (lifetime.disposed) return;
-  const grid = validateReplayGrid(rawGrid, manifest.cellCount);
-  const audit = validateReplayAudit(rawAudit);
-  const blanchardProfile = parsePublishedProfileJson(JSON.stringify(profileData));
-  const crossSectionScale = crossSectionDoc ? crossSectionHeightScale(crossSectionDoc.nodes, hours) : null;
-  if (
-    !grid ||
-    !audit ||
-    !blanchardProfile ||
-    blanchardProfile.model !== activeModel ||
-    blanchardProfile.hours.length !== hours.length ||
-    blanchardProfile.hours.some((h, i) => h.validAt !== hours[i].validAt)
-  ) {
-    throw new Error('Invalid or unsynchronized regional profile');
-  }
-
+  const hours = manifest.hours;
   const selectedValidHour = forecastHourAtValidTime(hours, query.get('valid'));
   let requested = selectedValidHour ?? location.hour;
   if (selectedValidHour === null && !query.has('hour') && location.caseId.endsWith('-live')) {
     requested = hours.reduce((best, h) => Math.abs(Date.parse(h.validAt) - Date.now()) < Math.abs(Date.parse(best.validAt) - Date.now()) ? h : best).forecastHour;
   }
-  const availableLayers = new Set(availableReplayLayers(hours));
+  const initialIndex = hourIndex(hours, requested);
+  const [initialHour, launchesDoc, crossSectionDoc, verificationDoc] = await Promise.all([
+    dataset.loadHour(hours[initialIndex].validAt),
+    optionalBundle('launches.json', validateLaunchesDoc),
+    optionalBundle('cross-section.json', validateCrossSectionDoc),
+    optionalBundle('verification.json', validateVerificationDoc),
+  ]);
+  if (lifetime.disposed) return;
+  if (!initialHour) throw new Error('Selected forecast hour unavailable');
+  let displayedHour = initialHour;
+  let crossSectionScale = crossSectionDoc ? crossSectionHeightScale(crossSectionDoc.nodes, [initialHour]) : null;
+  const availableLayers = new Set((Object.keys(LAYER_SPECS) as Layer[]).filter(key => Array.isArray(initialHour[key])));
   const defaultLayer: Layer = PRIMARY_LAYERS.find(candidate => availableLayers.has(candidate)) ?? [...availableLayers][0] ?? 'thermalVelocityV2Mps';
   let layer: Layer = defaultLayer;
   const layerSelect = el<HTMLSelectElement>('replay-layer');
@@ -170,8 +142,8 @@ async function main() {
 
   let showBarbs = true;
   let fullWindgramProfile = false;
-  let firstVisibleHour = 0;
-  let lastVisibleHour = hours.length - 1;
+  const firstVisibleHour = 0;
+  const lastVisibleHour = hours.length - 1;
 
   const slider = el<HTMLInputElement>('replay-hour');
   const prev = el<HTMLButtonElement>('replay-prev');
@@ -277,9 +249,7 @@ async function main() {
       longitude: launch?.longitude ?? cell.longitude,
       launchSlug: launch?.slug,
     };
-    if (remoteProfileLoader) {
-      void remoteProfileLoader.select(cellIndex);
-    }
+    void profileLoader.select(cellIndex);
     update();
   }
 
@@ -299,23 +269,35 @@ async function main() {
     name: manifest.case.site.name,
     elevationM: manifest.case.launchElevation.elevationM,
   });
-  const profileCache = new Map<number, SiteForecast | null>();
-  const remoteProfiles = manifest.cellProfiles ? createReplayProfileCache(root, manifest, read) : null;
-  const remoteProfileLoader = remoteProfiles
-    ? createKeyedAsyncLoader<number, SiteForecast>({
-        load: async cellIndex => {
-          const cached = remoteProfiles.cached(cellIndex);
-          if (cached) return cached;
-          const cellProps = grid.features[cellIndex]?.properties;
-          if (!cellProps) return null;
-          return await remoteProfiles.load(cellIndex, cellProps.gridIndex);
-        },
-        onActiveComplete: cellIndex => {
-          if (selectedCell === cellIndex) update();
-        },
-      })
-    : null;
-  lifetime.onDispose(() => remoteProfileLoader?.dispose());
+  let selectedProfile: { cellIndex: number; profile: SiteForecast | null; error: unknown } | null = null;
+  const profileLoader = createKeyedAsyncLoader<number, SiteForecast>({
+    load: cellIndex => dataset.loadCellProfile(cellIndex),
+    onActiveComplete: (cellIndex, profile, error) => {
+      selectedProfile = { cellIndex, profile, error };
+      update();
+    },
+  });
+  const hourLoader = createKeyedAsyncLoader<number, ReplayHour>({
+    load: async index => {
+      const hour = await dataset.loadHour(hours[index].validAt);
+      if (!hour) throw new Error('Forecast hour unavailable');
+      return hour;
+    },
+    onActiveComplete: (_index, hour, error) => {
+      if (!hour) {
+        set('cell-notice', `Forecast unavailable: ${error instanceof Error ? error.message : String(error)}`);
+        el('cell-notice').hidden = false;
+        return;
+      }
+      displayedHour = hour;
+      if (crossSectionDoc) {
+        const scale = crossSectionHeightScale(crossSectionDoc.nodes, [hour]);
+        if (!crossSectionScale || scale.maxAltM > crossSectionScale.maxAltM) crossSectionScale = scale;
+      }
+      update();
+    },
+  });
+  lifetime.onDispose(() => { profileLoader.dispose(); hourLoader.dispose(); });
 
   const windgramController = createWindgramController({
     host: el('replay-windgram'),
@@ -334,14 +316,15 @@ async function main() {
         : null;
   }
 
-  const inv = activeModel === 'hrrr-conus' ? verificationDoc?.hrrrWrfprsInventory : undefined;
   set('audit-summary', 'About this forecast');
-  set(
-    'audit-results',
-    `${audit.mapProfileAgreement.valuesChecked.toLocaleString('en-US')} map and profile values were checked across ${audit.mapProfileAgreement.hours} hours. The sampled grid point is ${formatQuantity(audit.sampledCell.distanceKm, 'distance')} from launch. Model terrain is ${formatQuantity(audit.terrain.modelElevationM, 'elevation')} MSL; launch elevation is ${formatQuantity(audit.terrain.launch.elevationM, 'elevation')} MSL.${inv ? ` The source provides ${inv.availablePressureLevelsCount} pressure levels.` : ''}`,
-  );
   el('audit-limitations').replaceChildren();
   el<HTMLAnchorElement>('audit-download').href = `${root}/audit.json`;
+  void optionalBundle('audit.json', raw => { try { return validateReplayAudit(raw); } catch { return null; } }).then(audit => {
+    if (lifetime.disposed) return;
+    set('audit-results', audit
+      ? `${audit.mapProfileAgreement.valuesChecked.toLocaleString('en-US')} map and profile values checked across ${audit.mapProfileAgreement.hours} hours. Grid point ${formatQuantity(audit.sampledCell.distanceKm, 'distance')} from launch. Model terrain ${formatQuantity(audit.terrain.modelElevationM, 'elevation')} MSL; launch ${formatQuantity(audit.terrain.launch.elevationM, 'elevation')} MSL.`
+      : 'Forecast audit unavailable.');
+  });
 
   const obsSkill = verificationDoc?.observationVerificationSkill;
   if (obsSkill && el('raob-table-body')) {
@@ -373,33 +356,27 @@ async function main() {
     const properties = grid!.features[selectedCell].properties;
     const matchedLaunch = launchForCell(selectedCell);
     const activeLabel = matchedLaunch?.name ?? (selectedCell === manifest.siteCell ? manifest.case.site.name : 'Selected location');
-    if (
-      remoteProfiles &&
-      remoteProfileLoader &&
-      !remoteProfiles.cached(selectedCell) &&
-      !remoteProfileLoader.isPending(selectedCell) &&
-      !remoteProfileLoader.hasFailed(selectedCell)
-    ) {
-      void remoteProfileLoader.select(selectedCell);
-    }
-    if (!remoteProfiles && !profileCache.has(selectedCell)) {
-      if (profileCache.size >= 32) profileCache.delete(profileCache.keys().next().value!);
-      profileCache.set(selectedCell, buildCellSiteForecast(manifest, hours, selectedCell, properties, activeLabel));
-    }
-    const cellForecast = remoteProfiles ? remoteProfiles.cached(selectedCell) : profileCache.get(selectedCell);
-    // The map keeps its entire forecast horizon; the chart follows the selected
-    // local day's daylight. Later days remain reachable through these controls.
-    firstVisibleHour = 0;
-    lastVisibleHour = hours.length - 1;
-    const state = selectedState(manifest, hours, requested), { hour, index } = state;
-    requested = hour.forecastHour;
+    if (profileLoader.getActiveKey() !== selectedCell) void profileLoader.select(selectedCell);
+    const cellForecast = selectedProfile?.cellIndex === selectedCell ? selectedProfile.profile : null;
+    const index = hourIndex(hours, requested);
     slider.min = String(firstVisibleHour);
     slider.max = String(lastVisibleHour);
     slider.value = String(index);
-    slider.setAttribute('aria-valuetext', state.validLabel);
+    slider.setAttribute('aria-valuetext', localTime(hours[index].validAt, manifest.case.site.timeZone));
     prev.disabled = index === firstVisibleHour;
     next.disabled = index === lastVisibleHour;
-    set('replay-valid', state.validLabel);
+    if (hourLoader.getActiveKey() !== index) void hourLoader.select(index);
+    if (displayedHour.validAt !== hours[index].validAt) {
+      if (hourLoader.isPending(index)) {
+        set('cell-notice', 'Loading forecast…');
+        el('cell-notice').hidden = false;
+      }
+      return;
+    }
+    const hour = displayedHour;
+    const validLabel = localTime(hour.validAt, manifest.case.site.timeZone);
+    requested = hour.forecastHour;
+    set('replay-valid', validLabel);
     set('cell-title', activeLabel);
     set(
       'cell-location',
@@ -413,7 +390,7 @@ async function main() {
 
     set('windgram-heading', `${activeLabel} · Windgram`);
     set('sounding-heading', `${activeLabel} · Sounding`);
-    set('sounding-valid', state.validLabel);
+    set('sounding-valid', validLabel);
     if (cellForecast) {
       const dayHours = windgramDayHours(cellForecast, hours[index].validAt, manifest.case.site.timeZone);
       windgramController.render({
@@ -429,16 +406,15 @@ async function main() {
         onSelectHour: validAt => {
           const clickedHour = hours.find(h => h.validAt === validAt);
           if (!clickedHour) return;
-          requested = clickedHour.forecastHour;
-          update();
+          selectHour(clickedHour.forecastHour);
         },
       });
     } else {
       windgramController.clear();
-      set(
-        'replay-windgram',
-        remoteProfileLoader?.isPending(selectedCell) ? 'Loading profile…' : 'A complete profile is unavailable at this location.',
-      );
+      const error = selectedProfile?.cellIndex === selectedCell ? selectedProfile.error : null;
+      set('replay-windgram', profileLoader.isPending(selectedCell) ? 'Loading profile…'
+        : error ? `Profile unavailable: ${error instanceof Error ? error.message : String(error)}`
+          : 'A complete profile is unavailable at this location.');
     }
     el('replay-windgram').dataset.validAt = hour.validAt;
     el('replay-sounding').dataset.validAt = hour.validAt;
@@ -544,8 +520,7 @@ async function main() {
     }
     const explanation = document.createElement('span');
     explanation.className = 'muted';
-    const liftTopLayer = ['usableLiftTopV2M', 'usableLiftTopM', 'hcritWxtoflyM', 'dryHcritM', 'resolvedThermalTopM'].includes(layer);
-    explanation.textContent = 'Gray: unavailable · Purple: limited height data' + (liftTopLayer ? ' · Beige: below sink threshold' : '');
+    explanation.textContent = 'Gray: unavailable · Purple: limited height data';
     if (layer === 'usableLiftTopV2M' || layer === 'usableLiftTopM') legendTitle.textContent += ` · ${formatQuantity(1, 'lift')} sink`;
     legend.append(legendTitle, scale, explanation);
 
@@ -593,13 +568,18 @@ async function main() {
     window.history.replaceState(null, '', url);
   }
 
-  function move(delta: number) {
-    const index = selectedState(manifest, hours, requested).index;
-    requested = hours[Math.max(firstVisibleHour, Math.min(lastVisibleHour, index + delta))].forecastHour;
+  function selectHour(forecastHour: number) {
+    requested = forecastHour;
+    void hourLoader.select(hourIndex(hours, requested));
     update();
   }
 
-  slider.addEventListener('input', () => { requested = hours[Number(slider.value)].forecastHour; update(); }, eventOptions);
+  function move(delta: number) {
+    const index = hourIndex(hours, requested);
+    selectHour(hours[Math.max(firstVisibleHour, Math.min(lastVisibleHour, index + delta))].forecastHour);
+  }
+
+  slider.addEventListener('input', () => selectHour(hours[Number(slider.value)].forecastHour), eventOptions);
   prev.addEventListener('click', () => move(-1), eventOptions);
   next.addEventListener('click', () => move(1), eventOptions);
   if (playBtn) {
@@ -611,9 +591,8 @@ async function main() {
       } else {
         playBtn.textContent = '⏸ Pause';
         playTimer = window.setInterval(() => {
-          const idx = selectedState(manifest, hours, requested).index;
-          requested = hours[idx >= lastVisibleHour ? firstVisibleHour : idx + 1].forecastHour;
-          update();
+          const idx = hourIndex(hours, requested);
+          selectHour(hours[idx >= lastVisibleHour ? firstVisibleHour : idx + 1].forecastHour);
         }, 900);
       }
     }, eventOptions);

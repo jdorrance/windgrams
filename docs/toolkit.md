@@ -25,17 +25,20 @@ configuration live in the Windgrams application.
 - [pipeline](../packages/pipeline/README.md) plans acquisitions, validates their
   results and publishes complete datasets through a configured store.
 - [data-client](../packages/data-client/README.md) reads published forecasts over
-  HTTP, checks their identity and manages retries and profile caching.
+  HTTP, samples regional grids and saves verified forecasts for offline use.
 - [windgram](../packages/windgram/README.md) builds and renders charts. Its DOM
   entry adds selection, inspection and keyboard interaction.
 
 ## Using the packages
 
 Start with the README for the package you need. It links to its public types and
-usage examples. The [consumer example](../examples/consumer/run.mts) follows a
-custom provider through calculation and publication, then reads the result and
-renders two charts. `pnpm test:consumer` compiles and runs it against packed
-archives in a separate project.
+usage snippets. The [regional reader](../packages/data-client/docs/regional.md)
+samples grids, profiles and routes; the [offline API](../packages/data-client/docs/offline.md)
+saves verified forecasts through a host-supplied byte store. Application concerns
+such as location permissions, map rendering and UI state stay with the consumer.
+
+`pnpm test:consumer` compiles and runs integration fixtures against packed archives
+in a separate project.
 
 For changes to the toolkit, see [API conventions](toolkit-contracts.md) and the
 [development guide](toolkit-development.md). TypeScript generates the published

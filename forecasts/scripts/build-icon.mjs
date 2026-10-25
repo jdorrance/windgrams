@@ -6,7 +6,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { parseForecastManifest, parseSiteForecast } from '@azohra/meteo.briefing/contract';
-import { acquireIcon, buildIconPointProfiles, ICON_FORECAST_HOURS, readIconAcquisition } from './lib/icon-eu.mjs';
+import { buildIconPointProfiles, discoverIconRun, ICON_FORECAST_HOURS, readIconAcquisition } from './lib/icon-eu.mjs';
+import { createIconAreaAdapter } from '@windgrams/providers/area';
 import { writeIconRegionalBundle } from '../soaring/icon-replay.mjs';
 import { assertAgreement } from '../soaring/science.mjs';
 import { postprocessAndArchiveModelOutput } from './build-covered.mjs';
@@ -169,11 +170,13 @@ async function main() {
   const expectedHours = values.hours ? values.hours.split(',').map(Number) : ICON_FORECAST_HOURS;
   const context = await ensureArmeniaTerrain(output, amSites(sites));
   const region = read(join(ROOT, 'soaring/regions.json')).regions.find(region => region.id === 'armenia');
-  const acquired = values.acquired ? readIconAcquisition(resolve(values.acquired)) : await acquireIcon({
-    referenceTime: values['reference-time'], sites: amSites(sites), bbox: region.bbox,
-    forecastHours: expectedHours, cacheDir: resolve(values['cache-root']),
+  const retained = values.acquired ? readIconAcquisition(resolve(values.acquired)) : null;
+  const referenceTime = values['reference-time'] ?? retained?.referenceTime ?? (await discoverIconRun({ lastForecastHour: expectedHours.at(-1) })).referenceTime;
+  const adapter = createIconAreaAdapter({ sites: amSites(sites), ...(retained ? { acquire: async () => retained } : {}) });
+  const { native: acquired } = await adapter.acquire({
+    run: { provider: adapter.model.provider, model: adapter.model.id, product: adapter.model.sourceProducts[0], referenceTime },
+    bounds: region.bbox, forecastHours: expectedHours, cacheDir: resolve(values['cache-root']),
   });
-  if (values['reference-time'] && Date.parse(acquired.referenceTime) !== Date.parse(values['reference-time'])) throw new Error('Acquired ICON run differs from request');
   await buildIconDataset({ output, sites, acquired, context, expectedHours });
 }
 

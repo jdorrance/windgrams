@@ -7,8 +7,7 @@ This guide covers adding data sources, building packages and publishing the app.
 
 ### A new model
 
-Start with the [provider API](../packages/providers/README.md) and the
-[custom-provider example](../examples/consumer/run.mts). Describe the model's
+Start with the [provider API](../packages/providers/README.md). Describe the model's
 coverage, run schedule, forecast horizon and available fields. Its adapter selects
 a run, downloads data and returns either normalized atmospheric columns or
 processed profiles. Include the source units, time intervals and height references
@@ -21,8 +20,9 @@ aggregating the results.
 
 Wire the model into [provider policy](../forecasts/provider-policy.json) and add
 fixtures for incomplete runs and missing fields. The pipeline validates a complete
-candidate before replacing published data. The packed-consumer example is useful
-for checking an adapter independently of the app's built-in model catalogue.
+candidate before replacing published data. The
+[consumer fixtures](../scripts/fixtures/consumer/run.mts) check custom adapters
+independently of the app's built-in model catalogue.
 
 ### A new region
 
@@ -54,9 +54,8 @@ SVG output. Each package build records file hashes and dependency versions in
 that produced it.
 
 Packages are private to the workspace. `pnpm test:consumer` packs them, installs
-the archives in a separate project, and compiles and runs the TypeScript example.
-It also checks the browser bundle and stylesheet. Publishing packages to a registry
-would require a separate release process.
+the archives in a separate project, and checks their public APIs and browser
+bundles. Publishing packages to a registry would require a separate release process.
 
 ## Tests
 
@@ -100,29 +99,20 @@ and known limitations. [Recorded comparisons](toolkit-verification.md) document 
 package extraction; [observation scoring](../forecasts/verification/README.md)
 evaluates forecasts against measurements.
 
-## Future consumers
+## Application boundaries
 
-The packages support parts of the following integrations. Each still needs
-application-specific code.
+Applications supply location, time, rendering and persistent storage. The weather
+packages own validation, field semantics and native-cell selection. The
+[regional reader](../packages/data-client/docs/regional.md) and
+[snapshot repository](../packages/data-client/docs/offline.md) preserve forecast
+run identity and scope across online and saved datasets.
 
-**Windy panels and server briefings** can share the forecast reader and chart
-renderer. A browser panel supplies location, time and units, then mounts and
-disposes the chart. A server can render an SVG at a chosen size for a briefing or
-report. Both need a forecast profile with atmospheric levels.
+`sampleRoute` accepts positions and valid times supplied by an application. A
+route planner can use estimated arrival times. Sampling returns coverage gaps and
+native-cell offsets. Denser route points retain the source model's resolution.
 
-**Offline tablets** can supply a local transport to the reader. The application
-would manage downloads and synchronization while retaining run timestamps for the
-freshness display.
-
-**Terrain at different zoom levels** would benefit from a query service accepting
-bounds, spacing, interpolation and cancellation. Results need the source resolution,
-grid alignment, vertical datum and missing-data mask. Display zoom, DEM resolution
-and weather-model resolution can vary independently.
-
-**Route briefings** could sample profiles along a route and compare conditions at
-expected arrival times. Route sampling, model blending and uncertainty estimates
-would need additional APIs.
-
-**Verification services** could pair archived forecasts with observations and score
-them across models and regions. The current offline scorer provides a starting
-point; ensemble calculations retain the calculate-per-member ordering.
+Terrain queries at different zoom levels remain a separate extension. They need
+explicit source resolution, grid alignment, interpolation, datum and missing-data
+handling. Model blending and route uncertainty likewise need scientific contracts
+beyond the existing sampling API. Observation scoring can build on the
+[verification tools](../forecasts/verification/README.md).

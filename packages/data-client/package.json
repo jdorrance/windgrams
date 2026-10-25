@@ -6,6 +6,7 @@
   "sideEffects": false,
   "files": [
     "dist",
+    "docs",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -18,9 +19,21 @@
       "types": "./dist/regional.d.ts",
       "import": "./dist/regional.js"
     },
+    "./dataset": {
+      "types": "./dist/dataset.d.ts",
+      "import": "./dist/dataset.js"
+    },
     "./http": {
       "types": "./dist/http.d.ts",
       "import": "./dist/http.js"
+    },
+    "./offline": {
+      "types": "./dist/offline.d.ts",
+      "import": "./dist/offline.js"
+    },
+    "./offline-browser": {
+      "types": "./dist/offline-browser.d.ts",
+      "import": "./dist/offline-browser.js"
     },
     "./build-inventory.json": "./dist/build-inventory.json"
   },
@@ -31,6 +44,7 @@
   },
   "dependencies": {
     "@azohra/meteo.briefing": "0.6.2",
-    "@windgrams/contracts": "workspace:*"
+    "@windgrams/contracts": "workspace:*",
+    "@windgrams/geography": "workspace:*"
   }
 }

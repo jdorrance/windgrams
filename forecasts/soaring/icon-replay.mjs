@@ -1,12 +1,11 @@
 // Native ICON cells and point profiles share one acquisition and one derivation.
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { gzipSync } from 'node:zlib';
 import { DRY_ADIABATIC_LAPSE_C_PER_M } from '@azohra/meteo.briefing/derive';
 import { greatCircleDistanceKm } from '@azohra/meteo.grib';
 import { deriveIconProfile, ICON_SEMANTICS } from '../scripts/lib/icon-eu.mjs';
 import { SOARING_CONTRACT_VERSION, metrics, v2LayerMetrics, metric, assertAgreement } from './science.mjs';
-import { json, sha256, versionsFor } from './common.mjs';
+import { encodeBundleFile, json, sha256, versionsFor } from './common.mjs';
 import { ICON_REPLAY_INVENTORY, computeImplementationCodeHashes } from './inventory.mjs';
 
 export function iconRegionalDocuments(acquired, region, sites, context, { includeNativeLevels = true, onCellProfile = () => {} } = {}) {
@@ -106,10 +105,11 @@ export function writeIconRegionalBundle(acquired, region, sites, context, root) 
   mkdirSync(root, { recursive: true });
   const staging = mkdtempSync(join(root, '.icon-bundle-'));
   try {
-    const hashes = {};
+    const hashes = {}, fileBytes = {};
     const save = (name, value) => {
-      const bytes = name.endsWith('.gz') ? gzipSync(json(value), { level: 9 }) : Buffer.from(json(value));
+      const bytes = encodeBundleFile(name, value);
       hashes[name] = sha256(bytes);
+      fileBytes[name] = bytes.byteLength;
       writeFileSync(join(staging, name), bytes);
     };
     const { manifest, files } = iconRegionalDocuments(acquired, region, sites, context, {
@@ -120,6 +120,7 @@ export function writeIconRegionalBundle(acquired, region, sites, context, root) 
     manifest.hours = manifest.hours.map(hour => ({ ...hour, file: `${hour.file}.gz` }));
     manifest.cellProfiles = 'cell-{index}.json.gz';
     manifest.files = hashes;
+    manifest.fileBytes = fileBytes;
     const hash = sha256(json(manifest)), dir = join(root, manifest.case.id, 'bundles', hash);
     writeFileSync(join(staging, 'manifest.json'), json(manifest));
     mkdirSync(join(root, manifest.case.id, 'bundles'), { recursive: true });

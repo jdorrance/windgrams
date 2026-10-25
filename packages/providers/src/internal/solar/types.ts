@@ -1,6 +1,7 @@
 import type { Position } from '@windgrams/geography';
 /** North-up raster: metres MSL, NaN gaps, dLon/dLat sample spacing in degrees. */
 export interface ElevationGrid { values: Float32Array; width: number; height: number; west: number; north: number; dLon: number; dLat: number }
+/** Ordered raster extent: south <= north and west <= east; longitudes may be unwrapped across 180°. */
 export interface TerrainBounds { south: number; west: number; north: number; east: number }
 export interface SolarArea extends TerrainBounds { name: string }
 export interface SolarSite extends Position { slug: string }

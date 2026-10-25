@@ -107,8 +107,8 @@ test('publication validates before replacing a pointer, invalidates older contra
     const m={soaringContractVersion:contractVersion,case:{id,referenceTime:run},hours:[{file:'f20.json',validAt:'2026-10-23T20:00:00Z'}],files};
     writeFileSync(join(dir,'manifest.json'),JSON.stringify(m));return dir;
   };
-  enrichBundleWithSidecars(root,out,id,make('old-contract',ref,'2.0.0'),{});
-  assert.equal(isRegionBundleCurrent(out,id,ref),false,'a 2.0.0 bundle for the same run must be invalidated when contractVersion is 2.1.0');
+  enrichBundleWithSidecars(root,out,id,make('old-contract',ref,'2.1.0'),{});
+  assert.equal(isRegionBundleCurrent(out,id,ref),false,'a previous-method bundle for the same run must be rebuilt');
   const first=enrichBundleWithSidecars(root,out,id,make('first'),{});
   const pointer=readFileSync(join(out,id,'index.json'),'utf8');
   assert.ok(isRegionBundleCurrent(out,id,ref));

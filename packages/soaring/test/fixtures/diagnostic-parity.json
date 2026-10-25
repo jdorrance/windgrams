@@ -3,7 +3,7 @@
     "kind": "synthetic",
     "baseline": "pre-workspace source modules captured before extraction",
     "capturedAt": "2026-10-25",
-    "description": "Fixed source columns exercise heating, stable air, high terrain, and existing missing-flux behavior. Values are characterization fixtures, not observational validation."
+    "description": "Fixed synthetic source columns exercise heating, stable air, high terrain, and missing flux. Method 2.2.0 preserves all 2.1.0 numerical expectations except missing-flux thermal velocity and buoyancy/shear ratio, now null. Not observational validation."
   },
   "cases": [
     {
@@ -89,7 +89,7 @@
         "launchElevationM": 250
       },
       "expected": {
-        "contractVersion": "2.1.0",
+        "contractVersion": "2.2.0",
         "resolvedThermalTopM": 544.4,
         "thermalTopPlus1CM": 2211.1,
         "thermalVelocityV2Mps": 1.33,
@@ -239,7 +239,7 @@
         "launchElevationM": 250
       },
       "expected": {
-        "contractVersion": "2.1.0",
+        "contractVersion": "2.2.0",
         "resolvedThermalTopM": null,
         "thermalTopPlus1CM": 250,
         "thermalVelocityV2Mps": 0,
@@ -389,7 +389,7 @@
         "launchElevationM": 2450
       },
       "expected": {
-        "contractVersion": "2.1.0",
+        "contractVersion": "2.2.0",
         "resolvedThermalTopM": 2450,
         "thermalTopPlus1CM": 2744.4,
         "thermalVelocityV2Mps": 0.83,
@@ -537,10 +537,10 @@
         "launchElevationM": 250
       },
       "expected": {
-        "contractVersion": "2.1.0",
+        "contractVersion": "2.2.0",
         "resolvedThermalTopM": 544.4,
         "thermalTopPlus1CM": 2211.1,
-        "thermalVelocityV2Mps": 0,
+        "thermalVelocityV2Mps": null,
         "usableLiftTopV2M": null,
         "hcritWxtoflyM": null,
         "dryHcritM": null,
@@ -554,7 +554,7 @@
         "blTopWindSpeedMps": 5.09,
         "blTopWindDirDeg": 280.5,
         "blWindShearMps": 2.21,
-        "buoyancyShearRatio": 0,
+        "buoyancyShearRatio": null,
         "wind10mSpeedMps": 3,
         "wind10mDirDeg": 270,
         "wind80mSpeedMps": 4,

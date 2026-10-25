@@ -23,12 +23,20 @@ The [thermodynamic functions](src/thermodynamics.ts) document their missing-inpu
 behavior. In particular, surface pressure falls back to 1013.25 hPa when its
 inputs are missing, and dew point from mixing ratio falls back to −60 °C for
 invalid or nonpositive inputs. Other calculations may return `null`.
+Pressure/vertical-velocity conversions use dry-air density; humidity is not an
+input to these helpers. Preserve the matching inverse when converting native
+geometric vertical velocity. The pressure fallback is a compatibility estimate,
+not a terrain-dependent standard atmosphere or a measured surface pressure.
 [`computeBoundaryLayerWind`](src/boundary-layer-wind.ts) interpolates the layer
 boundaries and averages wind components by height.
 
 The [`/sun` module](src/sun.ts) provides solar position, refraction, a sun vector
 and sunrise/sunset times. It accepts UTC epoch milliseconds and coordinates in
 degrees. Sunrise/sunset returns `null` when both crossings do not occur in the
-requested interval. Physical constants and lower-level calculations are available
+requested interval, with sunrise before sunset. The search brackets solar maxima
+and minima as well as ordinary crossings, including short polar daylight or night
+intervals; it does not model a terrain horizon. Invalid intervals, including
+times outside JavaScript's date range, return `null`.
+Physical constants and lower-level calculations are available
 from `@windgrams/meteorology/thermodynamics`; shared input types are exported from
 the [root module](src/index.ts).

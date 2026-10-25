@@ -7,7 +7,7 @@ export const RD_J_PER_KG_K = 287.05;
 export const CPD_J_PER_KG_K = 1004.0;
 export const LV_J_PER_KG = 2501000.0;
 export const GRAVITY_MPS2 = 9.80665;
-export const POISSON_KAPPA = 0.2854; // Rd / cpd for mixed-layer potential temperature
+export const POISSON_KAPPA = 0.2854; // Retained mixed-layer exponent; distinct from RD_J_PER_KG_K / CPD_J_PER_KG_K.
 export const EPSILON = 0.622;
 export const VIRTUAL_TEMP_DELTA = (1 - EPSILON) / EPSILON; // ~0.607717
 export const MAGNUS_A = 17.625;
@@ -20,6 +20,7 @@ export const round2 = (n: unknown): number | null => (finite(n) ? Math.round(n *
 
 /**
  * Converts pressure vertical velocity omega (Pa/s) to geometric vertical velocity w (m/s).
+ * Uses dry-air density; the native RRFS inverse must use the same approximation.
  */
 export function geometricWFromOmegaMps(omegaPaS: number | null | undefined, pressureHpa: number | null | undefined, temperatureC: number | null | undefined): number | null {
   if (!finite(omegaPaS) || !finite(pressureHpa) || !finite(temperatureC) || pressureHpa <= 0) return null;
@@ -42,7 +43,8 @@ export function parcelLclAglM(temperatureC: number | null | undefined, dewPointC
 
 /**
  * Hypsometric surface pressure (hPa) anchored to the lowest above-ground pressure level.
- * Returns 1013.25 hPa when any required input is absent or non-finite.
+ * Uses mean dry temperature. Returns 1013.25 hPa when any required input is absent
+ * or non-finite; that fallback is a compatibility estimate, not measured pressure.
  */
 export function hypsometricSurfacePressureHpa(terrainM: number | null | undefined, surfaceTempC: number | null | undefined, firstLevel: PressureLevel | null | undefined): number {
   if (!finite(terrainM) || !finite(surfaceTempC) || !firstLevel || !finite(firstLevel.pressureHpa) || !finite(firstLevel.heightM) || !finite(firstLevel.temperatureC)) {

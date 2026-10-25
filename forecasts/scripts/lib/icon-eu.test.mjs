@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseForecastManifest, parseSiteForecast } from '@azohra/meteo.briefing/contract';
 import { postprocessPointForecast } from '../../soaring/point-postprocess.mjs';
+import { SOARING_CONTRACT_VERSION } from '../../soaring/science.mjs';
 import { discoverIconRun, normalizeIconExtract, deriveIconProfile, buildIconPointProfiles, writeIconAcquisition, readIconAcquisition, ICON_MODEL_LEVELS } from './icon-eu.mjs';
 import { iconBounds, iconReferenceTime, iconFieldUrl, iconDewPointC, iconHourlyFlux, iconHourlyPrecipitation, iconSource } from '../../../packages/providers/src/internal/icon-native.ts';
 
@@ -101,7 +102,7 @@ test('all three real samples pass public profile contract and existing V2 physic
     const profile = deriveIconProfile(acquired, i, { slug, name: slug, latitude: cell.latitude, longitude: cell.longitude, timeZone: 'Asia/Yerevan' });
     assert.ok(parseSiteForecast(profile), slug);
     assert.equal(profile.hours[0].levels.length, 29); // Existing pipeline filters the native level within 20 m of terrain.
-    assert.equal(profile.hours[0].soaring.contractVersion, '2.1.0');
+    assert.equal(profile.hours[0].soaring.contractVersion, SOARING_CONTRACT_VERSION);
     assert.deepEqual(postprocessPointForecast(profile, { modelSlug: 'icon-eu' }), profile);
     assert.equal(profile.hours[0].validAt, '2026-10-24T13:00:00Z');
     assert.ok(profile.hours[0].soaring.thermalVelocityV2Mps > 0);

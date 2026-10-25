@@ -9,8 +9,11 @@ import { mergeArtifacts } from './merge-artifacts.mjs';
 import { regionalProduct } from './lib/artifact-products.mjs';
 import { preparePublication } from './prepare-publication.mjs';
 import { terrainPolicyId } from './lib/terrain-policy.mjs';
+import { postprocessPointForecast } from '@windgrams/soaring/compatibility';
+import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
 
-const sourceProfile = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+const issuedProfile = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+const sourceProfile = postprocessPointForecast(issuedProfile, { launchElevationM: issuedProfile.soaringMeta.launchElevationM });
 const site = { slug: sourceProfile.site.id, name: sourceProfile.site.name, latitude: sourceProfile.site.latitude, longitude: sourceProfile.site.longitude, timeZone: sourceProfile.site.timeZone };
 const sites = [site], referenceTime = sourceProfile.run.referenceTime;
 const generatedAt = '2026-10-24T12:00:00Z';
@@ -41,10 +44,10 @@ function regional(root, caseId = 'test-rrfs-live', { run = referenceTime, genera
       modelElevationM: profile.site.modelElevationM, models: { rrfs: { referenceTime: run, hours: profile.hours.map(hour => ({ validAt: hour.validAt })) } } }] },
     'cross-section.json': { caseId, model: 'rrfs', title: 'Test', totalDistanceKm: 1, nodes: [node, { ...node, nodeIndex: 1, distanceKm: 1 }] },
   };
-  for (const [i, hour] of profile.hours.entries()) files[`f${i + 1}.json`] = { forecastHour: i + 1, validAt: hour.validAt, soaringContractVersion: '2.1.0',
+  for (const [i, hour] of profile.hours.entries()) files[`f${i + 1}.json`] = { forecastHour: i + 1, validAt: hour.validAt, soaringContractVersion: SOARING_CONTRACT_VERSION,
     thermalVelocityMps: [hour.derived.thermalVelocityMps], usableLiftTopM: [hour.derived.usableLiftTopM], boundaryLayerTopM: [hour.derived.boundaryLayerTopM],
     cloudBaseM: [hour.derived.cloudBaseM], pblHeightM: [hour.surface.pblHeightM], status: ['valid'], levelCount: [hour.levels.length], ceilingReached: [false] };
-  const manifest = { schemaVersion: 1, model: 'rrfs', soaringContractVersion: '2.1.0', capturedAt: generated, versions: { algorithm: 'synthetic-publication-fixture' },
+  const manifest = { schemaVersion: 1, model: 'rrfs', soaringContractVersion: SOARING_CONTRACT_VERSION, capturedAt: generated, versions: { algorithm: 'synthetic-publication-fixture' },
     case: { id: caseId, model: 'rrfs', referenceTime: run, forecastHours: [1, 2], bbox: [-123, 48, -122, 49], sinkMps: 1, site, launchElevation: { elevationM: 378.5 } },
     cellCount: 1, siteCell: 0, hours: profile.hours.map((hour, i) => ({ forecastHour: i + 1, validAt: hour.validAt, file: `f${i + 1}.json` })) };
   edit({ manifest, files });
@@ -56,7 +59,7 @@ function regional(root, caseId = 'test-rrfs-live', { run = referenceTime, genera
   return { caseId, bundle, directory };
 }
 function catalogue(root, caseIds, generated = generatedAt) {
-  write(join(root, 'soaring/v1/regions-rrfs.json'), { schemaVersion: 1, soaringContractVersion: '2.1.0', generatedAt: generated, trialRegionId: 'test',
+  write(join(root, 'soaring/v1/regions-rrfs.json'), { schemaVersion: 1, soaringContractVersion: SOARING_CONTRACT_VERSION, generatedAt: generated, trialRegionId: 'test',
     regions: caseIds.map((caseId, i) => ({ id: `test-${i}`, name: 'Test', status: 'active-verified-trial', caseId, nativeModels: [{ model: 'rrfs', caseId }],
       timeZone: site.timeZone, morningBriefingLocalHour: 8, bbox: [-123, 48, -122, 49], primarySite: site.slug, launches: [site.slug], deterministicModels: ['rrfs'], ensembleModels: [], sparseAdapters: [] })) });
 }

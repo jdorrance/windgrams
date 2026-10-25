@@ -71,10 +71,14 @@ const HORIZON_DEG = -0.833;
 /**
  * Sunrise and sunset between two instants (usually a local midnight and the
  * next): the first upward and the last downward crossing of the horizon,
- * found to the second. Returns null unless both crossings occur in that order.
+ * found to the second. Returns null unless both crossings occur in that order,
+ * or if the interval is outside JavaScript's representable date range.
  */
 export function sunriseSunset(startMs: number, endMs: number, latDeg: number, lonDeg: number): { sunrise: number; sunset: number } | null {
-  const above = (ms: number) => sunPosition(ms, latDeg, lonDeg).trueElevationDeg > HORIZON_DEG;
+  if (![startMs, endMs, latDeg, lonDeg].every(Number.isFinite) || endMs <= startMs || Math.abs(latDeg) > 90
+    || !Number.isFinite(new Date(startMs).getTime()) || !Number.isFinite(new Date(endMs).getTime())) return null;
+  const elevation = (ms: number) => sunPosition(ms, latDeg, lonDeg).trueElevationDeg;
+  const above = (ms: number) => elevation(ms) > HORIZON_DEG;
   const refine = (a: number, b: number, rising: boolean) => {
     while (b - a > 1000) {
       const mid = (a + b) / 2;
@@ -84,13 +88,37 @@ export function sunriseSunset(startMs: number, endMs: number, latDeg: number, lo
     return Math.round((a + b) / 2);
   };
   const step = 10 * 60_000;
+  const sample = (time: number) => ({ time, elevation: elevation(time) });
+  const samples = [sample(startMs - step), sample(startMs)];
+  for (let t = startMs + step; t < endMs; t += step) samples.push(sample(t));
+  samples.push(sample(endMs), sample(endMs + step));
+  const sampledCount = samples.length;
+  // A polar graze can cross the horizon twice between samples. Bracket each
+  // local maximum/minimum from its slope reversal, then include the extremum
+  // in the crossing search. The outside samples also cover window-edge grazes.
+  for (let i = 1; i < sampledCount - 1; i++) {
+    const previous = samples[i - 1], current = samples[i], next = samples[i + 1];
+    const maximum = current.elevation >= previous.elevation && current.elevation > next.elevation;
+    const minimum = current.elevation <= previous.elevation && current.elevation < next.elevation;
+    if (!maximum && !minimum) continue;
+    let a = previous.time, b = next.time;
+    while (b - a > 100) {
+      const left = a + (b - a) / 3, right = b - (b - a) / 3;
+      if ((elevation(left) < elevation(right)) === maximum) a = left;
+      else b = right;
+    }
+    const extremum = (a + b) / 2;
+    if (extremum > startMs && extremum < endMs) samples.push(sample(extremum));
+  }
+  samples.sort((a, b) => a.time - b.time);
   let sunrise: number | null = null;
   let sunset: number | null = null;
-  let prev = above(startMs);
-  for (let t = startMs + step; t <= endMs; t += step) {
-    const now = above(t);
-    if (now && !prev && sunrise === null) sunrise = refine(t - step, t, true);
-    if (!now && prev) sunset = refine(t - step, t, false);
+  let prev = samples[1].elevation > HORIZON_DEG;
+  // The first and last samples only bracket extrema outside the window.
+  for (let i = 2; i < samples.length - 1; i++) {
+    const now = samples[i].elevation > HORIZON_DEG;
+    if (now && !prev && sunrise === null) sunrise = refine(samples[i - 1].time, samples[i].time, true);
+    if (!now && prev) sunset = refine(samples[i - 1].time, samples[i].time, false);
     prev = now;
   }
   return sunrise !== null && sunset !== null && sunset > sunrise ? { sunrise, sunset } : null;

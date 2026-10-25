@@ -20,7 +20,7 @@ Collect a prospective sample spanning warm-season thermals, marine intrusions, i
 
 The archive retains 120 rolling runs plus pinned cases—about 30 days at four successful cycles per day. Its ordinary records preserve issued values for scoring. Full source columns must be retained separately for studies that recalculate diagnostics under a proposed method change.
 
-The [near-neutral parcel-depth discontinuity](refactor-plan.md#open-near-neutral-parcel-depth-discontinuity) needs a targeted numerical correction and an impact study before changing method 2.1.0. Further atmospheric levels, regional maps, pressure-gradient views and run comparisons should be chosen according to the errors they help explain and the cost of acquiring and serving their data.
+Method 2.2.0 corrects the numerical near-neutral zero-depth cliff and missing-input behavior; the [method-change evidence](refactor-plan.md#method-220-parcel-depth-and-missing-inputs) records analytic tests, archived comparisons and the remaining physical closure boundary. Further atmospheric levels, regional maps, pressure-gradient views and run comparisons should be chosen according to the errors they help explain and the cost of acquiring and serving their data.
 
 ## Experimental WRF work
 

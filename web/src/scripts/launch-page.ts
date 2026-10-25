@@ -55,8 +55,8 @@ let sample = false;
 let fullWindgramProfile = false;
 let resizeTimer = 0;
 const lifetime = createPageLifecycle({
-  onSuspend() { window.clearTimeout(resizeTimer); },
-  onRestore() { render(); },
+  onSuspend() { window.clearTimeout(resizeTimer); sunlight.suspend(); },
+  onRestore() { sunlight.resume(); render(); },
 });
 const eventOptions = { signal: lifetime.signal };
 const forecastClient = createForecastClient({ baseUrl: DATA_BASE, signal: lifetime.signal });
@@ -177,6 +177,8 @@ lifetime.onDispose(() => {
   windgramController.dispose();
   balloonSection.dispose();
   nwsEcmwfSections.dispose();
+  skewt?.dispose();
+  sunlight.dispose();
 });
 
 function persistSelection() {

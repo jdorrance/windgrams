@@ -6,6 +6,9 @@ import { join } from 'node:path';
 import { buildCovered, launchOutsideGrid, stageModelBuild, buildModel } from "./build-covered.mjs";
 import { engineTerrain } from './terrain.mjs';
 import { validateCurrentDiagnostics } from './lib/diagnostic-completeness.mjs';
+import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
+import { postprocessPointForecast } from '@windgrams/soaring/compatibility';
+import { parseSiteForecast } from '@azohra/meteo.briefing/contract';
 
 const sites = [
   { slug: "va-daniels", name: "Daniels", latitude: 38.3105, longitude: -78.512 },
@@ -64,7 +67,7 @@ function modelOutput(root, run, { omitProfile = false } = {}) {
   mkdirSync(join(root, 'rrfs', 'sites'), { recursive: true });
   writeFileSync(join(root, 'rrfs', 'manifest.json'), JSON.stringify({ model: 'rrfs', referenceTime: run, forecastHours: 2, sites: [{ slug: 'wa-tiger' }] }));
   if (!omitProfile) {
-    const document = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+    const document = postprocessPointForecast(JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url))));
     document.run.referenceTime = run;
     document.site.id = 'wa-tiger';
     document.hours = document.hours.slice(0, 2).map((hour, i) => ({ ...hour, validAt: new Date(Date.parse(run) + (i + 1) * 3600000).toISOString().replace('.000Z', 'Z') }));
@@ -189,15 +192,40 @@ test('operator backfills a same-run catalogue, skips complete work and repairs a
 });
 
 test('diagnostic completeness accepts retained ensemble policy and rejects incomplete deterministic metadata', () => {
-  const doc = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+  const doc = postprocessPointForecast(JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url))));
   validateCurrentDiagnostics(doc);
   const missing = structuredClone(doc); delete missing.hours[0].soaring;
   assert.throws(() => validateCurrentDiagnostics(missing), /missing soaring diagnostics/);
   const nullified = structuredClone(doc); nullified.hours[0].soaring = null;
   assert.throws(() => validateCurrentDiagnostics(nullified), /unexplained unavailable/);
   assert.throws(() => validateCurrentDiagnostics({ ...doc, soaringMeta: { ...doc.soaringMeta, contractVersion: '2.0.0' } }), /outdated soaring method/);
-  validateCurrentDiagnostics({ model: 'geps', run: { members: 21 }, hours: [{}], soaringMeta: { contractVersion: '2.1.0', modelKind: 'ensemble-percentiles',
+  validateCurrentDiagnostics({ model: 'geps', run: { members: 21 }, hours: [{}], soaringMeta: { contractVersion: SOARING_CONTRACT_VERSION, modelKind: 'ensemble-percentiles',
     nonlinearMedianPostprocessRefused: true, postprocessAction: 'retained-upstream-member-percentiles' } });
+});
+
+test('diagnostic validation preserves missing versus zero while the pinned point-source contract rejects incomplete fluxes', () => {
+  const input = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+  input.hours = input.hours.slice(0, 1);
+  input.hours[0].surface.sensibleHeatFluxWm2 = null;
+  const missing = postprocessPointForecast(input);
+  assert.equal(missing.hours[0].soaring.thermalVelocityV2Mps, null);
+  validateCurrentDiagnostics(missing);
+  // This tests the diagnostic guard independently. Production also requires
+  // the pinned SiteForecast source contract, which does not accept null fluxes.
+  assert.equal(parseSiteForecast(missing), null);
+  const fabricated = structuredClone(missing);
+  fabricated.hours[0].soaring.thermalVelocityV2Mps = 0;
+  assert.throws(() => validateCurrentDiagnostics(fabricated), /missing heat flux/);
+  for (const field of ['usableLiftTopV2M', 'hcritWxtoflyM', 'dryHcritM', 'buoyancyShearRatio']) {
+    const invalid = structuredClone(missing); invalid.hours[0].soaring[field] = 0;
+    assert.throws(() => validateCurrentDiagnostics(invalid), /requires thermal velocity/);
+  }
+  Object.assign(input.hours[0].surface, { sensibleHeatFluxWm2: 0, latentHeatFluxWm2: 0 });
+  const zero = postprocessPointForecast(input);
+  assert.equal(zero.hours[0].soaring.thermalVelocityV2Mps, 0);
+  validateCurrentDiagnostics(zero);
+  zero.hours[0].soaring.thermalVelocityV2Mps = null;
+  assert.throws(() => validateCurrentDiagnostics(zero), /unexplained unavailable thermal velocity/);
 });
 
 test('empty regional coverage skips readiness, terrain and acquisition', async t => {

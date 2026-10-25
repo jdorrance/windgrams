@@ -20,4 +20,15 @@ The transport helper combines those headers with a synthetic 4×4 grid and simpl
 
 ## Provenance
 
+`convergence-native.json` saves original 3×3 wind stencils around the Blanchard
+cell from HRRR October 21, 2026 00Z f014 and RRFS October 23, 2026 06Z f008.
+Each entry includes the native grid and original GRIB URLs, byte ranges and
+SHA-256 receipts. `centreIndex` identifies the native Blanchard cell independently
+of array order. Values were sampled with the pinned `@azohra/meteo.grib` 0.1.4
+decoder. Winds at 925 hPa retain the replay's above-terrain mask.
+These are decoded native values, without synthetic transport packing. The
+[projected-convergence audit](../../../docs/soaring-replay.md#projected-convergence)
+records the wider regional comparison and the analytic tests used to verify
+the method.
+
 The weather fields and inventories are from NOAA. The transport grids and packing are synthetic constructions used to exercise the decoder. Derivation and transport software retain their repository and upstream licence notices. When updating an expectation, keep the source identity and timestamps and inspect the numerical differences.

@@ -7,6 +7,7 @@ import { compassPoint, inArc, windWindow, type Launch } from "../lib/launches.ts
 import { StationChart } from "../lib/station-chart.ts";
 import { historyGrid, isStale, readWind, recentGust, type StationDocument, type Tone } from "../lib/station.ts";
 import { formatQuantity, fmt, relativeTime } from "../lib/units.ts";
+import { createPageLifecycle } from './page-lifecycle.ts';
 
 interface StationPageConfig {
   id: string;
@@ -33,28 +34,42 @@ function start() {
   let chart: StationChart | null = null;
   let doc: StationDocument | null = null;
   let fetchedAt = 0;
+  let pending = false;
+  let refreshTimer = 0, ageTimer = 0;
+  const stopPolling = () => { clearInterval(refreshTimer); clearInterval(ageTimer); refreshTimer = ageTimer = 0; };
+  const startPolling = () => {
+    if (refreshTimer) return;
+    refreshTimer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, REFRESH_MS);
+    ageTimer = window.setInterval(updateAge, 30_000);
+  };
+  const lifetime = createPageLifecycle({ onSuspend: stopPolling, onRestore() { startPolling(); updateAge(); void load(); } });
+  lifetime.onDispose(() => { stopPolling(); chart?.dispose(); });
 
   drawCompassFrame(byId<SVGSVGElement>("station-compass"), arc);
 
   async function load() {
+    if (pending || lifetime.disposed) return;
+    pending = true;
     fetchedAt = Date.now();
-    let response: Response;
     try {
-      response = await fetch(`/api/stations/${encodeURIComponent(config.id)}`, { cache: "no-store" });
+      const signal = AbortSignal.any([lifetime.signal, AbortSignal.timeout(15_000)]);
+      const response = await fetch(`/api/stations/${encodeURIComponent(config.id)}`, { cache: "no-store", signal });
+      if (lifetime.disposed) return;
+      if (response.status === 503) {
+        showStatus("Station feed is not connected.", true);
+        return;
+      }
+      if (!response.ok) {
+        if (!doc) showStatus("Station feed unavailable. Retrying in 2 minutes.", true);
+        return;
+      }
+      const received = (await response.json()) as StationDocument;
+      if (lifetime.disposed) return;
+      doc = received;
+      render();
     } catch {
-      if (!doc) showStatus("Station feed unavailable. Retrying in 2 minutes.");
-      return;
-    }
-    if (response.status === 503) {
-      showStatus("Station feed is not connected.", true);
-      return;
-    }
-    if (!response.ok) {
-      if (!doc) showStatus("Station feed unavailable. Retrying in 2 minutes.", true);
-      return;
-    }
-    doc = (await response.json()) as StationDocument;
-    render();
+      if (!lifetime.disposed && !doc) showStatus("Station feed unavailable. Retrying in 2 minutes.");
+    } finally { pending = false; }
   }
 
   function showStatus(text: string, withLink = false) {
@@ -160,14 +175,11 @@ function start() {
     age.textContent = observedAt ? `Reported ${time.format(new Date(observedAt))} (${relativeTime(observedAt)})` : "";
   }
 
-  load();
-  setInterval(() => {
-    if (document.visibilityState === "visible") load();
-  }, REFRESH_MS);
-  setInterval(updateAge, 30_000);
+  void load();
+  startPolling();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && Date.now() - fetchedAt > REFRESH_MS / 2) load();
-  });
+  }, { signal: lifetime.signal });
 }
 
 function setHeadline(node: HTMLElement, tone: Tone, text: string) {

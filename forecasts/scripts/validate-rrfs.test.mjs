@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateRrfsProfile } from './validate-rrfs.mjs';
+import { postprocessPointForecast } from '../soaring/point-postprocess.mjs';
 
-const profile = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+const issued = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+const profile = postprocessPointForecast(issued, { launchElevationM: issued.soaringMeta.launchElevationM });
 const validate = document => validateRrfsProfile(document, profile.run.referenceTime, profile.site.id);
 
 test('the captured NOAA RRFS run has a complete hourly 84-hour column and bounded v2 diagnostics', () => {
@@ -33,6 +35,7 @@ test('missing upper-air data, absent postprocessing, and lift above the resolved
     d => { d.hours[0].levels[1].pressureHpa = d.hours[0].levels[0].pressureHpa; },
     d => { d.hours[0].levels[0].windSpeedMps = null; },
     d => { delete d.hours[0].soaring; },
+    d => { d.hours[0].soaring.contractVersion = '2.1.0'; },
     d => { d.hours[0].soaring.usableLiftTopV2M = 1200; d.hours[0].soaring.resolvedThermalTopM = 1000; },
   ]) {
     const broken = structuredClone(profile); mutate(broken);

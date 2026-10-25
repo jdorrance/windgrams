@@ -2,7 +2,7 @@
 
 Soaring diagnostics estimate thermal strength, lift ceilings, cloud base and layer winds from forecast columns. They describe the atmosphere represented by the model: terrain smoothing, vertical resolution and missing source fields all affect the result. Convective velocity characterizes air motion; glider climb also depends on sink rate and position within a thermal.
 
-The calculations below describe method 2.1.0. Published point profiles store them in `hours[].soaring`; regional maps and soundings use the same diagnostic fields. [Regional operations](../forecasts/soaring/README.md) explains how to build them, and [observation evaluation](../forecasts/verification/README.md) explains how to measure their errors.
+The calculations below describe method 2.2.0. Published point profiles store them in `hours[].soaring`; regional maps and soundings use the same diagnostic fields. [Regional operations](../forecasts/soaring/README.md) explains how to build them, and [observation evaluation](../forecasts/verification/README.md) explains how to measure their errors.
 
 ## Inputs and heights
 
@@ -26,7 +26,7 @@ $$
 
 Surface density uses pressure and virtual temperature. The pressure helper accepts surface pressure or estimates it hypsometrically; available inputs depend on the adapter. The heat flux and reference temperature use the same potential-temperature factor, which cancels in the ratio.
 
-Method 2.1.0 retains the existing missing-flux defaults, which can also produce zero W*. Interpret that value alongside the availability of the source heat-flux fields. The first-layer fallback has a [near-neutral discontinuity](refactor-plan.md#open-near-neutral-parcel-depth-discontinuity); the linked example gives the reproducer and the evidence needed for a correction.
+Method 2.2.0 preserves missing heat fluxes as null, so W* and its dependent lift ceilings and buoyancy/shear ratio remain unavailable. Measured zero heat flux or a known zero layer depth produces zero W* when the other required inputs are available. Layer means can still use a known model PBL depth; an unknown depth does not become a surface-only mixed layer. The first-layer fallback now reaches its first-level cap in the neutral limit, and upper-layer crossings use bracketed linear interpolation. The [method-change notes](refactor-plan.md#method-220-parcel-depth-and-missing-inputs) derive the limit, document the remaining closure boundary and report archived comparisons.
 
 ## Lift ceilings
 
@@ -60,6 +60,8 @@ The buoyancy/shear ratio is W* divided by the surface-to-layer-top vector shear,
 
 Point postprocessing adds the soaring diagnostics while retaining the baseline `derived` fields. The browser selects the published diagnostic family and preserves its nulls. Older profiles may provide a 1 m/s ceiling without a 225 ft/min ceiling.
 
+The reusable atmospheric-column and compatibility APIs permit absent optional flux inputs. The pinned production point-source contract still requires numeric or supported ensemble heat-flux fields; a missing-source profile fails full publication validation. Nullable diagnostic support does not relax that source contract.
+
 For ensembles, nonlinear quantities must be calculated for each member before taking percentiles; otherwise the temperature, moisture and wind relationships within a member are lost. GEPS retains upstream percentiles and scalar circular-median wind directions. Comparisons label legacy percentiles `v1` where member columns for the newer derivation are unavailable. When raw member columns are supplied, they are derived before aggregation.
 
 ECMWF and NWS adapters expose surface LCL and the wind or layer fields their sources support. Their limited profiles and heat-flux inputs leave thermal strength and usable lift unavailable.
@@ -68,7 +70,7 @@ ECMWF and NWS adapters expose surface LCL and the wind or layer fields their sou
 
 ## Reproducible example
 
-The [Blanchard regression](../forecasts/soaring/soaring.test.mjs) uses the October 21, 2026 20Z column at model terrain 221.7 m MSL. The saved v1 publication has a thermal top of 778.9 m, W* of 1.06 m/s and usable height of 724.5 m. Method 2.1.0 gives a thermal top of 504.3 m, W* of 0.88 m/s, a 1 m/s ceiling of 470.2 m, a 225 ft/min ceiling of 452.2 m, surface LCL of 1315.0 m and mixed-layer LCL of 1602.3 m.
+The [Blanchard regression](../forecasts/soaring/soaring.test.mjs) uses the October 21, 2026 20Z column at model terrain 221.7 m MSL. The saved v1 publication has a thermal top of 778.9 m, W* of 1.06 m/s and usable height of 724.5 m. Methods 2.1.0 and 2.2.0 give a thermal top of 504.3 m, W* of 0.88 m/s, a 1 m/s ceiling of 470.2 m, a 225 ft/min ceiling of 452.2 m, surface LCL of 1315.0 m and mixed-layer LCL of 1602.3 m.
 
 The [fixed replay](soaring-replay.md) reproduces this example from captured source fields to check numerical consistency. [Issued-history evaluation](../forecasts/verification/README.md) measures error against observations, and the [evaluation plan](soaring-forecast-plan.md) describes the broader sample still needed.
 

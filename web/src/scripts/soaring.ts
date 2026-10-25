@@ -279,6 +279,7 @@ async function main() {
     name: manifest.case.site.name,
     elevationM: manifest.case.launchElevation.elevationM,
   });
+  lifetime.onDispose(() => soundingChart.dispose());
   let selectedProfile: { cellIndex: number; profile: SiteForecast | null; error: unknown } | null = null;
   const profileLoader = createKeyedAsyncLoader<number, SiteForecast>({
     load: cellIndex => dataset.loadCellProfile(cellIndex),
@@ -293,9 +294,9 @@ async function main() {
       if (!hour) throw new Error('Forecast hour unavailable');
       return hour;
     },
-    onActiveComplete: (_index, hour, error) => {
+    onActiveComplete: (_index, hour) => {
       if (!hour) {
-        set('cell-notice', `Forecast unavailable: ${error instanceof Error ? error.message : String(error)}`);
+        set('cell-notice', 'Forecast unavailable for this hour. Try another hour.');
         el('cell-notice').hidden = false;
         return;
       }
@@ -331,9 +332,14 @@ async function main() {
   el<HTMLAnchorElement>('audit-download').href = `${root}/audit.json`;
   void optionalBundle('audit.json', raw => { try { return validateReplayAudit(raw); } catch { return null; } }).then(audit => {
     if (lifetime.disposed) return;
+    el('audit-limitations').replaceChildren(...(audit?.limitations ?? []).map(limitation => {
+      const item = document.createElement('li');
+      item.textContent = limitation;
+      return item;
+    }));
     set('audit-results', audit
-      ? `${audit.mapProfileAgreement.valuesChecked.toLocaleString('en-US')} map and profile values checked across ${audit.mapProfileAgreement.hours} hours. Grid point ${formatQuantity(audit.sampledCell.distanceKm, 'distance')} from launch. Model terrain ${formatQuantity(audit.terrain.modelElevationM, 'elevation')} MSL; launch ${formatQuantity(audit.terrain.launch.elevationM, 'elevation')} MSL.`
-      : 'Forecast audit unavailable.');
+      ? `Grid point ${formatQuantity(audit.sampledCell.distanceKm, 'distance')} from launch · Model ground ${formatQuantity(audit.terrain.modelElevationM, 'elevation')} MSL · Launch ${formatQuantity(audit.terrain.launch.elevationM, 'elevation')} MSL`
+      : 'Forecast details unavailable.');
   });
 
   const obsSkill = verificationDoc?.observationVerificationSkill;

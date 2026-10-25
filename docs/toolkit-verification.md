@@ -5,6 +5,8 @@ on October 25, 2026, with Node 24 and pnpm 10.28.0. The comparisons used retaine
 forecasts and fixed fixtures. Forecast method 2.1.0 and the pinned Azohra versions
 were unchanged.
 
+The subsequent method 2.2.0 corrections have a separate [numerical comparison](refactor-plan.md#archived-comparison-and-rollout) and [native-grid convergence comparison](soaring-replay.md). The results below describe the earlier package extraction.
+
 ## Numerical and rendering comparisons
 
 Eight profiles covering 646 forecast hours reproduced the previous postprocessor's

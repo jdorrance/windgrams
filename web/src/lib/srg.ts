@@ -51,6 +51,7 @@ export interface Srg {
 }
 
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const UTC_OFFSETS: Readonly<Record<string, number>> = { EDT: 4, EST: 5, CDT: 5, CST: 6, MDT: 6, MST: 7, PDT: 7, PST: 8, AKDT: 8, AKST: 9, HST: 10, UTC: 0, GMT: 0, Z: 0 };
 
 const value = (text: string, pattern: RegExp) => pattern.exec(text)?.[1]?.trim() ?? null;
 const number = (s: string | null | undefined) => {
@@ -63,8 +64,8 @@ const number = (s: string | null | undefined) => {
 export function srgInstant(date: string, hhmm: string, zone: string): string | null {
   const m = /^(\d\d)\/(\d\d)\/(\d{4})$/.exec(date);
   if (!m || !/^\d{4}$/.test(hhmm)) return null;
-  const offset = zone === "MDT" ? 6 : zone === "MST" ? 7 : zone === "PDT" ? 7 : zone === "PST" ? 8 : zone === "CDT" ? 5 : zone === "CST" ? 6 : null;
-  if (offset === null) return null;
+  const offset = Object.hasOwn(UTC_OFFSETS, zone) ? UTC_OFFSETS[zone] : undefined;
+  if (offset === undefined) return null;
   const t = Date.UTC(Number(m[3]), Number(m[1]) - 1, Number(m[2]), Number(hhmm.slice(0, 2)) + offset, Number(hhmm.slice(2)));
   return new Date(t).toISOString().replace(".000Z", "Z");
 }
@@ -94,7 +95,7 @@ function tableRows(lines: string[], start: number): { rows: string[]; end: numbe
 }
 
 function observedTable(text: string, lines: string[]): SrgProfile | null {
-  const header = /Upper air data from rawinsonde observation taken on (\d\d\/\d\d\/\d{4}) at (\d{4}) (\w{3})/.exec(text);
+  const header = /Upper air data from rawinsonde observation taken on (\d\d\/\d\d\/\d{4}) at (\d{4}) ([A-Z]{1,4})\b/.exec(text);
   if (!header) return null;
   const validAt = srgInstant(header[1], header[2], header[3]);
   const start = lines.findIndex((l) => l.includes("Upper air data from rawinsonde"));
@@ -135,7 +136,7 @@ function observedTable(text: string, lines: string[]): SrgProfile | null {
 
 function modelTables(lines: string[]): SrgProfile[] {
   const out: SrgProfile[] = [];
-  const headerRe = /^\s*(\d\d\/\d\d\/\d{4}) at (\d{4}) (\w{3})\s*\|\s*(\d\d\/\d\d\/\d{4}) at (\d{4}) (\w{3})/;
+  const headerRe = /^\s*(\d\d\/\d\d\/\d{4}) at (\d{4}) ([A-Z]{1,4})\b\s*\|\s*(\d\d\/\d\d\/\d{4}) at (\d{4}) ([A-Z]{1,4})\b/;
   for (let i = 0; i < lines.length; i += 1) {
     const h = headerRe.exec(lines[i]);
     if (!h) continue;
@@ -202,7 +203,7 @@ export function parseSrg(text: string): Srg {
   const forecastDate = dateMatch && month > 0 ? `${dateMatch[3]}-${String(month).padStart(2, "0")}-${dateMatch[2].padStart(2, "0")}` : null;
   const trigger = /trigger temperature of ([\d.]+) F\/(-?[\d.]+) C/.exec(text);
   const maxTemp = /Forecast maximum temperature\.+\s*([\d.]+) F\/(-?[\d.]+) C/.exec(text);
-  const triggerAt = /Time of trigger temperature\.+\s*(\d{4}) (\w{3})/.exec(text);
+  const triggerAt = /Time of trigger temperature\.+\s*(\d{4}) ([A-Z]{1,4})\b/.exec(text);
   const outlook = /Thermal soaring outlook for (\w+ [\d/]+)\.+\s*(.+)$/m.exec(text);
   const elevation = /Elevation:\s*(\d+) feet/.exec(text);
   const us = forecastDate ? `${forecastDate.slice(5, 7)}/${forecastDate.slice(8, 10)}/${forecastDate.slice(0, 4)}` : null;

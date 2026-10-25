@@ -85,7 +85,8 @@ test("a dry day reports wind aloft without inferring turbulence from a speed thr
 test("launch altitude is compared in MSL and is not substituted with model surface wind", () => {
   const s = buildSounding(site, hour({ t: 25, td: 8, ws: 3 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 }))!;
   const belowTerrain = readSounding(s, 1268).findings.find((finding) => finding.key === "wind")!;
-  assert.match(belowTerrain.text, /Launch wind unavailable: launch at 4,160 ft MSL is below model terrain at 4,265 ft MSL/);
+  assert.match(belowTerrain.text, /Launch wind unavailable \(4,160 ft MSL\) · Below model ground/);
+  assert.match(belowTerrain.text, /Model terrain: 4,265 ft MSL/);
   assert.match(belowTerrain.text, /Model surface \(33 ft AGL\): NW 7 mph/);
   assert.doesNotMatch(belowTerrain.text, /Launch \(.*\): NW 7 mph/);
 
@@ -99,7 +100,7 @@ test("launch altitude is compared in MSL and is not substituted with model surfa
   assert.match(unknownLaunch.text, /Model surface \(33 ft AGL\)/);
 
   const woodstock = readSounding(s, 565).findings.find((finding) => finding.key === "wind")!;
-  assert.match(woodstock.text, /launch at 1,854 ft MSL/);
+  assert.match(woodstock.text, /Launch wind unavailable \(1,854 ft MSL\)/);
   assert.doesNotMatch(woodstock.text, /1,900 ft/);
 });
 
@@ -213,7 +214,8 @@ test("metric sounding copy converts SI values while retaining altitude reference
   const words = reading.findings.map((finding) => finding.text).join(" ");
   assert.match(words, /w\* 2\.20 m\/s/);
   assert.match(words, /Lift 3,300 m MSL · 2,050 m above launch/);
-  assert.match(words, /launch at 1,268 m MSL is below model terrain at 1,300 m MSL/);
+  assert.match(words, /Launch wind unavailable \(1,268 m MSL\) · Below model ground/);
+  assert.match(words, /Model terrain: 1,300 m MSL/);
   assert.match(words, /Model surface \(10 m AGL\): NW 11 km\/h/);
   assert.match(words, /°C\/km/);
   assert.doesNotMatch(words, /\bft\b|mph|°F|\bno\b|\bnot\b|cannot/i);

@@ -26,7 +26,7 @@ export function createFreshnessNotice(
     const now = environment.now();
     const assessment = input ? assessForecastFreshness({ ...input, now: new Date(now).toISOString() }) : null;
     const failedRefresh = !input?.historical && ['retained', 'unavailable'].includes(input?.refresh?.outcome ?? '');
-    host.textContent = [assessment?.reason, failedRefresh ? 'Latest update did not complete; showing the available forecast.' : ''].filter(Boolean).join('. ');
+    host.textContent = [assessment?.reason, failedRefresh ? 'Latest update failed' : ''].filter(Boolean).join(' · ');
     host.hidden = !host.textContent;
     host.dataset.freshness = assessment?.status ?? '';
     if (!environment.document.hidden && assessment?.nextCheckAt) {

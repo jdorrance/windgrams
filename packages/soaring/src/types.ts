@@ -1,10 +1,12 @@
 import type { AtmosphericColumn, AtmosphericLevel, Scalar, SiteForecast } from '@windgrams/contracts';
 import type { PressureLevel } from '@windgrams/meteorology';
+import type { SOARING_CONTRACT_VERSION } from './diagnostics.js';
 
 export interface DiagnosticOptions { launchElevationM?: number | null }
 /** Baseline cloud ceiling used to cap lift, in metres MSL. */
 export interface BaselineLiftHour { derived?: { cloudBaseM?: number | null } }
-/** Upward heat flux in W/m²; boundary-layer depth in metres AGL; terrain in metres MSL. */
+/** Upward heat flux in W/m²; boundary-layer depth in metres AGL; terrain in metres MSL.
+ * Missing flux, pressure or depth yields null W*. Omitted dew point retains the dry-air approximation. */
 export interface ThermalVelocityInput {
   surfaceTemperatureC: number; surfaceDewPointC?: number | null;
   sensibleHeatFluxWm2?: number | null; latentHeatFluxWm2?: number | null;
@@ -37,7 +39,7 @@ export type SoaringMetric =
   | 'sensibleHeatFluxWm2' | 'latentHeatFluxWm2' | 'cloudCoverPercent' | 'lowCloudPercent'
   | 'midCloudPercent' | 'highCloudPercent' | 'precipitationMmHr' | 'capeJkg' | 'cinJkg';
 export type SoaringDiagnostics = Record<SoaringMetric, number | null> & {
-  contractVersion: '2.1.0'; thermalVelocityV2Mps: number; verticalResolution: VerticalResolution;
+  contractVersion: typeof SOARING_CONTRACT_VERSION; verticalResolution: VerticalResolution;
   experimental?: { terrainAdjustment: TerrainAdjustment | null };
 };
 export interface EnsembleMetric {
@@ -49,7 +51,7 @@ export type EnsembleSoaringMetric = 'resolvedThermalTopM' | 'thermalTopPlus1CM' 
   | 'cuPotentialM' | 'odPotentialM' | 'thermalVelocityV2Mps' | 'blMeanWindSpeedMps'
   | 'blTopWindSpeedMps' | 'blWindShearMps' | 'buoyancyShearRatio';
 export type EnsembleSoaringDiagnostics = Record<EnsembleSoaringMetric, EnsembleMetric> & {
-  contractVersion: '2.1.0'; modelKind: 'ensemble-percentiles'; derivationRule: 'per-member-before-percentiles'; memberCount: number;
+  contractVersion: typeof SOARING_CONTRACT_VERSION; modelKind: 'ensemble-percentiles'; derivationRule: 'per-member-before-percentiles'; memberCount: number;
 };
 export interface MemberColumn { source: AtmosphericColumn; v1Hour: BaselineLiftHour }
 /** Reconstructed fields may contain scalars or ensemble percentiles; validate before using them as a scalar column. */
@@ -91,7 +93,7 @@ export interface SoaringMetadata {
   reason?: string; supportedDiagnostics?: string[]; unsupportedDiagnostics?: string[]; unsupportedReason?: string;
 }
 export interface SparseSoaringDiagnostics {
-  contractVersion: '2.1.0'; modelKind: 'surface-or-sparse-adapter';
+  contractVersion: typeof SOARING_CONTRACT_VERSION; modelKind: 'surface-or-sparse-adapter';
   surfaceLclM: number | null; modelBlTopM: number | null;
   blMeanWindSpeedMps: number | null; blMeanWindDirDeg: number | null;
   thermalVelocityV2Mps: null; usableLiftTopV2M: null; hcritWxtoflyM: null; dryHcritM: null; mixedLayerLclM: null;

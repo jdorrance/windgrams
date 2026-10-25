@@ -59,3 +59,32 @@ Column quality is `valid`, `missing` or `insufficient-levels`. A valid column ca
 Root `pnpm test` exercises archived values, analytic columns, masks, geometry, wind rotation, transport, resume behavior and deterministic replay, along with browser data and selection behavior. These tests answer whether the software reproduces the expected result. [Matched observations](../forecasts/verification/README.md) answer how far that result differs from the atmosphere.
 
 [Fixture provenance](../forecasts/soaring/fixtures/README.md) identifies the original NOAA inventories, decoded values and synthetic GRIB transport used by offline tests. The vendored meteo module retains Justin Watts's MIT attribution.
+
+### Projected convergence
+
+Method 2.2.0 uses the spherical Lambert projection encoded in each GRIB record.
+Its scale `m` is projected distance divided by ground distance. For physical
+grid-axis winds `U,V`, convergence is `-m² [∂(U/m)/∂x + ∂(V/m)/∂y]`, preserving
+both the local distance scale and its spatial derivatives. Earth-relative winds
+are rotated to grid axes first. Signed native spacing handles every GRIB scan
+direction, with centered differences inside the region and one-sided differences
+at its edges. Missing stencil values remain unavailable. This is the conformal
+metric formulation described in the [WRF technical note](https://www2.mmm.ucar.edu/wrf/users/docs/technote/v4_technote.pdf).
+
+The archived North Sound comparison used all 2,259 cells and 14 hours from HRRR
+October 21, 2026 00Z (f014–f027) and RRFS October 23, 2026 06Z (f008–f021), decoded
+from retained original GRIB records. Compared with the prior Cartesian stencil,
+the mean/maximum absolute changes at 10 m were 0.41179/6.80 for HRRR and
+0.29037/3.75 for RRFS, in the published units of 10⁻⁵ s⁻¹. Each comparison included
+31,612 valid cell-hours. At 925 hPa, with the existing terrain mask applied, they
+were 0.03654/0.17 over 23,282 HRRR cell-hours and 0.16213/2.26 over 25,052 RRFS
+cell-hours. No nonzero value changed sign. Zero can become a small nonzero
+convergence because spatially constant grid winds need not be nondivergent on
+the sphere. These comparisons establish the change's magnitude, not forecast
+skill against observations.
+
+The [analytic tests](../forecasts/soaring/grid-kinematics.test.mjs) check
+nondivergent spherical solid-body rotation, uniform northward flow, constant
+metric flux, missing data and edge stencils. The broader geometry test covers
+every scan order with a linear metric-flux field. The saved native wind
+stencils retain small, reproducible HRRR/RRFS regression cases.

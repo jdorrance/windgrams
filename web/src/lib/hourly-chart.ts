@@ -74,6 +74,7 @@ const MARGIN = { top: 10, bottom: 24, left: 44 };
 const ARROW_ROW = 28;
 
 export class HourlyChart<T extends { validAt: string }> {
+  private disposed = false;
   private hours: T[] = [];
   private active: number | null = null;
   private crosshairs: SVGLineElement[] = [];
@@ -99,9 +100,20 @@ export class HourlyChart<T extends { validAt: string }> {
   }
 
   setHours(hours: T[]) {
+    if (this.disposed) return;
     this.hours = hours;
     this.active = null;
     this.render();
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.observer.disconnect();
+    this.hours = [];
+    this.crosshairs = [];
+    this.tooltip?.remove();
+    this.root.replaceChildren();
   }
 
   private get minutesPerPoint() {

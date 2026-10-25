@@ -61,3 +61,19 @@ test("times convert from the office's local zone; a changed format gives nulls, 
   assert.deepEqual(empty.model, []);
   assert.equal(empty.maxThermalHeightFt, null);
 });
+
+test('complete SRG bulletins parse Eastern, Alaska, Hawaii and UTC timestamps without truncating zone tokens', () => {
+  const baseline = parseSrg(TEXT);
+  for (const [zone, offset] of Object.entries({ EDT: 4, EST: 5, AKDT: 8, AKST: 9, HST: 10, UTC: 0, GMT: 0, Z: 0 })) {
+    const parsed = parseSrg(TEXT.replaceAll('MDT', zone));
+    const shift = (time: string) => new Date(Date.parse(time) + (offset - 6) * 3_600_000).toISOString().replace('.000Z', 'Z');
+    assert.equal(parsed.observed?.validAt, shift(baseline.observed!.validAt), zone);
+    assert.equal(parsed.triggerTime, shift(baseline.triggerTime!), zone);
+    assert.deepEqual(parsed.model.map(hour => hour.validAt), baseline.model.map(hour => shift(hour.validAt)), zone);
+    assert.deepEqual(parsed.observed?.rows, baseline.observed!.rows, 'time-zone support preserves measurements');
+  }
+  const unknown = parseSrg(TEXT.replaceAll('MDT', 'MDTX'));
+  assert.equal(unknown.observed, null);
+  assert.equal(unknown.triggerTime, null);
+  assert.deepEqual(unknown.model, []);
+});

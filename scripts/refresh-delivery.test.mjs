@@ -9,6 +9,8 @@ import { refreshGroups, refreshSelection } from './refresh-policy.mjs';
 import { refreshCommands, refreshProvider } from '../forecasts/scripts/refresh-provider.mjs';
 import { packRefresh } from '../forecasts/scripts/pack-refresh.mjs';
 import { mergeArtifacts } from '../forecasts/scripts/merge-artifacts.mjs';
+import { postprocessPointForecast } from '../forecasts/soaring/point-postprocess.mjs';
+import { SOARING_CONTRACT_VERSION } from '../forecasts/soaring/science.mjs';
 
 const repository = 'pilot/windgrams', sha = 'a'.repeat(40);
 const run = (group, id, overrides = {}) => ({ id, status: 'completed', conclusion: 'success', head_branch: 'main', event: 'schedule',
@@ -34,7 +36,7 @@ test('collection publishes ready providers while others run and falls back from 
   };
   const report = await collectRefreshArtifacts(root, { repository, api, download: (id, name, directory) => {
     writeFileSync(join(directory, '.artifact.json'), JSON.stringify({ schemaVersion: 1, group: 'rrfs', sourceSha: id === 2 ? 'bad' : sha,
-      soaringContractVersion: '2.1.0', createdAt: '2026-10-25T04:00:00Z' }));
+      soaringContractVersion: SOARING_CONTRACT_VERSION, createdAt: '2026-10-25T04:00:00Z' }));
     writeFileSync(join(directory, 'EMPTY'), 'empty');
   } });
   assert.deepEqual(report.collected.map(item => item.run), [1]);
@@ -47,7 +49,8 @@ test('collection publishes ready providers while others run and falls back from 
 test('uploaded unfinished or unsuccessful refreshes retain a validated fallback and the latest health', async t => {
   const root = mkdtempSync(join(tmpdir(), 'refresh-fallback-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const profile = JSON.parse(readFileSync(new URL('../forecasts/soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+  const issued = JSON.parse(readFileSync(new URL('../forecasts/soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+  const profile = JSON.parse(JSON.stringify(postprocessPointForecast(issued, { launchElevationM: issued.soaringMeta.launchElevationM })));
   const site = { slug: profile.site.id, name: profile.site.name, latitude: profile.site.latitude, longitude: profile.site.longitude, timeZone: profile.site.timeZone };
   const write = (path, document) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, JSON.stringify(document)); };
   for (const [mode, status, conclusion] of [['empty', 'completed', 'failure'], ['partial', 'completed', 'cancelled'],
@@ -68,7 +71,7 @@ test('uploaded unfinished or unsuccessful refreshes retain a validated fallback 
       download: (id, _name, directory) => {
         downloaded.push(id);
         write(join(directory, '.artifact.json'), { schemaVersion: 1, group: 'rrfs', sourceSha: id === 3 ? 'incompatible' : sha,
-          soaringContractVersion: '2.1.0', createdAt: '2026-10-25T06:00:00Z' });
+          soaringContractVersion: SOARING_CONTRACT_VERSION, createdAt: '2026-10-25T06:00:00Z' });
         const failed = id === 5 && mode !== 'ready', completedAt = `2026-10-25T0${id}:01:00Z`;
         write(join(directory, 'health/rrfs.json'), { schemaVersion: 1, group: 'rrfs', models: { rrfs: {
           attemptedAt: `2026-10-25T0${id}:00:00Z`, completedAt, lastSuccessfulRefreshAt: failed ? null : completedAt,
@@ -100,6 +103,24 @@ test('uploaded unfinished or unsuccessful refreshes retain a validated fallback 
   }
 });
 
+test('collection rejects a previous calculation method even when commit provenance is valid', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'refresh-method-upgrade-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const report = await collectRefreshArtifacts(root, { repository,
+    api: async path => path.includes('/workflows/')
+      ? { workflow_runs: path.includes('refresh-rrfs') ? [run('rrfs', 2), run('rrfs', 1)] : [] }
+      : { artifacts: [{ name: 'data-rrfs', expired: false, workflow_run: { head_sha: sha } }] },
+    download: (id, _name, directory) => {
+      writeFileSync(join(directory, '.artifact.json'), JSON.stringify({ schemaVersion: 1, group: 'rrfs', sourceSha: sha,
+        soaringContractVersion: id === 2 ? '2.1.0' : SOARING_CONTRACT_VERSION, createdAt: '2026-10-25T04:00:00Z' }));
+      writeFileSync(join(directory, 'EMPTY'), 'empty');
+    },
+  });
+  assert.deepEqual(report.collected.map(item => item.run), [1]);
+  assert.deepEqual(report.rejected, [{ group: 'rrfs', run: 2, reason: 'Incompatible artifact provenance' }]);
+  assert.equal(existsSync(join(root, 'data-rrfs--2')), false);
+});
+
 test('publication rejects malformed candidate run suffixes', t => {
   const root = mkdtempSync(join(tmpdir(), 'refresh-suffix-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -125,7 +146,7 @@ test('observation fallback run 9 seeds retained payloads before failed run 10', 
       : { artifacts: [{ name: 'data-observations', expired: false, workflow_run: { head_sha: sha } }] },
     download: (id, _name, directory) => {
       write(join(directory, '.artifact.json'), { schemaVersion: 1, group: 'observations', sourceSha: sha,
-        soaringContractVersion: '2.1.0', createdAt: '2026-10-25T11:00:00Z' });
+        soaringContractVersion: SOARING_CONTRACT_VERSION, createdAt: '2026-10-25T11:00:00Z' });
       write(join(directory, 'ecmwf/manifest.json'), { schemaVersion: 1, generatedAt: id === 9 ? payload.generatedAt : '2026-10-25T10:00:00Z',
         sites: [{ slug: 'retained', ok: id === 9, ...(id === 10 ? { error: 'Source unavailable' } : {}) }] });
       if (id === 9) write(join(directory, 'ecmwf/sites/retained.json'), payload);

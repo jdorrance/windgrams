@@ -41,14 +41,16 @@ export async function runProvider(group, options = {}, { build = buildProviderMo
   }
   return results;
 }
-async function main() {
-  const { values } = parseArgs({ options: { group: { type: 'string' }, sites: { type: 'string', default: 'sites.json' }, output: { type: 'string', default: 'data' }, 'readiness-attempts': { type: 'string' }, 'readiness-delay-ms': { type: 'string' } } });
-  const results = await runProvider(values.group, values);
+/** Finish every model and report acquisition failure even when last-good data remains available. */
+export async function runProviderCommand(args, dependencies) {
+  const { values } = parseArgs({ args, options: { group: { type: 'string' }, sites: { type: 'string', default: 'sites.json' }, output: { type: 'string', default: 'data' }, 'readiness-attempts': { type: 'string' }, 'readiness-delay-ms': { type: 'string' } } });
+  const results = await runProvider(values.group, values, dependencies);
   for (const result of results) console.log(`${result.model}: ${result.status}${result.error ? ` — ${result.error}` : ''}`);
   const degraded = results.filter(result => result.status !== 'updated');
   for (const result of degraded) console.warn(`::warning::${result.model} refresh ${result.status}; see health/${values.group}.json and provider logs.`);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### ${values.group} refresh\n\n${results.map(result => `- ${result.model}: ${result.status}`).join('\n')}\n`);
-  // Pack all successfully built/retained models even when one first run failed.
-  if (results.length && results.every(result => result.status === 'unavailable')) process.exitCode = 1;
+  // The workflow packs built/retained products even when this command fails.
+  return degraded.length ? 1 : 0;
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error); process.exitCode = 1; });
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) runProviderCommand(process.argv.slice(2))
+  .then(code => { process.exitCode = code; }).catch(error => { console.error(error); process.exitCode = 1; });

@@ -71,6 +71,8 @@ Map soundings retain native pressure levels and read the same published lift dia
 
 Provider workflows share the [refresh setup](../../.github/workflows/refresh-provider.yml) but run independently. Each completed refresh triggers the serialized [Pages publisher](../../.github/workflows/pages.yml). A slow provider can therefore leave its older forecast in place while other completed products publish. Code pushes also collect the latest compatible artifacts.
 
+Refreshes dispatched by `GITHUB_TOKEN` explicitly request publication after uploading their artifact because GitHub [suppresses their automatic follow-up events](https://docs.github.com/en/actions/concepts/security/github_token#when-github_token-triggers-workflow-runs). Uploaded artifacts can publish while the provider finishes runner cleanup, including when acquisition failed and older products were retained.
+
 To request a refresh and publication:
 
 ```sh
@@ -79,13 +81,21 @@ gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=rrfs
 
 The `refresh` choices are `all`, `rrfs`, `icon-eu` and `none`. Choose `none` to publish completed artifacts without requesting another refresh. Add `-f dry_run=true` to prepare and validate the candidate dataset without deployment. GitHub can dispatch a new workflow only after that file exists on `main`.
 
+### Schedule troubleshooting
+
+The provider schedules use UTC. Check the provider workflow's scheduled runs separately from Pages: a successful publication can contain retained forecasts. Compare the expected cron time with the run's `created_at`, then compare that with the job's `started_at`. A missing run or late creation points to event delivery; a created run waiting for a job points to runner or concurrency queues. Errors after a job starts belong to the refresh itself.
+
+GitHub documents that [scheduled events can be delayed or dropped](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). The hourly served-data monitor uses the same scheduler, so it cannot independently detect a scheduler outage. Use the manual dispatch above for recovery; verify new model initialization times and refresh health before treating publication as a successful refresh.
+
+### Publication and retention
+
 For a local rehearsal with downloaded artifacts in `../incoming`:
 
 ```sh
 node scripts/prepare-publication.mjs --incoming ../incoming --output data --dry-run
 ```
 
-The collector considers the latest 20 completed runs per provider, accepting artifacts from repository-owned `main` workflows with compatible source, format and diagnostic method. Following an unsuccessful run, it keeps that artifact and an earlier successful artifact as separate candidates, applying them oldest first by run ID. A failed attempt can thus supply useful completed products without erasing the record of the failure.
+The collector considers the latest 20 runs per provider, accepting completed uploads from repository-owned `main` workflows with compatible source, format and diagnostic method. A run still in progress is eligible only once its artifact is available; this keeps concurrent publication requests from losing an upload while the provider finishes cleanup. Following an unsuccessful or unfinished run, it keeps that artifact and an earlier successful artifact as separate candidates, applying them oldest first by run ID. A failed attempt can thus supply useful completed products without erasing the record of the failure.
 
 Complete newer products replace their retained counterparts. Older runs, partial profiles and invalid bundles leave the prior product in place. If a cached model itself is invalid, publication removes it from the prepared dataset and reports it unavailable while healthy models continue. An invalid regional pointer is removed from active catalogues; its immutable bundle files remain for diagnosis.
 
@@ -112,6 +122,8 @@ Imports add missing records and metadata while preserving existing coordinates, 
 ## Refresh health
 
 `run-provider.mjs --group GROUP --output data` records each model's attempt in `health/GROUP.json`, including its outcome and last successful refresh. Groups are `noaa-cloud`, `eccc`, `rrfs` and `dwd`; DWD runs the native ICON builder. Attempt times are separate from forecast initialization times. If a process is terminated, its attempt remains `running`, while successfully completed sibling models can still publish.
+
+Any model acquisition failure makes the refresh command exit unsuccessfully, including when a valid older forecast is retained. Other models still finish, and the workflow still packs their results and health records for publication. An already-current forecast that passes validation is successful.
 
 The [health helper](../scripts/lib/provider-health.mjs) validates these records and merges them by attempt time, independently of which forecast run publication accepts.
 

@@ -14,6 +14,7 @@ function el<K extends keyof SVGElementTagNameMap>(name: K, attrs: Record<string,
 }
 
 export class SunCurve {
+  private disposed = false;
   private steps: number[] = [];
   private values: number[] = [];
   private current = 0;
@@ -43,6 +44,7 @@ export class SunCurve {
 
   /** Values (W/m²) at each step (ms), the current step, and what the series is ("Launch"). */
   set(steps: number[], values: number[], current: number, label: string) {
+    if (this.disposed) return;
     this.steps = steps;
     this.values = values;
     this.current = current;
@@ -51,8 +53,18 @@ export class SunCurve {
   }
 
   setCurrent(index: number) {
+    if (this.disposed) return;
     this.current = index;
     this.draw();
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.observer.disconnect();
+    this.steps = []; this.values = [];
+    this.tooltip.remove();
+    this.host.replaceChildren();
   }
 
   peakIndex() {
@@ -62,6 +74,7 @@ export class SunCurve {
   }
 
   private draw() {
+    if (this.disposed) return;
     const host = this.host;
     this.width = host.clientWidth || 600;
     host.replaceChildren();

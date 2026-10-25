@@ -1,7 +1,7 @@
 import { parseAtmosphericColumn, type AtmosphericColumn, type AtmosphericLevel, type SiteForecast } from '@windgrams/contracts';
 import { computeBoundaryLayerWind, parcelLclAglM, type BoundaryLayerWind } from '@windgrams/meteorology';
 import { deriveDiagnosticsV2, computeThermalVelocityMps, type SoaringDiagnostics } from '@windgrams/soaring';
-import { postprocessPointForecast, sourceFromPublishedDeterministicHour, normalizeLaunchComparisonHour, deriveEnsembleSoaringDiagnostics } from '@windgrams/soaring/compatibility';
+import { postprocessPointForecast, sourceFromPublishedDeterministicHour, normalizeLaunchComparisonHour, deriveEnsembleSoaringDiagnostics, resolvedParcelDepthM } from '@windgrams/soaring/compatibility';
 
 declare const raw: unknown;
 const level: AtmosphericLevel = { pressureHpa: 900, heightM: 1000, temperatureC: 10, dewPointDepressionC: 5, windSpeedMps: 2, windDirectionDeg: 270 };
@@ -13,8 +13,10 @@ const wind: BoundaryLayerWind | null = computeBoundaryLayerWind(100, column, col
 const lcl: number | null = parcelLclAglM(column.temperatureC, column.dewPointC);
 const diagnostics: SoaringDiagnostics | null = deriveDiagnosticsV2(100, column, { derived: { cloudBaseM: 1500 } });
 if (diagnostics) {
-  const velocity: number = diagnostics.thermalVelocityV2Mps;
+  const velocity: number | null = diagnostics.thermalVelocityV2Mps;
   const top: number | null = diagnostics.usableLiftTopV2M;
+  // @ts-expect-error unavailable heat flux must be handled before using W* as a number
+  const requiredVelocity: number = diagnostics.thermalVelocityV2Mps;
   // @ts-expect-error diagnostic scalars are numeric, never arbitrary dictionaries
   diagnostics.thermalVelocityV2Mps.toUpperCase();
   // @ts-expect-error undocumented diagnostic names are not part of the contract
@@ -24,7 +26,12 @@ if (diagnostics) {
 deriveDiagnosticsV2(100, { temperatureC: 20 }, {});
 // @ts-expect-error core convective calculation uses unit-bearing object input
 computeThermalVelocityMps(20);
-computeThermalVelocityMps({ surfaceTemperatureC: 20, sensibleHeatFluxWm2: 150, latentHeatFluxWm2: 20, boundaryLayerDepthM: 1000, surfacePressureHpa: 950 });
+const velocity: number | null = computeThermalVelocityMps({ surfaceTemperatureC: 20, sensibleHeatFluxWm2: 150, latentHeatFluxWm2: 20, boundaryLayerDepthM: 1000, surfacePressureHpa: 950 });
+// @ts-expect-error the public result requires callers to handle missing inputs
+const requiredVelocity: number = computeThermalVelocityMps({ surfaceTemperatureC: 20 });
+const depth: number | null = resolvedParcelDepthM(20, null, null, null, 0, []);
+// @ts-expect-error compatibility callers must also handle unavailable depth
+const requiredDepth: number = resolvedParcelDepthM(20, null, null, null, 0, []);
 deriveEnsembleSoaringDiagnostics([{ source: column, v1Hour: {} }] as const, 100);
 declare const profile: SiteForecast;
 const processed = postprocessPointForecast(profile);

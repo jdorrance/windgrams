@@ -21,7 +21,7 @@ import {
 import { computeBoundaryLayerWind } from '@windgrams/meteorology';
 import { computeExperimentalTerrainAdjustment } from './terrain-adjustment.js';
 
-export const SOARING_CONTRACT_VERSION = '2.1.0';
+export const SOARING_CONTRACT_VERSION = '2.2.0';
 export const metrics = ['thermalVelocityMps', 'usableLiftTopM', 'boundaryLayerTopM', 'cloudBaseM', 'pblHeightM'];
 export const v2LayerMetrics = [
   'resolvedThermalTopM',
@@ -93,7 +93,7 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
     levels,
     0,
   );
-  const resolvedThermalTopM = resolvedDepthM > 0 ? terrain + resolvedDepthM : null;
+  const resolvedThermalTopM = resolvedDepthM != null && resolvedDepthM > 0 ? terrain + resolvedDepthM : null;
 
   const plus1DepthM = resolvedParcelDepthM(
     source.temperatureC,
@@ -104,7 +104,7 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
     levels,
     1.0,
   );
-  const thermalTopPlus1CM = plus1DepthM > 0 ? terrain + plus1DepthM : null;
+  const thermalTopPlus1CM = plus1DepthM != null && plus1DepthM > 0 ? terrain + plus1DepthM : null;
 
   const pSfcHpa = hypsometricSurfacePressureHpa(terrain, source.temperatureC, levels[0]);
   const thermalVelocityV2Raw = computeThermalVelocityMps({
@@ -115,11 +115,14 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
     boundaryLayerDepthM: resolvedDepthM,
     surfacePressureHpa: pSfcHpa,
   });
-  const thermalVelocityV2Mps = round2(thermalVelocityV2Raw) ?? 0;
+  const thermalVelocityV2Mps = round2(thermalVelocityV2Raw);
 
   // Physical Mixed-Layer LCL (zblcl) integrated over pressure mass and clipped at actual layer top
-  const blTopForMixM = resolvedThermalTopM ?? (terrain + (source.pblHeightM ?? 0));
-  const mixedLayerLclM = computeMixedLayerLclM(terrain, source.temperatureC, surfaceDewPointC, levels, blTopForMixM);
+  // A measured zero depth is a surface-only layer; an unknown depth is not.
+  const layerTopM = resolvedThermalTopM ?? (finite(source.pblHeightM) && source.pblHeightM >= 0
+    ? terrain + source.pblHeightM : resolvedDepthM === 0 ? terrain : null);
+  const mixedLayerLclM = layerTopM == null ? null
+    : computeMixedLayerLclM(terrain, source.temperatureC, surfaceDewPointC, levels, layerTopM);
 
   const cuPotentialM = resolvedThermalTopM != null && surfaceLclM != null ? resolvedThermalTopM - surfaceLclM : null;
   const odPotentialM = resolvedThermalTopM != null && mixedLayerLclM != null ? resolvedThermalTopM - mixedLayerLclM : null;
@@ -149,12 +152,11 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
   }, 1.0);
 
   // Height-weighted boundary-layer mean wind, BL top wind, and vector shear clipped at actual BL top
-  const targetTopM = resolvedThermalTopM ?? (terrain + (source.pblHeightM ?? 0));
-  const blWind = computeBoundaryLayerWind(
+  const blWind = layerTopM == null ? null : computeBoundaryLayerWind(
     terrain,
    { windSpeedMps: source.windSpeedMps, windDirectionDeg: source.windDirectionDeg },
     levels,
-    targetTopM,
+    layerTopM,
     finite(source.wind80mSpeedMps) && finite(source.wind80mDirectionDeg)
       ? { windSpeedMps: source.wind80mSpeedMps, windDirectionDeg: source.wind80mDirectionDeg }
       : null,
@@ -164,7 +166,8 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
   const blTopWindSpeedMps = blWind?.blTopWindSpeedMps ?? null;
   const blTopWindDirDeg = blWind?.blTopWindDirDeg ?? null;
   const blWindShearMps = blWind?.blWindShearMps ?? null;
-  const bsRatioRaw = blWindShearMps != null ? buoyancyShearRatio(thermalVelocityV2Mps, Math.max(0.2, blWindShearMps)) : null;
+  const bsRatioRaw = blWindShearMps != null && thermalVelocityV2Mps != null
+    ? buoyancyShearRatio(thermalVelocityV2Mps, Math.max(0.2, blWindShearMps)) : null;
 
   // Vertical velocities in geometric m/s
   let maxUpwardVelocityMps: number | null = null;

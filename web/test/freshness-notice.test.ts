@@ -67,7 +67,7 @@ test('refresh failures remain visible independently of forecast age and never ex
     now: () => now, window: new EventTarget(), document: Object.assign(new EventTarget(), { hidden: true }),
     setTimeout() { return 1; }, clearTimeout() {},
   });
-  const warning = 'Latest update did not complete; showing the available forecast.';
+  const warning = 'Latest update failed';
   for (const outcome of ['retained', 'unavailable'] as const) {
     refresh = { ...refresh!, outcome }; notice.refresh();
     assert.equal(host.dataset.freshness, 'current');
@@ -76,7 +76,7 @@ test('refresh failures remain visible independently of forecast age and never ex
   }
   now = Date.parse('2026-10-25T09:00:00Z'); notice.refresh();
   assert.equal(host.dataset.freshness, 'delayed');
-  assert.equal(host.textContent, `Update delayed. ${warning}`);
+  assert.equal(host.textContent, `Update delayed · ${warning}`);
   historical = true; notice.refresh();
   assert.equal(host.textContent, 'Historical forecast');
   historical = false; now = Date.parse('2026-10-25T06:00:00Z');

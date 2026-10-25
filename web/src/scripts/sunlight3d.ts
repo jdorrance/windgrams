@@ -63,6 +63,8 @@ function label(text: string, ink: string, halo: string, scale: number): THREE.Sp
 }
 
 export class Sunlight3D {
+  private disposed = false;
+  private suspended = false;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
@@ -332,6 +334,7 @@ export class Sunlight3D {
   // ── drawing ─────────────────────────────────────────────────────────────
 
   private resize() {
+    if (this.disposed || this.suspended) return;
     const { container } = this.options;
     const width = Math.max(1, container.clientWidth);
     const height = Math.max(1, container.clientHeight);
@@ -344,17 +347,47 @@ export class Sunlight3D {
   }
 
   requestRender() {
-    if (this.frame) return;
+    if (this.disposed || this.suspended || this.frame) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
       this.renderer.render(this.scene, this.camera);
     });
   }
 
-  dispose() {
+  suspend() {
+    this.suspended = true;
     cancelAnimationFrame(this.frame);
+    this.frame = 0;
+  }
+
+  resume() {
+    if (this.disposed) return;
+    this.suspended = false;
+    this.resize();
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.suspend();
     this.observer.disconnect();
     this.controls.dispose();
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    const textures = new Set<THREE.Texture>();
+    this.scene.traverse(object => {
+      if (!(object instanceof THREE.Mesh || object instanceof THREE.Sprite)) return;
+      // Sprite geometry is shared by Three.js; only these mesh geometries are ours.
+      if (object instanceof THREE.Mesh) geometries.add(object.geometry);
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+        materials.add(material);
+        if ((material instanceof THREE.MeshBasicMaterial || material instanceof THREE.SpriteMaterial) && material.map) textures.add(material.map);
+      }
+    });
+    for (const geometry of geometries) geometry.dispose();
+    for (const material of materials) material.dispose();
+    for (const texture of textures) texture.dispose();
+    this.scene.clear();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

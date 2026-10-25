@@ -91,6 +91,14 @@ GitHub documents that [scheduled events can be delayed or dropped](https://docs.
 
 ### Publication and retention
 
+When upgrading the soaring diagnostic method, merge the code and request a full
+refresh with `gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=all`.
+Point builders can reprocess complete retained source profiles for the same run;
+regional maps need a replay using the new method. Old artifacts are rejected by
+method identity, and an unsuccessful preparation leaves the served dataset in
+place. Verify the new method on point manifests and regional bundles after the
+refreshes publish; a website build alone does not upgrade forecast calculations.
+
 For a local rehearsal with downloaded artifacts in `../incoming`:
 
 ```sh

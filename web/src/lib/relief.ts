@@ -37,8 +37,8 @@ export function decodeRelief(raw: Uint8Array, meta: ReliefMeta): Float32Array {
   return out;
 }
 
-export async function fetchRelief(url: string, meta: ReliefMeta): Promise<Float32Array | null> {
-  const response = await fetchWithRetry(url);
+export async function fetchRelief(url: string, meta: ReliefMeta, signal?: AbortSignal): Promise<Float32Array | null> {
+  const response = await fetchWithRetry(url, { signal });
   if (!response.ok || !response.body) return null;
   const raw = new Uint8Array(await new Response(response.body.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
   return decodeRelief(raw, meta);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { buildSolarTerrain, domainFor, expandBounds, gridFromFunction, metresPerDegree, startSolarTerrain, indexIsFresh } from '../src/solar.ts';
+import { buildSolarTerrain, gridFromFunction, metresPerDegree, startSolarTerrain, indexIsFresh } from '../src/solar.ts';
 
 // Recorded from the retained JS builder before the TypeScript module split.
 // The fixed timestamp and reversed source-key order also protect generation IDs.
@@ -18,7 +18,12 @@ function withRecordedGzipPlatform(body) {
   return bytes;
 }
 function fixture(site, missing = false) {
-  const bounds = expandBounds(domainFor(site.latitude, site.longitude, 0.1).bounds, 1000), scale = metresPerDegree(site.latitude);
+  // Keep the recorded DEM's coordinates fixed: acquisition-padding corrections
+  // must not silently regenerate the source of a renderer characterization.
+  const bounds = site.slug === 'north'
+    ? { south: 43.603216272025634, north: 43.637123908274695, west: -116.00604306992412, east: -115.95928896132588 }
+    : { south: -44.143913138590854, north: -44.09436568307139, west: 169.37471082431463, east: 169.42167589443537 };
+  const scale = metresPerDegree(site.latitude);
   const elevation = (lat, lon) => missing ? NaN : 500 + (lat - site.latitude) * scale.lat * 0.1 + Math.max(0, 300 - Math.abs((lon - site.longitude) * scale.lon - 300));
   const fine = gridFromFunction(elevation, { ...bounds, dLat: 0.0001, dLon: 0.0001 });
   return { fine, coarse: fine, sources: { horizon: source, surface: source }, radiusKm: 0.1, maxDistanceKm: 0.5, generatedAt: '2026-10-25T00:00:00Z' };

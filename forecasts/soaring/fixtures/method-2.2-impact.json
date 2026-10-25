@@ -1,0 +1,35 @@
+{
+  "baselineCommit": "54bd70f846776cceb24a382a2e01e79b729f56e4",
+  "baselineMethod": "2.1.0",
+  "comparedMethod": "2.2.0",
+  "scope": "Parcel depth and missing-input changes only; scalar diagnostics exclude contractVersion. Source-complete native samples and rounded point reconstruction are reported separately. This is compatibility evidence, not forecast skill or operational-frequency evidence.",
+  "sources": {
+    "forecasts/soaring/cases/north-sound-20261021-00z.json": "51a15c8572540623c5b9ae26a13d7d5681259d3a2f5ea876de5a5bb873d5c898",
+    "forecasts/soaring/fixtures/blanchard-raw.json": "ff3f7fc652c47c9a4f0b18fe0c74ef0bf6ab50a31d1a2a3181582ecf8c85562f",
+    "forecasts/soaring/fixtures/rrfs-native-column.json": "337f1498103e68eb1cfead59b1a77807285e809cddfff67ce5fb9fb100d4ad1f",
+    "forecasts/scripts/lib/icon-native-fixture.json": "47b96f1b0176af14326f093a50536a6e66dc6bb4a4f52c41d26be352e140ff04",
+    "forecasts/soaring/fixtures/rrfs-blanchard-published.json": "172a710411b01d403ea7173adb4ff1e35160b5634714d911561341ee936e23f1"
+  },
+  "groups": {
+    "hrrrNative": {
+      "count": 14,
+      "baselineDiagnosticSha256": "f9e168e2410433b60d3effb3adec8b8239e6b8b080e05bce89f315bfbbcb594f",
+      "changedRoundedDiagnostics": 0
+    },
+    "rrfsNative": {
+      "count": 1,
+      "baselineDiagnosticSha256": "4c3b5d4948a2c7589605120efc82e5d3180d90cce26abf9b567efda54aa2c3e5",
+      "changedRoundedDiagnostics": 0
+    },
+    "iconNative": {
+      "count": 3,
+      "baselineDiagnosticSha256": "8aeb7d8af463c0e7f711f5ae8da79b385a48284f0d5ff8ef0960041f5ec2690f",
+      "changedRoundedDiagnostics": 0
+    },
+    "rrfsPublishedReconstruction": {
+      "count": 84,
+      "baselineDiagnosticSha256": "2b021397df07651dce67374e9ad883b774ec14837bf6f9b20c5dc71cd838fea5",
+      "changedRoundedDiagnostics": 0
+    }
+  }
+}

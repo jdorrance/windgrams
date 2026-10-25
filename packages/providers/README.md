@@ -94,8 +94,19 @@ application reuse the acquisition for point and regional publication. Optional
   documents and manifests.
 - [`/solar`](src/solar.ts) builds terrain tiles and relief from supplied elevation
   grids. The [input types](src/internal/solar/types.ts) describe resolution,
-  missing cells and required coverage. [`/terrain-policy`](src/terrain-policy.ts)
+  missing cells and required coverage. `expandBounds` conservatively pads those
+  bounds on WGS84, including equator crossings; reaching either pole covers all
+  longitudes. Bounds use ordered, unwrapped longitudes (`west <= east`), and
+  padding must be finite and nonnegative. [`/terrain-policy`](src/terrain-policy.ts)
   checks cached measurements against the sources requested by your application.
+
+Supplemental NWS/ECMWF documents identify the sparse method declared by
+[`SparseSoaring`](src/supplemental.ts). That method supports surface/cloud and
+layer-wind estimates while leaving unsupported convective diagnostics null.
+Optional [`@windgrams/soaring/compatibility`](../soaring/src/compatibility.ts)
+postprocessing applies its own method and labels the result accordingly; it can
+also change elevation fallbacks and layer eligibility. Method labels describe
+the calculation actually applied, not a universal JSON schema or package version.
 
 To add a source, implement [`AcquisitionAdapter`](src/types.ts) with your own
 model descriptor. Return either normalized columns or processed profiles, and

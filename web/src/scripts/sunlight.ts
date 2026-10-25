@@ -72,6 +72,9 @@ function pickedDot() {
 }
 
 export class Sunlight {
+  private readonly controller = new AbortController();
+  private readonly observer: IntersectionObserver;
+  private get disposed() { return this.controller.signal.aborted; }
   private index: SolarIndex | null = null;
   private map: MapLibreMap | null = null;
   private overlay: SunlightOverlay | null = null;
@@ -81,6 +84,7 @@ export class Sunlight {
   private readonly loading = new Map<string, Promise<SolarTile | null>>();
   private readonly decoded = new Map<string, SolarTile>();
   private started = false;
+  private suspended = false;
   private dateKey: string | null = null;
   private clouds: CloudSeries | null = null;
   private cloudsOn = true;
@@ -90,6 +94,7 @@ export class Sunlight {
   /** Bumped whenever the sunlight colours change, so the map repaints tiles in place. */
   private colourRevision = 0;
   private selected: Selected | null = null;
+  private selectionRequest = 0;
   private selectedMarker: Marker | null = null;
   private launchMarker: Marker | null = null;
   private values: number[] = [];
@@ -106,39 +111,71 @@ export class Sunlight {
   private readonly tileCanvas = document.createElement("canvas");
 
   constructor(private readonly launch: Launch) {
+    const events = { signal: this.controller.signal };
     this.time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: launch.timeZone });
     this.curve = new SunCurve($("sun-curve"), launch.timeZone, (i) => this.setStep(i, true));
     this.renderLegend();
 
-    $<HTMLInputElement>("sun-time").addEventListener("input", (e) => this.setStep(Number((e.target as HTMLInputElement).value), false));
-    $("sun-play").addEventListener("click", () => this.togglePlay());
-    $("sun-peak").addEventListener("click", () => this.setStep(this.curve.peakIndex(), true));
-    $("sun-reset").addEventListener("click", () => void this.selectPoint({ lat: launch.latitude, lng: launch.longitude }, true));
+    $<HTMLInputElement>("sun-time").addEventListener("input", (e) => this.setStep(Number((e.target as HTMLInputElement).value), false), events);
+    $("sun-play").addEventListener("click", () => this.togglePlay(), events);
+    $("sun-peak").addEventListener("click", () => this.setStep(this.curve.peakIndex(), true), events);
+    $("sun-reset").addEventListener("click", () => void this.selectPoint({ lat: launch.latitude, lng: launch.longitude }, true), events);
     $<HTMLInputElement>("sun-clouds").addEventListener("change", (e) => {
       this.cloudsOn = (e.target as HTMLInputElement).checked;
       this.rebuildFrames(false);
-    });
+    }, events);
     for (const button of $("sun-view").querySelectorAll<HTMLButtonElement>("button")) {
-      button.addEventListener("click", () => void this.setView(button.dataset.view === "3d" ? "3d" : "2d"));
+      button.addEventListener("click", () => void this.setView(button.dataset.view === "3d" ? "3d" : "2d"), events);
     }
-    $<HTMLInputElement>("sun-relief").addEventListener("change", (e) => this.three?.setExaggeration((e.target as HTMLInputElement).checked ? EXAGGERATION : 1));
+    $<HTMLInputElement>("sun-relief").addEventListener("change", (e) => this.three?.setExaggeration((e.target as HTMLInputElement).checked ? EXAGGERATION : 1), events);
     this.tileCanvas.width = this.tileCanvas.height = 256;
 
     // Nothing is downloaded until the section scrolls near the screen.
-    const observer = new IntersectionObserver(
+    this.observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          observer.disconnect();
+          this.observer.disconnect();
           void this.start();
         }
       },
       { rootMargin: "300px" },
     );
-    observer.observe($("sun-section"));
+    this.observer.observe($("sun-section"));
+  }
+
+  /** Pause playback for bfcache; keep terrain and graphics available for restoration. */
+  suspend() {
+    this.suspended = true;
+    if (this.timer) this.togglePlay();
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.three?.suspend();
+  }
+
+  resume() {
+    if (this.disposed) return;
+    this.suspended = false;
+    if (this.view === "3d") this.three?.resume();
+    this.map?.resize();
+    this.redraw();
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.suspend();
+    this.controller.abort();
+    this.observer.disconnect();
+    this.curve.dispose();
+    this.three?.dispose();
+    this.selectedMarker?.remove(); this.launchMarker?.remove();
+    this.map?.remove();
+    this.three = null; this.map = null; this.overlay = null;
+    this.loading.clear(); this.decoded.clear(); this.pictureTiles = []; this.picture = null;
   }
 
   /** Called by the launch page whenever the day or the model changes. */
   setDay(dateKey: string, clouds: CloudSeries | null) {
+    if (this.disposed) return;
     const sameDay = dateKey === this.dateKey;
     const sameClouds = clouds?.label === this.clouds?.label && clouds?.points.length === this.clouds?.points.length;
     if (sameDay && sameClouds) return;
@@ -150,16 +187,17 @@ export class Sunlight {
   // ── setup ───────────────────────────────────────────────────────────────
 
   private async start() {
-    if (this.started) return;
+    if (this.started || this.disposed) return;
     this.started = true;
     const status = $("sun-status");
     status.textContent = "Loading the terrain…";
     try {
-      const response = await fetchWithRetry(`${DATA_BASE}/solar/${this.launch.slug}/index.json`);
+      const response = await fetchWithRetry(`${DATA_BASE}/solar/${this.launch.slug}/index.json`, { signal: this.controller.signal });
       this.index = response.ok ? ((await response.json()) as SolarIndex) : null;
     } catch {
       this.index = null;
     }
+    if (this.disposed) return;
     if (!this.index) {
       status.textContent = "Sunlight map unavailable.";
       const section = document.getElementById("sun-section");
@@ -182,6 +220,7 @@ export class Sunlight {
     if (relief) $("sun-relief-spacing").textContent = `~${formatQuantity(metresPerPixel(this.launch.latitude, relief.zoom), "elevation")}`;
     // The launch's own curve decides the starting time (now, or the day's peak).
     await this.selectPoint({ lat: this.launch.latitude, lng: this.launch.longitude }, true);
+    if (this.disposed) return;
     if (this.dateKey) this.rebuildFrames(true);
   }
 
@@ -217,7 +256,7 @@ export class Sunlight {
       peek: (coords) => this.decoded.get(key(coords)) ?? null,
       inRange: (coords) => this.inRange(coords),
     });
-    onMapReady(map, () => map.addLayer(this.overlay!));
+    onMapReady(map, () => { if (!this.disposed) map.addLayer(this.overlay!); });
     this.launchMarker = new Marker({ element: launchDot(), anchor: "center" })
       .setLngLat([this.launch.longitude, this.launch.latitude])
       .addTo(map);
@@ -235,21 +274,22 @@ export class Sunlight {
 
   private loadTile(coords: { x: number; y: number; z: number }): Promise<SolarTile | null> {
     const index = this.index;
-    if (!index || !this.inRange(coords)) return Promise.resolve(null);
+    if (this.disposed || !index || !this.inRange(coords)) return Promise.resolve(null);
     const k = key(coords);
+    const decoded = this.decoded.get(k);
+    if (decoded) return Promise.resolve(decoded);
     let pending = this.loading.get(k);
     if (!pending) {
       const path = index.tiles.path.replace("{z}", String(coords.z)).replace("{x}", String(coords.x)).replace("{y}", String(coords.y));
-      pending = fetchTile(`${DATA_BASE}/solar/${this.launch.slug}/${path}`, index)
+      pending = fetchTile(`${DATA_BASE}/solar/${this.launch.slug}/${path}`, index, this.controller.signal)
         .then((tile) => {
+          if (this.disposed) return null;
           if (tile) this.decoded.set(k, tile);
           this.trimCache();
           return tile;
         })
-        .catch(() => {
-          this.loading.delete(k);
-          return null;
-        });
+        .catch(() => null)
+        .finally(() => this.loading.delete(k));
       this.loading.set(k, pending);
     }
     return pending;
@@ -261,14 +301,15 @@ export class Sunlight {
       if (this.decoded.size <= TILE_CACHE) break;
       if (this.overlay?.visibleKeys().has(k)) continue;
       this.decoded.delete(k);
-      this.loading.delete(k);
     }
   }
 
   private redraw() {
+    if (this.disposed || this.suspended) return;
     this.colourRevision += 1;
     cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame(() => {
+      this.raf = 0;
       if (this.view === "3d") {
         this.drawPicture();
         return;
@@ -280,6 +321,7 @@ export class Sunlight {
   // ── 3D view ─────────────────────────────────────────────────────────────
 
   private async setView(view: "2d" | "3d") {
+    if (this.disposed) return;
     if (view === this.view) return;
     const buttons = $("sun-view").querySelectorAll<HTMLButtonElement>("button");
     for (const b of buttons) b.setAttribute("aria-pressed", String(b.dataset.view === view));
@@ -288,12 +330,15 @@ export class Sunlight {
     $("sun-3d").hidden = view === "2d";
     $("sun-relief-label").hidden = view === "2d";
     if (view === "2d") {
+      this.three?.suspend();
       this.map?.resize();
       this.redraw();
       return;
     }
     this.threeLoading ??= this.open3D();
     await this.threeLoading;
+    if (this.disposed) return;
+    if (this.view === "3d" && !this.suspended) this.three?.resume();
     this.redraw();
   }
 
@@ -305,12 +350,14 @@ export class Sunlight {
     status.textContent = "Loading the 3D terrain…";
     try {
       const module = await import("./sunlight3d.ts");
+      if (this.disposed) return;
       if (!module.webglAvailable()) {
         status.textContent = "3D is unavailable. Use the 2D map.";
         return;
       }
       const meta = index.relief;
-      const [heights] = await Promise.all([fetchRelief(`${DATA_BASE}/solar/${this.launch.slug}/${meta.path}`, meta), this.loadPictureTiles()]);
+      const [heights] = await Promise.all([fetchRelief(`${DATA_BASE}/solar/${this.launch.slug}/${meta.path}`, meta, this.controller.signal), this.loadPictureTiles()]);
+      if (this.disposed) return;
       if (!heights || !this.picture) throw new Error("terrain missing");
       this.three = new module.Sunlight3D({
         container: $("sun-3d"),
@@ -320,10 +367,12 @@ export class Sunlight {
         launch: this.launch,
         onPick: (lat, lon) => void this.selectPoint({ lat, lng: lon }, false),
       });
+      if (this.suspended || this.view !== "3d") this.three.suspend();
       this.three.setExaggeration($<HTMLInputElement>("sun-relief").checked ? EXAGGERATION : 1);
       if (this.selected && !this.selected.isLaunch) this.three.setSelected({ lat: this.selected.latlng.lat, lon: this.selected.latlng.lng });
       status.hidden = true;
     } catch {
+      if (this.disposed) return;
       status.textContent = "3D terrain is unavailable. Use the 2D map.";
       this.threeLoading = null;
     }
@@ -355,12 +404,14 @@ export class Sunlight {
       }
     }
     await Promise.all(jobs);
+    if (this.disposed) return;
     this.pictureTiles = tiles;
     this.picture = canvas;
     this.drawPicture();
   }
 
   private drawPicture() {
+    if (this.disposed || this.suspended) return;
     const picture = this.picture;
     const frame = this.frames[this.step];
     if (!picture || !frame) return;
@@ -495,11 +546,13 @@ export class Sunlight {
   private async selectPoint(latlng: LatLng, isLaunch: boolean) {
     const map = this.map;
     const index = this.index;
-    if (!map || !index) return;
+    if (this.disposed || !map || !index) return;
+    const request = ++this.selectionRequest;
     const pixel = worldPixel(latlng.lat, latlng.lng, index.tiles.maxZoom);
     const X = Math.floor(pixel.x);
     const Y = Math.floor(pixel.y);
     const tile = await this.loadTile({ z: index.tiles.maxZoom, x: X >> 8, y: Y >> 8 });
+    if (this.disposed || request !== this.selectionRequest) return;
     const terrain = tile ? pointTerrain(tile, X & 255, Y & 255) : null;
     if (!terrain) {
       $("sun-readout").textContent = "Select terrain inside the coloured area.";

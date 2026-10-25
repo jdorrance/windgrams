@@ -484,7 +484,8 @@ test('Lambert geometry, native nearest cell, scanning orders, wind rotation, and
   assert.ok(Math.abs(rotated.windSpeedMps-10)<1e-12);
   assert.ok(Math.abs(rotated.windDirectionDeg-(180-angle))<1e-9);
   assert.equal(wind(real.grid,0,null,1),null);
-  const zeroConv = computeNativeGridConvergence(real.grid, region.cells, new Array(region.cells.length).fill(5), new Array(region.cells.length).fill(3));
+  const zeroConv = computeNativeGridConvergence(real.grid, region.cells,
+    region.cells.map(cell => 5 * p.scaleAt(cell.latitude)), region.cells.map(cell => 3 * p.scaleAt(cell.latitude)));
   assert.equal(zeroConv[region.siteCell], 0);
 });
 
@@ -542,14 +543,16 @@ test('ignored ranges, wrong content ranges, partial responses leave no reusable 
 test('convergence honors every scan order and signed grid spacing', () => {
   for (const jPointsAreConsecutive of [false,true]) for (const alternativeRowScanning of [false,true])
   for (const iScansNegatively of [false,true]) for (const jScansPositively of [false,true]) {
-    const grid={ni:4,nj:3,dxM:3000,dyM:3000,jPointsAreConsecutive,alternativeRowScanning,iScansNegatively,jScansPositively};
-    const cells=[],u=[],v=[];
+    const grid={...real.grid,ni:4,nj:3,dxM:3000,dyM:3000,jPointsAreConsecutive,alternativeRowScanning,iScansNegatively,jScansPositively};
+    const cells=[],u=[],v=[],expected=[],p=projection(grid);
     for(let j=0;j<3;j++) for(let i=0;i<4;i++) {
       const index=storageIndex(grid,i,j);
       assert.deepEqual(storageCoordinates(grid,index),[i,j]);
-      cells.push({index}); u.push(-i*3000*(iScansNegatively?-1:1)*1e-5);v.push(-j*3000*(jScansPositively?1:-1)*2e-5);
+      const scale=p.scaleAt(p.point(i,j)[1]);
+      cells.push({index}); u.push(-scale*i*3000*(iScansNegatively?-1:1)*1e-5);v.push(-scale*j*3000*(jScansPositively?1:-1)*2e-5);
+      expected.push(Math.round(3*scale**2*100)/100);
     }
-    assert.deepEqual(computeNativeGridConvergence(grid,cells,u,v),Array(12).fill(3));
+    assert.deepEqual(computeNativeGridConvergence(grid,cells,u,v),expected);
   }
 });
 
@@ -564,15 +567,15 @@ test('pressure-level wind and vertical motion below terrain are unavailable', ()
   assert.ok(result.v2.wind850SpeedMps!==null);
 });
 
-test('Stage 0: characterizes near-neutral first-layer parcel depth behavior and defined-domain physical invariants', () => {
+test('method 2.2 fixes the neutral-limit zero cliff while retaining the documented closure and physical invariants', () => {
   const env = [
     { heightM: 1000, temperatureC: 10 },
     { heightM: 2000, temperatureC: 0 },
     { heightM: 3000, temperatureC: -10 },
   ];
-  // Preserved v2.1.0 baseline characterization: near-neutral first-layer denominator guard (denom <= 1e-5)
+  // The heat-flux closure reaches its first-level cap instead of dropping to zero.
   assert.equal(resolvedParcelDepthM(19.700, 100, 0, null, 0, env, 0), 1000);
-  assert.equal(resolvedParcelDepthM(19.795, 100, 0, null, 0, env, 0), 0);
+  assert.equal(resolvedParcelDepthM(19.795, 100, 0, null, 0, env, 0), 1000);
   assert.equal(resolvedParcelDepthM(19.805, 100, 0, null, 0, env, 0), 3000);
   // When model PBL height is present, the PBL fallback branch avoids the heat-flux denominator guard
   assert.equal(resolvedParcelDepthM(19.795, 100, 0, 650, 0, env, 0), 650);

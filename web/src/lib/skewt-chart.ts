@@ -1,4 +1,4 @@
-import { convertQuantity, formatQuantity, fromDisplayQuantity, getUnitSystem, unitLabel } from "./units.ts";
+import { convertQuantity, formatQuantity, fromDisplayQuantity, getUnitSystem, mpsToKnots, unitLabel } from "./units.ts";
 // A Skew-T log-P diagram of one sounding, annotated for pilots: the thermal
 // zone, the top of the lift, cloud base, inversions ("lids"), cloud layers
 // and the launch are drawn and named inside the diagram, and hovering reads
@@ -20,7 +20,6 @@ export { barbPaths } from "./wind-barb.ts";
 const SVG = "http://www.w3.org/2000/svg";
 const FT = 3.28084;
 const MPH = 2.23694;
-const KT = 1.94384;
 
 function el<K extends keyof SVGElementTagNameMap>(name: K, attrs: Record<string, string | number> = {}, parent?: Element) {
   const node = document.createElementNS(SVG, name);
@@ -98,6 +97,7 @@ export interface SkewTLaunch {
 }
 
 export class SkewTChart {
+  private disposed = false;
   private sounding: Sounding | null = null;
   private readonly observer: ResizeObserver;
   private width = 0;
@@ -119,9 +119,19 @@ export class SkewTChart {
   }
 
   set(sounding: Sounding | null, launch?: SkewTLaunch) {
+    if (this.disposed) return;
     if (launch) this.launch = launch;
     this.sounding = sounding;
     this.render();
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.observer.disconnect();
+    this.sounding = null;
+    this.tooltip.remove();
+    this.host.replaceChildren();
   }
 
   private render() {
@@ -199,7 +209,7 @@ export class SkewTChart {
     }
     text(svg, box.left - 6, box.top - 8, `${unitLabel("elevation")} MSL`, { class: "tick", "text-anchor": "end" });
 
-    // Where a thermal is warmer than the air around it (it keeps rising).
+    // Shading follows temperature excess between the plotted traces.
     const lcl = s.lclM;
     let run: typeof s.parcel = [];
     const flush = () => {
@@ -298,7 +308,7 @@ export class SkewTChart {
       const yy = y(p.windHeightM === undefined ? p.pressureHpa : pAt(p.windHeightM));
       if (yy < box.top + 12 || lastBarbY - yy < 15) continue;
       lastBarbY = yy;
-      drawBarb(svg, windX, yy, p.windSpeedMps * (metric ? 2 : KT), p.windDirectionDeg);
+      drawBarb(svg, windX, yy, metric ? p.windSpeedMps * 2 : mpsToKnots(p.windSpeedMps), p.windDirectionDeg);
       text(svg, windX + (narrow ? 20 : 28), yy + 4, String(Math.round(convertQuantity(p.windSpeedMps, "wind")!)), { class: "tick", "text-anchor": "end" });
     }
 

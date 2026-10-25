@@ -99,7 +99,7 @@ export function createBalloonSection(options: BalloonSectionOptions) {
       legend.replaceChildren(
         legendItem('Temperature', 'key-line', 'var(--series-2)'),
         ...(choice.hasDewPoint ? [legendItem('Dew point', 'key-line', 'var(--series-3)')] : []),
-        legendItem(choice.start.source === 'forecast-high' ? 'Thermal from the forecast high' : 'Rising thermal', 'key-line key-dash'),
+        legendItem(choice.sounding.dryParcelOnly ? 'Dry ascent' : choice.start.source === 'forecast-high' ? 'Ascent · forecast high' : 'Rising air', 'key-line key-dash'),
         legendItem('Thermal zone', 'key-swatch skewt-key-zone'),
         legendItem('Inversion (lid)', 'key-swatch skewt-key-lid'),
       );
@@ -118,8 +118,8 @@ export function createBalloonSection(options: BalloonSectionOptions) {
         choice.kind === 'balloon' ? `Sounding valid ${when} · ${utc}` : `NWS model forecast for ${when}`;
       document.getElementById('balloon-note')!.textContent =
         choice.kind === 'balloon'
-          ? `${station ? `${station.name} · ${formatQuantity(station.distanceKm, 'distance')} from ${launchName} · ` : ''}${formatQuantity(elevation, 'elevation')} MSL.${choice.hasDewPoint ? '' : ' Humidity unavailable.'}${choice.start.source === 'forecast-high' ? ' The rising parcel starts at the forecast high for the station.' : ''} NWS / Iowa Environmental Mesonet.`
-          : 'NWS model temperature and wind at the station, with heights above sea level (MSL). Humidity is unavailable.';
+          ? `${station ? `${station.name} · ${formatQuantity(station.distanceKm, 'distance')} from ${launchName} · ` : ''}Station ${formatQuantity(elevation, 'elevation')} MSL${choice.hasDewPoint ? '' : ' · Humidity unavailable'}${choice.start.source === 'forecast-high' ? ' · Start: station forecast high' : ''} · NWS / IEM`
+          : 'NWS station forecast · Heights MSL · Humidity unavailable';
     };
 
     tabs.replaceChildren(
@@ -143,6 +143,7 @@ export function createBalloonSection(options: BalloonSectionOptions) {
     },
     dispose() {
       disposed = true;
+      balloonChart?.dispose();
       refreshCurrent = null;
     },
   };

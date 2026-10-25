@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { balloonSounding, choices, readChoice, srgSounding, type RaobDocument } from "../src/lib/balloon.ts";
 import { parseSrg } from "../src/lib/srg.ts";
 import { setUnitSystem } from "../src/lib/units.ts";
+import { liftParcel, type SoundingPoint } from '../src/lib/skewt.ts';
 
 afterEach(() => setUnitSystem("imperial"));
 
@@ -19,8 +20,32 @@ test("the morning table lifted from the forecast high tops out near the NWS ther
   // NWS: 9,264 ft MSL. Same method (dry adiabat from the forecast high), our own interpolation.
   assert.ok(Math.abs(topFt - 9264) < 300, `${topFt}`);
   assert.equal(s.hasDewPoint, false);
+  assert.equal(s.dryParcelOnly, true);
+  assert.equal(s.lclM, null);
   assert.equal(s.marks.cloudBaseM, null);
   assert.ok(s.inversions.some((l) => l.grounded), "the valley inversion at dawn");
+});
+
+test('missing or partial humidity gives a qualified dry curve with no invented condensation', () => {
+  for (const missing of ['all', 'surface', 'aloft']) {
+    const points: SoundingPoint[] = Array.from({ length: 8 }, (_, index) => ({
+      pressureHpa: 1000 * Math.exp(-index / 8), heightM: index * 1000,
+      temperatureC: 20 - index * 8, dewPointC: missing === 'all' || index === (missing === 'surface' ? 0 : 3) ? NaN : 10 - index * 8,
+      windSpeedMps: null, windDirectionDeg: null, surface: index === 0,
+    }));
+    const result = liftParcel(points, 20, points[0].dewPointC);
+    assert.equal(result.lclM, null);
+    for (const sample of result.parcel) assert.equal(sample.parcelC, 20 - 0.0098 * sample.heightM);
+    assert.ok(Math.abs(result.parcel.at(-1)!.parcelC - -48.6) < 1e-9, 'dry ascent continues above the old synthetic LCL');
+    const sounding = balloonSounding({ validAt: '2026-09-29T12:00:00Z', levels: points.map(point => ({ ...point, dewPointC: Number.isFinite(point.dewPointC) ? point.dewPointC : null })) }, 25)!;
+    assert.equal(sounding.dryParcelOnly, true);
+    assert.equal(sounding.lclM, null);
+    assert.equal(sounding.cloudBaseM, null);
+    const reading = readChoice({ id: 'missing-humidity', kind: 'balloon', validAt: sounding.validAt, sounding,
+      start: { temperatureC: 25, source: 'observed' }, srgProfile: null, hasDewPoint: sounding.hasDewPoint }, null, null, TZ);
+    assert.match(reading.headline, /^Dry estimate/);
+    assert.deepEqual(reading.findings.filter(finding => finding.title === 'Cloud base').map(finding => finding.text), ['Unavailable · humidity missing']);
+  }
 });
 
 test("SRG decoding retains the recorded height, wind and pressure conversion precision", () => {
@@ -49,13 +74,13 @@ test("without a balloon file, the Soaring Forecast's own table and model hours a
 test("the morning reading uses the NWS numbers and says it plainly", () => {
   const [morning] = choices(null, SRG, TZ);
   const r = readChoice(morning, SRG, 1268, TZ);
-  assert.match(r.headline, /^At forecast high 77 °F · thermals to 9,[3-5]\d{2} ft MSL\.$/);
+  assert.match(r.headline, /^Dry estimate · 9,[3-5]\d{2} ft MSL · High 77 °F$/);
   const title = (t: string) => r.findings.find((f) => f.title === t)!;
-  assert.match(title("Thermals: Fair").text, /Forecast high 77 °F.*NWS top 9,264 ft · lift 382 ft\/min\./);
+  assert.match(title("Thermals: Fair").text, /High 77 °F.*NWS top 9,264 ft · lift 382 ft\/min/);
   assert.equal(title("When they start").text, "NWS trigger 70 °F · 1:30 PM.");
   assert.match(title("Launch reference").text, /Station parcel top 5,[1-3]\d{2} ft above launch elevation 4,160 ft MSL/);
   assert.equal(title("Storms").text, "Lifted index +8.1: Very stable aloft.");
-  assert.equal(title("Clouds").text, "Cloud estimate unavailable without humidity.");
+  assert.equal(title("Cloud base").text, "Unavailable · humidity missing");
   assert.ok(r.findings.some((f) => f.title === "Valley inversion"));
 });
 
@@ -63,8 +88,8 @@ test("a model hour reads as that hour's thermals", () => {
   const list = choices(null, SRG, TZ);
   const three = list.find((c) => c.validAt === "2026-09-29T21:00:00Z")!;
   const r = readChoice(three, SRG, 1268, TZ);
-  assert.match(r.headline, /^Thermals to [\d,]+ ft MSL · 3:00 PM\.$/);
-  assert.match(r.findings[0].text, /NWS 3:00 PM · surface 72 °F · parcel top [\d,]+ ft MSL/);
+  assert.match(r.headline, /^Dry estimate · [\d,]+ ft MSL · 3:00 PM$/);
+  assert.match(r.findings[0].text, /NWS 3:00 PM · Surface 72 °F · Top [\d,]+ ft MSL/);
   assert.match(r.findings.find((f) => f.key === "storms")!.text, /Lifted index \+6\.2/);
 });
 
@@ -103,7 +128,7 @@ test("a flight the archive missed comes from the Soaring Forecast's table, in ti
   assert.deepEqual(balloons.map((c) => [c.validAt, c.hasDewPoint]), [["2026-09-29T12:00:00Z", false], ["2026-09-30T00:00:00Z", true]]);
   assert.equal(balloons[0].start.source, "forecast-high");
   const r = readChoice(balloons[1], SRG, 1268, TZ);
-  assert.match(r.findings[0].text, /^6:00 PM station parcel: 75 °F surface · top [\d,]+ ft MSL\.$/);
+  assert.match(r.findings[0].text, /^6:00 PM · Surface 75 °F · Top [\d,]+ ft MSL$/);
 });
 
 test("Thursday morning precedes Thursday evening regardless of source order, with model hours between them", () => {
@@ -174,10 +199,10 @@ test("metric balloon readings convert displayed values while preserving sounding
     assert.deepEqual(physical(metric[i].sounding), physical(imperial[i].sounding));
   }
   const metricReading = readChoice(metric[0], SRG, 1268, TZ);
-  assert.equal(metricReading.headline, "At forecast high 25 °C · thermals to 2,897 m MSL.");
+  assert.equal(metricReading.headline, "Dry estimate · 2,866 m MSL · High 25 °C");
   assert.match(metricReading.findings[0].text, /NWS top 2,824 m · lift 1\.94 m\/s/);
   assert.match(metricReading.findings.find(finding => finding.key === "wind")!.text, /^1,268 m MSL: NNW 23 km\/h/);
-  assert.match(metric[0].sounding.marks.top!.label, /2,897 m/);
+  assert.match(metric[0].sounding.marks.top!.label, /2,866 m/);
   const categories = (reading: typeof metricReading) => reading.findings.map(({ key, title, tone }) => ({ key, title, tone }));
   assert.deepEqual(categories(metricReading), categories(imperialReading));
   assert.doesNotMatch(JSON.stringify(metricReading), /mph|ft\/min|ft MSL|°F/);
@@ -191,7 +216,7 @@ test("balloon readings retain uncertainty without instructions or storm guarante
   assert.equal(storm.text, "Lifted index -1: Slightly unstable · Cu growth possible.");
   assert.equal(storm.tone, "caution");
   const unheated = { ...morning, start: { temperatureC: 10, source: "observed" as const }, sounding: { ...morning.sounding, marks: { ...morning.sounding.marks, zoneTopM: null } } };
-  assert.equal(readChoice(unheated, null, 1268, TZ).findings[0].text, "The morning parcel is stable; the forecast high is unavailable.");
+  assert.equal(readChoice(unheated, null, 1268, TZ).findings[0].text, 'Stable morning air · Forecast high unavailable');
 });
 
 test("P2-4: balloon sounding carries profile-limited coverage limit through headline, launch comparison, and cloud conclusions", () => {
@@ -216,10 +241,10 @@ test("P2-4: balloon sounding carries profile-limited coverage limit through head
 
   // For a 4,000 m launch above the 3,000 m profile limit, reports that the profile ends below launch and ceiling is unresolved
   const highLaunchReading = readChoice(choice, { ...SRG, forecastMaxTempC: 35 }, 4000, TZ);
-  assert.equal(highLaunchReading.headline, "At forecast high 95 °F · thermals ≥ 9,843 ft MSL (sounding ends here).");
-  assert.match(highLaunchReading.findings.find(f => f.key === "thermals")!.text, /buoyant through profile top.*ceiling unresolved/);
+  assert.equal(highLaunchReading.headline, "Thermals · ≥ 9,843 ft MSL · High 95 °F · Sounding limit");
+  assert.match(highLaunchReading.findings.find(f => f.key === "thermals")!.text, /Top ≥ 9,843 ft MSL.*Sounding limit · Ceiling unknown/);
   const launchFinding = highLaunchReading.findings.find(f => f.key === "top")!;
-  assert.match(launchFinding.text, /The sounding ends at 9,843 ft MSL, near or below launch elevation \(13,123 ft MSL\). The thermal ceiling is unresolved/);
+  assert.equal(launchFinding.text, 'Sounding ends 9,843 ft MSL · Near or below launch 13,123 ft MSL · Ceiling unknown');
   assert.doesNotMatch(launchFinding.text, /Station parcel top near or below launch/);
   assert.equal(choice.sounding.lclM, null, "condensation lies above this observed profile");
   assert.equal(highLaunchReading.findings.find(f => f.key === "clouds"), undefined);
@@ -227,5 +252,5 @@ test("P2-4: balloon sounding carries profile-limited coverage limit through head
 
   // For a 1,500 m launch below the 3,000 m profile limit, reports buoyant parcel at profile top with unresolved ceiling
   const lowLaunchReading = readChoice(choice, { ...SRG, forecastMaxTempC: 35 }, 1500, TZ);
-  assert.match(lowLaunchReading.findings.find(f => f.key === "top")!.text, /Parcel remains buoyant at profile top.*ceiling unresolved/);
+  assert.equal(lowLaunchReading.findings.find(f => f.key === "top")!.text, 'Top ≥ 9,843 ft MSL · ≥ 4,921 ft above launch · Ceiling unknown');
 });

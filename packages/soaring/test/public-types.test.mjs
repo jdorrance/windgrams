@@ -22,12 +22,11 @@ test('typed diagnostic facade retains runtime function identity and exact diagno
   for (const item of fixture.cases) {
     const result = core.deriveDiagnosticsV2(item.terrainM, item.source, item.v1Hour, item.options);
     assert.deepEqual(result, item.expected);
-    assert.equal(result.contractVersion, '2.1.0');
+    assert.equal(result.contractVersion, '2.2.0');
     for (const [key, value] of Object.entries(result)) {
       if (['contractVersion', 'verticalResolution', 'experimental'].includes(key)) continue;
       assert.ok(value === null || Number.isFinite(value), key);
     }
-    assert.equal(typeof result.thermalVelocityV2Mps, 'number');
     assert.equal(result.verticalResolution.synthesizedLevels, 0);
   }
 });

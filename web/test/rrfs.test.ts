@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs';
 import { parsePublishedProfileJson, publishedLift } from '../src/lib/published-lift.ts';
 import {  buildWindgramView, readWindgram  } from "./helpers/windgram.ts";
 import {  renderWindgramSvg, renderWindgramDiagnosticsSvg  } from "./helpers/windgram.ts";
-import { buildSounding } from '../src/lib/skewt.ts';
+import { buildSounding, readSounding } from '../src/lib/skewt.ts';
+import { launchConditions } from '../src/lib/launch-forecast.ts';
+import { DEFAULT_DETAILS } from '../src/lib/launches.ts';
+import { postprocessPointForecast } from '../../forecasts/soaring/point-postprocess.mjs';
 
 // Actual NOAA RRFS 2026-10-23 06Z f001–f084, decoded and postprocessed at
 // Blanchard. Values and timestamps remain exactly as published in the fixture.
@@ -84,5 +87,32 @@ test('actual RRFS null lift remains absent even when the older diagnostic report
     if (source.soaring.resolvedThermalTopM !== null) continue;
     assert.equal(publishedLift(profile.hours[index]).boundaryLayerTopM, null);
     assert.equal(buildSounding(profile, profile.hours[index])!.marks.zoneTopM, null);
+  }
+});
+
+test('postprocessed missing flux stays unavailable in launch and chart readings despite positive legacy lift', () => {
+  for (const missing of ['sensibleHeatFluxWm2', 'latentHeatFluxWm2']) {
+    const source = structuredClone(captured.hours[10]);
+    assert.ok(source.derived.thermalVelocityMps > 0);
+    assert.ok(source.derived.usableLiftTopM > 0);
+    source.surface[missing] = null;
+    // Exercise the calculation-to-display boundary directly. The pinned full
+    // profile parser rejects missing surface flux before a profile can load.
+    const published = postprocessPointForecast({ ...captured, hours: [source] });
+    const hour = published.hours[0];
+    assert.deepEqual(hour.derived, source.derived, 'legacy diagnostics remain available for audit');
+    assert.equal(publishedLift(hour).thermalVelocityMps, null);
+    assert.equal(publishedLift(hour).usableLiftTopM, null);
+    const conditions = Object.fromEntries(launchConditions(hour, DEFAULT_DETAILS, 378.5).values);
+    assert.equal(conditions['Thermal strength'], 'Unavailable');
+    assert.equal(conditions['Usable lift top'], 'Unavailable');
+    const sounding = buildSounding(published, hour)!;
+    assert.equal(sounding.thermalVelocityMps, null);
+    assert.equal(sounding.usableLiftTopM, null);
+    assert.equal(sounding.marks.top, null);
+    assert.equal(readSounding(sounding, 378.5).headline, 'Thermals: Unavailable');
+    const view = buildWindgramView(published, { timeZone: published.site.timeZone, hours: [hour] });
+    assert.equal(view.hours[0].thermalVelocityMps, null);
+    assert.equal(view.series.find(series => series.key === 'usableLiftTopM')!.path, '');
   }
 });

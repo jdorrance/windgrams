@@ -6,6 +6,10 @@ applied when values are displayed. See the [website README](../README.md) for
 local development and the [windgram package](../../packages/windgram/README.md)
 for the renderer's API.
 
+Lead pilot-facing copy with the reading, units and time. Use short labels and the
+caveat needed to interpret them; keep formulas and implementation details in the
+[calculation reference](../../docs/forecast-improvement-plan.md).
+
 ## Data and selection
 
 The country selector remembers the choice for the session and accepts
@@ -101,3 +105,13 @@ zone and UTC cycle. Regional views, windgrams and model soundings read the same
 published diagnostics. The [calculation reference](../../docs/forecast-improvement-plan.md)
 explains those values; [visual QA](../test/fixtures/windgram-visual/README.md) covers
 rendering regressions.
+
+Skew-T shading compares the plotted temperatures. Parcel buoyancy also accounts
+for moisture when available. Incomplete balloon or SRG humidity gives a dry
+estimate with no cloud-base marker. Legacy SRG height
+and wind decoding precision is retained; displayed wind barbs use the shared unit
+conversion.
+
+Page owners release chart observers, station polling and sunlight graphics on final
+departure. Back/forward-cache suspension pauses playback and polling without destroying
+the retained view. Pending reads are aborted on disposal and cannot mount late graphics.

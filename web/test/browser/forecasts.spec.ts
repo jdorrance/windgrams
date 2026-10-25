@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { buildSolarTerrain, domainFor, expandBounds, gridFromFunction } from '@windgrams/providers/solar';
+import { latLonToPixel } from '../../src/lib/relief.ts';
 
 const launch = '/launches/wa-blanchard?model=hrrr-conus&day=2026-10-25';
 const now = new Date('2026-10-25T18:00:00Z');
@@ -65,7 +67,7 @@ test('a current forecast shows a failed refresh without hiding the chart or chan
   const notice = page.locator('#forecast-freshness');
   await expect(notice).toBeVisible();
   await expect(notice).toHaveAttribute('data-freshness', 'current');
-  await expect(notice).toHaveText('Latest update did not complete; showing the available forecast.');
+  await expect(notice).toHaveText('Latest update failed');
   await page.locator('#model-select').selectOption('gfs');
   await expect(page.locator('#model-selected-name')).toHaveText('GFS');
   await expect(notice).toBeHidden();
@@ -85,6 +87,210 @@ test('archived regional replay labels history and advances the chart with its ho
   await expect(page).toHaveURL(/hour=12/);
   await expect(page.locator('#replay-windgram > svg')).toHaveCount(1);
   expect(errors).toEqual([]);
+});
+
+test('regional audit caveats render as text inside forecast details', async ({ page }) => {
+  const limitations = ['Native levels cannot resolve every inversion.', '<img src=x onerror=alert(1)>'];
+  await page.route('**/audit.json', async route => {
+    const response = await route.fetch();
+    const audit = await response.json();
+    await route.fulfill({ json: { ...audit, limitations } });
+  });
+  await page.goto('/soaring?case=synthetic-archive&hour=11');
+  await page.getByText('About this forecast', { exact: true }).click();
+  await expect(page.locator('#audit-limitations > li')).toHaveText(limitations);
+  await expect(page.locator('#audit-limitations img')).toHaveCount(0);
+});
+
+test('launch chart owners retain observers through bfcache and release them on final departure', async ({ page }) => {
+  await page.addInitScript(() => {
+    const native = window.ResizeObserver;
+    const observed = new Map<ResizeObserver, string[]>();
+    Object.defineProperty(window, 'observedCharts', { value: observed });
+    window.ResizeObserver = class extends native {
+      observe(target: Element, options?: ResizeObserverOptions) {
+        observed.set(this, [...(observed.get(this) ?? []), target.id]);
+        super.observe(target, options);
+      }
+      disconnect() { observed.delete(this); super.disconnect(); }
+    };
+  });
+  await page.goto(launch);
+  await expect(page.locator('#skewt-chart > svg')).toHaveCount(1);
+  const activeCharts = () => page.evaluate(() => [...(window as unknown as { observedCharts: Map<ResizeObserver, string[]> }).observedCharts.values()]
+    .flat().filter(id => ['skewt-chart', 'sun-curve', 'nws-charts', 'ecmwf-charts', 'balloon-chart'].includes(id)).sort());
+  const initial = await activeCharts();
+  expect(initial).toContain('skewt-chart'); expect(initial).toContain('sun-curve');
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  expect(await activeCharts()).toEqual(initial);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await page.locator('#forecast-hour-next').click();
+  await expect(page.locator('#skewt-chart > svg')).toHaveCount(1);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })));
+  expect(await activeCharts()).toEqual([]);
+  await expect(page.locator('#skewt-chart > svg')).toHaveCount(0);
+});
+
+test('station polling recovers from a stalled body, resumes after bfcache and aborts on departure', async ({ page }) => {
+  await page.addInitScript(() => {
+    const native = window.fetch;
+    const signals: AbortSignal[] = [];
+    Object.defineProperty(window, 'stationSignals', { value: signals });
+    window.fetch = (input, init) => {
+      if (String(input).startsWith('/api/stations/') && init?.signal) {
+        signals.push(init.signal);
+        if (signals.length === 1) {
+          const signal = init.signal;
+          return Promise.resolve(new Response(new ReadableStream({
+            start(controller) { signal.addEventListener('abort', () => controller.error(signal.reason), { once: true }); },
+          })));
+        }
+      }
+      return native(input, init);
+    };
+  });
+  await page.route('**/launches/wa-blanchard?**', async route => {
+    const response = await route.fetch();
+    const html = (await response.text()).replace('</body>', `<section id="station"><script id="station-config" type="application/json">{"id":"KTEST1","name":"Test station","url":"https://example.com/station"}</script><p id="station-status"></p><div id="station-body"></div><svg id="station-compass"></svg><p id="station-age"></p></section></body>`);
+    await route.fulfill({ response, body: html });
+  });
+  let calls = 0, release = () => {};
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/stations/KTEST1', async route => {
+    if (++calls > 1) await held;
+    await route.fulfill({ status: 503, json: { error: 'not connected' } });
+  });
+  await page.goto(launch);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { stationSignals: AbortSignal[] }).stationSignals[0]?.aborted), { timeout: 20_000 }).toBe(true);
+  await page.clock.fastForward(120_000);
+  await expect(page.locator('#station-status')).toContainText('not connected');
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  await page.clock.runFor(150_000);
+  expect(calls).toBe(1);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await expect.poll(() => calls).toBe(2);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })));
+  expect(await page.evaluate(() => (window as unknown as { stationSignals: AbortSignal[] }).stationSignals.every(signal => signal.aborted))).toBe(true);
+  release();
+  await page.clock.runFor(150_000);
+  expect(calls).toBe(2);
+  await expect(page.locator('#station-status')).toContainText('not connected');
+});
+
+test('sunlight retries tiles, ignores older point selections and retains suspended 3D rendering', async ({ page }) => {
+  const site = { slug: 'wa-blanchard', latitude: 48.6097, longitude: -122.426 };
+  const bounds = domainFor(site.latitude, site.longitude, 1).bounds;
+  const grid = gridFromFunction(() => 100, { ...expandBounds(bounds, 1500), dLon: 1 / 3600, dLat: 1 / 3600 });
+  const { index, tiles, relief } = buildSolarTerrain(site, { fine: grid, coarse: grid, radiusKm: 1, maxDistanceKm: 1,
+    sources: { surface: { id: 'test', name: 'Flat test terrain', resolutionM: 30, licence: 'test', url: '' } } });
+  const paths = new Map(tiles.map(tile => [index.tiles.path.replace('{z}', String(tile.z)).replace('{x}', String(tile.x)).replace('{y}', String(tile.y)), tile.body]));
+  let tilesAvailable = false, releaseRelief = () => {};
+  const heldRelief = new Promise<void>(resolve => { releaseRelief = resolve; });
+  const launchPixel = latLonToPixel(site.latitude, site.longitude, index.tiles.maxZoom);
+  const westernTile = index.tiles.path.replace('{z}', String(index.tiles.maxZoom))
+    .replace('{x}', String(Math.floor(launchPixel.x / 256) - 1)).replace('{y}', String(Math.floor(launchPixel.y / 256)));
+  let holdWesternTile = false, westernRequested = false, releaseWestern = () => {};
+  const heldWestern = new Promise<void>(resolve => { releaseWestern = resolve; });
+  await page.route('**/solar/wa-blanchard/**', async route => {
+    const path = route.request().url().split('/solar/wa-blanchard/')[1];
+    if (path === 'index.json') return route.fulfill({ json: index });
+    if (path === index.relief.path) {
+      await heldRelief;
+      return route.fulfill({ body: Buffer.from(relief.body) });
+    }
+    if (holdWesternTile && path === westernTile) { westernRequested = true; await heldWestern; }
+    const body = tilesAvailable ? paths.get(path) : undefined;
+    await route.fulfill(body ? { body: Buffer.from(body) } : { status: 404 });
+  });
+  await page.addInitScript(() => {
+    const graphics = { draws: 0, deletedTextures: 0 };
+    Object.defineProperty(window, 'sunlightGraphics', { value: graphics });
+    const draw = WebGL2RenderingContext.prototype.drawElements;
+    const remove = WebGL2RenderingContext.prototype.deleteTexture;
+    WebGL2RenderingContext.prototype.drawElements = function(...args) {
+      if ((this.canvas as HTMLCanvasElement).closest('#sun-3d')) graphics.draws++;
+      return draw.apply(this, args);
+    };
+    WebGL2RenderingContext.prototype.deleteTexture = function(texture) {
+      if (texture && (this.canvas as HTMLCanvasElement).closest('#sun-3d')) graphics.deletedTextures++;
+      return remove.call(this, texture);
+    };
+  });
+  await page.goto(launch);
+  await page.locator('#sun-section').scrollIntoViewIfNeeded();
+  await expect(page.locator('#sun-map canvas')).toHaveCount(1);
+  await expect(page.locator('#sun-readout')).not.toBeEmpty();
+  await expect(page.locator('#sun-curve > svg')).toHaveCount(0);
+  tilesAvailable = true;
+  await page.locator('#sun-map canvas').click();
+  await expect(page.locator('#sun-curve > svg')).toHaveCount(1);
+  holdWesternTile = true;
+  const mapBox = (await page.locator('#sun-map canvas').boundingBox())!;
+  await page.locator('#sun-map canvas').click({ position: { x: mapBox.width / 2 - 60, y: mapBox.height / 2 } });
+  await expect.poll(() => westernRequested).toBe(true);
+  await page.locator('#sun-reset').click();
+  await expect(page.locator('#sun-reset')).toBeHidden();
+  const selectedPoint = await page.locator('#sun-point').textContent();
+  releaseWestern();
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('#sun-point')).toHaveText(selectedPoint!);
+  await page.locator('#sun-view [data-view="3d"]').click();
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  releaseRelief();
+  await expect(page.locator('#sun-3d canvas')).toHaveCount(1);
+  await page.clock.runFor(100);
+  const graphics = () => page.evaluate(() => (window as unknown as { sunlightGraphics: { draws: number; deletedTextures: number } }).sunlightGraphics);
+  expect((await graphics()).draws).toBe(0);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await expect.poll(async () => (await graphics()).draws).toBeGreaterThan(0);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })));
+  await expect(page.locator('#sun-3d canvas, #sun-map canvas')).toHaveCount(0);
+  expect((await graphics()).deletedTextures).toBeGreaterThan(0);
+});
+
+test('a balloon with missing humidity visibly qualifies its dry parcel estimate', async ({ page }) => {
+  await page.route('**/raob/sites/wa-blanchard.json', route => route.fulfill({ json: {
+    schemaVersion: 1, generatedAt: '2026-10-25T13:00:00Z',
+    station: { id: 'KTEST', name: 'Test station', latitude: 48, longitude: -122, distanceKm: 10, elevationM: 100 },
+    soundings: [{ validAt: '2026-10-25T12:00:00Z', levels: Array.from({ length: 11 }, (_, i) => ({
+      pressureHpa: 1000 - i * 50, heightM: 100 + i * 500, temperatureC: 20 - i * 4,
+      dewPointC: null, windSpeedMps: 3, windDirectionDeg: 250,
+    })) }],
+  } }));
+  await page.goto(launch);
+  await expect(page.locator('#balloon-headline')).toContainText('Dry estimate');
+  await expect(page.locator('#balloon-findings li').filter({ hasText: 'Cloud base' })).toContainText('Unavailable · humidity missing');
+  await expect(page.locator('#balloon-chart .skewt-dew')).toHaveCount(0);
+  await expect(page.locator('#balloon-chart .skewt-mark-base')).toHaveCount(0);
+});
+
+test('a late sunlight response cannot mount or update a departed view', async ({ page }) => {
+  await page.addInitScript(() => {
+    const native = window.fetch;
+    window.fetch = (input, init) => {
+      if (!String(input).includes('/solar/wa-blanchard/index.json')) return native(input, init);
+      Object.defineProperty(window, 'solarSignal', { value: init?.signal });
+      // Deliberately ignore cancellation to exercise the late-completion guard too.
+      return new Promise<Response>(resolve => Object.defineProperty(window, 'finishSolarRead', {
+        value: () => resolve(new Response('{}', { status: 404 })),
+      }));
+    };
+  });
+  await page.goto(launch);
+  await page.locator('#sun-section').scrollIntoViewIfNeeded();
+  await expect(page.locator('#sun-status')).toHaveText('Loading the terrain…');
+  await expect.poll(() => page.evaluate(() => 'solarSignal' in window)).toBe(true);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  expect(await page.evaluate(() => (window as unknown as { solarSignal: AbortSignal }).solarSignal.aborted)).toBe(false);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await page.evaluate(async () => {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+    (window as unknown as { finishSolarRead(): void }).finishSolarRead();
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+  });
+  expect(await page.evaluate(() => (window as unknown as { solarSignal: AbortSignal }).solarSignal.aborted)).toBe(true);
+  await expect(page.locator('#sun-status')).toHaveText('Loading the terrain…');
+  await expect(page.locator('#sun-map canvas')).toHaveCount(0);
 });
 
 test('regional map loads lazily, retries failures and ignores superseded hours', async ({ page }) => {

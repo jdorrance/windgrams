@@ -9,7 +9,7 @@ import { publishedEffectiveCloudLimit, publishedLift } from "./published-lift.ts
 // the top of the lift, and a plain-language reading of all of it.
 
 import type { SiteForecast } from "@azohra/meteo.briefing/contract";
-import { lapseRateCPer1000Ft, parcelAscent, stabilityClass, windToComponents, componentsToWind } from "@azohra/meteo.briefing/derive";
+import { DRY_ADIABATIC_LAPSE_C_PER_M, lapseRateCPer1000Ft, parcelAscent, stabilityClass, windToComponents, componentsToWind } from "@azohra/meteo.briefing/derive";
 import { compassPoint } from "./launches.ts";
 
 type Hour = SiteForecast["hours"][number];
@@ -42,8 +42,15 @@ export interface ParcelSample {
   heightM: number;
   parcelC: number;
   environmentC: number;
-  /** Parcel minus environment, virtual temperature: positive = a thermal here still rises. */
+  /** Virtual-temperature excess with complete moisture; dry-temperature excess for a qualified dry curve. */
   buoyancyC: number;
+}
+
+interface ParcelCurve {
+  parcel: ParcelSample[];
+  lclM: number | null;
+  /** True when missing humidity limits the parcel curve to dry ascent. */
+  dryParcelOnly: boolean;
 }
 
 export interface Layer {
@@ -56,13 +63,11 @@ export interface Layer {
   grounded?: boolean;
 }
 
-export interface Sounding {
+export interface Sounding extends ParcelCurve {
   validAt: string;
   modelElevationM: number;
   /** Surface first, then the published levels upward. */
   points: SoundingPoint[];
-  parcel: ParcelSample[];
-  lclM: number | null;
   boundaryLayerTopM: number | null;
   thermalVelocityMps: number | null;
   cloudBaseM: number | null;
@@ -129,7 +134,7 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
   const points = [surface, ...levels];
   const topM = levels[levels.length - 1].heightM;
 
-  const { parcel, lclM } = liftParcel(points, ts, surface.dewPointC);
+  const { parcel, lclM, dryParcelOnly } = liftParcel(points, ts, surface.dewPointC);
 
   const d = publishedLift(hour);
   const w = scalar(d.thermalVelocityMps);
@@ -158,6 +163,7 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
     freezingLevelM: freezingLevel(points),
     topM,
     hasDewPoint: true,
+    dryParcelOnly,
     marks: {
       zoneTopM: zoneTop !== null && zoneTop > zs ? zoneTop : null,
       top: thermals && usable !== null ? { heightM: usable, label: `Top of lift ${formatQuantity(usable, "elevation")}` } : null,
@@ -171,22 +177,30 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
  * display curve rendering only (display interpolation between native model
  * levels does not resolve sub-grid inversions or extra vertical structure).
  */
-export function liftParcel(points: SoundingPoint[], surfaceTempC: number, surfaceDewPointC: number): { parcel: ParcelSample[]; lclM: number | null } {
+export function liftParcel(points: SoundingPoint[], surfaceTempC: number, surfaceDewPointC: number): ParcelCurve {
   const surface = points[0];
   const zs = surface.heightM;
   const topM = points[points.length - 1].heightM;
-  const dewOf = (td: number, t: number) => (Number.isFinite(td) ? td : t - 40);
   const dense: { heightM: number; temperatureC: number; dewPointC: number }[] = [];
   for (let z = zs + 25; z < topM; z += 25) {
     const env = environmentAtHeight(points, z);
-    dense.push({ heightM: z, temperatureC: env.temperatureC, dewPointC: dewOf(env.dewPointC, env.temperatureC) });
+    dense.push({ heightM: z, temperatureC: env.temperatureC, dewPointC: env.dewPointC });
   }
-  for (const l of points.slice(1)) dense.push({ heightM: l.heightM, temperatureC: l.temperatureC, dewPointC: dewOf(l.dewPointC, l.temperatureC) });
+  for (const l of points.slice(1)) dense.push({ heightM: l.heightM, temperatureC: l.temperatureC, dewPointC: l.dewPointC });
   dense.sort((a, b) => a.heightM - b.heightM);
-  const dew = Math.min(dewOf(surfaceDewPointC, surfaceTempC), surfaceTempC);
+  // Missing humidity limits the curve to a dry-temperature comparison.
+  if (!Number.isFinite(surfaceDewPointC) || points.some(point => !Number.isFinite(point.dewPointC))) {
+    return { lclM: null, dryParcelOnly: true, parcel: [{ heightM: zs, temperatureC: surface.temperatureC }, ...dense].map(level => {
+      const parcelC = surfaceTempC - DRY_ADIABATIC_LAPSE_C_PER_M * (level.heightM - zs);
+      return { pressureHpa: pressureAtHeight(points, level.heightM), heightM: level.heightM,
+        parcelC, environmentC: level.temperatureC, buoyancyC: parcelC - level.temperatureC };
+    }) };
+  }
+  const dew = Math.min(surfaceDewPointC, surfaceTempC);
   const ascent = parcelAscent({ temperatureC: surfaceTempC, dewPointC: dew, elevationM: zs }, dense);
   return {
     lclM: ascent.lclM,
+    dryParcelOnly: false,
     parcel: [
       { pressureHpa: surface.pressureHpa, heightM: zs, parcelC: surfaceTempC, environmentC: surface.temperatureC, buoyancyC: surfaceTempC - surface.temperatureC },
       ...ascent.levels.map((sample) => ({
@@ -474,7 +488,7 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   const windParts: string[] = [];
   if (launchM !== null) {
     if (atLaunch) windParts.push(`Launch (${referenceHeightText(launchM)} MSL): ${windText(atLaunch)}.`);
-    else if (launchM < sounding.modelElevationM) windParts.push(`Launch wind unavailable: launch at ${referenceHeightText(launchM)} MSL is below model terrain at ${referenceHeightText(sounding.modelElevationM)} MSL.`);
+    else if (launchM < sounding.modelElevationM) windParts.push(`Launch wind unavailable (${referenceHeightText(launchM)} MSL) · Below model ground.`);
     else windParts.push(`Wind unavailable at launch elevation (${referenceHeightText(launchM)} MSL).`);
   }
   if (launchM === null || !atLaunch) {

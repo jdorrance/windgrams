@@ -120,15 +120,34 @@ export function blocksOf(domain: TerrainDomain): TerrainDomain[] {
   return blocks;
 }
 
-/** Geographic box around `bounds` extended by `metres` on every side. */
+/** Pad an ordered, unwrapped geographic box by a nonnegative distance; reachable poles cover all longitudes. */
 export function expandBounds(bounds: TerrainBounds, metres: number): TerrainBounds {
-  const mid = (bounds.south + bounds.north) / 2;
-  const m = metresPerDegree(Math.abs(mid) + Math.abs(bounds.north - bounds.south) / 2);
+  if (!Number.isFinite(metres) || metres < 0 || ![bounds.south, bounds.north, bounds.west, bounds.east].every(Number.isFinite)
+    || bounds.south < -90 || bounds.north > 90 || bounds.south > bounds.north || bounds.west > bounds.east) throw new RangeError('Expected finite ordered geographic bounds and nonnegative padding');
+  if (metres === 0) return { ...bounds };
+  // Exact ellipsoid radii for a coverage bound. The shorter series used by
+  // metresPerDegree is retained for the existing terrain raster calculations.
+  const e2 = (1 / 298.257223563) * (2 - 1 / 298.257223563);
+  const scale = (latitude: number) => {
+    const phi = latitude * DEG, w = 1 - e2 * Math.sin(phi) ** 2;
+    return { lat: WGS84_A * (1 - e2) / w ** 1.5 * DEG, lon: WGS84_A / Math.sqrt(w) * Math.cos(phi) * DEG };
+  };
+  // The meridian scale is smallest at the equator. First bound the complete
+  // padded latitude interval, then use its minimum scale, including 0° when
+  // crossed. This keeps the expansion conservative in either hemisphere.
+  const maxPadding = metres / scale(0).lat;
+  const lower = Math.max(-90, bounds.south - maxPadding), upper = Math.min(90, bounds.north + maxPadding);
+  const closest = lower <= 0 && upper >= 0 ? 0 : Math.min(Math.abs(lower), Math.abs(upper));
+  const paddingLat = metres / scale(closest).lat;
+  const south = Math.max(-90, bounds.south - paddingLat), north = Math.min(90, bounds.north + paddingLat);
+  // Longitude spacing shrinks toward either pole. Use the entire padded
+  // interval; a reachable pole requires all longitudes.
+  const paddingLon = metres / scale(Math.max(Math.abs(south), Math.abs(north))).lon;
+  const allLongitudes = south === -90 || north === 90 || bounds.east - bounds.west + 2 * paddingLon >= 360;
   return {
-    south: bounds.south - metres / m.lat,
-    north: bounds.north + metres / m.lat,
-    west: bounds.west - metres / m.lon,
-    east: bounds.east + metres / m.lon,
+    south, north,
+    west: allLongitudes ? -180 : bounds.west - paddingLon,
+    east: allLongitudes ? 180 : bounds.east + paddingLon,
   };
 }
 

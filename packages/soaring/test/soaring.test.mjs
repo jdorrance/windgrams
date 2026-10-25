@@ -6,7 +6,7 @@ import { postprocessPointForecast, aggregateEnsembleMetric, summarizeModelWindow
   sourceFromPublishedDeterministicHour, deriveEnsembleSoaringDiagnostics } from '@windgrams/soaring/compatibility';
 
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/diagnostic-parity.json',import.meta.url),'utf8'));
-for (const c of fixture.cases) test(`pre-package numerical parity: ${c.id}`, () => {
+for (const c of fixture.cases) test(`method 2.2 numerical regression: ${c.id}`, () => {
   const before=structuredClone(c.source);
   assert.deepEqual(deriveDiagnosticsV2(c.terrainM,c.source,c.v1Hour,c.options),c.expected);
   assert.deepEqual(c.source,before);

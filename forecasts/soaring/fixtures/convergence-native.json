@@ -1,0 +1,294 @@
+[
+  {
+    "model": "hrrr",
+    "referenceTime": "2026-10-21T00:00:00Z",
+    "forecastHour": 14,
+    "grid": {
+      "kind": "lambert",
+      "gridDefinitionTemplateNumber": 30,
+      "numberOfDataPoints": 1905141,
+      "ni": 1799,
+      "nj": 1059,
+      "scanningMode": 64,
+      "iScansNegatively": false,
+      "jScansPositively": true,
+      "jPointsAreConsecutive": false,
+      "alternativeRowScanning": false,
+      "resolutionAndComponentFlags": 8,
+      "uvRelativeToGrid": true,
+      "earthRadiusM": 6371229,
+      "gridKey": "8c8b3013f8c77310",
+      "latitudeOfFirstGridPoint": 21.138123,
+      "longitudeOfFirstGridPoint": 237.280472,
+      "laD": 38.5,
+      "loV": 262.5,
+      "dxM": 3000,
+      "dyM": 3000,
+      "projectionCentreFlag": 0,
+      "latin1": 38.5,
+      "latin2": 38.5,
+      "southPoleLatitude": 0,
+      "southPoleLongitude": 0
+    },
+    "records": [
+      {
+        "key": "terrain",
+        "url": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20261021/conus/hrrr.t00z.wrfprsf01.grib2",
+        "range": "bytes=294792779-296946473",
+        "sha256": "e727cefafc03d2db27f1c76baecf0e1c0249bf2ced9210391895d8195796d75e"
+      },
+      {
+        "key": "u",
+        "url": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20261021/conus/hrrr.t00z.wrfprsf14.grib2",
+        "range": "bytes=330453042-332834656",
+        "sha256": "09e785cacd387d3d3e1c9d5d81047822d5385cad0b027b689a4f8ccf13bde203"
+      },
+      {
+        "key": "v",
+        "url": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20261021/conus/hrrr.t00z.wrfprsf14.grib2",
+        "range": "bytes=332834657-335216271",
+        "sha256": "942544c2c1d1ae44d27c44b7a1a8a27f816d3dfc092c2347c9a0fa756e56b12d"
+      },
+      {
+        "key": "925.UGRD",
+        "url": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20261021/conus/hrrr.t00z.wrfprsf14.grib2",
+        "range": "bytes=239121499-239743287",
+        "sha256": "19b9498f96343ef72d607ed933f2d4dc292f45b849b3e113a5d9791adadf7ef3"
+      },
+      {
+        "key": "925.VGRD",
+        "url": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20261021/conus/hrrr.t00z.wrfprsf14.grib2",
+        "range": "bytes=239743288-240373953",
+        "sha256": "c758ff3f1a7fd5ac2695cd940387be36f30d9c673017b59b962f2c17cbf8cdfe"
+      },
+      {
+        "key": "925.HGT",
+        "url": "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.20261021/conus/hrrr.t00z.wrfprsf14.grib2",
+        "range": "bytes=233504232-234262534",
+        "sha256": "7e8375ba4ea8ad8d5bd6664a120edd0075670008c785380284fe22dba99fc37e"
+      }
+    ],
+    "cells": [
+      {
+        "index": 1777697
+      },
+      {
+        "index": 1777698
+      },
+      {
+        "index": 1777699
+      },
+      {
+        "index": 1779496
+      },
+      {
+        "index": 1779497
+      },
+      {
+        "index": 1779498
+      },
+      {
+        "index": 1781295
+      },
+      {
+        "index": 1781296
+      },
+      {
+        "index": 1781297
+      }
+    ],
+    "winds": {
+      "u": [
+        0.16009521484375,
+        0.22259521484375,
+        0.78509521484375,
+        -0.08990478515625,
+        -0.33990478515625,
+        0.91009521484375,
+        -0.71490478515625,
+        -0.58990478515625,
+        0.84759521484375
+      ],
+      "v": [
+        0.9568614959716797,
+        -0.7306385040283203,
+        -0.7306385040283203,
+        0.9568614959716797,
+        0.08186149597167969,
+        0.3943614959716797,
+        0.7693614959716797,
+        3.3943614959716797,
+        2.5818614959716797
+      ],
+      "925.UGRD": [
+        0.06781005859375,
+        0.00531005859375,
+        -0.05718994140625,
+        0.13031005859375,
+        0.06781005859375,
+        0.00531005859375,
+        0.25531005859375,
+        0.19281005859375,
+        0.06781005859375
+      ],
+      "925.VGRD": [
+        6.71025276184082,
+        6.52275276184082,
+        6.21025276184082,
+        6.64775276184082,
+        6.46025276184082,
+        6.21025276184082,
+        6.58525276184082,
+        6.39775276184082,
+        6.14775276184082
+      ]
+    },
+    "centreIndex": 1779497
+  },
+  {
+    "model": "rrfs",
+    "referenceTime": "2026-10-23T06:00:00Z",
+    "forecastHour": 8,
+    "grid": {
+      "kind": "lambert",
+      "gridDefinitionTemplateNumber": 30,
+      "numberOfDataPoints": 1905141,
+      "ni": 1799,
+      "nj": 1059,
+      "scanningMode": 64,
+      "iScansNegatively": false,
+      "jScansPositively": true,
+      "jPointsAreConsecutive": false,
+      "alternativeRowScanning": false,
+      "resolutionAndComponentFlags": 56,
+      "uvRelativeToGrid": true,
+      "earthRadiusM": 6371229,
+      "gridKey": "90f73dab9842d16c",
+      "latitudeOfFirstGridPoint": 21.138123,
+      "longitudeOfFirstGridPoint": 237.280472,
+      "laD": 38.5,
+      "loV": 262.5,
+      "dxM": 3000,
+      "dyM": 3000,
+      "projectionCentreFlag": 0,
+      "latin1": 38.5,
+      "latin2": 38.5,
+      "southPoleLatitude": -90,
+      "southPoleLongitude": 0
+    },
+    "records": [
+      {
+        "key": "terrain",
+        "url": "https://noaa-rrfs-ops-pds.s3.amazonaws.com/rrfs.20261023/06/rrfs.t06z.2dfld.3km.f001.conus.grib2",
+        "range": "bytes=25441409-27147871",
+        "sha256": "0c01939ce425dcdeffb57551642563d2202a175e5e274f18c466f91e7e595fd8"
+      },
+      {
+        "key": "u",
+        "url": "https://noaa-rrfs-ops-pds.s3.amazonaws.com/rrfs.20261023/06/rrfs.t06z.2dfld.3km.f008.conus.grib2",
+        "range": "bytes=90418100-92272899",
+        "sha256": "564aa7309db73ddfcc6f201ed6d9e199d4a60873f68b04e0aff2bd2649460be8"
+      },
+      {
+        "key": "v",
+        "url": "https://noaa-rrfs-ops-pds.s3.amazonaws.com/rrfs.20261023/06/rrfs.t06z.2dfld.3km.f008.conus.grib2",
+        "range": "bytes=92272900-94115570",
+        "sha256": "692652fd4d0f3586586b0a9fa46b344b7b9703c8c8be81273c5a614b524e9f0e"
+      },
+      {
+        "key": "925.UGRD",
+        "url": "https://noaa-rrfs-ops-pds.s3.amazonaws.com/rrfs.20261023/06/rrfs.t06z.prslev.3km.f008.conus.grib2",
+        "range": "bytes=438185325-439972499",
+        "sha256": "a5db961b4dedb307fbf1cb3d3f75a6cb5fb87944166e0b86320aa5b8a805894f"
+      },
+      {
+        "key": "925.VGRD",
+        "url": "https://noaa-rrfs-ops-pds.s3.amazonaws.com/rrfs.20261023/06/rrfs.t06z.prslev.3km.f008.conus.grib2",
+        "range": "bytes=439972500-441769238",
+        "sha256": "b7bcdc6b04add697cb189c60cf4ea554b011c208337d7b60b3bce4c8f4afdf9d"
+      },
+      {
+        "key": "925.HGT",
+        "url": "https://noaa-rrfs-ops-pds.s3.amazonaws.com/rrfs.20261023/06/rrfs.t06z.prslev.3km.f008.conus.grib2",
+        "range": "bytes=429785264-431449404",
+        "sha256": "981131773ea69d2d5d50f00398fcd2a671ba2c2191a5af1f20071062b6206ad3"
+      }
+    ],
+    "cells": [
+      {
+        "index": 1777697
+      },
+      {
+        "index": 1777698
+      },
+      {
+        "index": 1777699
+      },
+      {
+        "index": 1779496
+      },
+      {
+        "index": 1779497
+      },
+      {
+        "index": 1779498
+      },
+      {
+        "index": 1781295
+      },
+      {
+        "index": 1781296
+      },
+      {
+        "index": 1781297
+      }
+    ],
+    "winds": {
+      "u": [
+        -0.25944580078125,
+        -0.76944580078125,
+        -1.13944580078125,
+        -0.33944580078125003,
+        -0.5594458007812501,
+        -0.84944580078125,
+        -0.87944580078125,
+        -0.48944580078125,
+        -0.20944580078125
+      ],
+      "v": [
+        -3.9602978515625002,
+        -2.1602978515625,
+        -2.0002978515625,
+        -4.4902978515625005,
+        -2.9802978515625003,
+        -2.5002978515625,
+        -5.0802978515625,
+        -4.0102978515625,
+        -3.2902978515625
+      ],
+      "925.UGRD": [
+        -5.919754638671875,
+        -5.159754638671875,
+        -5.0897546386718755,
+        -7.099754638671875,
+        -6.509754638671875,
+        -6.099754638671875,
+        -8.019754638671875,
+        -7.719754638671875,
+        -7.289754638671875
+      ],
+      "925.VGRD": [
+        -5.1853662109375005,
+        -5.1253662109375,
+        -5.1953662109375,
+        -5.3653662109375,
+        -5.0753662109375,
+        -5.1853662109375005,
+        -6.2053662109375,
+        -5.7553662109375,
+        -5.9453662109375
+      ]
+    },
+    "centreIndex": 1779497
+  }
+]

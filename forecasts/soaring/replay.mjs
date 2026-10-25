@@ -218,13 +218,11 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
     publishedProfileComparison: { baselineSha256: sha256(await readFile(baselinePath)), excluded: ['run.generatedAt', 'hours[].soaring'], applicable: isPinnedBaseline, exact: isPinnedBaseline ? comparison.length === 0 : null, differences: comparison },
     hours: audits,
     limitations: [
-      'Historical replay. Numerical consistency is not verification against observations.',
-      `${c.pressureLevels.length} sampled pressure levels cannot resolve all inversions or terrain-driven flows. No synthetic pressure levels are added.`,
-      'v1 preserves the pinned parcel calculation. v2 may use model PBL depth or a heat-flux estimate where a shallow layer is not bracketed by pressure levels; its thermal top is not always an independently resolved parcel crossing.',
-      'Ceiling-reached profiles retain the baseline top at the last sampled level and are flagged; this is a lower bound, not a resolved thermal top.',
-      'Mixed-layer LCL integrates potential temperature (theta) and water-vapor mixing ratio over pressure mass up to the interpolated resolved thermal top and lifts the mixed parcel via Bolton (1980). Boundary-layer wind averages integrate (u, v) over geometric height clipped at the resolved thermal top.',
-      'v1 usableLiftTopM uses 1.0 m/s sink; v2 computes usableLiftTopV2M (1.0 m/s), hcritWxtoflyM at 1.143 m/s (225 ft/min), and dryHcritM strictly bounded by resolvedThermalTopM using exact monotone descending-branch bisection above the Lenschow (1980) peak (zeta = 0.3125, F_max = 2.035813).',
-      'Model terrain differs from launch terrain. Raw MSL heights are preserved; launch-altitude wind interpolation is isolated in experimental.terrainAdjustment.',
+      `${c.pressureLevels.length} height samples; thin inversions may be missed.`,
+      'Shallow thermal tops are estimates.',
+      'Thermals may extend above the highest sampled level.',
+      'Local ridge and valley winds may differ.',
+      'Usable height depends on your glider’s sink rate.',
     ],
   };
   const files = {

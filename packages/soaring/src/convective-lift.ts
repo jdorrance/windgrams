@@ -44,7 +44,7 @@ export function computeThermalVelocityMps(
   sensibleHeatFluxWm2?: number | null, latentHeatFluxWm2?: number | null,
   boundaryLayerDepthM?: number | null, surfacePressureHpa?: number | null,
   options: Partial<ThermalVelocityInput> = {},
-): number {
+): number | null {
   const opts = typeof surfaceTemperatureCOrOpts === 'object' && surfaceTemperatureCOrOpts !== null
     ? surfaceTemperatureCOrOpts
     : {
@@ -58,12 +58,17 @@ export function computeThermalVelocityMps(
 
   const sfcTempC = opts.surfaceTemperatureC;
   const depthM = opts.boundaryLayerDepthM;
+  const first = opts.firstLevel;
+  const canEstimatePressure = finite(opts.terrainM) && finite(first?.pressureHpa) && first.pressureHpa > 0
+    && finite(first?.heightM) && finite(first?.temperatureC);
   const pSfcHpa = finite(opts.surfacePressureHpa) && opts.surfacePressureHpa > 0
     ? opts.surfacePressureHpa
-    : (finite(opts.terrainM) && opts.firstLevel ? hypsometricSurfacePressureHpa(opts.terrainM, sfcTempC, opts.firstLevel) : null);
+    : (canEstimatePressure ? hypsometricSurfacePressureHpa(opts.terrainM, sfcTempC, first) : null);
   const pRefHpa = finite(opts.referencePressureHpa) && opts.referencePressureHpa > 0 ? opts.referencePressureHpa : 1000.0;
 
-  if (!finite(sfcTempC) || !finite(depthM) || depthM <= 0 || !finite(pSfcHpa) || pSfcHpa <= 0) return 0;
+  if (!finite(sfcTempC) || !finite(depthM) || depthM < 0 || !finite(pSfcHpa) || pSfcHpa <= 0
+    || !finite(opts.sensibleHeatFluxWm2) || !finite(opts.latentHeatFluxWm2)) return null;
+  if (depthM === 0) return 0;
 
   const sfcTempK = sfcTempC + 273.15;
   const sfcDewC = finite(opts.surfaceDewPointC) ? Math.min(sfcTempC, opts.surfaceDewPointC) : null;
@@ -75,8 +80,8 @@ export function computeThermalVelocityMps(
   const exnerScale = (pRefHpa / pSfcHpa) ** kappa;
   const thetaV0K = tv0K * exnerScale;
 
-  const kinematicSensibleFlux = (opts.sensibleHeatFluxWm2 ?? 0) / (rhoSfcKgM3 * CPD_J_PER_KG_K);
-  const kinematicMoistureFlux = (opts.latentHeatFluxWm2 ?? 0) / (rhoSfcKgM3 * LV_J_PER_KG);
+  const kinematicSensibleFlux = opts.sensibleHeatFluxWm2 / (rhoSfcKgM3 * CPD_J_PER_KG_K);
+  const kinematicMoistureFlux = opts.latentHeatFluxWm2 / (rhoSfcKgM3 * LV_J_PER_KG);
   const kinematicVirtualTempFlux = (1 + VIRTUAL_TEMP_DELTA * q0) * kinematicSensibleFlux + VIRTUAL_TEMP_DELTA * sfcTempK * kinematicMoistureFlux;
   const kinematicVirtualThetaFlux = exnerScale * kinematicVirtualTempFlux;
 
@@ -127,15 +132,19 @@ export function computeUsableLiftTopV2M({ modelElevationM, resolvedThermalTopM, 
 }
 
 /**
- * Resolve parcel convective depth in metres AGL from surface conditions and above-ground levels.
+ * Resolve parcel convective depth in metres AGL from ascending above-ground levels.
+ * Missing inputs needed by the selected shallow-layer closure return null.
  */
 export function resolvedParcelDepthM(surfaceTemperatureC: number, sensibleHeatFluxWm2: number | null | undefined, latentHeatFluxWm2: number | null | undefined, pblHeightM: number | null | undefined, modelElevationM: number, levels: readonly {
     heightM: number;
     temperatureC: number;
-}[], deltaTC: number = 0): number {
+}[], deltaTC: number = 0): number | null {
+  if (!finite(surfaceTemperatureC) || !finite(modelElevationM) || !finite(deltaTC) || !levels.length
+    || levels.some(level => !finite(level.heightM) || !finite(level.temperatureC) || level.heightM <= modelElevationM)) return null;
   const parcelSurfaceTC = surfaceTemperatureC + deltaTC;
   const surfaceTemperatureK = surfaceTemperatureC + 273.15;
-  const virtualHeatFlux = (sensibleHeatFluxWm2 ?? 0) + 245268e-9 * surfaceTemperatureK * (latentHeatFluxWm2 ?? 0);
+  const virtualHeatFlux = finite(sensibleHeatFluxWm2) && finite(latentHeatFluxWm2)
+    ? sensibleHeatFluxWm2 + 245268e-9 * surfaceTemperatureK * latentHeatFluxWm2 : null;
   for (let index = 0; index < levels.length; index += 1) {
     const level = levels[index];
     const altitudeAglM = level.heightM - modelElevationM;
@@ -143,25 +152,31 @@ export function resolvedParcelDepthM(surfaceTemperatureC: number, sensibleHeatFl
     if (index === 0) {
       // Fix v1 index===0 jump: when the surface parcel is already cooler than the
       // dry adiabat at the first pressure level (e.g. 925 hPa), do not jump to 925 hPa.
-      if (virtualHeatFlux <= 0 && deltaTC <= 0) return 0;
-      if (finite(pblHeightM) && pblHeightM > 0) {
-        const capM = Math.max(0, altitudeAglM);
-        const sensBoostM = deltaTC > 0 ? Math.min(250 * deltaTC, Math.max(0, capM - pblHeightM)) : 0;
-        return Math.min(capM, Math.max(0, pblHeightM + sensBoostM));
+      if (deltaTC <= 0) {
+        if (virtualHeatFlux === null) return null;
+        if (virtualHeatFlux <= 0) return 0;
       }
-      const superadiabaticExcessC = Math.max(0, deltaTC + Math.min(1.5, Math.max(0, sensibleHeatFluxWm2 ?? 0) * 0.012));
-      const envLapse = (level.temperatureC - surfaceTemperatureC) / Math.max(1, altitudeAglM);
-      const denom = DRY_ADIABATIC_LAPSE_C_PER_M + envLapse;
-      if (denom <= 1e-5) return 0;
-      return Math.min(altitudeAglM, Math.max(0, superadiabaticExcessC / denom));
+      if (finite(pblHeightM) && pblHeightM > 0) {
+        const sensBoostM = deltaTC > 0 ? Math.min(250 * deltaTC, Math.max(0, altitudeAglM - pblHeightM)) : 0;
+        return Math.min(altitudeAglM, pblHeightM + sensBoostM);
+      }
+      if (!finite(sensibleHeatFluxWm2)) return null;
+      const superadiabaticExcessC = Math.max(0, deltaTC + Math.min(1.5, Math.max(0, sensibleHeatFluxWm2) * 0.012));
+      if (superadiabaticExcessC === 0) return 0;
+      // Linear first-layer deficit D(z) = D(z1) z/z1. Compare before dividing:
+      // a positive excess reaches z1 as D(z1) tends to zero, never zero depth.
+      const deficitC = level.temperatureC - (surfaceTemperatureC - altitudeAglM * DRY_ADIABATIC_LAPSE_C_PER_M);
+      if (deficitC <= superadiabaticExcessC) return altitudeAglM;
+      return altitudeAglM * (superadiabaticExcessC / deficitC);
     }
     const previous = levels[index - 1];
     const previousAglM = previous.heightM - modelElevationM;
-    const lapse = (level.temperatureC - previous.temperatureC) / (level.heightM - previous.heightM);
-    const denominator = DRY_ADIABATIC_LAPSE_C_PER_M + lapse;
-    if (Math.abs(denominator) < 1e-5) return Math.max(0, previousAglM);
-    return Math.max(0, (parcelSurfaceTC - previous.temperatureC + lapse * previousAglM) / denominator);
+    const previousExcessC = parcelSurfaceTC - previousAglM * DRY_ADIABATIC_LAPSE_C_PER_M - previous.temperatureC;
+    const excessC = parcelSurfaceTC - altitudeAglM * DRY_ADIABATIC_LAPSE_C_PER_M - level.temperatureC;
+    // The previous point is positive and this point is nonpositive. Their
+    // bracketed linear crossing needs no lapse-rate tolerance or extrapolation.
+    const fraction = previousExcessC / (previousExcessC - excessC);
+    return previousAglM + fraction * (altitudeAglM - previousAglM);
   }
-  if (levels.length > 0) return Math.max(0, levels[levels.length - 1].heightM - modelElevationM);
-  return 0;
+  return levels[levels.length - 1].heightM - modelElevationM;
 }

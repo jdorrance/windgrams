@@ -125,7 +125,7 @@ export function createNwsEcmwfSections(options: NwsEcmwfControllerOptions) {
     add(`Area Forecast Discussion (NWS ${office?.office ?? ''})`, office?.products.afd);
   }
 
-  return { renderNws, renderEcmwf, renderText, dispose() { disposed = true; } };
+  return { renderNws, renderEcmwf, renderText, dispose() { disposed = true; nwsChart?.dispose(); ecmwfChart?.dispose(); } };
 }
 
 /** The selected model's total cloud cover (ensemble median), for dimming the sunlight map. */

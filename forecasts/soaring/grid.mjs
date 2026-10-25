@@ -4,6 +4,7 @@ const rad = Math.PI / 180;
 const wrap = lon => ((lon + 180) % 360 + 360) % 360 - 180;
 // Spherical Lambert conformal inverse, using the GRIB's radius and standard
 // parallels. Storage order is independent of geographic north/east.
+/** @param {import('@azohra/meteo.grib').LambertGrid} grid */
 export function projection(grid) {
   if (grid.kind !== 'lambert' || grid.projectionCentreFlag !== 0) throw new Error('Expected northern Lambert grid');
   const n = lambertConeConstant(grid.latin1, grid.latin2);
@@ -18,7 +19,15 @@ export function projection(grid) {
     (2 * Math.atan((grid.earthRadiusM * f / Math.hypot(x, rho0 - y)) ** (1 / n)) - Math.PI / 2) / rad];
   const [x0, y0] = forward(grid.longitudeOfFirstGridPoint, grid.latitudeOfFirstGridPoint);
   const dx = grid.dxM * (grid.iScansNegatively ? -1 : 1), dy = grid.dyM * (grid.jScansPositively ? 1 : -1);
-  return { forward, inverse, point: (i, j) => inverse(x0 + i * dx, y0 + j * dy),
+  /** @param {number} latitude */
+  const scaleAt = latitude => n * rho(latitude) / (grid.earthRadiusM * Math.cos(latitude * rad));
+  /** @param {number} longitude @param {number} u @param {number} v */
+  const gridWind = (longitude, u, v) => {
+    // Inverse of lambertEarthWind: physical east/north to projected axes.
+    const angle = n * wrap(longitude - grid.loV) * rad;
+    return [u * Math.cos(angle) - v * Math.sin(angle), u * Math.sin(angle) + v * Math.cos(angle)];
+  };
+  return { forward, inverse, scaleAt, gridWind, point: (i, j) => inverse(x0 + i * dx, y0 + j * dy),
     fractional: (lon, lat) => { const [x, y] = forward(lon, lat); return [(x - x0) / dx, (y - y0) / dy]; } };
 }
 export function storageIndex(grid, i, j) {

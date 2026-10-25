@@ -144,10 +144,12 @@ export function expandBounds(bounds: TerrainBounds, metres: number): TerrainBoun
   // interval; a reachable pole requires all longitudes.
   const paddingLon = metres / scale(Math.max(Math.abs(south), Math.abs(north))).lon;
   const allLongitudes = south === -90 || north === 90 || bounds.east - bounds.west + 2 * paddingLon >= 360;
+  // Keep the input's longitude branch: rasters sample unwrapped coordinates.
+  const longitudePadding = allLongitudes ? Math.max(0, (360 - (bounds.east - bounds.west)) / 2) : paddingLon;
   return {
     south, north,
-    west: allLongitudes ? -180 : bounds.west - paddingLon,
-    east: allLongitudes ? 180 : bounds.east + paddingLon,
+    west: bounds.west - longitudePadding,
+    east: bounds.east + longitudePadding,
   };
 }
 

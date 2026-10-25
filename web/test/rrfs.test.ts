@@ -37,6 +37,7 @@ test('the real RRFS run renders all 84 hourly columns with original model and pr
   assert.equal(precipitation.values[64], 0.06);
   const svg = renderWindgramSvg(view);
   assert.equal((svg.match(/class="wg-hourline"/g) ?? []).length, 84);
+  assert.equal(view.timeAxis.filter(tick => tick.hourIndex === null).length, 0, 'undated multi-day charts retain the full source interval');
   assert.doesNotMatch(svg, /NaN|Infinity|undefined/);
   assert.doesNotMatch(renderWindgramDiagnosticsSvg(view), /NaN|Infinity|undefined/);
 });
@@ -57,14 +58,16 @@ test('RRFS hours 61, 62, and 84 retain native winds, timestamps, and published s
     assert.equal(point.heightM, level.heightM);
     assert.equal(point.windSpeedMps, level.windSpeedMps);
     assert.equal(point.windDirectionDeg, level.windDirectionDeg);
-    const reading = readWindgram(view, index, level.heightM);
+    const displayIndex = view.hours.findIndex(displayed => displayed.validAt === hour.validAt);
+    assert.ok(displayIndex >= 0, `f${forecastHour} is inside the multi-day frame`);
+    const reading = readWindgram(view, displayIndex, level.heightM);
     assert.equal(reading.validAt, source.validAt);
     assert.equal(reading.interpolated, false);
     close(reading.speedKt, level.windSpeedMps * 1.9438444924406);
     close(reading.directionDeg, level.windDirectionDeg);
     close(reading.temperatureF, level.temperatureC * 1.8 + 32);
   }
-  assert.equal(view.hours[83].validAt, '2026-10-26T18:00:00Z');
+  assert.equal(view.hours.at(-1)!.validAt, '2026-10-26T18:00:00Z');
 });
 
 test('actual RRFS null lift remains absent even when the older diagnostic reports lift', () => {

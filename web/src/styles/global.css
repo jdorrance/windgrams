@@ -874,11 +874,22 @@ details[open] > summary {
 }
 
 .meteogram-frame > svg,
-.meteogram-diagnostics > svg,
 .windgram-viewport .replay-chart > svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.meteogram-diagnostics > svg {
   display: block;
   max-width: none;
   height: auto;
+}
+
+.meteogram-frame,
+.windgram-viewport .replay-chart {
+  width: 100%;
+  overflow-x: clip;
 }
 
 /* Keep the chart's paper and text together in both site themes. The mobile
@@ -904,6 +915,9 @@ details[open] > summary {
 .windgram-viewport {
   position: relative;
   overflow: hidden;
+  width: 100%;
+  max-width: 800px;
+  margin-inline: auto;
   border-radius: 8px;
 }
 

@@ -2,6 +2,7 @@ import { formatQuantity, getUnitSystem } from '../lib/units.ts';
 import { createReplayProfileCache, readRegionalJson } from '../lib/regional-data.ts';
 import { parsePublishedProfileJson } from '../lib/published-lift.ts';
 import { type SiteForecast } from '@azohra/meteo.briefing/contract';
+import { localDateKey } from '@azohra/meteo.briefing/derive';
 import { DATA_BASE } from '../lib/site.ts';
 import { windgramDayHours } from '../lib/windgram-view.ts';
 import { windgramViewport } from '../lib/windgram-viewport.ts';
@@ -401,11 +402,11 @@ async function main() {
         profile: cellForecast,
         timeZone: manifest.case.site.timeZone,
         hours: dayHours,
+        dateKey: localDateKey(hours[index].validAt, manifest.case.site.timeZone),
         selectedValidAt: hours[index]?.validAt ?? null,
         fullProfile: fullWindgramProfile,
         idPrefix: 'soaring',
         launch: windgramLaunch(selectedCell),
-        desktopWidthPx: 1100,
         onSelectHour: validAt => {
           const clickedHour = hours.find(h => h.validAt === validAt);
           if (!clickedHour) return;

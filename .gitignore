@@ -10,3 +10,6 @@ forecasts/.soaring-cache/
 
 # Local ecCodes decoder environment.
 forecasts/.venv-icon/
+
+# Generated screenshots and local visual QA reports.
+artifacts/windgram-visual/

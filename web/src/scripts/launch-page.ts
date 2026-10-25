@@ -289,7 +289,7 @@ function selectedWindgramHours(profile: SiteForecast) {
   const { compact } = windgramViewport();
   return windgramHours(profile, {
     timeZone: tz,
-    hours: compact ? { dateKey: day, timeZone: tz } : profile.hours.filter(hour => inDay(hour.validAt, day)),
+    hours: { dateKey: day, timeZone: tz },
     compact,
     heightRange: fullWindgramProfile ? "full" : "soaring",
     launch: launchElevationM != null ? { elevationM: launchElevationM } : null,
@@ -334,7 +334,7 @@ function renderMeteogram() {
   }${loaded.stale ? " · update in progress" : ""}`;
 
   const hours = selectedWindgramHours(loaded.profile);
-  if (hours.length === 0) {
+  if (hours.length === 0 && !loaded.profile.hours.some(hour => localDateKey(hour.validAt, tz) === day)) {
     const other = MODEL_ORDER.find((slug) => slug !== model && covers(slug, day));
     frame.replaceChildren();
     const p = document.createElement("p");
@@ -356,14 +356,14 @@ function renderMeteogram() {
     profile: loaded.profile,
     timeZone: tz,
     hours,
+    dateKey: day,
     selectedValidAt,
     fullProfile: fullWindgramProfile,
     idPrefix: `mg-${launch.slug}`,
     launch: launchElevationM != null ? { name: launch.name, elevationM: launchElevationM } : null,
     launchWindows: arc ? [arc] : [],
     capabilities: entry?.capabilities,
-    constrainPortraitHeight: true,
-    cursorStyle: { fill: '#fff', fillOpacity: 0.06, stroke: '#203747' },
+    cursorStyle: { fill: '#fff', fillOpacity: 0.04, stroke: '#203747' },
     onSelectHour: validAt => {
       const i = skewtHours.findIndex(h => h.validAt === validAt);
       if (i >= 0) showSkewTHour(i);

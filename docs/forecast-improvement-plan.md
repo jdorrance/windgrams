@@ -45,13 +45,13 @@ The browser presents published quantities in the selected Imperial or Metric uni
 
 - Outlined cloud: potential surface LCL (`surfaceLclM`), including heights above usable lift.
 - White crosshatching: relative humidity above 94%.
-- Pale cloud band: model cloud fraction of at least 30%.
+- Diagonal hatching: model cloud fraction of at least 30%.
 - Paraglider: published 225 ft/min ceiling; blue line: 1 m/s ceiling.
 - Snowflake: lowest freezing crossing.
 
 ICON axis ticks use fixed isobars with median heights interpolated in log-pressure across displayed columns. Source atmospheric levels, soundings and forecast values remain native. This prevents each changing native pressure from adding a duplicate height-axis tick.
 
-One label is placed on each connected temperature contour when room is available. Mobile charts fit the day's hours. Strongest thermals selects the greatest published $w_*$; the tallest cloud-base line can occur later.
+One label is placed on each connected temperature contour when room is available. Single-day charts span sunrise–sunset, with hatching over unavailable hours. Chart width is capped at 800 px; the plot keeps a 656:592 aspect ratio with a 160 px minimum height. Mobile full height changes the altitude range. Strongest thermals selects the greatest published $w_*$; the tallest cloud-base line can occur later.
 
 ## Verification and retention
 

@@ -1,8 +1,10 @@
-// Label collision avoidance and compact wind-barb thinning for Windgram charts.
+// Label collision avoidance and wind-barb spacing for Windgram charts.
 // Consumes structured `ContourComponent` geometry directly rather than regex-parsing SVG strings.
 
 import { convertQuantity, fahrenheitToCelsius, type UnitSystem } from "./units.ts";
 import { contourComponents, type TemperatureContour } from "./windgram-geometry.ts";
+import { cloudGlyphBounds, freezingGlyphBounds, windBarbGlyph, wingGlyphBounds } from "./windgram-glyphs.ts";
+import { resolveWindgramPresentation } from "./windgram-presentation.ts";
 import type { WindgramBarb, WindgramCloud, WindgramView } from "./windgram-view.ts";
 
 export interface LabelBox {
@@ -34,36 +36,28 @@ export function placeTemperatureLabels(
   view: Pick<
     WindgramView,
     "contours" | "clouds" | "barbs" | "compact" | "columnWidth" | "left" | "top" | "bottom" | "plotWidth" | "unitSystem"
-  >,
+  > & Partial<Pick<WindgramView, "presentation" | "wings" | "freezing">>,
   cloudScale: number,
   clouds: readonly WindgramCloud[] = view.clouds,
   barbs: readonly WindgramBarb[] = view.barbs,
   system: UnitSystem = view.unitSystem,
 ): PlacedTemperatureLabel[] {
-  const occupied: LabelBox[] = clouds.map((c) => ({
-    x: c.x - 29 * cloudScale,
-    y: c.y - 25 * cloudScale,
-    width: 58 * cloudScale,
-    height: 27 * cloudScale,
-  }));
-  const winds: LabelBox[] = barbs.map((b) => {
-    const direction = (b.directionDeg * Math.PI) / 180;
-    const tipX = b.x + Math.sin(direction) * 22, tipY = b.y - Math.cos(direction) * 22;
-    return {
-      x: Math.min(b.x, tipX) - 7,
-      y: Math.min(b.y, tipY) - 7,
-      width: Math.abs(b.x - tipX) + 14,
-      height: Math.abs(b.y - tipY) + 14,
-    };
-  });
+  const presentation = view.presentation ?? resolveWindgramPresentation({ compact: view.compact });
+  const occupied: LabelBox[] = [
+    ...clouds.map(c => cloudGlyphBounds(c.x, c.y, cloudScale)),
+    ...(view.wings ?? []).map(w => wingGlyphBounds(w.x, w.y)),
+    ...(view.freezing ?? []).map(f => freezingGlyphBounds(f.x, f.y)),
+  ];
+  const winds = barbs.map(b => windBarbGlyph(b, presentation, system).bounds);
   const placed: PlacedTemperatureLabel[] = [];
   const displayTemp = (f: number) => convertQuantity(fahrenheitToCelsius(f), "temperature", system)!;
 
   for (const contour of view.contours as readonly TemperatureContour[]) {
     for (const component of contourComponents(contour)) {
       const valueText = `${Math.round(displayTemp(contour.temperatureF))}°`;
-      const width = view.compact ? Math.max(24, valueText.length * 7 + 6) : Math.max(28, valueText.length * 8 + 10);
-      const height = view.compact ? 19 : 22;
+      // Arial's tabular digits plus the degree mark and 3px horizontal padding.
+      const width = Math.ceil([...valueText].reduce((sum, c) => sum + (c === "°" ? 0.4 : /[-−]/.test(c) ? 0.333 : 0.556), 0) * presentation.fonts.primary + 6);
+      const height = presentation.fonts.primary + 6;
       const middleX = (component.minX + component.maxX) / 2, middleY = (component.minY + component.maxY) / 2;
       // Geometry candidates cover short branches between source-hour labels and
       // provide another place on the line when the central candidate is cloudy.
@@ -99,14 +93,18 @@ export function placeTemperatureLabels(
             !occupied.some((other) => overlaps(box, other, 4)),
         );
       if (!boxes.length) continue;
-      const box = boxes.find((candidate) => !winds.some((wind) => overlaps(candidate, wind, 1))) ?? boxes[0];
+      const box = boxes.find((candidate) => !winds.some((wind) => overlaps(candidate, wind, 1))) ??
+        boxes.reduce((best, candidate) => {
+          const cost = (box: LabelBox) => winds.reduce((sum, wind, i) => sum + (overlaps(box, wind, 1) ? (barbs[i].interpolated ? 1 : 2) : 0), 0);
+          return cost(candidate) < cost(best) ? candidate : best;
+        });
       occupied.push(box);
       placed.push({
         temperatureF: contour.temperatureF,
         valueText,
         box,
         textX: box.x + width / 2,
-        textY: box.y + (view.compact ? 14 : 16),
+        textY: box.y + height / 2 + presentation.fonts.primary * 0.35,
         freezing: contour.temperatureF === 32,
       });
     }
@@ -114,24 +112,49 @@ export function placeTemperatureLabels(
   return placed;
 }
 
-/** Avoid colliding wind feathers at small screen sizes without changing samples. */
+/** Thin display marks only; retain native model levels before filling large gaps. */
 export function displayedBarbs(
-  view: Pick<WindgramView, "barbs" | "compact" | "top">,
+  view: Pick<WindgramView, "barbs" | "compact" | "top" | "bottom" | "left" | "plotWidth" | "unitSystem" | "presentation">,
   hourIndices: ReadonlySet<number>,
 ): WindgramBarb[] {
-  if (!view.compact) return [...view.barbs];
+  const { minimumHorizontalSpacing, minimumVerticalSpacing } = view.presentation.glyphs;
+  const columns = [...new Map(view.barbs.filter(b => hourIndices.has(b.hourIndex)).map(b => [b.hourIndex, b.x])).entries()]
+    .sort((a, b) => a[1] - b[1]);
   const visible: WindgramBarb[] = [];
-  for (const hourIndex of hourIndices) {
-    const native = view.barbs
-      .filter((barb) => barb.hourIndex === hourIndex && !barb.interpolated && barb.y >= view.top + 20)
-      .sort((a, b) => b.y - a.y);
+  let previousX = -Infinity;
+  for (const [hourIndex, x] of columns) {
+    if (x - previousX < minimumHorizontalSpacing) continue;
+    const candidates = view.barbs.filter(barb => {
+      if (barb.hourIndex !== hourIndex) return false;
+      const box = windBarbGlyph(barb, view.presentation, view.unitSystem).bounds;
+      return box.x >= view.left && box.x + box.width <= view.left + view.plotWidth &&
+        box.y >= view.top && box.y + box.height <= view.bottom;
+    }).sort((a, b) => Number(a.interpolated) - Number(b.interpolated) || b.y - a.y);
     const selected: WindgramBarb[] = [];
-    for (const barb of native) {
-      if (!selected.length || selected.at(-1)!.y - barb.y >= 23) selected.push(barb);
+    for (const barb of candidates) {
+      if (selected.every(other => Math.abs(other.y - barb.y) >= minimumVerticalSpacing)) selected.push(barb);
     }
-    const top = native.at(-1);
-    if (top && selected.length > 1 && selected.at(-1) !== top) selected[selected.length - 1] = top;
-    visible.push(...selected);
+    if (selected.length) {
+      visible.push(...selected);
+      previousX = x;
+    }
   }
   return visible;
+}
+
+/** Reserve a clear spot for each label, hiding a colliding wind mark only as a last resort. */
+export function layoutWindgramMarks(
+  view: WindgramView,
+  cloudScale: number,
+  clouds: readonly WindgramCloud[],
+  barbs: readonly WindgramBarb[],
+) {
+  const labels = placeTemperatureLabels(view, cloudScale, clouds, barbs);
+  return {
+    labels,
+    barbs: barbs.filter(barb => {
+      const box = windBarbGlyph(barb, view.presentation, view.unitSystem).bounds;
+      return !labels.some(label => overlaps(label.box, box, 1));
+    }),
+  };
 }

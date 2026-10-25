@@ -3,6 +3,7 @@ import { buildWindgramView, type WindgramOptions, type WindgramView } from '../l
 import { windgramViewport } from '../lib/windgram-viewport.ts';
 import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from '../lib/windgram-chart.ts';
 import { getUnitSystem, type UnitSystem } from '../lib/units.ts';
+import { windgramPresentationKey } from '../lib/windgram-presentation.ts';
 
 /**
  * Coordinates asynchronous keyed loads with out-of-order completion protection
@@ -103,6 +104,8 @@ export interface WindgramRenderRequest {
   profile: SiteForecast;
   timeZone: string;
   hours: SiteForecast['hours'];
+  /** Keeps a daylight frame even when this day's forecast contains only night hours. */
+  dateKey?: string;
   selectedValidAt: string | null;
   fullProfile: boolean;
   idPrefix: string;
@@ -110,8 +113,6 @@ export interface WindgramRenderRequest {
   launchWindows?: WindgramOptions['launchWindows'];
   unitSystem?: UnitSystem;
   capabilities?: ModelCapabilities;
-  desktopWidthPx?: number;
-  constrainPortraitHeight?: boolean;
   cursorStyle?: {
     fill: string;
     fillOpacity: number;
@@ -127,8 +128,17 @@ export function createWindgramController(elements: WindgramControllerElements) {
   let currentLayoutKey = '';
   let currentSelectedValidAt: string | null = null;
   let cursorRect: SVGRectElement | null = null;
+  let lastRequest: WindgramRenderRequest | null = null;
+  let lastContainerWidth = 0;
+  let disposed = false;
+  const profileIds = new WeakMap<SiteForecast, number>();
+  let nextProfileId = 1;
   const syncedScrollPositions = new WeakMap<HTMLElement, number>();
   const abortController = new AbortController();
+  const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
+    if (!disposed && lastRequest && Math.abs(host.clientWidth - lastContainerWidth) > 0.5) render(lastRequest);
+  });
+  resizeObserver?.observe(host);
 
   function syncDiagnosticsScroll(from: HTMLElement, to: HTMLElement) {
     if (!detailsElement || !diagnosticsHost) return;
@@ -165,6 +175,7 @@ export function createWindgramController(elements: WindgramControllerElements) {
   }
 
   function clear() {
+    lastRequest = null;
     clearInspector?.();
     clearInspector = null;
     currentView = null;
@@ -179,6 +190,7 @@ export function createWindgramController(elements: WindgramControllerElements) {
   }
 
   function select(validAt: string | null, reveal = false, rebuilt = false) {
+    if (lastRequest) lastRequest = { ...lastRequest, selectedValidAt: validAt };
     if (!currentView) return;
     const idx = validAt ? currentView.hours.findIndex(hour => hour.validAt === validAt) : -1;
     const displayedHour = idx >= 0 ? currentView.hours[idx] : undefined;
@@ -212,25 +224,26 @@ export function createWindgramController(elements: WindgramControllerElements) {
 
   function render(req: WindgramRenderRequest): WindgramView {
     const unitSystem = req.unitSystem ?? getUnitSystem();
-    const { compact, portrait, height: heightPx } = windgramViewport();
+    const { compact } = windgramViewport();
+    lastRequest = req;
+    lastContainerWidth = host.clientWidth;
     fullProfileButton.hidden = !compact;
     fullProfileButton.setAttribute('aria-pressed', String(req.fullProfile));
-    const widthPx = compact
-      ? Math.max(host.clientWidth || 320, 240)
-      : req.desktopWidthPx ?? Math.max(host.clientWidth || 640, 240);
-    const layoutKey =
-      req.cacheKey !== undefined
-        ? `${req.cacheKey}:${unitSystem}:${compact ? `compact:${widthPx}:${heightPx}:${req.fullProfile}` : `desktop:${widthPx}`}:${req.launch?.elevationM}:${req.launch?.name}:${req.hours[0]?.validAt}:${req.hours.at(-1)?.validAt}`
-        : '';
+    const widthPx = host.clientWidth || (compact ? 320 : 800);
+    if (!profileIds.has(req.profile)) profileIds.set(req.profile, nextProfileId++);
+    const layoutKey = JSON.stringify([
+      req.cacheKey, profileIds.get(req.profile), widthPx, unitSystem, compact, req.fullProfile,
+      windgramPresentationKey({ widthPx, compact }), req.timeZone, req.dateKey, req.idPrefix,
+      req.launch, req.launchWindows, req.capabilities, req.hours.map(hour => hour.validAt), req.cursorStyle,
+    ]);
 
     const rebuilt = !layoutKey || layoutKey !== currentLayoutKey || !currentView;
     if (rebuilt) {
       clearInspector?.();
       currentLayoutKey = layoutKey;
-      const chartTop = req.constrainPortraitHeight ? host.getBoundingClientRect().top + window.scrollY : 0;
       currentView = buildWindgramView(req.profile, {
         timeZone: req.timeZone,
-        hours: req.hours,
+        hours: req.dateKey ? { dateKey: req.dateKey, timeZone: req.timeZone } : req.hours,
         launch: req.launch,
         launchWindows: req.launchWindows,
         capabilities: req.capabilities,
@@ -238,8 +251,6 @@ export function createWindgramController(elements: WindgramControllerElements) {
         widthPx,
         compact,
         heightRange: req.fullProfile ? 'full' : 'soaring',
-        heightPx,
-        maxHeightPx: req.constrainPortraitHeight && compact && portrait ? heightPx - chartTop - 16 : undefined,
       });
       host.innerHTML = renderWindgramSvg(currentView, { idPrefix: req.idPrefix });
       if (diagnosticsHost) {
@@ -263,7 +274,7 @@ export function createWindgramController(elements: WindgramControllerElements) {
 
       const cursorStyle = req.cursorStyle ?? {
         fill: '#237e81',
-        fillOpacity: 0.08,
+        fillOpacity: 0.04,
         stroke: '#237e81',
       };
       cursorRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -274,7 +285,7 @@ export function createWindgramController(elements: WindgramControllerElements) {
         fill: cursorStyle.fill,
         'fill-opacity': cursorStyle.fillOpacity,
         stroke: cursorStyle.stroke,
-        'stroke-width': 2,
+        'stroke-width': 1,
         'pointer-events': 'none',
         'data-selected-hour': '',
       })) {
@@ -291,6 +302,8 @@ export function createWindgramController(elements: WindgramControllerElements) {
   }
 
   function dispose() {
+    disposed = true;
+    resizeObserver?.disconnect();
     clear();
     abortController.abort();
   }

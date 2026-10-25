@@ -6,6 +6,7 @@ import type { SiteForecast } from "@azohra/meteo.briefing/contract";
 import { localDateKey, localInstantMs } from "@azohra/meteo.briefing/derive";
 import type { MeteogramOptions } from "@azohra/meteo.briefing/meteogram";
 import { sunriseSunset } from "./sun.ts";
+import { resolveWindgramPresentation, WINDGRAM_PRESENTATION, type WindgramPresentation } from "./windgram-presentation.ts";
 
 type ProfileHour = SiteForecast["hours"][number];
 
@@ -32,9 +33,8 @@ export function timeGaps(hours: readonly { validAt: string }[]): Set<number> {
 /** Thin only display marks, keeping both ends of the complete forecast visible. */
 export function visibleWindgramHourIndices(
   view: { hours: readonly { x: number }[]; compact: boolean },
-  minimumSpacingPx = 34,
+  minimumSpacingPx = WINDGRAM_PRESENTATION.glyphs.minimumHorizontalSpacing,
 ): number[] {
-  if (!view.compact) return view.hours.map((_, i) => i);
   const selected: number[] = [];
   for (const [i, hour] of view.hours.entries()) {
     if (!selected.length || hour.x - view.hours[selected.at(-1)!].x >= minimumSpacingPx) selected.push(i);
@@ -60,17 +60,24 @@ export function daylightSpan(
   ) {
     return null;
   }
-  const daylight = (validAt: string) => {
-    const dateKey = localDateKey(validAt, timeZone);
-    // Resolve both midnights locally: DST days can have 23 or 25 hours.
-    return sunriseSunset(localInstantMs(dateKey, 0, timeZone), localInstantMs(dateKey, 24, timeZone), latitude, longitude);
-  };
+  const daylight = (validAt: string) => daylightForDate(profile, localDateKey(validAt, timeZone), timeZone);
   const firstDay = daylight(hours[0].validAt);
   const lastDay =
     localDateKey(hours[0].validAt, timeZone) === localDateKey(hours.at(-1)!.validAt, timeZone)
       ? firstDay
       : daylight(hours.at(-1)!.validAt);
   return firstDay && lastDay ? { sunrise: firstDay.sunrise, sunset: lastDay.sunset } : null;
+}
+
+function daylightForDate(profile: SiteForecast, dateKey: string, timeZone: string) {
+  const { latitude, longitude } = profile.site;
+  if (!Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return null;
+  // Resolve both midnights locally: DST days can have 23 or 25 hours.
+  return sunriseSunset(localInstantMs(dateKey, 0, timeZone), localInstantMs(dateKey, 24, timeZone), latitude, longitude);
+}
+
+function spansLocalDates(hours: readonly ProfileHour[], timeZone: string): boolean {
+  return hours.length > 1 && localDateKey(hours[0].validAt, timeZone) !== localDateKey(hours.at(-1)!.validAt, timeZone);
 }
 
 export type WindgramHourFilterOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "launch"> & {
@@ -80,7 +87,8 @@ export type WindgramHourFilterOptions = Pick<MeteogramOptions, "timeZone" | "hou
 
 /** Sunrise through sunset, bracketed by available forecast samples.
  * A multi-day profile stays contiguous so its controls retain their time indices.
- * Polar days/nights and forecasts outside daylight retain the supplied hours.
+ * Explicit dates with only nighttime data retain an empty daylight frame.
+ * Polar days/nights and undated forecasts outside daylight retain their hours.
  */
 export function windgramHours(profile: SiteForecast, options: WindgramHourFilterOptions): ProfileHour[] {
   const window = options.hours;
@@ -89,13 +97,14 @@ export function windgramHours(profile: SiteForecast, options: WindgramHourFilter
   const hours = profile.hours.filter(
     (h) => (!selected || selected.has(h.validAt)) && (!dayWindow || localDateKey(h.validAt, dayWindow.timeZone) === dayWindow.dateKey),
   );
-  if (!options.compact || hours.length < 2) return hours;
+  if (!hours.length) return hours;
   const times = hours.map(hour => Date.parse(hour.validAt));
   const timeZone = dayWindow?.timeZone ?? options.timeZone;
-  const daylight = daylightSpan(profile, hours, timeZone);
+  if (!dayWindow && spansLocalDates(hours, timeZone)) return hours;
+  const daylight = dayWindow ? daylightForDate(profile, dayWindow.dateKey, timeZone) : daylightSpan(profile, hours, timeZone);
   if (!daylight) return hours;
   const start = daylight.sunrise, end = daylight.sunset;
-  if (times.at(-1)! < start || times[0] > end) return hours;
+  if (times.at(-1)! < start || times[0] > end) return dayWindow ? [] : hours;
   const first = Math.max(0, times.findLastIndex(time => time <= start));
   const last = times.findIndex(time => time >= end);
   return hours.slice(first, last < 0 ? hours.length : last + 1);
@@ -112,16 +121,18 @@ export function formatWindgramHourLabel(validAtOrMs: string | number, labelTime:
 
 /**
  * Computes daylight-aware horizontal layout and `timeAxis` ticks (including empty pre/post
- * daylight columns outside the run's coverage on compact views).
+ * daylight columns outside the run's coverage at every screen width).
  */
 export function buildWindgramTimeLayout(
   profile: SiteForecast,
   hours: readonly ProfileHour[],
-  options: { timeZone: string; hours?: MeteogramOptions["hours"]; compact: boolean; widthPx?: number },
+  options: { timeZone: string; hours?: MeteogramOptions["hours"]; compact: boolean; widthPx?: number; presentation?: WindgramPresentation },
 ) {
   const { compact } = options;
   const dayWindow = options.hours && !Array.isArray(options.hours) && "dateKey" in options.hours ? options.hours : null;
-  const daylight = compact ? daylightSpan(profile, hours, dayWindow?.timeZone ?? options.timeZone) : null;
+  const daylight = dayWindow
+    ? daylightForDate(profile, dayWindow.dateKey, dayWindow.timeZone)
+    : spansLocalDates(hours, options.timeZone) ? null : daylightSpan(profile, hours, options.timeZone);
   const steps = profile.hours
     .slice(1)
     .map((hour, i) => Date.parse(hour.validAt) - Date.parse(profile.hours[i].validAt))
@@ -132,13 +143,17 @@ export function buildWindgramTimeLayout(
   const overlapsDaylight = Boolean(daylight && firstTime <= daylight.sunset && lastTime >= daylight.sunrise);
   const before = overlapsDaylight && daylight ? Math.max(0, Math.ceil((firstTime - daylight.sunrise) / cadence)) : 0;
   const after = overlapsDaylight && daylight ? Math.max(0, Math.ceil((daylight.sunset - lastTime) / cadence)) : 0;
-  const columnCount = Math.max(1, before + hours.length + after);
-  const left = compact ? 52 : 102;
-  const right = compact ? 8 : 88;
-  const top = compact ? 70 : 65;
-  const availableWidth = Math.max(1, (options.widthPx ?? 1000) - left - right);
-  const columnWidth = compact ? availableWidth / columnCount : Math.max(48, availableWidth / columnCount);
-  const plotWidth = columnWidth * columnCount;
+  const emptyTimes: number[] = [];
+  if (!hours.length && daylight && dayWindow) {
+    const sourceTime = Date.parse(profile.hours[0]?.validAt ?? "");
+    const alignment = Number.isFinite(sourceTime) ? sourceTime : 0;
+    const start = alignment + Math.floor((daylight.sunrise - alignment) / cadence) * cadence;
+    const end = alignment + Math.ceil((daylight.sunset - alignment) / cadence) * cadence;
+    for (let time = start; time <= end; time += cadence) emptyTimes.push(time);
+  }
+  const columnCount = Math.max(1, emptyTimes.length, before + hours.length + after);
+  const { left, right, top, plotWidth } = options.presentation ?? resolveWindgramPresentation({ compact, widthPx: options.widthPx });
+  const columnWidth = plotWidth / columnCount;
   const dataLeft = left + before * columnWidth;
 
   return {
@@ -154,5 +169,6 @@ export function buildWindgramTimeLayout(
     cadence,
     firstTime,
     lastTime,
+    emptyTimes,
   };
 }

@@ -50,7 +50,7 @@ test("lapse colors and boundaries match the published WxToFly legend", () => {
   // Interior RGB samples at y=53, x=40/100/170/240/305/370/500/570 in
   // http://wxtofly.net/images/locallapserates.png (606 × 89 pixels).
   assert.deepEqual(WINDGRAM_STABILITY.map((band) => band.color), [
-    "#ff3c39", "#ff9900", "#ffbaff", "#cdbeff", "#fff2e6", "#7b7de6", "#cdcecd", "#9c999c",
+    "#ff4444", "#ff9900", "#ffbbff", "#ccbbff", "#ffeeee", "#7777dd", "#cccccc", "#999999",
   ]);
   assert.deepEqual(WINDGRAM_STABILITY.map((band) => band.maxLapse), [-3, -2.5, -2, -1.5, -1.2, 0, .5, Infinity]);
   const svg = renderWindgramSvg(uniformLapseView(-.5));

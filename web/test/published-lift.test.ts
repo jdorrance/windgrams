@@ -30,12 +30,15 @@ test('every archived map hour agrees with the cell windgram and sounding, includ
     assert.equal(lift.thermalVelocityMps, h.thermalVelocityV2Mps![0]);
     assert.equal(lift.usableLiftTopM, h.usableLiftTopV2M![0]);
     assert.equal(publishedWxtoflyLiftTop(profile.hours[i]), h.hcritWxtoflyM?.[0] ?? null);
-    assert.equal(view.hours[i].thermalVelocityMps, h.thermalVelocityV2Mps![0]);
+    const single = buildWindgramView(profile, { timeZone: c.site.timeZone, hours: [profile.hours[i]] });
+    assert.equal(single.hours.length, 1, 'explicit inspection includes nighttime source records outside the daylight frame');
+    assert.equal(single.hours[0].validAt, profile.hours[i].validAt);
+    assert.equal(single.hours[0].thermalVelocityMps, h.thermalVelocityV2Mps![0]);
     const sounding = buildSounding(profile, profile.hours[i])!;
     assert.equal(sounding.thermalVelocityMps, h.thermalVelocityV2Mps![0]);
     assert.equal(sounding.usableLiftTopM, h.usableLiftTopV2M![0]);
   }
-  assert.equal(view.hours[6].thermalVelocityMps, 0.88);
+  assert.equal(view.hours.find(hour => hour.validAt === profile.hours[6].validAt)!.thermalVelocityMps, 0.88);
   assert.equal(publishedLift(profile.hours[6]).usableLiftTopM, 470.2);
   assert.doesNotMatch(readSounding(buildSounding(profile, profile.hours[6])!, 378.5).headline, /too weak to climb/);
 });

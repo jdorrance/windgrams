@@ -1,0 +1,296 @@
+{
+  "schemaVersion": 1,
+  "baselineRevision": "b4a0824cb3d9370d959222b59f54daab0942735f",
+  "dependencyLockSha256": "bbdb63755716e020b50a50570d460d6cc81dd1ef598fed9efaa21ebc5a2f3df2",
+  "day": "2026-10-24",
+  "viewports": [
+    [
+      320,
+      667
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      844,
+      390
+    ],
+    [
+      1280,
+      900
+    ]
+  ],
+  "units": [
+    "imperial",
+    "metric"
+  ],
+  "ranges": [
+    "soaring",
+    "full"
+  ],
+  "fixtures": [
+    {
+      "id": "dog-rrfs",
+      "label": "Dog · rrfs",
+      "kind": "published",
+      "file": "dog-rrfs.json.gz",
+      "day": "2026-10-24",
+      "timeZone": "America/Los_Angeles",
+      "launch": {
+        "name": "Dog",
+        "elevationM": 645.5
+      },
+      "selectedValidAt": "2026-10-24T21:00:00Z",
+      "tags": [
+        "model-comparison"
+      ],
+      "source": {
+        "path": "/tmp/dog-model-audit/rrfs.json",
+        "url": "https://jdorrance.github.io/windgrams/data/rrfs/sites/wa-dog.json",
+        "cacheOrigin": "published profile fetched during prior October 24 comparison; reused without a new request",
+        "sha256": "bbe6982adea9225cf7a31e0da79b9f699761b13bf13b8206b38dd07c4285c1cd",
+        "referenceTime": "2026-10-24T06:00:00Z",
+        "generatedAt": "2026-10-24T13:58:07Z",
+        "hourCount": 84
+      },
+      "selection": "Complete original hour records for the specified local calendar date; every other document field retained unchanged.",
+      "sha256": "b11464789507d0ca743088008ab0ba584c683efe4bd47d57624113b3bddeeef7",
+      "gzipSha256": "6286a71f875e184759e7f6f2504e30f21cb0c642f645e2d014df5834d6b07ec7",
+      "hourCount": 24,
+      "firstValidAt": "2026-10-24T07:00:00Z",
+      "lastValidAt": "2026-10-25T06:00:00Z",
+      "nativeLevelCounts": [
+        9
+      ]
+    },
+    {
+      "id": "dog-hrrr-conus",
+      "label": "Dog · hrrr-conus",
+      "kind": "published",
+      "file": "dog-hrrr-conus.json.gz",
+      "day": "2026-10-24",
+      "timeZone": "America/Los_Angeles",
+      "launch": {
+        "name": "Dog",
+        "elevationM": 645.5
+      },
+      "selectedValidAt": "2026-10-24T21:00:00Z",
+      "tags": [
+        "model-comparison"
+      ],
+      "source": {
+        "path": "/tmp/dog-model-audit/hrrr-conus.json",
+        "url": "https://jdorrance.github.io/windgrams/data/hrrr-conus/sites/wa-dog.json",
+        "cacheOrigin": "published profile fetched during prior October 24 comparison; reused without a new request",
+        "sha256": "8d488d3e7873138dbc0d7db5faa8e8f67c05a4142eb7d74c53b82edaca50e026",
+        "referenceTime": "2026-10-24T12:00:00Z",
+        "generatedAt": "2026-10-24T17:10:41Z",
+        "hourCount": 48
+      },
+      "selection": "Complete original hour records for the specified local calendar date; every other document field retained unchanged.",
+      "sha256": "a43af5ab7c8a8a23a1c64fd121837b7fa00417c0f7d77e99d07befbcc785b0a2",
+      "gzipSha256": "bde37a5667b15e58c0be16a47dac9970ec742683953b26b467883f107eee672e",
+      "hourCount": 18,
+      "firstValidAt": "2026-10-24T13:00:00Z",
+      "lastValidAt": "2026-10-25T06:00:00Z",
+      "nativeLevelCounts": [
+        9
+      ]
+    },
+    {
+      "id": "dog-hrdps-continental",
+      "label": "Dog · hrdps-continental",
+      "kind": "published",
+      "file": "dog-hrdps-continental.json.gz",
+      "day": "2026-10-24",
+      "timeZone": "America/Los_Angeles",
+      "launch": {
+        "name": "Dog",
+        "elevationM": 645.5
+      },
+      "selectedValidAt": "2026-10-24T21:00:00Z",
+      "tags": [
+        "model-comparison"
+      ],
+      "source": {
+        "path": "/tmp/dog-model-audit/hrdps-continental.json",
+        "url": "https://jdorrance.github.io/windgrams/data/hrdps-continental/sites/wa-dog.json",
+        "cacheOrigin": "published profile fetched during prior October 24 comparison; reused without a new request",
+        "sha256": "e7a8e27ef42a0312e65dd65195fb3a436e3268c59c455f45834eb1389d9fa75b",
+        "referenceTime": "2026-10-24T12:00:00Z",
+        "generatedAt": "2026-10-24T17:14:17Z",
+        "hourCount": 48
+      },
+      "selection": "Complete original hour records for the specified local calendar date; every other document field retained unchanged.",
+      "sha256": "bf793f177e95c17b40d516aed385ed04db48d7b2529907d19f7c0e25383232e7",
+      "gzipSha256": "cf736d98e3250df4aabc1bd5761c5cee2d865e9aad7ea50b863e8ce87eeaa205",
+      "hourCount": 18,
+      "firstValidAt": "2026-10-24T13:00:00Z",
+      "lastValidAt": "2026-10-25T06:00:00Z",
+      "nativeLevelCounts": [
+        11
+      ]
+    },
+    {
+      "id": "dog-gfs",
+      "label": "Dog · gfs",
+      "kind": "published",
+      "file": "dog-gfs.json.gz",
+      "day": "2026-10-24",
+      "timeZone": "America/Los_Angeles",
+      "launch": {
+        "name": "Dog",
+        "elevationM": 645.5
+      },
+      "selectedValidAt": "2026-10-24T21:00:00Z",
+      "tags": [
+        "model-comparison"
+      ],
+      "source": {
+        "path": "/tmp/dog-model-audit/gfs.json",
+        "url": "https://jdorrance.github.io/windgrams/data/gfs/sites/wa-dog.json",
+        "cacheOrigin": "published profile fetched during prior October 24 comparison; reused without a new request",
+        "sha256": "baf6a7b4f7a22ef8d19877e06226ecb41d26d3d583237b1da8c29d933650812b",
+        "referenceTime": "2026-10-24T06:00:00Z",
+        "generatedAt": "2026-10-24T12:34:15Z",
+        "hourCount": 128
+      },
+      "selection": "Complete original hour records for the specified local calendar date; every other document field retained unchanged.",
+      "sha256": "6c1b236d84b2f7e87bb81b55f0dd054b77b48d79f2ecf469ac4ec48294ba7d7f",
+      "gzipSha256": "0bd8caae8b7b3f6a4a72e7c5c76259e96b9d56c6352f903c6f264c6e01f91352",
+      "hourCount": 8,
+      "firstValidAt": "2026-10-24T09:00:00Z",
+      "lastValidAt": "2026-10-25T06:00:00Z",
+      "nativeLevelCounts": [
+        8
+      ]
+    },
+    {
+      "id": "aparan-icon-eu",
+      "label": "Aparan · icon-eu",
+      "kind": "published",
+      "file": "aparan-icon-eu.json.gz",
+      "day": "2026-10-24",
+      "timeZone": "Asia/Yerevan",
+      "launch": {
+        "name": "Aparan",
+        "elevationM": 2404.8
+      },
+      "selectedValidAt": "2026-10-24T10:00:00Z",
+      "tags": [
+        "dense-native-levels",
+        "missing-morning"
+      ],
+      "source": {
+        "path": "forecasts/data/icon-eu/sites/am-aparan.json",
+        "url": "https://jdorrance.github.io/windgrams/data/icon-eu/sites/am-aparan.json",
+        "cacheOrigin": "existing local forecast cache",
+        "sha256": "2743f9c4a8d5f84c00cc3297223a002bcb3098ab87f2c4efc1642d3b218d63b6",
+        "referenceTime": "2026-10-24T06:00:00Z",
+        "generatedAt": "2026-10-24T13:54:40.891Z",
+        "hourCount": 78
+      },
+      "selection": "Complete original hour records for the specified local calendar date; every other document field retained unchanged.",
+      "sha256": "78418b6200d2a0c6105797f1158d875f0ce064c2720152551e2b03784110b5d0",
+      "gzipSha256": "570ef8e2b03eb1411838638e8d6b7bfcf405be0d96a139526df839266e7654fe",
+      "hourCount": 13,
+      "firstValidAt": "2026-10-24T07:00:00Z",
+      "lastValidAt": "2026-10-24T19:00:00Z",
+      "nativeLevelCounts": [
+        29
+      ]
+    },
+    {
+      "id": "synthetic-strong-lift",
+      "label": "Synthetic · strong lift",
+      "kind": "synthetic",
+      "day": "2000-01-01",
+      "timeZone": "Etc/UTC",
+      "launch": {
+        "name": "Synthetic Ridge",
+        "elevationM": 1000
+      },
+      "selectedValidAt": "2000-01-01T15:00:00Z",
+      "tags": [
+        "strong-lift"
+      ],
+      "source": {
+        "path": "web/dev-data-src/convective-cycle.profile.json",
+        "url": "https://github.com/azohra/meteo/tree/main/scenarios/generated",
+        "sha256": "a7d70c3e6a1f47635e060ccc771a4ec36f66d4dae824e5f5078791648e8c2240",
+        "referenceTime": "2000-01-01T06:00:00Z",
+        "generatedAt": "2000-01-01T06:00:00Z"
+      },
+      "recipe": "synthetic-strong-lift",
+      "selection": "Existing synthetic fixture reused without duplication. Deterministic presentation scenarios are defined in scenarios.mjs; these are not observations or forecasts for a real launch."
+    },
+    {
+      "id": "synthetic-inversions",
+      "label": "Synthetic · multiple inversions",
+      "kind": "synthetic",
+      "day": "2000-01-01",
+      "timeZone": "Etc/UTC",
+      "launch": {
+        "name": "Synthetic Ridge",
+        "elevationM": 1000
+      },
+      "selectedValidAt": "2000-01-01T15:00:00Z",
+      "tags": [
+        "inversions",
+        "temperature-branches"
+      ],
+      "source": {
+        "path": "web/dev-data-src/convective-cycle.profile.json",
+        "url": "https://github.com/azohra/meteo/tree/main/scenarios/generated",
+        "sha256": "a7d70c3e6a1f47635e060ccc771a4ec36f66d4dae824e5f5078791648e8c2240",
+        "referenceTime": "2000-01-01T06:00:00Z",
+        "generatedAt": "2000-01-01T06:00:00Z"
+      },
+      "recipe": "synthetic-inversions",
+      "selection": "Existing synthetic fixture reused without duplication. Deterministic presentation scenarios are defined in scenarios.mjs; these are not observations or forecasts for a real launch."
+    },
+    {
+      "id": "synthetic-clouds",
+      "label": "Synthetic · cloud layers",
+      "kind": "synthetic",
+      "day": "2000-01-01",
+      "timeZone": "Etc/UTC",
+      "launch": {
+        "name": "Synthetic Ridge",
+        "elevationM": 1000
+      },
+      "selectedValidAt": "2000-01-01T15:00:00Z",
+      "tags": [
+        "clouds"
+      ],
+      "source": {
+        "path": "web/dev-data-src/convective-cycle.profile.json",
+        "url": "https://github.com/azohra/meteo/tree/main/scenarios/generated",
+        "sha256": "a7d70c3e6a1f47635e060ccc771a4ec36f66d4dae824e5f5078791648e8c2240",
+        "referenceTime": "2000-01-01T06:00:00Z",
+        "generatedAt": "2000-01-01T06:00:00Z"
+      },
+      "recipe": "synthetic-clouds",
+      "selection": "Existing synthetic fixture reused without duplication. Deterministic presentation scenarios are defined in scenarios.mjs; these are not observations or forecasts for a real launch."
+    }
+  ],
+  "visualReference": {
+    "url": "http://wxtofly.net/windgrams/2026-10-24_Dog_windgram.png?29881195",
+    "path": "artifacts/windgram-visual/wxtofly-dog-reference.png",
+    "sha256": "1e20c6dce3da8d3e82cc5eda58161d6b6e83d4be184f4a6492ada5db000241ea",
+    "savedAt": "2026-10-24T19:56:12.383Z",
+    "timestampMeaning": "Local screenshot file modification time; captured by the parent agent from the live page.",
+    "dimensionsPx": [
+      800,
+      800
+    ],
+    "plotBoundsPx": {
+      "left": 80,
+      "right": 736,
+      "top": 64,
+      "bottom": 656
+    },
+    "purpose": "Layout reference only. Model/run equivalence is not asserted."
+  }
+}

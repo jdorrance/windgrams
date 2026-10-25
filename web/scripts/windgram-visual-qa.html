@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Windgram visual QA</title>
+<link id="app-styles" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; } body { margin: 0; background: #eee; color: #202c30; font: 14px Arial, sans-serif; }
+  aside { padding: 10px; background: white; } form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  select, button { font: inherit; padding: 5px; } main { padding: 17px; margin: 0 auto; background: #fff; }
+  #chart { overflow-x: auto; }
+  #meta { margin: 0 0 8px; font-size: 12px; line-height: 1.4; } #key { margin-top: 12px; font-size: 12px; }
+  body.clean aside, body.clean #meta { display: none; } #error { white-space: pre-wrap; color: #9d0000; }
+</style>
+<aside><form>
+  <label>Fixture <select name="fixture"></select></label>
+  <label>Viewport <select name="viewport"></select></label>
+  <label>Units <select name="units"><option>imperial</option><option>metric</option></select></label>
+  <label>Height <select name="range"><option value="soaring">focused</option><option value="full">full</option></select></label>
+  <label>Version <select name="version"><option>before</option><option>after</option></select></label>
+  <button>Show</button><a href="report.json">Invariant report</a>
+</form></aside>
+<main><p id="meta"></p><div class="windgram-viewport"><div id="chart" class="meteogram-frame chart-scroll"></div></div><div id="key" class="windgram-key"></div><p id="error"></p></main>
+<script type="module">
+try {
+  const manifest = await (await fetch('manifest.json')).json();
+  const query = new URLSearchParams(location.search);
+  const value = (key, fallback) => query.get(key) || fallback;
+  const fixture = value('fixture', 'dog-rrfs'), viewport = value('viewport', '390x844');
+  const units = value('units', 'imperial'), range = value('range', 'soaring'), version = value('version', 'before');
+  document.querySelector('#app-styles').href = version + '.css';
+  const entry = manifest.fixtures.find(item => item.id === fixture);
+  if (!entry) throw new Error('Unknown fixture');
+  const form = document.querySelector('form');
+  const fill = (name, entries) => entries.forEach(([id, label]) => form.elements[name].add(new Option(label, id)));
+  fill('fixture', manifest.fixtures.map(item => [item.id, item.label]));
+  fill('viewport', manifest.viewports.map(size => [size.join('x'), size.join(' × ')]));
+  for (const [key, val] of Object.entries({ fixture, viewport, units, range, version })) form.elements[key].value = val;
+  const [width, height] = viewport.split('x').map(Number);
+  document.querySelector('main').style.width = width + 'px';
+  if (query.get('clean') === '1') document.body.classList.add('clean');
+  const prefix = 'scenes/' + fixture + '/';
+  const getText = async path => { const response = await fetch(path); if (!response.ok) throw new Error(path + ': ' + response.status); return response.text(); };
+  const [svg, key] = await Promise.all([
+    getText(prefix + viewport + '-' + units + '-' + range + '-' + version + '.svg'),
+    getText(prefix + units + '-' + version + '-key.html'),
+  ]);
+  document.querySelector('#chart').innerHTML = svg;
+  document.querySelector('#key').innerHTML = key;
+  document.querySelector('#meta').textContent = entry.label + ' · ' + version + ' · ' + width + ' × ' + height +
+    ' · ' + units + ' · ' + range + ' · ' + entry.kind + '\nRun ' + entry.source.referenceTime + ' · published ' + entry.source.generatedAt;
+  document.title = entry.label + ' / ' + version + ' / ' + viewport;
+} catch (error) { document.querySelector('#error').textContent = error.stack; }
+</script>

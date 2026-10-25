@@ -135,10 +135,11 @@ function smoothTemperatureProfile(count = 14) {
   return profile;
 }
 
-test("each long connected temperature line receives one label on desktop and mobile", () => {
+test("each unobstructed long connected temperature line receives one label on desktop and mobile", () => {
   const profile = smoothTemperatureProfile();
   for (const compact of [false, true]) {
     const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact, heightRange: "full", widthPx: compact ? 320 : 1000, heightPx: 844 });
+    view.clouds = []; view.wings = []; view.freezing = [];
     const before = structuredClone(view.contours);
     const svg = renderWindgramSvg(view);
     for (const temperatureF of [24, 32, 40]) {
@@ -178,8 +179,9 @@ test("a missing-time gap splits temperature labels without moving either into th
   assert.ok(labels[1].x + labels[1].width / 2 >= view.hours[3].x);
 });
 
-test("single-hour temperature crossings keep one finite label each", () => {
+test("unobstructed single-hour temperature crossings keep one finite label each", () => {
   const view = viewOf(smoothTemperatureProfile(1));
+  view.clouds = []; view.wings = []; view.freezing = [];
   const svg = renderWindgramSvg(view);
   for (const temperatureF of [24, 32, 40]) assert.equal(temperatureLabelRects(svg, temperatureF).length, 1);
   assert.doesNotMatch(svg, /NaN|Infinity|undefined/);
@@ -314,7 +316,13 @@ test("paraglider symbols use the published 225 ft/min ceiling and never substitu
 test("wind feathers are green below 9 knots and white starting at 9 knots", () => {
   const view = viewOf(steadyProfile());
   const source = view.barbs.find((barb) => !barb.interpolated)!;
-  view.barbs = [5, 8.99, 9, 9.01].map((speedKt) => ({ ...source, speedKt }));
+  view.contours = [];
+  view.wings = [];
+  view.freezing = [];
+  view.clouds = [];
+  view.barbs = [5, 8.99, 9, 9.01].map((speedKt, index) => ({
+    ...source, speedKt, x: view.left + 80, y: view.bottom - 60 - index * 40,
+  }));
   const colors = [...renderWindgramSvg(view).matchAll(/style="color:([^"]+)"[^>]*data-wind-source="native"/g)].map((match) => match[1]);
   assert.deepEqual(colors, ["#78ff78", "#78ff78", "#ffffff", "#ffffff"]);
 });
@@ -435,14 +443,15 @@ test("diagnostics keep their hour positions after an ensemble dropout", () => {
   assert.deepEqual(profile, before, "building the display never rewrites forecast measurements");
 });
 
-test("compact charts fit a full forecast into portrait and landscape phones without discarding samples", () => {
+test("charts follow available width and preserve atmospheric samples across screen sizes", () => {
   const profile = steadyProfile(14);
   for (const hour of profile.hours) hour.levels = Array.from({ length: 18 }, (_, i) => ({
     ...hour.levels[0], pressureHpa: 1000 - i * 25, heightM: profile.site.modelElevationM + 100 + i * 180,
   }));
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 390, heightPx: 640 });
   assert.equal(view.left, 52);
-  assert.equal(view.plotHeight, 380);
+  assert.equal(view.plotHeight, 298);
+  assert.equal(view.height, 410);
   assert.ok(view.height < 640);
   assert.equal(view.width, 390, "the whole forecast fits the available width");
   const labels = visibleHeightAnchors(view);
@@ -451,17 +460,20 @@ test("compact charts fit a full forecast into portrait and landscape phones with
   for (const anchor of view.anchors) close(yToHeight(view, anchor.y), anchor.heightM, 0.01);
   for (const heightPx of [300, 2000]) {
     const bounded = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 390, heightPx });
-    assert.ok(bounded.plotHeight >= 160 && bounded.plotHeight <= 440);
+    assert.equal(bounded.plotHeight, view.plotHeight);
+    assert.equal(bounded.height, view.height, "browser chrome cannot change the chart height");
   }
   const desktop = viewOf(profile);
   assert.equal(desktop.compact, false);
-  assert.equal(desktop.left, 102);
-  assert.equal(desktop.top, 65);
-  assert.ok(desktop.plotHeight >= 680);
+  assert.equal(desktop.left, 80);
+  assert.equal(desktop.top, 56);
+  assert.equal(desktop.width, 800);
+  assert.equal(desktop.plotHeight, 592);
   for (const [widthPx, heightPx] of [[240, 667], [320, 667], [390, 844], [430, 932], [780, 390]]) {
     const fitted = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx, heightPx });
     close(fitted.width, widthPx);
-    assert.ok(fitted.height <= heightPx - 40, `${widthPx}×${heightPx} fits vertically`);
+    assert.equal(fitted.plotHeight, Math.max(160, Math.round(fitted.plotWidth * 592 / 656)));
+    assert.equal(fitted.height, fitted.plotHeight + 112);
     assert.deepEqual(fitted.hours.map((hour) => hour.validAt), desktop.hours.map((hour) => hour.validAt));
     assert.deepEqual(fitted.sampling, desktop.sampling, "fitting changes display coordinates, never atmospheric measurements");
     for (const [index, hour] of profile.hours.entries()) {
@@ -470,7 +482,7 @@ test("compact charts fit a full forecast into portrait and landscape phones with
     const visibleHours = visibleWindgramHourIndices(fitted);
     assert.equal(visibleHours[0], 0);
     assert.equal(visibleHours.at(-1), fitted.hours.length - 1);
-    for (const [i, index] of visibleHours.entries()) if (i) assert.ok(fitted.hours[index].x - fitted.hours[visibleHours[i - 1]].x >= 34);
+    for (const [i, index] of visibleHours.entries()) if (i) assert.ok(fitted.hours[index].x - fitted.hours[visibleHours[i - 1]].x >= 40);
   }
 });
 
@@ -603,7 +615,7 @@ test("compact charts thin display marks, retain first and last hours, and keep d
   assert.ok(altitudeLabels(axis).length > 1);
   assert.match(axis, new RegExp(`viewBox="0 0 ${view.left} ${view.height}"`));
   assert.match(axis, /aria-hidden="true"/);
-  assert.match(axis, /fill="#7b7de6"/);
+  assert.match(axis, /fill="#7777dd"/);
   assert.match(svg, /ft MSL/);
   assert.doesNotMatch(svg, / hPa<\/text>/);
   const visibleHours = visibleWindgramHourIndices(view);
@@ -621,11 +633,13 @@ test("compact charts thin display marks, retain first and last hours, and keep d
   assert.doesNotMatch(svg + axis + diagnostics, /NaN|Infinity|undefined/);
 });
 
-test("compact chart height can fit the space below phone controls", () => {
+test("page controls and changing viewport height cannot resize a chart of fixed width", () => {
+  const reference = buildWindgramView(fixture(), { timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx: 320 });
   for (const maxHeightPx of [264, 350]) {
     const view = buildWindgramView(fixture(), { timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx: 320, heightPx: 667, maxHeightPx });
-    assert.equal(view.height, maxHeightPx);
-    assert.equal(view.plotHeight, maxHeightPx - 152);
+    assert.deepEqual(view.presentation, reference.presentation);
+    assert.deepEqual(view.anchors, reference.anchors);
+    assert.deepEqual(view.fields, reference.fields);
     assert.ok(visibleHeightAnchors(view).length > 3);
     assert.equal(visibleWindgramHourIndices(view).at(-1), view.hours.length - 1);
     assert.match(renderWindgramSvg(view), /Sfc °F/);
@@ -642,17 +656,15 @@ test("compact charts retain isolated model cloud bands and every potential cloud
       level.cloudFractionPercent = 0;
     }
   }
-  profile.hours[3].levels[2].cloudFractionPercent = 100;
+  profile.hours[2].levels[2].cloudFractionPercent = 100;
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 320, heightPx: 667 });
-  assert.ok(!visibleWindgramHourIndices(view).includes(3));
+  assert.ok(!visibleWindgramHourIndices(view).includes(2));
   const modelCloud = view.clouds.filter((cloud) => cloud.kind === "model");
   assert.equal(modelCloud.length, 1);
-  assert.equal(modelCloud[0].hourIndex, 3);
+  assert.equal(modelCloud[0].hourIndex, 2);
   const potential = view.clouds.filter((cloud) => cloud.kind === "potential");
   assert.equal(potential.length, profile.hours.length, "zero lift does not hide potential LCL symbols");
   const svg = renderWindgramSvg(view);
-  const windXs = [...svg.matchAll(/<g transform="translate\(([-\d.]+) [-\d.]+\) scale\(\.7\)"[^>]*data-wind-source=/g)].map((match) => Number(match[1]));
-  assert.ok(windXs.every((x) => Math.abs(x - view.hours[3].x) > .01), "the cloud occurs between sampled wind columns");
   assert.doesNotMatch(svg, /data-cloud-kind="model"/);
   assert.equal([...svg.matchAll(/data-cloud-kind="potential"/g)].length, potential.length);
   assert.match(svg, /data-cloud-band="model"/);
@@ -715,7 +727,8 @@ test("metric windgram labels and feathers change while physical fields and coord
   const svg = renderWindgramSvg(metric);
   assert.match(svg, /Sfc °C/);
   assert.match(svg, /Wind m\/s · temperature °C/);
-  assert.match(svg, /Launch · 1,000 m MSL/);
+  assert.equal(metric.launch?.label, "Launch · 1,000 m MSL");
+  assert.doesNotMatch(svg, /Launch ·/);
   assert.match(svg, />2<\/text>/);
   const geometry = barbPaths(20, 270); // 10 m/s, full feather = 5 m/s.
   assert.ok(svg.includes(`d="${geometry.staff}"`));
@@ -743,7 +756,8 @@ test("a view retains its explicit units across rendering and later preference ch
     ];
     const before = render();
     assert.match(before[0], unitSystem === "metric" ? /Sfc °C/ : /Sfc °F/);
-    assert.match(before[0], unitSystem === "metric" ? /Launch · 1,000 m MSL/ : /Launch · 3,281 ft MSL/);
+    assert.equal(view.launch?.label, unitSystem === "metric" ? "Launch · 1,000 m MSL" : "Launch · 3,281 ft MSL");
+    assert.doesNotMatch(before[0], /Launch ·/);
     assert.match(before[3], unitSystem === "metric" ? /≤ −9\.84<\/span>/ : /≤ −5\.4<\/span>/);
     assert.match(before[2], unitSystem === "metric" ? />hPa<\/text>/ : />inHg<\/text>/);
     setUnitSystem(unitSystem);

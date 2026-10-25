@@ -8,6 +8,7 @@ import { buildMeteogramScene, type HourSampling, type MeteogramOptions, type Met
 import { publishedLift, publishedWxtoflyLiftTop } from "./published-lift.ts";
 import {
   celsiusToFahrenheit,
+  convertQuantity,
   finiteScalar,
   formatQuantity,
   getUnitSystem,
@@ -50,6 +51,7 @@ import {
   windgramHours,
   type WindgramTimeTick,
 } from "./windgram-time-axis.ts";
+import { resolveWindgramPresentation, type WindgramPresentation } from "./windgram-presentation.ts";
 
 export {
   buildStabilityFieldPaths,
@@ -118,6 +120,7 @@ export interface WindgramHour {
 export interface WindgramView {
   /** Formatting context captured at construction; later preference changes require a new view. */
   unitSystem: UnitSystem;
+  presentation: WindgramPresentation;
   width: number;
   height: number;
   left: number;
@@ -156,35 +159,37 @@ export interface WindgramView {
 }
 export type WindgramOptions = Pick<MeteogramOptions, "timeZone" | "hours" | "launch" | "launchWindows" | "capabilities" | "widthPx"> & {
   compact?: boolean;
-  /** Vertical extent only; both compact views use daylight hours. Desktop keeps all heights. */
+  /** Vertical extent only; every screen width uses daylight hours. Desktop keeps all heights. */
   heightRange?: "soaring" | "full";
-  /** Available viewport height; compact charts reserve room for page controls. */
+  /** @deprecated Retained for callers; chart height depends only on available width. */
   heightPx?: number;
-  /** Total height available below page controls, including the chart's axes. */
+  /** @deprecated Retained for callers; page position never changes chart dimensions. */
   maxHeightPx?: number;
   /** Optional explicit unit system override; defaults to current user preference. */
   unitSystem?: UnitSystem;
 };
 
 type ProfileHour = SiteForecast["hours"][number];
-const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(high, n));
 
 export function buildWindgramView(profile: SiteForecast, options: WindgramOptions): WindgramView {
   const system = options.unitSystem ?? getUnitSystem();
   const hours = windgramHours(profile, options);
   const compact = options.compact ?? false;
-  const { left, right, top, columnWidth, plotWidth, dataLeft, before, after, cadence, firstTime, lastTime } =
+  // Use all supplied native heights so focused/full switching retains the same margins.
+  const altitudeLabels = [profile.site.modelElevationM, options.launch?.elevationM,
+    ...hours.flatMap(hour => hour.levels.map(level => finiteScalar(level.heightM))),
+  ].filter((height): height is number => typeof height === "number" && Number.isFinite(height))
+    .map(height => `${Math.round(convertQuantity(height, "elevation", system)!).toLocaleString("en-US")}${compact ? "" : system === "metric" ? " m" : " ft"}`);
+  const presentation = resolveWindgramPresentation({ compact, widthPx: options.widthPx, altitudeLabels });
+  const { left, right, top, columnWidth, plotWidth, dataLeft, before, after, cadence, firstTime, lastTime, emptyTimes } =
     buildWindgramTimeLayout(profile, hours, {
       timeZone: options.timeZone,
       hours: options.hours,
       compact,
       widthPx: options.widthPx,
+      presentation,
     });
-  const preferredPlotHeight = compact ? clamp((options.heightPx ?? 720) - 260, 160, 440) : clamp(plotWidth * 0.8, 680, 1100);
-  const plotHeight =
-    compact && options.maxHeightPx !== undefined
-      ? Math.min(preferredPlotHeight, Math.max(80, options.maxHeightPx - top - 82))
-      : preferredPlotHeight;
+  const plotHeight = presentation.plotHeight;
   const bottom = top + plotHeight;
   const launchElevationM = finiteScalar(options.launch?.elevationM);
   const { modelFloorM, floorM, topM, anchors } = buildWindgramVerticalScale(profile, hours, {
@@ -221,8 +226,9 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
 
   const view: WindgramView = {
     unitSystem: system,
+    presentation,
     width: left + plotWidth + right,
-    height: bottom + (compact ? 82 : 86),
+    height: presentation.height,
     left,
     top,
     plotWidth,
@@ -295,6 +301,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     hourIndex: null,
   });
   view.timeAxis = [
+    ...emptyTimes.map((time, i) => emptyTick(time, i)),
     ...Array.from({ length: before }, (_, i) => emptyTick(firstTime - (before - i) * cadence, i)),
     ...view.hours.map(({ validAt, label, x }, hourIndex) => ({ validAt, label, x, hourIndex })),
     ...Array.from({ length: after }, (_, i) => emptyTick(lastTime + (i + 1) * cadence, before + hours.length + i)),

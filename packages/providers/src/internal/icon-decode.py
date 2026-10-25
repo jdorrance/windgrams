@@ -98,9 +98,9 @@ class Fetcher:
                         self.records[key] = {'url': url, 'range': byte_range, 'bytes': len(body), 'sha256': digest(body),
                                              'lastModified': response.headers.get('Last-Modified')}
                     return body
-            except (OSError, TimeoutError):
+            except (OSError, TimeoutError) as error:
                 if attempt == 2:
-                    raise
+                    raise OSError(f'ICON transfer failed for {url}: {error}') from error
                 with self.lock:
                     self.retries += 1
                 time.sleep(1 + attempt)

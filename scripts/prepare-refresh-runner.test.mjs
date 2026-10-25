@@ -6,7 +6,10 @@ import { refreshCommands, refreshProvider } from '../forecasts/scripts/refresh-p
 test('runner disk cleanup is confined to the ECCC disposable GitHub Linux runner', () => {
   const calls = [], run = (...args) => calls.push(args);
   assert.equal(prepareRefreshRunner('eccc', { platform: 'darwin', githubActions: 'true', run }), false);
-  assert.equal(prepareRefreshRunner('eccc', { platform: 'linux', githubActions: undefined, run }), false);
+  // undefined selects the process.env default, which is true inside Actions.
+  for (const githubActions of [null, '', 'false']) {
+    assert.equal(prepareRefreshRunner('eccc', { platform: 'linux', githubActions, run }), false);
+  }
   assert.equal(prepareRefreshRunner('rrfs', { platform: 'linux', githubActions: 'true', run }), false);
   assert.equal(calls.length, 0);
   assert.equal(prepareRefreshRunner('eccc', { platform: 'linux', githubActions: 'true', run }), true);

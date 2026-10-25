@@ -35,7 +35,7 @@ test('run discovery ignores short cycles and waits for the complete requested ho
   };
   const result = await discoverIconRun({ now: new Date('2026-10-24T13:00Z'), fetchFn });
   assert.equal(result.referenceTime, '2026-10-24T00:00:00Z');
-  assert.equal(calls.length, 9);
+  assert.equal(calls.length, 11);
   assert.ok(calls.slice(1).every(url => url.includes('PT078H00M')));
 });
 

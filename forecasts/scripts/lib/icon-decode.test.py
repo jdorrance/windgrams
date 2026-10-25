@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+from urllib.error import HTTPError
 import sys
 sys.dont_write_bytecode = True
 
@@ -38,6 +40,17 @@ class NativeDecoder(unittest.TestCase):
         fetch.stopped.set()
         with self.assertRaisesRegex(ValueError, 'budget'):
             fetch.get(icon.BASE)
+
+    def test_failed_transfer_identifies_the_field_url_after_retries(self):
+        url = icon.field_url('MH', '2026-10-25T06:00:00Z', 1)
+        fetch = icon.Fetcher('/tmp/windgrams-icon-offline-test', 1)
+        with patch.object(icon.urllib.request, 'urlopen', side_effect=HTTPError(url, 404, 'Not Found', {}, None)) as request, patch.object(icon.time, 'sleep'):
+            with self.assertRaises(OSError) as caught:
+                fetch.get(url)
+        self.assertIn(url, str(caught.exception))
+        self.assertIn('404', str(caught.exception))
+        self.assertEqual(request.call_count, 3)
+        self.assertEqual(fetch.retries, 2)
 
 
 if __name__ == '__main__':

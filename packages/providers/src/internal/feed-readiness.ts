@@ -55,7 +55,7 @@ const templates: Record<string, FeedAvailabilitySpec> = {
     horizonHours: 240,
     completeRunAvailabilityMinutes: 345,
     typicalMaxLagMinutes: 380,
-    completionProbeTemplate: 'https://dd.weather.gc.ca/{YYYYMMDD}/WXO-DD/model_gem_global/15km/grib2/lat_lon/{HH}/240/',
+    completionProbeTemplate: 'https://dd.weather.gc.ca/{YYYYMMDD}/WXO-DD/model_gdps/15km/{HH}/240/',
   },
   geps: {
     slug: 'geps',

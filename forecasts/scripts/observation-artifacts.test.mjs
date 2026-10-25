@@ -87,3 +87,41 @@ test('invalid failed slugs, duplicate inventory, and missing healthy payloads le
     assert.equal(read(join(output, 'ecmwf/manifest.json')).generatedAt, oldTime);
   }
 });
+
+test('balloon publication preserves failed observations but removes a confirmed absent flight', t => {
+  for (const absent of [false, true]) {
+    const { source, incoming, output } = workspace(t);
+    const payloadPath = join(output, 'raob/sites/boise.json');
+    write(payloadPath, { schemaVersion: 1, generatedAt: oldTime, site: { slug: 'boise' }, soundings: [{ validAt: oldTime, levels: [] }] });
+    const original = readFileSync(payloadPath);
+    manifest(output, 'raob', oldTime, [{ slug: 'boise', ok: true, absent: false }]);
+    manifest(source, 'raob', newTime, [{ slug: 'boise', ...(absent ? { ok: true, absent: true } : { ok: false, error: 'HTTP 503' }) }]);
+    const report = mergeArtifacts(incoming, output, { sites: [] });
+    assert.deepEqual(report.rejected, []);
+    assert.ok(report.accepted.includes('raob'));
+    if (absent) assert.equal(existsSync(payloadPath), false);
+    else assert.deepEqual(readFileSync(payloadPath), original);
+    assert.deepEqual(read(join(output, 'raob/manifest.json')).sites[0], absent
+      ? { slug: 'boise', ok: true, absent: true }
+      : { slug: 'boise', ok: false, error: 'HTTP 503', retained: true });
+  }
+});
+
+test('balloon publication rejects contradictory absence and invalid sounding payloads', t => {
+  for (const row of [{ slug: 'boise', ok: false, absent: true, error: 'Timeout' }, { slug: 'boise', ok: true, absent: false }]) {
+    const { source, incoming, output } = workspace(t);
+    manifest(source, 'raob', newTime, [row]);
+    write(join(source, 'raob/sites/boise.json'), { schemaVersion: 1, generatedAt: newTime, site: { slug: 'boise' } });
+    assert.equal(mergeArtifacts(incoming, output, { sites: [] }).rejected[0].product, 'raob');
+  }
+});
+
+test('an older legacy balloon artifact cannot resurrect a subsequently confirmed absent flight', t => {
+  const { source, incoming, output } = workspace(t);
+  manifest(output, 'raob', newTime, [{ slug: 'boise', ok: true, absent: true }]);
+  write(join(source, 'raob/sites/boise.json'), { schemaVersion: 1, generatedAt: oldTime, site: { slug: 'boise' }, soundings: [] });
+  const report = mergeArtifacts(incoming, output, { sites: [] });
+  assert.deepEqual(report.rejected, []);
+  assert.equal(existsSync(join(output, 'raob/sites/boise.json')), false);
+  assert.equal(read(join(output, 'raob/manifest.json')).generatedAt, newTime);
+});

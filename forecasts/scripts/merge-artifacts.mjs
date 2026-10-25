@@ -128,15 +128,17 @@ export function mergeArtifacts(incoming, output, { sites = readJson(new URL('../
       if (!dryRun) cpSync(join(source, name), join(output, name === 'site-context.json' ? 'site-context-terrain.json' : name));
       return true;
     });
-    if (group === 'observations') for (const product of ['nws', 'ecmwf']) {
+    if (group === 'observations') for (const product of ['nws', 'ecmwf', 'raob']) {
       const directory = join(source, product);
-      if (!existsSync(directory)) continue;
+      if (!existsSync(directory) || product === 'raob' && !existsSync(join(directory, 'manifest.json'))) continue;
       attempt(product, () => mergeObservationProduct(directory, join(output, product), product));
     }
-    if (group === 'observations' && existsSync(join(source, 'raob/sites'))) {
+    if (group === 'observations' && !existsSync(join(source, 'raob/manifest.json')) && existsSync(join(source, 'raob/sites'))) {
       for (const name of readdirSync(join(source, 'raob/sites')).filter(name => /^[a-zA-Z0-9_-]+\.json$/.test(name))) attempt(`raob/${name}`, () => {
         const key = `raob/sites/${name}`, next = readJson(join(source, key)), previous = tryRead(join(output, key));
         if (next.schemaVersion !== 1 || next.site?.slug !== name.slice(0, -5) || !Array.isArray(next.soundings)) throw new Error('Invalid sounding document');
+        const attempt = tryRead(join(output, 'raob/manifest.json'));
+        if (attempt && timestamp(attempt.generatedAt) >= timestamp(next.generatedAt)) return false;
         if (previous && timestamp(previous.generatedAt) >= timestamp(next.generatedAt)) return false;
         timestamp(next.generatedAt);
         if (!dryRun) writeJson(join(output, key), next);

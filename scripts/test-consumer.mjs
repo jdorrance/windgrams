@@ -50,6 +50,7 @@ try {
     contracts: '@windgrams/contracts',
     fields: '@windgrams/contracts/fields',
     regional: '@windgrams/contracts/regional',
+    providerHealth: '@windgrams/contracts/provider-health',
     client: '@windgrams/data-client',
     dataset: '@windgrams/data-client/dataset',
     offline: '@windgrams/data-client/offline',

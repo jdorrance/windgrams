@@ -15,6 +15,8 @@ const KT_TO_MPS = 0.514444;
 const HOUR = 3_600_000;
 /** Farthest a launch can be from a station and still use its balloon. */
 export const MAX_DISTANCE_KM = 300;
+/** Search and served-data age bound for usable balloon observations. */
+export const LOOKBACK_HOURS = 48;
 /** Levels above this pressure (hPa) are dropped: well above any flying. */
 export const TOP_HPA = 250;
 
@@ -169,16 +171,18 @@ export async function fetchSounding(station, getJson, t, { log = () => {} } = {}
 /**
  * The station's latest `keep` soundings (newest first) with at least 10
  * levels. `log` receives one line per launch time tried (raw and kept levels).
+ * `onError` reports failed requests separately from legitimately absent flights.
  */
-export async function fetchStationSoundings(station, getJson, { now = Date.now(), keep = 2, warn = () => {}, log = () => {} } = {}) {
+export async function fetchStationSoundings(station, getJson, { now = Date.now(), keep = 2, warn = () => {}, log = () => {}, onError = () => {} } = {}) {
   const soundings = [];
-  for (const t of recentLaunchTimes(now, 4)) {
+  for (const t of recentLaunchTimes(now, LOOKBACK_HOURS / 12)) {
     if (soundings.length >= keep) break;
     try {
       const sounding = await fetchSounding(station, getJson, t, { log });
       if (sounding) soundings.push(sounding);
     } catch (error) {
       warn(`${station.id} ${isoMinute(t)}: ${error.message}`);
+      onError(error);
     }
   }
   return soundings;
@@ -222,4 +226,4 @@ export function buildSiteDocument({ site, station, soundings, now = Date.now() }
   };
 }
 
-export const paths = { site: (slug) => `raob/sites/${slug}.json` };
+export const paths = { site: (slug) => `raob/sites/${slug}.json`, manifest: () => 'raob/manifest.json' };

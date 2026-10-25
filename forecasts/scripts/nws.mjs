@@ -88,7 +88,7 @@ for (const office of offices) {
   console.log(`✓ ${office}: AFD ${document.products.afd ? "yes" : "no"}, Soaring Forecast ${document.products.srg ? "yes" : "no"}`);
 }
 
-if (documents.length > 0) {
+if (siteEntries.length > 0) {
   write(paths.manifest(), buildManifest({ now, sites: siteEntries, offices: officeEntries }));
 }
 

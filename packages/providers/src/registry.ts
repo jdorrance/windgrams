@@ -57,7 +57,7 @@ const delivery = {
   'icon-eu': ['DWD Open Data', 'icon-eu/native-model-levels'],
   'hrdps-continental': ['ECCC MSC Datamart', 'model_hrdps/continental/2.5km'],
   rdps: ['ECCC MSC Datamart', 'model_rdps/10km'],
-  gdps: ['ECCC MSC Datamart', 'model_gem_global/15km'],
+  gdps: ['ECCC MSC Datamart', 'model_gdps/15km'],
   geps: ['ECCC MSC Datamart', 'ensemble/geps/grib2/raw'],
 } satisfies Record<string, string[]>;
 function checkedCatalogue(): ModelCatalogue {

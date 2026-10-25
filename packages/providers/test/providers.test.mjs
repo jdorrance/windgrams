@@ -12,6 +12,7 @@ import { parseNormalizedColumnRecord } from '@windgrams/contracts';
 const profile = JSON.parse(readFileSync(new URL('../../../forecasts/soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
 const raw = JSON.parse(readFileSync(new URL('../../../forecasts/scripts/lib/icon-native-fixture.json', import.meta.url)));
 const { parseSites } = await import(new URL('./sites.js', import.meta.resolve('@azohra/meteo.forecast')));
+const { fileUrl: ecccFileUrl } = await import(new URL('./builders/eccc.js', import.meta.resolve('@azohra/meteo.forecast')));
 
 test('registered models have explicit ownership, source identity and supported fields', () => {
   assert.equal(new Set(MODELS.map(model => model.id)).size, MODELS.length);
@@ -40,6 +41,22 @@ test('installed RRFS bridge and readiness agree on both final products and horiz
   const { model } = await loadLegacyBuilder('rrfs');
   assert.deepEqual(model.completionUrls('20261023', '00'), selectTargetCycles('rrfs', Date.parse('2026-10-23T03:55:00Z')).primaryCandidate.probeUrls);
   assert.equal(model.pressureToken, 'prslev'); assert.equal(model.surfaceToken, '2dfld');
+});
+test('readiness probes follow every pinned builder final product and ECCC delivery path', async () => {
+  for (const descriptor of MODELS.filter(model => model.product === 'processed-profile')) {
+    const { model } = await loadLegacyBuilder(descriptor.id);
+    const selected = selectTargetCycles(descriptor.id, Date.parse('2026-10-25T15:20:00Z')).primaryCandidate;
+    const date = selected.referenceTime.slice(0, 10).replaceAll('-', ''), hour = selected.referenceTime.slice(11, 13);
+    if (descriptor.provider === 'NOAA') {
+      assert.deepEqual(selected.probeUrls, model.completionUrls(date, hour), descriptor.id);
+    } else {
+      const finalHour = model.forecastHours.at(-1);
+      const file = descriptor.id === 'geps' ? model.fileUrl(model.probeVariable, date, hour, finalHour)
+        : ecccFileUrl(model, date, hour, finalHour, model.probeVariable);
+      assert.deepEqual(selected.probeUrls, [new URL('.', file).href], descriptor.id);
+      assert.equal(new URL(file).pathname.startsWith(`/${date}/WXO-DD/${descriptor.sourceProducts[0]}/`), true, descriptor.id);
+    }
+  }
 });
 test('legacy acquisition writes a catalogue accepted by the pinned builder and permits a same-run backfill', async t => {
   const root = mkdtempSync(join(tmpdir(), 'provider-test-')); t.after(() => rmSync(root, { recursive: true, force: true }));

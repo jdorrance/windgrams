@@ -5,7 +5,9 @@ upstream feeds. Acquisition runs on Node 24; the model registry and terrain
 source policy helpers can also be used in a browser.
 
 The legacy adapter wraps the pinned Azohra forecast builders for NOAA and ECCC
-models. Give it a selected initialization time and the sites to acquire:
+models. Set `METEO_DATA_BASE` to your published dataset URL; the pinned builder
+requires it even when writing fresh local files. Give the adapter a selected
+initialization time and the sites to acquire:
 
 ```ts
 import { createLegacyAdapter, type SiteLocation } from '@windgrams/providers';

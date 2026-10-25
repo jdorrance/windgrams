@@ -7,6 +7,7 @@ Complete the [workspace setup](../README.md#start-locally). Run commands below f
 ## Local data
 
 ```sh
+export METEO_DATA_BASE=https://jdorrance.github.io/windgrams/data
 node scripts/write-models-catalogue.mjs --output data
 WINDGRAMS_DATA_DIR=data node scripts/publish-sites.mjs
 pnpm run build:model hrrr-conus

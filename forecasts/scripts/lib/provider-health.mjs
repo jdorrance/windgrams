@@ -4,29 +4,14 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PROVIDER_GROUPS } from '@windgrams/providers/registry';
+import { parseProviderHealth as parseHealth } from '@windgrams/contracts/provider-health';
 
-const outcomes = new Set(['running', 'updated', 'retained', 'unavailable']);
-const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-const instant = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value) && Number.isFinite(Date.parse(value));
 const message = value => value == null ? null : String(value).replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 1000);
 
 /** Null rejects unknown group/model ownership, malformed lifecycle times or outcomes. */
 export function parseProviderHealth(raw, group) {
   const models = Object.hasOwn(PROVIDER_GROUPS, group) ? PROVIDER_GROUPS[group] : null;
-  if (!models || !object(raw) || raw.schemaVersion !== 1 || raw.group !== group || !object(raw.models)) return null;
-  const parsed = {};
-  for (const [model, entry] of Object.entries(raw.models)) {
-    if (!models.includes(model) || !object(entry) || !instant(entry.attemptedAt) || !outcomes.has(entry.outcome)
-      || !(entry.reason === null || typeof entry.reason === 'string' && entry.reason.length <= 1000)
-      || !(entry.completedAt === null || instant(entry.completedAt))
-      || !(entry.lastSuccessfulRefreshAt === null || instant(entry.lastSuccessfulRefreshAt))) return null;
-    if ((entry.outcome === 'running') !== (entry.completedAt === null)
-      || entry.completedAt !== null && Date.parse(entry.completedAt) < Date.parse(entry.attemptedAt)
-      || entry.lastSuccessfulRefreshAt !== null && Date.parse(entry.lastSuccessfulRefreshAt) > Date.parse(entry.completedAt ?? entry.attemptedAt)
-      || entry.outcome === 'updated' && entry.lastSuccessfulRefreshAt !== entry.completedAt) return null;
-    parsed[model] = { attemptedAt: entry.attemptedAt, completedAt: entry.completedAt, lastSuccessfulRefreshAt: entry.lastSuccessfulRefreshAt, outcome: entry.outcome, reason: entry.reason };
-  }
-  return { schemaVersion: 1, group, models: parsed };
+  return models ? parseHealth(raw, { group, models }) : null;
 }
 
 /** Newer attempts win independently of forecast acceptance; old failures cannot erase success. */

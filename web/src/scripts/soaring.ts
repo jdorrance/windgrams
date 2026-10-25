@@ -50,6 +50,8 @@ import { createSoaringMap } from './soaring-map.ts';
 import { createKeyedAsyncLoader, createWindgramController } from './windgram-controller.ts';
 import { createPageLifecycle } from './page-lifecycle.ts';
 import { createFreshnessNotice } from './freshness-notice.ts';
+import { createRefreshHealthReader } from '../lib/refresh-health.ts';
+import type { ProviderRefresh } from '@windgrams/contracts/provider-health';
 
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const set = (id: string, text: string) => { const node = el(id); if (node) node.textContent = text; };
@@ -95,13 +97,21 @@ async function main() {
   const activeModel = dataset.identity.model;
   const catalogue = await modelCatalogue;
   if (lifetime.disposed) return;
+  const historical = !location.caseId.endsWith('-live');
+  let refreshHealth: ProviderRefresh | null = null;
   const freshnessNotice = createFreshnessNotice(el('replay-freshness'), () => ({
     referenceTime: manifest.case.referenceTime,
     validUntil: manifest.hours.at(-1)?.validAt,
     policy: catalogue?.models.find(model => model.slug === activeModel),
-    historical: !location.caseId.endsWith('-live'),
+    historical,
+    refresh: refreshHealth,
   }), lifetime.signal);
   freshnessNotice.refresh();
+  if (!historical) void createRefreshHealthReader({ baseUrl: DATA_BASE, signal: lifetime.signal })(activeModel).then(health => {
+    if (lifetime.disposed) return;
+    refreshHealth = health;
+    freshnessNotice.refresh();
+  });
   const activeRegionMeta = regionForCase(regionsCatalogue?.regions ?? [], location.caseId);
   const optionalBundle = <T>(name: string, validate: (raw: unknown) => T | null) =>
     manifest.files && !Object.hasOwn(manifest.files, name)

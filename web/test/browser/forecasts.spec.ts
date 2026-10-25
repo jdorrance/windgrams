@@ -52,6 +52,25 @@ test('an old run keeps a visible stale notice alongside its chart', async ({ pag
   await expect(notice).toHaveText('Old forecast · reload for update');
 });
 
+test('a current forecast shows a failed refresh without hiding the chart or changing its age', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-25T14:00:00Z'));
+  await page.route('**/health/noaa-cloud.json', route => route.fulfill({ json: {
+    schemaVersion: 1, group: 'noaa-cloud', models: { 'hrrr-conus': {
+      attemptedAt: '2026-10-25T13:00:00Z', completedAt: '2026-10-25T13:30:00Z',
+      lastSuccessfulRefreshAt: '2026-10-25T12:00:00Z', outcome: 'retained', reason: '/tmp/provider private diagnostic',
+    } },
+  } }));
+  await page.goto(launch);
+  await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+  const notice = page.locator('#forecast-freshness');
+  await expect(notice).toBeVisible();
+  await expect(notice).toHaveAttribute('data-freshness', 'current');
+  await expect(notice).toHaveText('Latest update did not complete; showing the available forecast.');
+  await page.locator('#model-select').selectOption('gfs');
+  await expect(page.locator('#model-selected-name')).toHaveText('GFS');
+  await expect(notice).toBeHidden();
+});
+
 test('archived regional replay labels history and advances the chart with its hour', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));

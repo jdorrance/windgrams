@@ -47,6 +47,7 @@ test("collectGroup reads NWS offices, ECMWF sites, and one balloon file per laun
       asked.push(key);
       if (key === "nws/manifest.json") return { sites: [{ slug: "va-daniels" }], offices: [{ office: "LWX" }] };
       if (key === "ecmwf/manifest.json") return { sites: [{ slug: "va-daniels" }] };
+      if (key === 'raob/manifest.json') return null; // Legacy publication without attempt metadata.
       return { key };
     },
   });
@@ -56,8 +57,61 @@ test("collectGroup reads NWS offices, ECMWF sites, and one balloon file per laun
     "nws/offices/LWX.json",
     "ecmwf/manifest.json",
     "ecmwf/sites/va-daniels.json",
+    "raob/manifest.json",
     "raob/sites/va-daniels.json",
   ]);
+});
+
+test('balloon seeding follows attempt inventory and respects newer cached attempts', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'balloon-seed-'));
+  t.after(() => rmSync(output, { recursive: true, force: true }));
+  const manifest = { schemaVersion: 1, generatedAt: '2026-10-25T12:00:00Z', sites: [
+    { slug: 'absent', ok: true, absent: true }, { slug: 'retained', ok: false, error: 'Timeout' },
+  ] };
+  const asked = [], payload = { schemaVersion: 1, generatedAt: '2026-10-25T00:00:00Z', site: { slug: 'retained' }, soundings: [] };
+  const files = await collectGroup('observations', { sites: [{ slug: 'not-covered' }], get: async key => {
+    asked.push(key);
+    return key === 'raob/manifest.json' ? manifest : key === 'raob/sites/retained.json' ? payload : null;
+  } });
+  assert.deepEqual(asked.filter(key => key.startsWith('raob/')), ['raob/manifest.json', 'raob/sites/retained.json']);
+  mkdirSync(join(output, 'raob/sites'), { recursive: true });
+  writeFileSync(join(output, 'raob/sites/absent.json'), JSON.stringify(payload));
+  applyGroup(output, 'observations', files);
+  assert.equal(existsSync(join(output, 'raob/sites/absent.json')), false);
+  assert.deepEqual(JSON.parse(readFileSync(join(output, 'raob/sites/retained.json'))), payload);
+  const current = readFileSync(join(output, 'raob/manifest.json'));
+  applyGroup(output, 'observations', new Map([
+    ['raob/manifest.json', { ...manifest, generatedAt: '2026-10-25T06:00:00Z', sites: [{ slug: 'retained', ok: true, absent: true }] }],
+  ]));
+  assert.deepEqual(readFileSync(join(output, 'raob/manifest.json')), current);
+  assert.equal(existsSync(join(output, 'raob/sites/retained.json')), true);
+});
+
+test('a legacy balloon seed cannot resurrect flights or replace payloads after a newer recorded attempt', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'balloon-legacy-seed-'));
+  t.after(() => rmSync(output, { recursive: true, force: true }));
+  mkdirSync(join(output, 'raob/sites'), { recursive: true });
+  const manifest = { schemaVersion: 1, generatedAt: '2026-10-25T12:00:00Z', sites: [
+    { slug: 'absent', ok: true, absent: true }, { slug: 'retained', ok: false, error: 'Timeout', retained: true },
+  ] };
+  const retained = { schemaVersion: 1, generatedAt: '2026-10-25T06:00:00Z', site: { slug: 'retained' }, soundings: [] };
+  writeFileSync(join(output, 'raob/manifest.json'), JSON.stringify(manifest));
+  writeFileSync(join(output, 'raob/sites/retained.json'), JSON.stringify(retained));
+  const legacy = slug => ({ schemaVersion: 1, generatedAt: '2026-10-25T00:00:00Z', site: { slug }, soundings: [] });
+  const files = await collectGroup('observations', { sites: manifest.sites.map(({ slug }) => ({ slug })), get: async key => {
+    if (key === 'nws/manifest.json') return { schemaVersion: 1, generatedAt: '2026-10-25T13:00:00Z', sites: [], offices: [] };
+    if (key.startsWith('raob/sites/')) return legacy(key.split('/').at(-1).slice(0, -5));
+    return null; // The lagging publication predates RAOB manifests.
+  } });
+  assert.equal(files.has('raob/manifest.json'), false);
+  applyGroup(output, 'observations', files);
+  assert.equal(existsSync(join(output, 'raob/sites/absent.json')), false);
+  assert.deepEqual(JSON.parse(readFileSync(join(output, 'raob/sites/retained.json'))), retained);
+  assert.deepEqual(JSON.parse(readFileSync(join(output, 'raob/manifest.json'))), manifest);
+  assert.equal(existsSync(join(output, 'nws/manifest.json')), true, 'unrelated observation products still seed');
+  const emptyCache = join(output, 'empty-cache');
+  applyGroup(emptyCache, 'observations', files);
+  assert.deepEqual(JSON.parse(readFileSync(join(emptyCache, 'raob/sites/absent.json'))), legacy('absent'), 'legacy publications still seed a cache with no newer attempt');
 });
 
 test("--list prints that group's model slugs", () => {

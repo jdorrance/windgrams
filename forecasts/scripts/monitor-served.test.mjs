@@ -20,6 +20,14 @@ function dataset() {
     [`gfs/sites/${profile.site.id}.json`, encode(profile)],
     ['health/noaa-cloud.json', encode({ schemaVersion: 1, group: 'noaa-cloud', models: { gfs: { attemptedAt: now, completedAt: now, lastSuccessfulRefreshAt: now, outcome: 'updated', reason: null } } })],
   ]);
+  for (const product of ['nws', 'ecmwf', 'raob']) {
+    documents.set(`${product}/manifest.json`, encode({ schemaVersion: 1, generatedAt: now,
+      sites: [{ slug: profile.site.id, ok: true, ...(product === 'raob' ? { absent: false } : {}) }], ...(product === 'nws' ? { offices: [] } : {}) }));
+    documents.set(`${product}/sites/${profile.site.id}.json`, encode({ schemaVersion: 1, generatedAt: now,
+      site: { slug: profile.site.id }, ...(product === 'raob' ? { soundings: [{ validAt: now,
+        levels: Array.from({ length: 10 }, (_, index) => ({ pressureHpa: 900 - index * 50, heightM: 100 + index * 500, temperatureC: 15 - index * 3 })) }] }
+        : { hours: profile.hours.map(hour => ({ validAt: hour.validAt, temperatureC: 15, windSpeedMps: 3 })) }) }));
+  }
   const caseId = 'test-gfs-live';
   const hours = profile.hours.map((hour, i) => ({ forecastHour: model.forecastHours[i], validAt: hour.validAt, file: `hours/${i}.json` }));
   const bundleFiles = new Map([['profile.json', encode(profile)]]);
@@ -39,7 +47,8 @@ test('served monitor verifies representative point, refresh health and immutable
   const data = dataset();
   const report = await monitorServed(data.options);
   assert.equal(report.ok, true, JSON.stringify(report.checks));
-  assert.deepEqual(report.checks.map(check => [check.kind, check.status]), [['point', 'current'], ['refresh', 'updated'], ['regional', 'current']]);
+  assert.deepEqual(report.checks.filter(check => !check.kind.startsWith('observation')).map(check => [check.kind, check.status]), [['point', 'current'], ['refresh', 'updated'], ['regional', 'current']]);
+  assert.equal(report.checks.filter(check => check.kind.startsWith('observation')).length, 6);
 });
 test('missing representative profile and mismatched point run fail publication checks', async () => {
   for (const missing of [true, false]) {
@@ -83,4 +92,62 @@ test('model cadence bounds unfinished and abandoned refresh attempts', async () 
   assert.equal((await monitorServed(data.options)).checks.find(check => check.kind === 'refresh').ok, true);
   const late = await monitorServed({ ...data.options, now: new Date(Date.parse(data.now) + 7 * 3_600_000).toISOString() });
   assert.equal(late.checks.find(check => check.kind === 'refresh').ok, false);
+});
+
+test('supplemental failed attempts are unhealthy even while retained forecast hours remain valid', async () => {
+  for (const product of ['nws', 'ecmwf', 'raob']) {
+    const data = dataset(), path = `${product}/manifest.json`, manifest = JSON.parse(data.documents.get(path));
+    manifest.sites[0] = { slug: data.profile.site.id, ok: false, error: 'HTTP 403', retained: true };
+    data.documents.set(path, encode(manifest));
+    const report = await monitorServed(data.options);
+    assert.equal(report.ok, false);
+    assert.deepEqual(report.checks.find(check => check.product === product && check.kind === 'observation-refresh'), {
+      product, kind: 'observation-refresh', status: 'failed', ok: false, reason: `${data.profile.site.id}: HTTP 403`,
+    });
+    assert.equal(report.checks.find(check => check.product === product && check.kind === 'observation').status, 'current');
+  }
+});
+
+test('supplemental probes reject missing documents, invalid identities and expired actual horizons', async () => {
+  for (const product of ['nws', 'ecmwf']) for (const issue of ['manifest', 'payload', 'identity', 'expired']) {
+    const data = dataset(), path = `${product}/sites/${data.profile.site.id}.json`;
+    if (issue === 'manifest') data.documents.delete(`${product}/manifest.json`);
+    else if (issue === 'payload') data.documents.delete(path);
+    else {
+      const document = JSON.parse(data.documents.get(path));
+      if (issue === 'identity') document.site.slug = 'wrong-site';
+      else document.hours = [{ validAt: new Date(Date.parse(data.now) - 1).toISOString(), temperatureC: 15 }];
+      data.documents.set(path, encode(document));
+    }
+    const report = await monitorServed(data.options);
+    assert.equal(report.ok, false);
+    assert.equal(report.checks.find(check => check.product === product && check.kind === 'observation').status, issue === 'expired' ? 'expired' : 'unavailable');
+  }
+});
+
+test('balloon monitoring accepts confirmed absence but rejects old queries and observations outside the acquisition window', async () => {
+  for (const absent of [false, true]) {
+    const data = dataset(), manifestPath = 'raob/manifest.json', payloadPath = `raob/sites/${data.profile.site.id}.json`;
+    const manifest = JSON.parse(data.documents.get(manifestPath));
+    if (absent) {
+      manifest.sites[0].absent = true;
+      data.documents.set(manifestPath, encode(manifest));
+      data.documents.delete(payloadPath);
+    }
+    let report = await monitorServed(data.options);
+    assert.equal(report.ok, true);
+    assert.equal(report.checks.find(check => check.product === 'raob' && check.kind === 'observation').status, absent ? 'absent' : 'current');
+    const oldTime = new Date(Date.parse(data.now) - 48 * 3_600_000 - 1).toISOString();
+    if (absent) {
+      manifest.generatedAt = oldTime;
+      data.documents.set(manifestPath, encode(manifest));
+    } else {
+      const document = JSON.parse(data.documents.get(payloadPath));
+      document.soundings[0].validAt = oldTime;
+      data.documents.set(payloadPath, encode(document));
+    }
+    report = await monitorServed(data.options);
+    assert.equal(report.ok, false);
+    assert.equal(report.checks.find(check => check.product === 'raob' && check.kind === (absent ? 'observation-refresh' : 'observation')).status, 'stale');
+  }
 });

@@ -11,6 +11,7 @@ import { terrainPolicyId, terrainSourcesMatchPolicy } from '../dist/terrain-poli
 import { parseNormalizedColumnRecord } from '@windgrams/contracts';
 const profile = JSON.parse(readFileSync(new URL('../../../forecasts/soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
 const raw = JSON.parse(readFileSync(new URL('../../../forecasts/scripts/lib/icon-native-fixture.json', import.meta.url)));
+const { parseSites } = await import(new URL('./sites.js', import.meta.resolve('@azohra/meteo.forecast')));
 
 test('registered models have explicit ownership, source identity and supported fields', () => {
   assert.equal(new Set(MODELS.map(model => model.id)).size, MODELS.length);
@@ -40,7 +41,7 @@ test('installed RRFS bridge and readiness agree on both final products and horiz
   assert.deepEqual(model.completionUrls('20261023', '00'), selectTargetCycles('rrfs', Date.parse('2026-10-23T03:55:00Z')).primaryCandidate.probeUrls);
   assert.equal(model.pressureToken, 'prslev'); assert.equal(model.surfaceToken, '2dfld');
 });
-test('legacy acquisition forwards the selected run and deliberately permits a same-run backfill', async t => {
+test('legacy acquisition writes a catalogue accepted by the pinned builder and permits a same-run backfill', async t => {
   const root = mkdtempSync(join(tmpdir(), 'provider-test-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const run = { provider: 'NOAA', model: 'rrfs', product: 'rrfs', referenceTime: profile.run.referenceTime };
   let called = 0;
@@ -48,7 +49,8 @@ test('legacy acquisition forwards the selected run and deliberately permits a sa
     called++;
     assert.equal(options.referenceTime, run.referenceTime); assert.equal(options.history, false);
     assert.equal((await options.dataset.fetch('https://published.example/rrfs/manifest.json')).status, 404);
-    const { sites } = JSON.parse(readFileSync(options.sitesPath));
+    const sites = parseSites(readFileSync(options.sitesPath, 'utf8'), options.sitesPath);
+    assert.deepEqual(sites, request.sites);
     const document = structuredClone(profile); document.site.id = sites[0].slug; document.site.latitude = sites[0].latitude; document.site.longitude = sites[0].longitude;
     mkdirSync(join(options.outputRoot, 'rrfs/sites'), { recursive: true });
     writeFileSync(join(options.outputRoot, 'rrfs/sites', `${sites[0].slug}.json`), JSON.stringify(document));

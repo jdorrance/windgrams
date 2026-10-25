@@ -1,7 +1,7 @@
 import { readFileSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseForecastManifest, parseSiteForecast } from '@azohra/meteo.briefing/contract';
+import { SITES_SCHEMA_VERSION, parseForecastManifest, parseSiteForecast } from '@azohra/meteo.briefing/contract';
 import type { AcquisitionAdapter, AcquisitionRequest, ProcessedProfileResult } from './types.ts';
 import { modelDescriptor } from './registry.ts';
 import { object } from './internal/json.ts';
@@ -86,7 +86,7 @@ export function createLegacyAdapterWithLoader(id: string, options: { load?: (id:
       const temporary = mkdtempSync(join(tmpdir(), 'windgrams-provider-'));
       try {
         const sitesPath = join(temporary, 'sites.json');
-        writeFileSync(sitesPath, JSON.stringify({ schemaVersion: 1, sites: request.sites }));
+        writeFileSync(sitesPath, JSON.stringify({ schemaVersion: SITES_SCHEMA_VERSION, sites: request.sites }));
         const { build } = await (options.load ?? loadLegacyBuilder)(id);
         // Upstream uses this reader only for publication/history. History is off;
         // the pipeline's validated local state owns idempotency and recovery.

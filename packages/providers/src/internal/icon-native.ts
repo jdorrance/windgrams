@@ -55,8 +55,11 @@ export async function discoverIconRun({ now = new Date(), fetchFn = fetch, lastF
     .sort((a, b) => Date.parse(b) - Date.parse(a));
   for (const referenceTime of candidates) {
     signal?.throwIfAborted();
+    // DWD publishes mixing height later than the native and flux fields.
+    // Wait for its requested horizon before selecting an otherwise ready run.
     const urls = [iconFieldUrl('T', referenceTime, lastForecastHour, 74), iconFieldUrl('P', referenceTime, lastForecastHour, 45),
-      iconFieldUrl('TOT_PREC', referenceTime, lastForecastHour), iconFieldUrl('ASHFL_S', referenceTime, lastForecastHour)];
+      iconFieldUrl('TOT_PREC', referenceTime, lastForecastHour), iconFieldUrl('ASHFL_S', referenceTime, lastForecastHour),
+      iconFieldUrl('MH', referenceTime, lastForecastHour)];
     const probes = await Promise.allSettled(urls.map(url => fetchFn(url, { method: 'HEAD', signal: requestSignal() })));
     signal?.throwIfAborted();
     if (probes.every(probe => probe.status === 'fulfilled' && probe.value.ok)) return { referenceTime: iconReferenceTime(referenceTime), forecastHours: lastForecastHour, completionUrls: urls };

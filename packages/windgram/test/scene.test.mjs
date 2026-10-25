@@ -14,14 +14,61 @@ const manifest = JSON.parse(readFileSync(new URL('manifest.json', fixtures), 'ut
 const baseline = JSON.parse(readFileSync(new URL('./scene-parity.sha256.json', import.meta.url), 'utf8'));
 const load = entry => parsePublishedProfileJson(gunzipSync(readFileSync(new URL(entry.file, fixtures))).toString());
 
-test('package extraction preserves 40 exact scenes, SVGs, keys and physical readouts', () => {
+// Wind trigonometry differs by a few ULPs between V8's ARM64 and x64 builds.
+// Keep 15 significant digits for derived components, speeds and bearings only.
+// SVGs, keys, source measurements, coordinates and all other data stay exact.
+function sceneParityHash(payload) {
+  const windNumber = value => typeof value === 'number' ? Number(value.toPrecision(15)) : value;
+  const serialized = JSON.stringify(payload, (key, value) => {
+    if (key === 'speedKt' || key === 'directionDeg') return windNumber(value);
+    if (key === 'windU' || key === 'windV') {
+      return value.map(node => ({ ...node, value: windNumber(node.value) }));
+    }
+    return value;
+  });
+  return createHash('sha256').update(serialized).digest('hex');
+}
+
+test('package extraction preserves 40 scenes, exact SVGs and keys, and physical readouts', () => {
   for (const entry of manifest.fixtures.filter(f => f.file)) for (const unitSystem of ['imperial', 'metric']) for (const compact of [false, true]) for (const heightRange of ['soaring', 'full']) {
     const profile = load(entry);
     const view = buildWindgramView(profile, { unitSystem, compact, heightRange, widthPx: compact ? 356 : 800, timeZone: entry.timeZone, launch: entry.launch, hours: { dateKey: entry.day, timeZone: entry.timeZone } });
     const payload = { view: sceneData(view), svg: renderWindgramSvg(view, { idPrefix: 'parity' }), key: renderWindgramKey(unitSystem), readings: view.hours.map((_, i) => readWindgram(view, i, (view.floorM + view.topM) / 2)) };
     const key = [entry.id, unitSystem, compact, heightRange].join('/');
-    assert.equal(createHash('sha256').update(JSON.stringify(payload)).digest('hex'), baseline[key], key);
+    assert.equal(sceneParityHash(payload), baseline[key], key);
   }
+});
+
+test('scene parity tolerates only insignificant derived wind rounding', () => {
+  const payload = {
+    windU: [{ altitudeM: 1000, value: 0.9840885434857611 }],
+    windV: [{ altitudeM: 1000, value: 5.747077093956845 }],
+    speedKt: 13.49528126929258,
+    directionDeg: 228.99999999999997,
+    temperatureF: 32,
+    svg: '<path d="M0.9840885434857611,0"/>',
+    key: '<text>Wind 10 kt</text>',
+  };
+  const original = structuredClone(payload);
+  const hash = sceneParityHash(payload);
+  assert.equal(hash, sceneParityHash({
+    ...payload,
+    windU: [{ altitudeM: 1000, value: 0.9840885434857609 }],
+    windV: [{ altitudeM: 1000, value: 5.747077093956843 }],
+    speedKt: 13.495281269292578,
+    directionDeg: 229,
+  }));
+  for (const change of [
+    { windU: [{ altitudeM: 1000, value: 0.9840885434858 }] },
+    { windV: [{ altitudeM: 1000, value: 5.7470770939569 }] },
+    { speedKt: 13.495281269293 },
+    { directionDeg: 229.000000000001 },
+    { temperatureF: 32.00000000000001 },
+    { windU: [{ altitudeM: 1000.0000000000001, value: payload.windU[0].value }] },
+    { svg: '<path d="M0.9840885434857609,0"/>' },
+    { key: '<text>Wind 11 kt</text>' },
+  ]) assert.notEqual(sceneParityHash({ ...payload, ...change }), hash, JSON.stringify(change));
+  assert.deepEqual(payload, original, 'snapshot normalization never mutates scientific data');
 });
 
 test('independent contexts need no browser preferences and produce independent SVG ids', () => {

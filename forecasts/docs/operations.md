@@ -49,6 +49,8 @@ node scripts/write-runs-index.mjs --output data
 
 Use Python 3.11–3.13; CI uses 3.12. A full build has taken roughly 12 GB of downloads and 40 minutes. Native fields are cached under `.soaring-cache/icon-eu`, so subsequent work can reuse them.
 
+Run selection waits for mixing height (`MH`) through the requested horizon as well as native, precipitation and flux fields. DWD can publish mixing height later; until it arrives, the builder selects the preceding complete main run. Transfer errors include the upstream field URL for diagnosis.
+
 To investigate a few hours from a particular run, use `node scripts/build-icon.mjs --reference-time ISO --hours 1,2,3 --output TRIAL_DIR` with the same environment settings. Write the trial to a separate directory: production validation requires the complete 78-hour horizon.
 
 ### Native data and terrain

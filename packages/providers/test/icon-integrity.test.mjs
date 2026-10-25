@@ -54,3 +54,23 @@ test('a failed ICON completion probe still permits the preceding complete main r
   } });
   assert.equal(result.referenceTime, '2026-10-24T00:00:00Z');
 });
+
+test('ICON waits for delayed mixing height at the requested horizon before selecting a run', async () => {
+  for (const lastForecastHour of [3, 78]) {
+    let mixingHeightReady = false;
+    const fetchFn = async (url, options) => {
+      if (options.method !== 'HEAD') return { ok: true, text: async () => '<a href="2026-10-25T06%3A00/">6</a><a href="2026-10-25T00%3A00/">0</a>' };
+      if (url.includes('/MH/') && url.includes('06%3A00')) {
+        assert.ok(url.endsWith(`/s/PT${String(lastForecastHour).padStart(3, '0')}H00M.grib2`));
+        return { ok: mixingHeightReady, status: mixingHeightReady ? 200 : 404 };
+      }
+      return { ok: true };
+    };
+    const options = { now: new Date('2026-10-25T09:30:00Z'), lastForecastHour, fetchFn };
+    assert.equal((await discoverIconRun(options)).referenceTime, '2026-10-25T00:00:00Z');
+    mixingHeightReady = true;
+    const ready = await discoverIconRun(options);
+    assert.equal(ready.referenceTime, '2026-10-25T06:00:00Z');
+    assert.ok(ready.completionUrls.some(url => url.includes('/MH/')));
+  }
+});

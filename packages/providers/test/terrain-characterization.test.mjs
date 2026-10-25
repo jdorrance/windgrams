@@ -10,6 +10,13 @@ const cases = [
   { site: { slug: 'south', latitude: -44.12, longitude: 169.4 }, hash: '49d78865abb4a65ee3828f4e679cc947232496eacda088555b91785bf9516018' },
 ];
 const source = { id: 'fixture', name: 'Synthetic ridge', resolutionM: 10, licence: 'Test', url: 'https://example.invalid/dem' };
+function withRecordedGzipPlatform(body) {
+  // gzip's OS byte varies by host (Unix = 3, macOS = 19); the retained
+  // snapshots used macOS. Preserve every other byte, including the checksum.
+  const bytes = Buffer.from(body);
+  bytes[9] = 19;
+  return bytes;
+}
 function fixture(site, missing = false) {
   const bounds = expandBounds(domainFor(site.latitude, site.longitude, 0.1).bounds, 1000), scale = metresPerDegree(site.latitude);
   const elevation = (lat, lon) => missing ? NaN : 500 + (lat - site.latitude) * scale.lat * 0.1 + Math.max(0, 300 - Math.abs((lon - site.longitude) * scale.lon - 300));
@@ -18,8 +25,8 @@ function fixture(site, missing = false) {
 }
 for (const { site, hash } of cases) test(`${site.slug}: strict TS preserves terrain values, generation ID and encoded bytes`, () => {
   const result = buildSolarTerrain(site, fixture(site));
-  const digest = createHash('sha256').update(JSON.stringify(result.index)).update(result.relief.body)
-    .update(Buffer.concat(result.tiles.flatMap(tile => [Buffer.from(`${tile.z}/${tile.x}/${tile.y}\n`), tile.body]))).digest('hex');
+  const digest = createHash('sha256').update(JSON.stringify(result.index)).update(withRecordedGzipPlatform(result.relief.body))
+    .update(Buffer.concat(result.tiles.flatMap(tile => [Buffer.from(`${tile.z}/${tile.x}/${tile.y}\n`), withRecordedGzipPlatform(tile.body)]))).digest('hex');
   assert.equal(digest, hash);
 });
 test('missing ground remains missing through normals, tiles, relief and launch summary', () => {

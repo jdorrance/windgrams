@@ -26,6 +26,10 @@
       "types": "./dist/fields.d.ts",
       "import": "./dist/fields.js"
     },
+    "./provider-health": {
+      "types": "./dist/provider-health.d.ts",
+      "import": "./dist/provider-health.js"
+    },
     "./wire-schemas.json": "./dist/wire-schemas.json",
     "./build-inventory.json": "./dist/build-inventory.json"
   },

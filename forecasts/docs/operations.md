@@ -16,7 +16,9 @@ node scripts/solar.mjs --output data
 
 NWS and balloon feeds cover US launches. The ECMWF adapter reads the Open-Meteo product. Sunlight tiles can be served in [local development and preview](../../web/README.md#run-and-preview), but they are excluded from Pages because of their size.
 
-NWS and ECMWF refreshes merge by site. If a site refresh fails, publication keeps an available prior payload with its original timestamps. The attempt remains `ok: false` in the manifest; `retained: true` indicates that older data is still available. NWS office products used by retained sites are kept too. This lets the display show the age of the data without presenting a failed refresh as successful.
+Supplemental refreshes merge by site. If a site refresh fails, publication keeps an available prior payload with its original timestamps. The attempt remains `ok: false` in the product's `manifest.json`; `retained: true` indicates that older data is still available. NWS office products used by retained sites are kept too. Even a refresh in which every request fails writes its attempt manifest and exits unsuccessfully.
+
+Balloon queries distinguish request failures from a successful search with no usable flight in the preceding 48 hours. A successful absence is recorded as `ok: true, absent: true` and removes the old published sounding; a request failure retains available soundings and fails the command. The first observation refresh after upgrading creates `raob/manifest.json`. Older payload-only artifacts remain readable during that transition, but the served-data monitor requires the new manifest.
 
 ## RRFS
 
@@ -127,12 +129,14 @@ Any model acquisition failure makes the refresh command exit unsuccessfully, inc
 
 The [health helper](../scripts/lib/provider-health.mjs) validates these records and merges them by attempt time, independently of which forecast run publication accepts.
 
+Launch pages and live regional forecasts show a failed-refresh notice alongside the forecast's age. A failed attempt does not change the forecast's initialization time or freshness classification. Historical regional cases keep their historical notice; operator diagnostics remain in the health records.
+
 Check the public dataset with:
 
 ```sh
 node scripts/monitor-served.mjs --from https://jdorrance.github.io/windgrams/data
 ```
 
-The monitor exits unsuccessfully for delayed, stale, expired or inconsistent products; failed refreshes; missing health records; and missing or invalid served documents. It reads a representative profile for each configured model, every active regional pointer and profile, and the first and last map hours of each regional horizon. These probes check what the website can actually fetch; full build validation checks the complete dataset before upload.
+The monitor exits unsuccessfully for delayed, stale, expired or inconsistent products; failed refreshes; missing health records; and missing or invalid served documents. It reads a representative profile for each configured model, every active regional pointer and profile, and the first and last map hours of each regional horizon. It also checks NWS, ECMWF and balloon attempt manifests and representative payloads. Supplemental forecasts use their actual forecast horizon; balloon queries and observations use the acquisition's 48-hour search window. These probes check what the website can actually fetch; full build validation checks the complete dataset before upload.
 
 Freshness limits come from model cadence, as they do in the UI. An unfinished attempt is allowed one run interval; a completed refresh must be within three intervals plus lag. Reads are limited to 32 MiB with a 10-second timeout and HTTP retries. Use `--now ISO_UTC` to repeat an investigation with a fixed clock.

@@ -10,6 +10,8 @@ import { validateRegionCatalogue, validateReplayManifest, validateReplayHour, re
 import { assessForecastFreshness, fetchWithRetry } from '@windgrams/data-client';
 import { MODELS, modelDescriptor } from '@windgrams/providers/registry';
 import { parseProviderHealth } from './lib/provider-health.mjs';
+import { parseObservationManifest } from './lib/observation-manifest.mjs';
+import { LOOKBACK_HOURS, MIN_LEVELS } from './lib/raob.mjs';
 
 const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -18,6 +20,50 @@ const assessment = (product, kind, input) => {
   const result = assessForecastFreshness(input);
   return { product, kind, status: result.status, ok: result.status === 'current', reason: result.reason };
 };
+
+// Supplemental forecasts have no model-cadence policy: use their actual horizon.
+// Balloon age uses the same archive search window as acquisition.
+async function monitorObservations(read, now) {
+  const checks = [], clock = Date.parse(now);
+  for (const product of ['nws', 'ecmwf', 'raob']) {
+    try {
+      const manifest = parseObservationManifest((await read(`${product}/manifest.json`)).raw, product);
+      if (!manifest || product !== 'raob' && !manifest.sites.length || Date.parse(manifest.generatedAt) > clock) throw new Error('Missing or invalid observation manifest');
+      const failed = manifest.sites.filter(site => !site.ok);
+      const oldQuery = product === 'raob' && clock - Date.parse(manifest.generatedAt) > LOOKBACK_HOURS * 3_600_000;
+      checks.push({ product, kind: 'observation-refresh', status: failed.length ? 'failed' : oldQuery ? 'stale' : 'updated',
+        ok: failed.length === 0 && !oldQuery,
+        reason: failed.length ? failed.map(site => `${site.slug}: ${site.error}`).join('; ') : oldQuery ? 'Balloon query is older than the archive search window' : '' });
+      const candidates = manifest.sites.filter(site => !site.absent);
+      const site = candidates.find(site => site.ok) ?? candidates[0];
+      if (!site) {
+        checks.push({ product, kind: 'observation', status: 'absent', ok: true, reason: 'No usable flights were returned for covered launches' });
+        continue;
+      }
+      const document = (await read(`${product}/sites/${site.slug}.json`)).raw;
+      if (document?.schemaVersion !== 1 || document.site?.slug !== site.slug
+        || !Number.isFinite(Date.parse(document.generatedAt)) || Date.parse(document.generatedAt) > clock) throw new Error('Invalid representative observation document');
+      if (product === 'raob') {
+        if (!Array.isArray(document.soundings) || !document.soundings.length || document.soundings.some(sounding =>
+          !Number.isFinite(Date.parse(sounding.validAt)) || Date.parse(sounding.validAt) > clock
+          || !Array.isArray(sounding.levels) || sounding.levels.length < MIN_LEVELS
+          || sounding.levels.some(level => ![level.pressureHpa, level.heightM, level.temperatureC].every(Number.isFinite)))) throw new Error('Invalid representative balloon soundings');
+        const latest = Math.max(...document.soundings.map(sounding => Date.parse(sounding.validAt)));
+        const stale = clock - latest > LOOKBACK_HOURS * 3_600_000;
+        checks.push({ product, kind: 'observation', status: stale ? 'stale' : 'current', ok: !stale,
+          reason: stale ? 'Latest balloon observation is older than the archive search window' : '' });
+      } else {
+        if (!Array.isArray(document.hours) || !document.hours.length || document.hours.some((hour, index) =>
+          !Number.isFinite(Date.parse(hour.validAt)) || index > 0 && Date.parse(hour.validAt) <= Date.parse(document.hours[index - 1].validAt))
+          || !document.hours.some(hour => Number.isFinite(hour.temperatureC) || Number.isFinite(hour.windSpeedMps))) throw new Error('Invalid representative supplemental forecast hours');
+        const expired = clock > Date.parse(document.hours.at(-1).validAt);
+        checks.push({ product, kind: 'observation', status: expired ? 'expired' : 'current', ok: !expired,
+          reason: expired ? 'Supplemental forecast ended' : '' });
+      }
+    } catch (error) { checks.push(failure(product, 'observation', error)); }
+  }
+  return checks;
+}
 
 /** Inject fetch/clock/model selection for fixtures; production checks each configured model. */
 export async function monitorServed({ from, now = new Date().toISOString(), models = MODELS, fetchImpl = fetch, timeoutMs = 10_000 }) {
@@ -89,6 +135,8 @@ export async function monitorServed({ from, now = new Date().toISOString(), mode
       }
     } catch (error) { checks.push(failure(group, 'refresh', error)); }
   }
+
+  checks.push(...await monitorObservations(read, now));
 
   try {
     const catalogue = validateRegionCatalogue((await read('soaring/v1/regions.json')).raw);

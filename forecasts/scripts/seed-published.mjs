@@ -20,6 +20,7 @@ import { paths as ecmwfPaths } from "./lib/ecmwf.mjs";
 import { retryingFetch } from "./lib/http.mjs";
 import { paths as nwsPaths } from "./lib/nws.mjs";
 import { paths as raobPaths } from "./lib/raob.mjs";
+import { parseObservationManifest } from './lib/observation-manifest.mjs';
 import { isPublishedCase } from './merge-soaring-regions.mjs';
 import { mergeProviderHealth } from './lib/provider-health.mjs';
 
@@ -122,7 +123,9 @@ export async function collectGroup(group, { get, getBytes, getCachedBytes, sites
     }
     const ecmwf = await take(ecmwfPaths.manifest());
     if (ecmwf) for (const slug of slugsOf(ecmwf)) await take(ecmwfPaths.site(slug));
-    for (const site of sites) await take(raobPaths.site(site.slug));
+    const raob = await take(raobPaths.manifest());
+    if (raob && !parseObservationManifest(raob, 'raob')) throw new Error('Invalid published balloon manifest');
+    for (const site of raob?.sites ?? sites) if (!site.absent) await take(raobPaths.site(site.slug));
   }
 
   if (group === "terrain") await take("site-context.json");
@@ -159,6 +162,20 @@ export function applyGroup(output, group, files) {
   // Cached publication may be ahead of a lagging CDN. Seed immutable bytes, but
   // never move a known regional run or a newer model catalogue backward.
   if (group === 'soaring') files = monotonicSoaringSeed(output, files);
+  if (group === 'observations') {
+    let previous;
+    try { previous = parseObservationManifest(JSON.parse(readFileSync(join(output, raobPaths.manifest()), 'utf8')), 'raob'); } catch { /* No prior attempt. */ }
+    if (files.has(raobPaths.manifest())) {
+      const manifest = parseObservationManifest(JSON.parse(bytesOf(files.get(raobPaths.manifest())).toString('utf8')), 'raob');
+      if (!manifest) throw new Error('Invalid published balloon manifest');
+      if (Date.parse(previous?.generatedAt) > Date.parse(manifest.generatedAt)) files = new Map([...files].filter(([key]) => !key.startsWith('raob/')));
+      else for (const site of manifest.sites) if (site.absent) rmSync(join(output, raobPaths.site(site.slug)), { force: true });
+    } else if (previous) {
+      // Legacy CDNs have no attempt manifest; their older flights cannot undo one.
+      files = new Map([...files].filter(([key, document]) => !key.startsWith('raob/sites/')
+        || Date.parse(JSON.parse(bytesOf(document).toString('utf8')).generatedAt) > Date.parse(previous.generatedAt)));
+    }
+  }
   for (const model of GROUPS[group]) {
     if (!files.has(`${model}/manifest.json`)) continue;
     rmSync(join(output, model), { recursive: true, force: true });

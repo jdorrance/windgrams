@@ -28,6 +28,9 @@ the model's update schedule, run time and last forecast hour. It runs again when
 a time threshold passes or the tab resumes. Archived cases are labelled historical;
 missing timestamps or update intervals produce an unknown-age notice. Forecast
 details show the run and publication times.
+Live forecasts also show a fixed warning when their latest recorded refresh failed,
+even if the forecast's age is still current. Refresh health does not change run age;
+operator error details are not shown. Historical forecasts ignore current refresh health.
 
 ## Units
 

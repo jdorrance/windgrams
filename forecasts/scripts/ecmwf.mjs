@@ -65,8 +65,8 @@ for (const site of sites) {
   }
 }
 
-if (documents.length > 0) {
-  const runs = { surface: documents[0].models.surface.run, aloft: documents[0].models.aloft.run };
+if (entries.length > 0) {
+  const runs = { surface: documents[0]?.models.surface.run ?? null, aloft: documents[0]?.models.aloft.run ?? null };
   write(paths.manifest(), buildManifest({ now, sites: entries, runs }));
 }
 

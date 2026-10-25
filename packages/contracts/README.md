@@ -41,6 +41,9 @@ measurement.
 - [`@windgrams/contracts/fields`](src/fields.ts) describes regional field units,
   height references and availability. It also converts an MSL height to AGL
   against an explicitly compatible ground datum, preserving negative clearance.
+- [`@windgrams/contracts/provider-health`](src/provider-health.ts) validates refresh
+  outcomes and lifecycle times against a caller-supplied provider/model inventory.
+  Refresh attempts are separate from forecast age; reasons are operator diagnostics.
 
 `@windgrams/contracts/wire-schemas.json` contains structural JSON Schemas generated
 from the same runtime schemas at build time. Use these for another language's

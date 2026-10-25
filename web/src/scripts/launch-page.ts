@@ -29,6 +29,8 @@ import {
 import { createWindgramController } from "./windgram-controller.ts";
 import { createPageLifecycle } from "./page-lifecycle.ts";
 import { createFreshnessNotice } from './freshness-notice.ts';
+import { createRefreshHealthReader } from '../lib/refresh-health.ts';
+import type { ProviderRefresh } from '@windgrams/contracts/provider-health';
 
 // Short-range high-resolution models first, then regional, global, and the ensemble.
 
@@ -58,6 +60,7 @@ const lifetime = createPageLifecycle({
 });
 const eventOptions = { signal: lifetime.signal };
 const forecastClient = createForecastClient({ baseUrl: DATA_BASE, signal: lifetime.signal });
+const readRefreshHealth = createRefreshHealthReader({ baseUrl: DATA_BASE, signal: lifetime.signal });
 
 async function getJson<T>(path: string): Promise<T | null> {
   try {
@@ -131,6 +134,7 @@ let launchElevationM: number | null = null;
 const manifests = new Map<string, ForecastManifest>();
 const pendingProfiles = new Map<string, Promise<void>>();
 const profiles = new Map<string, { profile: SiteForecast; referenceTime: string; generatedAt: string; stale: boolean } | null>();
+const refreshHealth = new Map<string, ProviderRefresh>();
 const freshnessNotice = createFreshnessNotice($('forecast-freshness'), () => {
   const loaded = model ? profiles.get(model) : null;
   return loaded ? {
@@ -138,6 +142,7 @@ const freshnessNotice = createFreshnessNotice($('forecast-freshness'), () => {
     validUntil: loaded.profile.hours.at(-1)?.validAt,
     policy: model ? modelEntry(model) : null,
     consistent: !loaded.stale,
+    refresh: model ? refreshHealth.get(model) : null,
   } : null;
 }, lifetime.signal);
 let nws: NwsSiteDocument | null = null;
@@ -499,6 +504,12 @@ export async function start() {
   if (lifetime.disposed) return;
   const raobPromise = capabilities.raob ? getJson<RaobDocument>(`raob/sites/${launch.slug}.json`) : Promise.resolve(null);
   const metadata = Promise.all([
+    Promise.all(MODEL_ORDER.map(async slug => {
+      const health = await readRefreshHealth(slug);
+      if (lifetime.disposed) return;
+      if (health) refreshHealth.set(slug, health);
+      if (model === slug) freshnessNotice.refresh();
+    })),
     getJson<unknown>('models.json').then(doc => { if (lifetime.disposed) return; catalogue = doc ? parseModelCatalogueJson(JSON.stringify(doc)) : null; renderModelSelect(MODEL_ORDER.filter(slug => manifests.has(slug))); if (model && profiles.get(model)) renderMeteogram(); }),
     getJson<unknown>('site-context.json').then(doc => {
       if (lifetime.disposed) return;

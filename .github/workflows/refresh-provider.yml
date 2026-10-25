@@ -66,3 +66,9 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 2
+      # Token-dispatched refreshes do not generate downstream workflow_run events.
+      - name: Request publication after token dispatch
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main -f refresh=none

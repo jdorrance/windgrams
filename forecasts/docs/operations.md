@@ -71,6 +71,8 @@ Map soundings retain native pressure levels and read the same published lift dia
 
 Provider workflows share the [refresh setup](../../.github/workflows/refresh-provider.yml) but run independently. Each completed refresh triggers the serialized [Pages publisher](../../.github/workflows/pages.yml). A slow provider can therefore leave its older forecast in place while other completed products publish. Code pushes also collect the latest compatible artifacts.
 
+Refreshes dispatched by `GITHUB_TOKEN` explicitly request publication after uploading their artifact because GitHub [suppresses their automatic follow-up events](https://docs.github.com/en/actions/concepts/security/github_token#when-github_token-triggers-workflow-runs). Uploaded artifacts can publish while the provider finishes runner cleanup, including when acquisition failed and older products were retained.
+
 To request a refresh and publication:
 
 ```sh
@@ -93,7 +95,7 @@ For a local rehearsal with downloaded artifacts in `../incoming`:
 node scripts/prepare-publication.mjs --incoming ../incoming --output data --dry-run
 ```
 
-The collector considers the latest 20 completed runs per provider, accepting artifacts from repository-owned `main` workflows with compatible source, format and diagnostic method. Following an unsuccessful run, it keeps that artifact and an earlier successful artifact as separate candidates, applying them oldest first by run ID. A failed attempt can thus supply useful completed products without erasing the record of the failure.
+The collector considers the latest 20 runs per provider, accepting completed uploads from repository-owned `main` workflows with compatible source, format and diagnostic method. A run still in progress is eligible only once its artifact is available; this keeps concurrent publication requests from losing an upload while the provider finishes cleanup. Following an unsuccessful or unfinished run, it keeps that artifact and an earlier successful artifact as separate candidates, applying them oldest first by run ID. A failed attempt can thus supply useful completed products without erasing the record of the failure.
 
 Complete newer products replace their retained counterparts. Older runs, partial profiles and invalid bundles leave the prior product in place. If a cached model itself is invalid, publication removes it from the prepared dataset and reports it unavailable while healthy models continue. An invalid regional pointer is removed from active catalogues; its immutable bundle files remain for diagnosis.
 

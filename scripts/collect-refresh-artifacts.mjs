@@ -1,4 +1,4 @@
-// Collect the latest provider slice and one successful fallback after an unsuccessful run.
+// Collect uploaded provider slices and keep a successful fallback until each source run succeeds.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,7 @@ import { refreshGroups, refreshWorkflow } from './refresh-policy.mjs';
 import { validateFileTree } from '../forecasts/scripts/lib/artifact-products.mjs';
 
 export function trustedRuns(runs, group, repository) {
-  return runs.filter(run => run.status === 'completed' && run.head_branch === 'main'
+  return runs.filter(run => ['completed', 'in_progress'].includes(run.status) && run.head_branch === 'main'
     && run.head_repository?.full_name === repository && ['schedule', 'workflow_dispatch'].includes(run.event)
     && run.path === `.github/workflows/${refreshWorkflow(group)}` && /^[a-f0-9]{40}$/.test(run.head_sha)
     && Number.isSafeInteger(run.id) && run.id > 0 && Number.isFinite(Date.parse(run.created_at)))
@@ -23,10 +23,13 @@ export async function collectRefreshArtifacts(output, { repository = process.env
   for (const group of refreshGroups) {
     let found = false;
     try {
-      const response = await api(`/actions/workflows/${refreshWorkflow(group)}/runs?branch=main&status=completed&per_page=20`);
+      const response = await api(`/actions/workflows/${refreshWorkflow(group)}/runs?branch=main&per_page=20`);
       for (const run of trustedRuns(response.workflow_runs ?? [], group, repository)) {
-        if (found && run.conclusion !== 'success') continue;
+        const succeeded = run.status === 'completed' && run.conclusion === 'success';
+        if (found && !succeeded) continue;
         const result = await api(`/actions/runs/${run.id}/artifacts?per_page=100`);
+        // v4 uploads are immutable and available before post-job cleanup finishes.
+        // Collect ready uploads even when another provider's Pages request supersedes theirs.
         const artifact = result.artifacts?.find(item => item.name === `data-${group}` && !item.expired && item.workflow_run?.head_sha === run.head_sha);
         if (!artifact) continue;
         const temporary = mkdtempSync(join(output, '.download-'));
@@ -41,7 +44,7 @@ export async function collectRefreshArtifacts(output, { repository = process.env
           renameSync(temporary, destination);
           report.collected.push({ group, run: run.id, sourceSha: run.head_sha });
           found = true;
-          if (run.conclusion === 'success') break;
+          if (succeeded) break;
         } catch (error) { report.rejected.push({ group, run: run.id, reason: error.message }); }
         finally { rmSync(temporary, { recursive: true, force: true }); }
       }

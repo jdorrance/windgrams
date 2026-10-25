@@ -54,6 +54,17 @@ test('refresh always packs retained products and preserves native decoder setup'
   assert.match(monitor, /scripts\/monitor-served.mjs/);
 });
 
+test('token-dispatched refreshes request publication after upload, including failed refreshes', () => {
+  const dispatch = refresh.split('- name: Request publication after token dispatch')[1];
+  assert.ok(dispatch, 'token dispatches need an explicit replacement for suppressed workflow_run events');
+  assert.ok(refresh.indexOf('Request publication after token dispatch') > refresh.indexOf('actions/upload-artifact@'));
+  const condition = dispatch.match(/if: \$\{\{ (.*) \}\}/)?.[1];
+  assert.equal(condition, "!cancelled() && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]'",
+    'continue after failures, but avoid duplicate requests for scheduled or owner-dispatched runs');
+  assert.match(dispatch, /GH_TOKEN: \$\{\{ secrets.GITHUB_TOKEN \}\}/);
+  assert.match(dispatch, /gh workflow run pages\.yml --repo "\$GITHUB_REPOSITORY" --ref main -f refresh=none\s*$/);
+});
+
 test('Pages resolves reader paths and rejects malformed publication configuration', () => {
   const run = (env = {}) => pagesUrls({ GITHUB_REPOSITORY: 'pilot/windgrams', ...env });
   assert.deepEqual(run(), { site: 'https://pilot.github.io/windgrams', base: '/windgrams', data: 'https://pilot.github.io/windgrams/data' });

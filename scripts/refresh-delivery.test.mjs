@@ -15,11 +15,12 @@ const run = (group, id, overrides = {}) => ({ id, status: 'completed', conclusio
   path: `.github/workflows/refresh-${group}.yml`, head_sha: sha, head_repository: { full_name: repository },
   created_at: `2026-10-25T${String(id).padStart(2, '0')}:00:00Z`, ...overrides });
 
-test('collector trusts only completed repository/main provider workflows, ordered by run creation', () => {
+test('collector trusts completed and in-progress repository/main provider workflows, ordered by run creation', () => {
   const valid = run('rrfs', 2);
   assert.deepEqual(trustedRuns([valid, run('rrfs', 1), run('rrfs', 3, { status: 'in_progress' }),
+    run('rrfs', 4, { status: 'queued' }), run('rrfs', 5, { status: 'waiting' }),
     { ...valid, event: 'pull_request' }, { ...valid, head_branch: 'trial' }, { ...valid, head_repository: { full_name: 'fork/windgrams' } },
-    { ...valid, path: '.github/workflows/check.yml' }], 'rrfs', repository).map(item => item.id), [2, 1]);
+    { ...valid, path: '.github/workflows/check.yml' }], 'rrfs', repository).map(item => item.id), [3, 2, 1]);
 });
 
 test('collection publishes ready providers while others run and falls back from incompatible artifacts', async t => {
@@ -43,26 +44,32 @@ test('collection publishes ready providers while others run and falls back from 
   assert.equal(existsSync(join(root, 'data-eccc')), false);
 });
 
-test('empty and partial unsuccessful refreshes retain one successful fallback and the latest health', async t => {
+test('uploaded unfinished or unsuccessful refreshes retain a validated fallback and the latest health', async t => {
   const root = mkdtempSync(join(tmpdir(), 'refresh-fallback-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const profile = JSON.parse(readFileSync(new URL('../forecasts/soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
   const site = { slug: profile.site.id, name: profile.site.name, latitude: profile.site.latitude, longitude: profile.site.longitude, timeZone: profile.site.timeZone };
   const write = (path, document) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, JSON.stringify(document)); };
-  for (const [mode, conclusion] of [['empty', 'failure'], ['partial', 'cancelled']]) {
-    const incoming = join(root, mode, 'incoming'), output = join(root, mode, 'data'), downloaded = [];
+  for (const [mode, status, conclusion] of [['empty', 'completed', 'failure'], ['partial', 'completed', 'cancelled'],
+    ['ready', 'in_progress', null], ['partial', 'in_progress', null]]) {
+    const incoming = join(root, `${status}-${mode}`, 'incoming'), output = join(root, `${status}-${mode}`, 'data'), downloaded = [], inspected = [];
     const report = await collectRefreshArtifacts(incoming, { repository,
       api: async path => {
+        assert.equal(path.includes('status=completed'), false, 'uploaded artifacts remain visible while providers finish cleanup');
         if (path.includes('/workflows/')) return { workflow_runs: path.includes('refresh-rrfs') ? [
-          run('rrfs', 5, { conclusion }), run('rrfs', 4, { conclusion: 'failure' }), run('rrfs', 3), run('rrfs', 2), run('rrfs', 1),
+          run('rrfs', 7, { status: 'queued', conclusion: null }), run('rrfs', 6, { status: 'in_progress', conclusion: null }),
+          run('rrfs', 5, { status, conclusion }), run('rrfs', 4, { conclusion: 'failure' }), run('rrfs', 3), run('rrfs', 2), run('rrfs', 1),
         ] : [] };
+        const id = Number(path.match(/\/runs\/(\d+)\//)?.[1]);
+        inspected.push(id);
+        if (id === 6) return { artifacts: [] };
         return { artifacts: [{ name: 'data-rrfs', expired: false, workflow_run: { head_sha: sha } }] };
       },
       download: (id, _name, directory) => {
         downloaded.push(id);
         write(join(directory, '.artifact.json'), { schemaVersion: 1, group: 'rrfs', sourceSha: id === 3 ? 'incompatible' : sha,
           soaringContractVersion: '2.1.0', createdAt: '2026-10-25T06:00:00Z' });
-        const failed = id === 5, completedAt = `2026-10-25T0${id}:01:00Z`;
+        const failed = id === 5 && mode !== 'ready', completedAt = `2026-10-25T0${id}:01:00Z`;
         write(join(directory, 'health/rrfs.json'), { schemaVersion: 1, group: 'rrfs', models: { rrfs: {
           attemptedAt: `2026-10-25T0${id}:00:00Z`, completedAt, lastSuccessfulRefreshAt: failed ? null : completedAt,
           outcome: failed ? 'retained' : 'updated', reason: failed ? 'upstream unavailable' : null,
@@ -70,11 +77,12 @@ test('empty and partial unsuccessful refreshes retain one successful fallback an
         if (failed && mode === 'empty') writeFileSync(join(directory, 'EMPTY'), 'empty');
         else {
           write(join(directory, 'rrfs/manifest.json'), { model: 'rrfs', referenceTime: profile.run.referenceTime,
-            generatedAt: '2026-10-24T12:00:00Z', forecastHours: 84, firstForecastHour: 1, lastForecastHour: 84, sites: [{ slug: site.slug, name: site.name }] });
+            generatedAt: id === 5 ? '2026-10-24T13:00:00Z' : '2026-10-24T12:00:00Z', forecastHours: 84, firstForecastHour: 1, lastForecastHour: 84, sites: [{ slug: site.slug, name: site.name }] });
           write(join(directory, 'rrfs/sites', `${site.slug}.json`), failed ? { ...profile, hours: profile.hours.slice(0, -1) } : profile);
         }
       },
     });
+    assert.deepEqual(inspected, [6, 5, 3, 2], 'skip queued runs and in-progress runs without uploaded artifacts');
     assert.deepEqual(downloaded, [5, 3, 2], 'skip intervening failures, reject incompatible success, stop after one valid fallback');
     assert.deepEqual(report.collected.map(item => item.run), [5, 2]);
     assert.equal(report.rejected.length, 1);
@@ -82,11 +90,13 @@ test('empty and partial unsuccessful refreshes retain one successful fallback an
     assert.ok(merged.accepted.includes('rrfs'));
     assert.equal(merged.rejected.length, mode === 'partial' ? 1 : 0);
     assert.deepEqual(JSON.parse(readFileSync(join(output, 'rrfs/sites', `${site.slug}.json`))), profile);
+    assert.equal(JSON.parse(readFileSync(join(output, 'rrfs/manifest.json'))).generatedAt,
+      mode === 'ready' ? '2026-10-24T13:00:00Z' : '2026-10-24T12:00:00Z', 'only complete uploaded products replace the fallback');
     const health = JSON.parse(readFileSync(join(output, 'health/rrfs.json'))).models.rrfs;
     assert.equal(health.attemptedAt, '2026-10-25T05:00:00Z');
-    assert.equal(health.reason, 'upstream unavailable');
-    assert.equal(health.outcome, 'retained');
-    assert.equal(health.lastSuccessfulRefreshAt, '2026-10-25T02:01:00Z');
+    assert.equal(health.reason, mode === 'ready' ? null : 'upstream unavailable');
+    assert.equal(health.outcome, mode === 'ready' ? 'updated' : 'retained');
+    assert.equal(health.lastSuccessfulRefreshAt, mode === 'ready' ? '2026-10-25T05:01:00Z' : '2026-10-25T02:01:00Z');
   }
 });
 

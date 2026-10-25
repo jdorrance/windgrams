@@ -1,27 +1,42 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { createHash } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { applyGroup, collectGroup, groupHasLocal } from "./seed-published.mjs";
+import { applyGroup, collectGroup, groupHasLocal, seedPublishedGroup, seedPublishedGroups } from "./seed-published.mjs";
 import { isPublishedCase } from './merge-soaring-regions.mjs';
+import { modelDescriptor } from '@windgrams/providers/registry';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), "seed-published.mjs");
 
-test("collectGroup follows a model manifest and skips a 404", async () => {
-  const docs = {
-    "hrrr-conus/manifest.json": { model: "hrrr-conus", sites: [{ slug: "va-daniels" }, { slug: "va-eagle-rock" }] },
-    "hrrr-conus/sites/va-daniels.json": { slug: "va-daniels" },
-    "gfs/manifest.json": null,
-  };
-  const files = await collectGroup("noaa-cloud", {
-    get: async (key) => (Object.hasOwn(docs, key) ? docs[key] : null),
+test('multi-group recovery attempts every group once after an independent seed failure', async () => {
+  const attempted = [];
+  const results = await seedPublishedGroups('unused', ['terrain', 'observations', 'terrain'], {}, async (_, group) => {
+    attempted.push(group);
+    if (group === 'terrain') throw new Error('terrain feed unavailable');
+    return { objects: 2, outcomes: [{ model: 'observations', status: 'seeded' }] };
   });
-  assert.deepEqual([...files.keys()], ["hrrr-conus/manifest.json", "hrrr-conus/sites/va-daniels.json"]);
+  assert.deepEqual(attempted, ['terrain', 'observations']);
+  assert.deepEqual(results.map(result => result.outcomes[0].status), ['unavailable', 'seeded']);
+  await assert.rejects(() => seedPublishedGroups('unused', ['terrain', 'typo'], {}, () => assert.fail('Validate group names before writing')), /Unknown seed group/);
+});
+
+test('collectGroup rejects partial or mixed runs for every point model', async () => {
+  const run = '2026-10-24T00:00:00Z';
+  const docs = {
+    'hrrr-conus/manifest.json': { model: 'hrrr-conus', referenceTime: run, sites: [{ slug: 'va-daniels' }, { slug: 'va-eagle-rock' }] },
+    'hrrr-conus/sites/va-daniels.json': { run: { referenceTime: run } },
+  };
+  const get = async key => docs[key] ?? null;
+  await assert.rejects(collectGroup('noaa-cloud', { get }), /Incomplete published/);
+  docs['hrrr-conus/sites/va-eagle-rock.json'] = { run: { referenceTime: '2026-10-23T18:00:00Z' } };
+  await assert.rejects(collectGroup('noaa-cloud', { get }), /Incomplete published/);
+  docs['hrrr-conus/sites/va-eagle-rock.json'].run.referenceTime = run;
+  assert.equal((await collectGroup('noaa-cloud', { get })).size, 3);
 });
 
 test("collectGroup reads NWS offices, ECMWF sites, and one balloon file per launch", async () => {
@@ -92,6 +107,52 @@ function soaringDocuments(version, model = 'rrfs', region = 'north', compressed 
     [`${root}/${profileName}`, profile],
   ]);
 }
+
+function datedSoaringDocuments(version, referenceTime, capturedAt = referenceTime) {
+  const files = soaringDocuments(version);
+  const manifestKey = [...files.keys()].find(key => key.endsWith('/manifest.json'));
+  const manifest = JSON.parse(files.get(manifestKey));
+  manifest.case.referenceTime = referenceTime;
+  manifest.capturedAt = capturedAt;
+  const bytes = Buffer.from(JSON.stringify(manifest));
+  files.set(manifestKey, bytes);
+  const pointerKey = 'soaring/v1/north-rrfs-live/index.json';
+  const pointer = JSON.parse(files.get(pointerKey));
+  pointer.manifestSha256 = createHash('sha256').update(bytes).digest('hex');
+  files.set(pointerKey, Buffer.from(JSON.stringify(pointer)));
+  for (const name of ['regions.json', 'regions-rrfs.json']) {
+    const key = `soaring/v1/${name}`, catalogue = JSON.parse(files.get(key));
+    catalogue.generatedAt = capturedAt;
+    files.set(key, Buffer.from(JSON.stringify(catalogue)));
+  }
+  return files;
+}
+
+test('lagging remote regional pointers and catalogues cannot replace a newer cached publication', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'seed-soaring-monotonic-'));
+  t.after(() => rmSync(output, { recursive: true, force: true }));
+  const latest = datedSoaringDocuments('latest', '2026-10-25T12:00:00Z', '2026-10-25T16:00:00Z');
+  applyGroup(output, 'soaring', latest);
+  for (const [run, captured] of [['2026-10-25T06:00:00Z', '2026-10-25T10:00:00Z'], ['2026-10-25T12:00:00Z', '2026-10-25T15:00:00Z']]) {
+    const remote = datedSoaringDocuments(captured, run, captured);
+    await seedPublishedGroup(output, 'soaring', { getBytes: async key => remote.get(key) ?? null });
+    for (const key of ['soaring/v1/north-rrfs-live/index.json', 'soaring/v1/regions.json', 'soaring/v1/regions-rrfs.json']) assert.deepEqual(readFileSync(join(output, key)), latest.get(key));
+    assert.equal(isPublishedCase(join(output, 'soaring/v1'), 'north-rrfs-live'), true);
+  }
+});
+
+test('same-run verified regional bytes repair corruption without changing the run pointer', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'seed-soaring-repair-'));
+  t.after(() => rmSync(output, { recursive: true, force: true }));
+  const documents = datedSoaringDocuments('repair', '2026-10-25T12:00:00Z', '2026-10-25T16:00:00Z');
+  applyGroup(output, 'soaring', documents);
+  const profile = [...documents.keys()].find(key => key.endsWith('/profile.json'));
+  writeFileSync(join(output, profile), 'corrupt');
+  assert.equal(isPublishedCase(join(output, 'soaring/v1'), 'north-rrfs-live'), false);
+  await seedPublishedGroup(output, 'soaring', { getBytes: async key => documents.get(key) ?? null });
+  assert.equal(isPublishedCase(join(output, 'soaring/v1'), 'north-rrfs-live'), true);
+  assert.deepEqual(readFileSync(join(output, profile)), documents.get(profile));
+});
 
 test('soaring seed preserves hashed bytes and follows native RRFS pointers', async t => {
   const output = mkdtempSync(join(tmpdir(), 'seed-soaring-'));
@@ -207,4 +268,65 @@ test('incomplete or corrupted soaring seeds leave last-good pointers and catalog
     for (const [key, bytes] of old) assert.deepEqual(readFileSync(join(output, key)), bytes);
     assert.equal(isPublishedCase(join(output, 'soaring', 'v1'), 'north-rrfs-live'), true);
   }
+});
+
+// Synthetic horizons reuse a real scalar column to exercise publication identity
+// and completeness. These documents are never meteorological reference fixtures.
+function pointDocuments(model, referenceTime = '2026-10-24T00:00:00Z') {
+  const document = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+  const sample = document.hours[0], leads = modelDescriptor(model).forecastHours;
+  document.model = model;
+  document.run.referenceTime = referenceTime;
+  document.hours = leads.map(lead => ({ ...sample, validAt: new Date(Date.parse(referenceTime) + lead * 3_600_000).toISOString() }));
+  const manifest = { model, referenceTime, forecastHours: leads.length, firstForecastHour: leads[0], lastForecastHour: leads.at(-1), sites: [{ slug: document.site.id }] };
+  return new Map([[`${model}/manifest.json`, manifest], [`${model}/sites/${document.site.id}.json`, document]]);
+}
+
+test('seed CLI core applies a healthy model after another model fails and withholds invalid cache', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'seed-independent-'));
+  t.after(() => rmSync(output, { recursive: true, force: true }));
+  mkdirSync(join(output, 'hrrr-conus'), { recursive: true });
+  writeFileSync(join(output, 'hrrr-conus/manifest.json'), '{}');
+  const docs = pointDocuments('gfs');
+  const result = await seedPublishedGroup(output, 'noaa-cloud', {
+    get: async key => { if (key.startsWith('hrrr-conus/')) throw new Error('HRRR published origin offline'); return docs.get(key) ?? null; },
+  });
+  assert.deepEqual(result.outcomes.map(outcome => outcome.status), ['unavailable', 'seeded']);
+  assert.equal(existsSync(join(output, 'hrrr-conus')), false);
+  assert.deepEqual(JSON.parse(readFileSync(join(output, 'gfs/manifest.json'))), docs.get('gfs/manifest.json'));
+});
+
+test('per-model seeding retains only a validated complete cache when its published feed fails', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'seed-last-good-'));
+  t.after(() => rmSync(output, { recursive: true, force: true }));
+  applyGroup(output, 'noaa-cloud', pointDocuments('hrrr-conus'));
+  const before = readFileSync(join(output, 'hrrr-conus/manifest.json'));
+  const result = await seedPublishedGroup(output, 'noaa-cloud', { get: async () => { throw new Error('offline'); } });
+  assert.deepEqual(result.outcomes.map(outcome => outcome.status), ['retained', 'unavailable']);
+  assert.deepEqual(readFileSync(join(output, 'hrrr-conus/manifest.json')), before);
+});
+
+test('self-consistent shortened published runs cannot displace full cache or stop another model seeding', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'seed-short-run-'));
+  t.after(() => rmSync(output, { recursive: true, force: true }));
+  const cached = pointDocuments('hrrr-conus');
+  applyGroup(output, 'noaa-cloud', cached);
+  const docs = new Map([...pointDocuments('hrrr-conus'), ...pointDocuments('gfs')]);
+  const manifest = docs.get('hrrr-conus/manifest.json');
+  manifest.forecastHours = 1; manifest.lastForecastHour = 1;
+  docs.get(`hrrr-conus/sites/${manifest.sites[0].slug}.json`).hours.length = 1;
+  const result = await seedPublishedGroup(output, 'noaa-cloud', { get: async key => docs.get(key) ?? null });
+  assert.deepEqual(result.outcomes.map(outcome => outcome.status), ['retained', 'seeded']);
+  assert.deepEqual(JSON.parse(readFileSync(join(output, 'hrrr-conus/manifest.json'))), cached.get('hrrr-conus/manifest.json'));
+});
+
+test('older remote pointers preserve a newer complete cached run', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'seed-newer-cache-'));
+  t.after(() => rmSync(output, { recursive: true, force: true }));
+  const cached = pointDocuments('hrrr-conus', '2026-10-24T06:00:00Z');
+  applyGroup(output, 'noaa-cloud', cached);
+  const old = pointDocuments('hrrr-conus');
+  const result = await seedPublishedGroup(output, 'noaa-cloud', { get: async key => old.get(key) ?? null });
+  assert.deepEqual(result.outcomes.map(outcome => outcome.status), ['retained', 'absent']);
+  assert.deepEqual(JSON.parse(readFileSync(join(output, 'hrrr-conus/manifest.json'))), cached.get('hrrr-conus/manifest.json'));
 });

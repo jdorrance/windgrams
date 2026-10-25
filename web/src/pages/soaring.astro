@@ -7,6 +7,7 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
   <div class="soaring-page">
     <h1>Soaring forecast</h1>
     <p id="replay-run" class="run-label">Loading forecast run…</p>
+    <p id="replay-freshness" class="notice forecast-freshness" role="status" hidden></p>
     <p id="replay-status" role="status">Loading forecast…</p>
     <div id="replay-content" hidden>
       <div class="replay-controls">
@@ -46,7 +47,7 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
           <label class="checkbox-label"><input type="checkbox" id="toggle-barbs" checked /> Wind barbs <span id="map-barb-units"></span></label>
           <label class="checkbox-label"><input type="checkbox" id="additional-layers" /> Show additional map layers</label>
         </div>
-        <p class="muted">Heights MSL · AGL: height above model terrain. Lift threshold: <Unit kind="lift" value={1} /> sink.</p>
+        <p class="muted">Heights are above sea level (MSL); AGL is measured above model terrain. Usable lift top assumes a <Unit kind="lift" value={1} /> sink rate.</p>
       </details>
 
       <div class="replay-layout">
@@ -72,7 +73,7 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
 
       <section aria-labelledby="launches-heading">
         <h2 id="launches-heading">Compare launches</h2>
-        <p class="muted">Select a launch · heights MSL.</p>
+        <p class="muted">Select a launch to see its forecast. Heights are above sea level (MSL).</p>
         <div class="table-scroll">
           <table class="soaring-table" id="launches-table">
             <thead><tr><th>Launch</th><th>Thermal strength</th><th>Usable lift top</th><th>Potential cloud base</th><th>Surface wind</th></tr></thead>
@@ -105,7 +106,7 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
 
       <section aria-labelledby="windgram-heading">
         <h2 id="windgram-heading">Windgram</h2>
-        <p id="windgram-subtitle" class="muted">Hover or tap an hour for lift top AGL. Select an hour to update the map and sounding.</p>
+        <p id="windgram-subtitle" class="muted">Hover or tap an hour to see lift top above ground. Selecting an hour also updates the map and sounding.</p>
         <div class="windgram-viewport">
           <div id="replay-windgram" class="replay-chart" tabindex="0" role="group" aria-label="Windgram. Click a column or use left and right arrows to select an hour."></div>
           <div id="replay-height-axis" class="windgram-height-axis" hidden aria-hidden="true"></div>
@@ -122,7 +123,7 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
         <details class="section-details">
           <summary>Sounding details</summary>
           <ul id="sounding-findings" class="findings-list"></ul>
-          <p class="muted">Model-level temperature, dew point and wind. Vertical detail follows model resolution.</p>
+          <p class="muted">The sounding shows temperature, dew point and wind at the model’s available heights.</p>
         </details>
       </section>
 
@@ -140,10 +141,10 @@ import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
         <summary id="audit-summary">About this forecast</summary>
         <p id="audit-results"></p>
         <ul id="audit-limitations"></ul>
-        <a id="audit-download">Download audit data</a>
+        <a id="audit-download">Download forecast checks</a>
         <div class="reality-grid">
           <div id="regional-observations" class="reality-card">
-            <h3>Observation checks</h3>
+            <h3>Comparison with balloon observations</h3>
             <p id="raob-meta" class="muted"></p>
             <div class="table-scroll">
               <table class="soaring-table compact-table">

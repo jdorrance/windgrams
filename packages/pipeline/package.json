@@ -1,0 +1,35 @@
+{
+  "name": "@windgrams/pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Forecast generation, validation and publication",
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./build-inventory.json": "./dist/build-inventory.json"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs @windgrams/pipeline",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@windgrams/providers": "workspace:*",
+    "@azohra/meteo.briefing": "0.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  }
+}

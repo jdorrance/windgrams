@@ -1,14 +1,13 @@
-import { forecastCapabilities, launchCountry, shortModelLabel } from "../lib/forecast-capabilities.ts";
+import { forecastCapabilities, launchCountry, defaultSoaringRegion, shortModelLabel } from "../lib/forecast-capabilities.ts";
 import { launchConditions, matchingHourIndex, peakLiftIndex, validDateKey } from "../lib/launch-forecast.ts";
-import { parsePublishedProfileJson } from "../lib/published-lift.ts";
 // Launch page: day tabs and a model switch scope the meteogram and the NWS
 // charts below them. All forecast data is read from /data at view time, so the
 // page is always as fresh as the dataset without rebuilding the site.
 
 import { parseForecastManifestJson, parseModelCatalogueJson, parseSiteContextJson } from "@azohra/meteo.briefing/contract";
 import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/meteo.briefing/contract";
-import { localDateKey, localHourOfDay, localInstantMs, runFreshness } from "@azohra/meteo.briefing/derive";
-import { loadDocument } from "@azohra/meteo.briefing/transport";
+import { localDateKey, localHourOfDay, localInstantMs } from "@azohra/meteo.briefing/derive";
+import { createForecastClient } from "@windgrams/data-client";
 import { windgramHours } from "../lib/windgram-view.ts";
 import { windgramViewport } from "../lib/windgram-viewport.ts";
 import { windWindow, type Launch } from "../lib/launches.ts";
@@ -29,6 +28,7 @@ import {
 } from "./nws-ecmwf-sections.ts";
 import { createWindgramController } from "./windgram-controller.ts";
 import { createPageLifecycle } from "./page-lifecycle.ts";
+import { createFreshnessNotice } from './freshness-notice.ts';
 
 // Short-range high-resolution models first, then regional, global, and the ensemble.
 
@@ -42,9 +42,10 @@ const launch = JSON.parse($("launch-config").textContent ?? "{}") as Launch;
 const tz = launch.timeZone;
 const capabilities = forecastCapabilities(launch);
 try { sessionStorage.setItem("windgrams-country", launchCountry(launch)); } catch { /* Storage is optional. */ }
-if (launchCountry(launch) === "AM") {
+const soaringRegion = defaultSoaringRegion(launchCountry(launch));
+if (soaringRegion) {
   const nav = $<HTMLAnchorElement>("soaring-nav-link");
-  if (nav) { const target = new URL(nav.href); target.searchParams.set("region", "armenia"); nav.href = target.toString(); }
+  if (nav) { const target = new URL(nav.href); target.searchParams.set("region", soaringRegion); nav.href = target.toString(); }
 }
 const MODEL_ORDER = capabilities.models;
 const arc = windWindow(launch);
@@ -56,10 +57,11 @@ const lifetime = createPageLifecycle({
   onRestore() { render(); },
 });
 const eventOptions = { signal: lifetime.signal };
+const forecastClient = createForecastClient({ baseUrl: DATA_BASE, signal: lifetime.signal });
 
 async function getJson<T>(path: string): Promise<T | null> {
   try {
-    const response = await fetchWithRetry(`${DATA_BASE}/${path}`);
+    const response = await fetchWithRetry(`${DATA_BASE}/${path}`, { signal: lifetime.signal });
     if (response.headers.get("x-sample-data")) sample = true;
     if (!response.ok) return null;
     return (await response.json()) as T;
@@ -129,6 +131,15 @@ let launchElevationM: number | null = null;
 const manifests = new Map<string, ForecastManifest>();
 const pendingProfiles = new Map<string, Promise<void>>();
 const profiles = new Map<string, { profile: SiteForecast; referenceTime: string; generatedAt: string; stale: boolean } | null>();
+const freshnessNotice = createFreshnessNotice($('forecast-freshness'), () => {
+  const loaded = model ? profiles.get(model) : null;
+  return loaded ? {
+    referenceTime: loaded.referenceTime,
+    validUntil: loaded.profile.hours.at(-1)?.validAt,
+    policy: model ? modelEntry(model) : null,
+    consistent: !loaded.stale,
+  } : null;
+}, lifetime.signal);
 let nws: NwsSiteDocument | null = null;
 let ecmwf: EcmwfSiteDocument | null = null;
 let skewt: SkewTChart | null = null;
@@ -176,7 +187,7 @@ function persistSelection() {
 async function profileFor(slug: string) {
   if (!profiles.has(slug)) {
     if (!pendingProfiles.has(slug)) pendingProfiles.set(slug, (async () => {
-      const loaded = await loadDocument({ guard: parsePublishedProfileJson, supportedSchemaVersion: 2, fetch: (url) => fetchWithRetry(url), baseUrl: DATA_BASE, modelSlug: slug, siteSlug: launch.slug }).catch(() => null);
+      const loaded = await forecastClient.loadProfile(slug, launch.slug).catch(() => null);
       if (lifetime.disposed) return;
       const valid = loaded && !('miss' in loaded) && loaded.document.model === slug && loaded.document.site.id === launch.slug;
       profiles.set(slug, valid ? {
@@ -196,7 +207,7 @@ function modelEntry(slug: string) {
 }
 
 async function loadManifest(slug: string) {
-  const text = await fetchWithRetry(`${DATA_BASE}/${slug}/manifest.json`)
+  const text = await fetchWithRetry(`${DATA_BASE}/${slug}/manifest.json`, { signal: lifetime.signal })
     .then((r) => (r.ok ? r.text() : null))
     .catch(() => null);
   const manifest = text ? parseForecastManifestJson(text) : null;
@@ -286,18 +297,15 @@ function renderModelSelect(available: string[]) {
 $<HTMLSelectElement>("model-select").addEventListener("change", (event) => { manualModel = true; void selectModel((event.target as HTMLSelectElement).value); }, eventOptions);
 
 function selectedWindgramHours(profile: SiteForecast) {
-  const { compact } = windgramViewport();
   return windgramHours(profile, {
     timeZone: tz,
     hours: { dateKey: day, timeZone: tz },
-    compact,
-    heightRange: fullWindgramProfile ? "full" : "soaring",
-    launch: launchElevationM != null ? { elevationM: launchElevationM } : null,
   });
 }
 
 function renderMeteogram() {
   if (lifetime.disposed) return;
+  freshnessNotice.refresh();
   const frame = $("meteogram");
   const meta = $("meteogram-meta");
   const title = $("meteogram-title");
@@ -314,7 +322,7 @@ function renderMeteogram() {
     const loading = model !== null ? !profiles.has(model) : modelsLoading;
     const statusP = document.createElement("p");
     statusP.className = "chart-status";
-    statusP.textContent = loading ? "Loading forecast…" : "Forecast pending.";
+    statusP.textContent = loading ? "Loading forecast…" : "Forecast unavailable.";
     frame.replaceChildren(statusP);
     if (!loading && model) {
       const retry = document.createElement('button');
@@ -325,13 +333,8 @@ function renderMeteogram() {
     return;
   }
 
-  const freshness = entry
-    ? runFreshness({ referenceTime: loaded.referenceTime, generatedAt: loaded.generatedAt }, entry, new Date().toISOString(), { currentIntervals: 1, staleAfterIntervals: 3 })
-    : "current";
   const run = new Date(loaded.referenceTime);
-  meta.textContent = `Run ${run.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} ${String(run.getUTCHours()).padStart(2, "0")}Z · published ${relativeTime(loaded.generatedAt)}${
-    freshness === "stale" ? " · older than expected" : freshness === "delayed" ? " · newer run is late" : ""
-  }${loaded.stale ? " · update in progress" : ""}`;
+  meta.textContent = `Run ${run.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} ${String(run.getUTCHours()).padStart(2, "0")}Z · published ${relativeTime(loaded.generatedAt)}`;
 
   const hours = selectedWindgramHours(loaded.profile);
   if (hours.length === 0 && !loaded.profile.hours.some(hour => localDateKey(hour.validAt, tz) === day)) {
@@ -373,10 +376,10 @@ function renderMeteogram() {
 
 // ── Skew-T ────────────────────────────────────────────────────────────────
 
-const hourFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", timeZone: tz });
+const hourFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
 
 function renderConditions(hour: SiteForecast['hours'][number], index: number) {
-  const label = hourFormat.format(new Date(hour.validAt));
+  const label = hourFormat.format(new Date(hour.validAt)).replace(":00", "");
   const slider = $<HTMLInputElement>('forecast-hour');
   slider.max = String(skewtHours.length - 1); slider.value = String(index);
   slider.setAttribute('aria-valuetext', label);
@@ -408,7 +411,7 @@ function showSkewTHour(index: number) {
   persistSelection();
   const slider = $<HTMLInputElement>("skewt-hour");
   slider.value = String(index);
-  const label = hourFormat.format(new Date(hour.validAt));
+  const label = hourFormat.format(new Date(hour.validAt)).replace(":00", "");
   $("skewt-hour-label").textContent = label;
   slider.setAttribute("aria-valuetext", label);
   const sounding = buildSounding(loaded.profile, hour);
@@ -417,7 +420,7 @@ function showSkewTHour(index: number) {
   const list = $("skewt-findings");
   list.replaceChildren();
   if (!sounding) {
-    $("skewt-headline").textContent = "Sounding unavailable · limited vertical data.";
+    $("skewt-headline").textContent = "Too few forecast levels to draw a sounding.";
     return;
   }
   const reading = readSounding(sounding, launchElevationM);
@@ -436,9 +439,9 @@ function renderSkewT() {
     body.hidden = true;
     status.hidden = false;
     status.textContent = !model
-      ? modelsLoading ? "Loading the sounding…" : "Forecast pending."
+      ? modelsLoading ? "Loading the sounding…" : "Forecast unavailable."
       : !loaded
-        ? profiles.has(model) ? "Sounding unavailable · select another model." : "Loading the sounding…"
+        ? profiles.has(model) ? "Sounding unavailable. Select another model." : "Loading the sounding…"
         : `${modelLabel(model)} upper-air data unavailable for this day.`;
     skewtHours = [];
     $("forecast-hour-panel").hidden = true;
@@ -505,7 +508,7 @@ export async function start() {
         const sourceId = context?.sites[launch.slug]?.elevation.source;
         const source = context?.sources.find(source => source.id === sourceId);
         $('launch-elevation').textContent = `${formatQuantity(launchElevationM, "elevation")} MSL`;
-        $('launch-elevation-source').textContent = source ? `Terrain · ${source.product}${source.kind === 'surfaceModel' ? ' · surface includes vegetation' : ''}.` : 'Terrain elevation at launch coordinates.';
+        $('launch-elevation-source').textContent = source ? `${source.product}${source.kind === 'surfaceModel' ? ' (includes vegetation)' : ''}.` : 'Terrain elevation at launch coordinates.';
         $('launch-elevation-item').hidden = false;
       }
       balloonSection.refresh();

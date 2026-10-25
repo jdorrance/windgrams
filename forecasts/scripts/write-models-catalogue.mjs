@@ -5,24 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { packagedModelsPath } from '@azohra/meteo.forecast';
 import { parseModelCatalogue } from '@azohra/meteo.briefing/contract';
-import { ICON_FORECAST_HOURS, ICON_SEMANTICS } from './lib/icon-eu.mjs';
+import { ICON_MODEL, PACKAGED_MODEL_CATALOGUE } from '@windgrams/providers/registry';
+export { ICON_MODEL };
 
-export const ICON_MODEL = Object.freeze({
-  slug: 'icon-eu', label: 'ICON-EU', provider: 'DWD',
-  gridKm: 6.5, stepHours: 1, horizonHours: Math.max(...ICON_FORECAST_HOURS),
-  runIntervalHours: 6, typicalPublicationLagHours: 4,
-  kind: 'deterministic', experimental: true,
-  capabilities: {
-    // These are terrain-following model levels with pressure at each cell,
-    // rather than fixed isobaric surfaces.
-    levels: true, pressureLevels: [], verticalVelocity: false,
-    heatFluxes: true, ...ICON_SEMANTICS,
-    cape: true, cin: true, pblHeight: true,
-    cloudLayers: true, cloudProfile: false, smoke: false,
-  },
-});
-
-export function modelsCatalogue(base = JSON.parse(readFileSync(packagedModelsPath(), 'utf8'))) {
+export function modelsCatalogue(base = PACKAGED_MODEL_CATALOGUE) {
   const result = { ...base, models: [...base.models.filter(model => model.slug !== 'icon-eu'), ICON_MODEL] };
   if (!parseModelCatalogue(result)) throw new Error('models.json fails the contract guard');
   return result;

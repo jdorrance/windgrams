@@ -69,10 +69,10 @@ test('Stage 1: download-boundary validators accept valid regional documents and 
   const twoCells = { ...validGrid, features: [validGrid.features[0], second] };
   assert.equal(validateReplayGrid(twoCells, 2).features.length, 2);
   second.properties.latitude = Number.NaN;
-  assert.throws(() => validateReplayGrid(twoCells, 2), /properties at 1/);
+  assert.throws(() => validateReplayGrid(twoCells, 2), /Invalid regional grid/);
   second.properties.latitude = 48.6;
   second.properties.cellIndex = 0;
-  assert.throws(() => validateReplayGrid(twoCells, 2), /properties at 1/);
+  assert.throws(() => validateReplayGrid(twoCells, 2), /Invalid regional grid/);
 
   const audit = validateReplayAudit({
     sampledCell: { distanceKm: 1.58 },
@@ -82,7 +82,7 @@ test('Stage 1: download-boundary validators accept valid regional documents and 
   });
   assert.equal(audit.mapProfileAgreement.hours, 14);
   assert.throws(() => validateReplayAudit({}), /Invalid regional audit/);
-  assert.throws(() => validateReplayAudit({ ...audit, terrain: { modelElevationM: 221.7 } }), /terrain/);
+  assert.throws(() => validateReplayAudit({ ...audit, terrain: { modelElevationM: 221.7 } }), /Invalid regional audit/);
 
   assert.equal(validateLaunchesDoc({ launches: 'not-an-array' }), null);
   assert.equal(validateCrossSectionDoc({ totalDistanceKm: 40, nodes: [{}] }), null);
@@ -94,7 +94,8 @@ test('Stage 1: download-boundary validators accept valid regional documents and 
 test('launch sidecars validate nested comparison data before readers dereference it', () => {
   const validAt = '2026-10-21T20:00:00Z';
   const launch = {
-    slug: 'test', name: 'Test', latitude: 48, longitude: -122, cellIndex: 0,
+    slug: 'test', name: 'Test', latitude: 48, longitude: -122, timeZone: 'America/Los_Angeles',
+    cellIndex: 0, gridIndex: 100, distanceKm: 1,
     launchElevationM: null, modelElevationM: 400,
     models: {
       rrfs: {
@@ -104,7 +105,7 @@ test('launch sidecars validate nested comparison data before readers dereference
       futureModel: { hours: [{ validAt }], providerMetadata: { retained: true } },
     },
   };
-  const doc = { launches: [launch], nwsOffice: { office: 'SEW', products: { afd: { text: 'Forecast discussion' } } } };
+  const doc = { launches: [launch], nwsOffice: { office: 'SEW', products: { afd: { issuanceTime: validAt, text: 'Forecast discussion' } } } };
   const validated = validateLaunchesDoc(doc);
   assert.equal(validated, doc);
   assert.equal(buildLaunchComparisonRows(validated!.launches[0], validAt).length, 1);
@@ -119,7 +120,9 @@ test('launch sidecars validate nested comparison data before readers dereference
     { hours: [{ validAt }], referenceTime: {} }]) {
     assert.equal(validateLaunchesDoc({ launches: [{ ...launch, models: { rrfs: series } }] }), null);
   }
-  const terrain = { bracketsLaunchAltitude: true, launchElevationM: 500, launchWindSpeedMps: 4, launchWindDirectionDeg: 270 };
+  const terrain = { experimental: true, bracketsLaunchAltitude: true, launchElevationM: 500,
+    modelElevationM: 400, terrainDeltaM: 100, launchWindSpeedMps: 4, launchWindDirectionDeg: 270,
+    rawMslHeightsPreserved: true, assumptions: [] };
   const withTerrain = (value: unknown) => ({ launches: [{ ...launch, models: { rrfs: { hours: [{ validAt, experimentalTerrain: value }] } } }] });
   assert.ok(validateLaunchesDoc(withTerrain(terrain)));
   assert.ok(validateLaunchesDoc(withTerrain({ ...terrain, launchWindSpeedMps: null, launchWindDirectionDeg: null })));
@@ -129,8 +132,8 @@ test('launch sidecars validate nested comparison data before readers dereference
 });
 
 test('cross-section sidecars require usable map coordinates and indexed profile samples', () => {
-  const node = { distanceKm: 0, cellIndex: 0, latitude: 48, longitude: -122, modelElevationM: null, launchElevationM: null, waypointLabel: null };
-  const doc = { totalDistanceKm: 5, nodes: [node, { ...node, distanceKm: 5, cellIndex: 1, waypointLabel: 'End' }], futureMetadata: true };
+  const node = { nodeIndex: 0, gridIndex: 100, distanceKm: 0, cellIndex: 0, latitude: 48, longitude: -122, modelElevationM: null, launchElevationM: null, waypointLabel: null };
+  const doc = { title: 'Test transect', totalDistanceKm: 5, nodes: [node, { ...node, distanceKm: 5, cellIndex: 1, waypointLabel: 'End' }], futureMetadata: true };
   assert.equal(validateCrossSectionDoc(doc), doc);
   assert.equal(validateCrossSectionDoc(null), null);
   for (const fields of [{ latitude: undefined }, { latitude: NaN }, { latitude: 91 }, { cellIndex: -1 },
@@ -143,11 +146,13 @@ test('cross-section sidecars require usable map coordinates and indexed profile 
 test('verification sidecars reject nested collections that would break the optional panels', () => {
   const skill = {
     note: 'Matched soundings', matchedCount: 0, matchedPairs: [],
-    rejectedMismatchedComparisons: [{ stationId: 'KUIL', distanceKm: 80, timeDeltaMinutes: -60 }],
+    rejectedMismatchedComparisons: [{ id: 'rejected', stationId: 'KUIL', siteSlug: 'test', matchStatus: 'rejected', reason: 'Distance', distanceKm: 80, timeDeltaMinutes: -60 }],
   };
   const doc = {
-    hrrrWrfprsInventory: { availablePressureLevelsCount: 42 },
-    wrfPilotDomain: { domains: [{ dxM: 3000 }, { dxM: 1000 }] },
+    hrrrWrfprsInventory: { totalGribRecordsPerHour: 711, availablePressureLevelsCount: 42, availableSub925PressureLevelsHpa: [1000], explicitCloudAndStabilityFields: [] },
+    wrfPilotDomain: { modelSlug: 'wrf', label: 'WRF trial', wrfRelease: '4.6',
+      domains: [{ id: 'd01', dxM: 3000, eWe: 100, eSn: 100, eVert: 60 }, { id: 'd02', dxM: 1000, eWe: 100, eSn: 100, eVert: 60 }],
+      physics: { blPblPhysics: 'MYNN', mpPhysics: 'Thompson' } },
     observationVerificationSkill: skill,
     futureMetadata: { retained: true },
   };
@@ -155,7 +160,7 @@ test('verification sidecars reject nested collections that would break the optio
   assert.ok(validateVerificationDoc({}));
   assert.equal(validateVerificationDoc(null), null);
   for (const domains of [null, {}, [null], [{ dxM: '3000' }], [{ dxM: 0 }], [{ dxM: Infinity }]]) {
-    assert.equal(validateVerificationDoc({ ...doc, wrfPilotDomain: { domains } }), null);
+    assert.equal(validateVerificationDoc({ ...doc, wrfPilotDomain: { ...doc.wrfPilotDomain, domains } }), null);
   }
   for (const rejected of [{}, [null], [{ stationId: 'KUIL', distanceKm: null, timeDeltaMinutes: 60 }],
     [{ stationId: 'KUIL', distanceKm: 80, timeDeltaMinutes: '60' }]]) {

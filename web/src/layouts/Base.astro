@@ -1,6 +1,8 @@
 ---
 import "../styles/global.css";
+import "@windgrams/windgram/styles.css";
 import { href, SITE_NAME, SITE_TAGLINE } from "../lib/site.ts";
+import { localDataConfiguration } from "../../config/data-mode.mjs";
 
 interface Props {
   title?: string;
@@ -11,6 +13,7 @@ interface Props {
 
 const { title, description = SITE_TAGLINE, current, forecast = false } = Astro.props;
 const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
+const { sample } = localDataConfiguration();
 ---
 
 <!doctype html>
@@ -52,6 +55,7 @@ const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
     </header>
     <main id="main">
       <div class="container">
+        {sample && <p id="fixture-mode-notice" class="notice sample" role="status">Synthetic test data</p>}
         <slot />
       </div>
     </main>

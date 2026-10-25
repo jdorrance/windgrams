@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast, type SiteForecast } from "@azohra/meteo.briefing/contract";
 import { dewPointC, relativeHumidityPercent } from "@azohra/meteo.briefing/derive";
-import { buildWindgramView, heightToY, readWindgram, visibleHeightAnchors, visibleWindgramHourIndices, yToHeight } from "../src/lib/windgram-view.ts";
-import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramHeightAxisSvg, renderWindgramKey, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
+import {  buildWindgramView, heightToY, readWindgram, visibleHeightAnchors, visibleWindgramHourIndices, yToHeight  } from "./helpers/windgram.ts";
+import {  mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramHeightAxisSvg, renderWindgramKey, renderWindgramSvg  } from "./helpers/windgram.ts";
 
 const fixture = (name = "convective-cycle") => {
   const profile = parseSiteForecast(JSON.parse(readFileSync(new URL(`../dev-data-src/${name}.profile.json`, import.meta.url), "utf8")));

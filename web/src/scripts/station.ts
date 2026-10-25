@@ -42,15 +42,15 @@ function start() {
     try {
       response = await fetch(`/api/stations/${encodeURIComponent(config.id)}`, { cache: "no-store" });
     } catch {
-      if (!doc) showStatus("Station feed unavailable · retry in 2 min.");
+      if (!doc) showStatus("Station feed unavailable. Retrying in 2 minutes.");
       return;
     }
     if (response.status === 503) {
-      showStatus("Station feed pending.", true);
+      showStatus("Station feed is not connected.", true);
       return;
     }
     if (!response.ok) {
-      if (!doc) showStatus("Station feed unavailable · retry in 2 min.", true);
+      if (!doc) showStatus("Station feed unavailable. Retrying in 2 minutes.", true);
       return;
     }
     doc = (await response.json()) as StationDocument;

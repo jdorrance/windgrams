@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "regionIndexes": [
+    { "model": "hrrr-conus", "file": "regions.json" },
+    { "model": "rrfs", "file": "regions-rrfs.json" },
+    { "model": "icon-eu", "file": "regions-icon-eu.json" }
+  ],
+  "primaryRegionalModel": "hrrr-conus",
+  "preferredRegionalModels": ["hrrr-conus", "rrfs", "icon-eu"],
+  "defaultRegionalModels": ["hrrr-conus", "rrfs"]
+}

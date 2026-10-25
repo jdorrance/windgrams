@@ -1,9 +1,10 @@
 import type { ModelCapabilities, SiteForecast } from '@azohra/meteo.briefing/contract';
-import { buildWindgramView, type WindgramOptions, type WindgramView } from '../lib/windgram-view.ts';
+import { buildWindgramView, type WindgramOptions, type WindgramView } from '@windgrams/windgram/scene';
 import { windgramViewport } from '../lib/windgram-viewport.ts';
-import { mountWindgramInspector, renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from '../lib/windgram-chart.ts';
+import { renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from '@windgrams/windgram/svg/external';
+import { mountWindgramInspector } from '@windgrams/windgram/dom';
 import { getUnitSystem, type UnitSystem } from '../lib/units.ts';
-import { windgramPresentationKey } from '../lib/windgram-presentation.ts';
+import { windgramPresentationKey } from '@windgrams/windgram/scene';
 
 /**
  * Coordinates asynchronous keyed loads with out-of-order completion protection

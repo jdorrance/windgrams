@@ -1,0 +1,32 @@
+{
+  "name": "windgrams-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build:packages": "node scripts/build-packages.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:api": "node scripts/check-api.mjs",
+    "test:packages": "node --test \"packages/*/test/**/*.test.{mjs,js,ts}\" \"scripts/**/*.test.mjs\"",
+    "test:consumer": "node scripts/test-consumer.mjs",
+    "test:browser": "pnpm --dir web test:browser",
+    "check": "pnpm build:packages && pnpm check:boundaries && pnpm check:api && pnpm --dir forecasts check && pnpm --dir forecasts check:types && pnpm --dir web check",
+    "test": "node --test \"packages/*/test/**/*.test.{mjs,js,ts}\" \"scripts/**/*.test.mjs\" \"forecasts/**/*.test.mjs\" \"web/test/*.test.ts\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"packages/providers/src/internal/solar/*.ts\" --test-coverage-include=\"packages/meteorology/dist/*.js\" --test-coverage-include=\"packages/soaring/dist/*.js\" --test-coverage-exclude=\"**/dist/{index,api,compatibility,types}.js\" --test-coverage-lines=98 --test-coverage-branches=85 --test-coverage-functions=95 \"packages/*/test/**/*.test.{mjs,js,ts}\" \"scripts/**/*.test.mjs\" \"forecasts/**/*.test.mjs\" \"web/test/*.test.ts\"",
+    "build": "pnpm build:packages && pnpm --dir web build"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  }
+}

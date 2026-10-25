@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast } from "@azohra/meteo.briefing/contract";
-import { buildWindgramView, heightToY, readWindgram, yToHeight } from "../src/lib/windgram-view.ts";
-import { resolveWindgramPresentation, windgramPresentationKey } from "../src/lib/windgram-presentation.ts";
+import {  buildWindgramView, heightToY, readWindgram, yToHeight  } from "./helpers/windgram.ts";
+import {  resolveWindgramPresentation, windgramPresentationKey  } from "./helpers/windgram.ts";
 
 test("presentation uses the reference aspect ratio at phone and desktop widths", () => {
   const phone = resolveWindgramPresentation({ widthPx: 356, compact: true });

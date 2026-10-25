@@ -6,30 +6,34 @@
   "scripts": {
     "dev-data": "node scripts/make-dev-data.mjs",
     "dev": "astro dev",
+    "dev:fixtures": "WINDGRAMS_DATA_MODE=fixtures astro dev",
     "preview": "astro build && node scripts/preview-data.mjs && astro preview",
+    "preview:fixtures": "WINDGRAMS_DATA_MODE=fixtures pnpm preview",
     "build": "astro build",
     "check": "astro check && tsc -p worker/tsconfig.json",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "test:browser": "playwright test"
   },
   "packageManager": "pnpm@10.28.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "dependencies": {
     "@azohra/meteo.briefing": "0.6.2",
+    "@windgrams/contracts": "workspace:*",
+    "@windgrams/data-client": "workspace:*",
+    "@windgrams/geography": "workspace:*",
+    "@windgrams/meteorology": "workspace:*",
+    "@windgrams/providers": "workspace:*",
+    "@windgrams/windgram": "workspace:*",
     "astro": "7.3.5",
     "maplibre-gl": "6.14.0",
     "three": "0.186.1"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
+    "@playwright/test": "1.62.1",
     "@types/three": "0.186.0",
     "typescript": "5.9.3"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "sharp"
-    ]
   }
 }

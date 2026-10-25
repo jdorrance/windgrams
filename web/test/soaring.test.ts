@@ -10,7 +10,7 @@ test('replay links preserve the project base and reject unknown cases', () => {
   assert.equal(replayLocation('?hour=27','/data').hour,27);
   assert.equal(replayLocation('?hour=NaN','/data').hour,20);
   assert.throws(()=>replayLocation('?case=../bad','/data'),/Unknown/);
-  assert.match(historicalLabel('2026-10-21T00:00:00Z'),/Historical forecast.*HRRR.*2026-10-21.*00:00 UTC/);
+  assert.match(historicalLabel('2026-10-21T00:00:00Z',false,'hrrr-conus'),/Historical forecast.*HRRR.*2026-10-21.*00:00 UTC/);
 });
 
 test('regional layer choices omit absent native fields while keeping zero and later-hour data', () => {
@@ -71,7 +71,7 @@ test('mountain transects keep terrain, launch, lift and cloud lines inside a sta
 test('RRFS live routes accept the 84-hour horizon and preserve explicit historical cases', () => {
   const caseId = 'north-sound-expanded-v2-rrfs-live';
   assert.equal(replayLocation(`?case=${caseId}&hour=84`, '/data').hour, 84);
-  assert.equal(replayLocation(`?case=${caseId}&hour=85`, '/data').hour, 20);
+  assert.equal(replayLocation(`?case=${caseId}&hour=85`, '/data').hour, 85, 'the manifest resolves the actual horizon');
   assert.throws(() => replayLocation('?case=../north-sound-expanded-v2-rrfs-live', '/data'), /Unknown/);
   assert.match(historicalLabel('2026-10-23T00:00:00Z', true, 'rrfs'), /Forecast run · RRFS/);
   const region = {
@@ -140,11 +140,16 @@ test('unknown launches fall back to coordinates and stale launch indexes are rem
 });
 test('location links reject invalid coordinates and do not snap distant locations to a region edge', () => {
   const cells = [{ cellIndex: 0, latitude: 48.6, longitude: -122.4 }, { cellIndex: 1, latitude: 48.8, longitude: -122.1 }];
+  const grid = { features: cells.map(properties => ({ properties, geometry: { coordinates: [[
+    [properties.longitude-.05,properties.latitude-.05], [properties.longitude+.05,properties.latitude-.05],
+    [properties.longitude+.05,properties.latitude+.05], [properties.longitude-.05,properties.latitude+.05],
+    [properties.longitude-.05,properties.latitude-.05],
+  ]] } })) } as import('../src/lib/soaring.ts').Grid;
   for (const query of ['', 'lat=&lon=', 'lat=0&lon=', 'lat=NaN&lon=-122.1', 'lat=Infinity&lon=-122.1',
     'lat=91&lon=-122.1', 'lat=48.8&lon=-181', 'lat=48.8', 'lon=-122.1', 'lat=0&lon=0', 'lat=48.86&lon=-122.1']) {
-    assert.equal(replaySelection(new URLSearchParams(query), cells, [], 0).cellIndex, 0, query);
+    assert.equal(replaySelection(new URLSearchParams(query), cells, [], 0, grid).cellIndex, 0, query);
   }
-  assert.equal(replaySelection(new URLSearchParams('lat=48.84&lon=-122.1'), cells, [], 0).cellIndex, 1);
+  assert.equal(replaySelection(new URLSearchParams('lat=48.84&lon=-122.1'), cells, [], 0, grid).cellIndex, 1);
   assert.throws(() => replaySelection(new URLSearchParams(), [], [], 0), /no valid grid/);
 });
 test('nearest grid selection uses physical distance at northern latitudes and across the date line', () => {
@@ -282,7 +287,7 @@ test('Armenia regional links select ICON-EU and retain its full forecast horizon
   const query = defaultReplayQuery('?region=armenia&model=icon-eu', catalogue);
   assert.equal(query.get('case'), 'armenia-icon-eu-live');
   assert.equal(replayLocation(`?${query}&hour=120`, '/data').hour, 120);
-  assert.equal(replayLocation(`?${query}&hour=121`, '/data').hour, 20);
+  assert.equal(replayLocation(`?${query}&hour=121`, '/data').hour, 121, 'horizon selection follows manifest hours');
   assert.equal(regionForCase(catalogue.regions, 'armenia-icon-eu-live'), region);
   assert.match(historicalLabel('2026-10-24T00:00:00Z', true, 'icon-eu'), /ICON-EU/);
   assert.throws(() => defaultReplayQuery('?region=armenia&model=rrfs', catalogue), /unavailable/);

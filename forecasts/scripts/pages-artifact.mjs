@@ -6,6 +6,7 @@ import { parseArgs } from 'node:util';
 import { isPublishedCase } from './merge-soaring-regions.mjs';
 
 export const PAGES_MAX_BYTES = 1_000_000_000;
+export const PAGES_WARN_BYTES = 800_000_000;
 const read = path => JSON.parse(readFileSync(path, 'utf8'));
 
 /** Keep the active and most recently superseded bundle of each rolling case.
@@ -51,11 +52,13 @@ export function checkPagesArtifact(root) {
   visit(root);
   if (!files) throw new Error('Pages artifact is empty');
   if (bytes >= PAGES_MAX_BYTES) throw new Error(`Pages artifact is ${bytes} bytes; it must stay below ${PAGES_MAX_BYTES} bytes (1 GB).`);
-  return { bytes, files, remainingBytes: PAGES_MAX_BYTES - bytes };
+  return { bytes, files, remainingBytes: PAGES_MAX_BYTES - bytes, warning: bytes >= PAGES_WARN_BYTES };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({ options: { 'prune-data': { type: 'string' }, 'check-site': { type: 'string' } } });
   if (Boolean(values['prune-data']) === Boolean(values['check-site'])) throw new Error('Use --prune-data DATA or --check-site DIST');
-  console.log(values['prune-data'] ? prunePublishedBundles(resolve(values['prune-data'])) : checkPagesArtifact(resolve(values['check-site'])));
+  const report = values['prune-data'] ? prunePublishedBundles(resolve(values['prune-data'])) : checkPagesArtifact(resolve(values['check-site']));
+  console.log(report);
+  if (report.warning) console.warn(`::warning::Pages uses ${report.bytes} bytes; review product sizes before adding coverage.`);
 }

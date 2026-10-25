@@ -149,7 +149,7 @@ export function buildMultimodelComparisonRow(
       primaryText: `v1: ${formatQuantity(mh.wstarMps, 'lift', undefined, system)}`,
       spreadText: formatSpread(mh.wstarLegacySpreadMps, 'lift', system),
       suffixText: null,
-      title: 'Legacy v1 ensemble diagnostic (v2 member derivation unavailable)',
+      title: 'Earlier ensemble estimate (v1); the current method is unavailable.',
       muted: true,
     };
   } else {
@@ -196,7 +196,7 @@ export function buildMultimodelComparisonRow(
       primaryText: `v1: ${formatElev(mh.usableLiftTopM, system)}`,
       spreadText: formatSpread(mh.usableLiftLegacySpreadM, 'elevation', system),
       suffixText: null,
-      title: 'Legacy v1 ensemble diagnostic (v2 member derivation unavailable)',
+      title: 'Earlier ensemble estimate (v1); the current method is unavailable.',
       muted: true,
     };
   } else {
@@ -234,7 +234,7 @@ export function buildMultimodelComparisonRow(
       primaryText: `v1: ${formatElev(mh.blTopM, system)}`,
       spreadText: formatSpread(mh.blTopLegacySpreadM, 'elevation', system),
       suffixText: null,
-      title: 'Legacy v1 ensemble parcel top (v2 member derivation unavailable)',
+      title: 'Earlier ensemble parcel top (v1); the current method is unavailable.',
       muted: true,
     };
   } else {

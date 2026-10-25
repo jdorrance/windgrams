@@ -54,7 +54,7 @@ export function createNwsEcmwfSections(options: NwsEcmwfControllerOptions) {
       link.hidden = true;
       const p = document.createElement('p');
       p.className = 'chart-status';
-      p.textContent = 'NWS forecast pending.';
+      p.textContent = 'NWS forecast unavailable.';
       chartsHost.replaceChildren(p);
       return;
     }
@@ -77,7 +77,7 @@ export function createNwsEcmwfSections(options: NwsEcmwfControllerOptions) {
       meta.textContent = '';
       const p = document.createElement('p');
       p.className = 'chart-status';
-      p.textContent = 'ECMWF forecast pending.';
+      p.textContent = 'ECMWF forecast unavailable.';
       chartsHost.replaceChildren(p);
       return;
     }

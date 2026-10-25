@@ -1,62 +1,61 @@
 # Fixed North Sound HRRR replay
 
-This historical case preserves the October 21, 2026 00 UTC HRRR run, forecast hours 14–27, over the North Sound bounding box `[-123.5, 47.8, -121.5, 49.0]`. The case freezes launch coordinates, the terrain-context snapshot, nine pressure levels and the minimum usable level count. Current live regions use the same capture/replay machinery with their own initialization and model.
+This replay rebuilds a regional forecast from saved HRRR source records. It is useful for investigating a calculation, checking a decoder change, or comparing a proposed method with the same atmospheric inputs.
+
+The case uses the October 21, 2026 00 UTC initialization, forecast hours 14–27, and bounds `[-123.5, 47.8, -121.5, 49.0]`. Its [configuration](../forecasts/soaring/cases/north-sound-20261021-00z.json) fixes the launch coordinates, terrain context, nine pressure levels and minimum usable level count.
 
 ## Run and inspect
 
-Use Node 24 and pnpm 10.28.0. From `forecasts/`:
+Use Node 24 and pnpm 10.28.0 from the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm run soaring:capture --case north-sound-20261021-00z
-pnpm run soaring:replay --case north-sound-20261021-00z
+pnpm build:packages
+pnpm --dir forecasts run soaring:capture --case north-sound-20261021-00z
+pnpm --dir forecasts run soaring:replay --case north-sound-20261021-00z
 ```
 
-Start `pnpm dev` in `web/`, then open `/soaring?case=north-sound-20261021-00z&hour=20`. The `hour` parameter is forecast lead time. The page synchronizes cell selection, windgram and sounding. `pnpm preview` provides a production build linked to the complete local dataset; `WINDGRAMS_BASE=/windgrams` exercises the project-site URL prefix.
+Capture needs the original NOAA files to remain available, or a complete retained cache. Once those records are saved, replay runs offline. It prints the bundle directory containing the manifest, numerical outputs and audit.
 
-At f20, the preserved legacy publication has w* 1.06 m/s and usable height 724.5 m MSL. Current v2 displays use w* 0.85 m/s, a 1 m/s ceiling of 465.5 m and a 225 ft/min ceiling of 446.8 m. Both calculation families remain available for comparison.
+Start with `audit.json` to check the sampled cell and map/profile agreement, then compare `profile.json` with the decoded values in `blanchard-raw.json`. The [Blanchard example](forecast-improvement-plan.md#reproducible-example) lists the baseline and method 2.1.0 results for forecast hour 20.
+
+The standalone replay produces the numerical bundle described below. Website publication also uses launch and cross-section sidecars, which the [live regional builder](../forecasts/soaring/README.md#live-regions) adds. For a prepared website dataset, `/soaring?case=north-sound-20261021-00z&hour=20` selects this case at f20; `hour` is forecast lead time.
 
 ## Capture
 
-`capture.mjs` fetches the original `.idx` and selected NOAA GRIB byte ranges. This historical case uses terrain from f001 and nine-level atmospheric columns from f014–f027. Optional fields include PBL depth, gusts, cloud layers, vertical velocity and HRRR smoke.
+[`capture.mjs`](../forecasts/soaring/capture.mjs) downloads NOAA inventories and the selected GRIB byte ranges. Terrain comes from f001; the atmospheric columns come from f014–f027. Optional fields include PBL depth, gusts, clouds, vertical velocity and smoke.
 
-Validation checks HTTP range metadata, byte counts, GRIB framing, run and lead time, parameter/level identity and grid definition. A validated file receives a SHA-256 receipt. Resume verifies that receipt before reusing the file. The first capture timestamp is retained.
+Each record is checked for range metadata, byte count, GRIB framing, initialization, lead time, field identity and grid definition. SHA-256 receipts let a resumed capture reuse verified records. The original capture timestamp is preserved when work resumes.
 
-The full capture is roughly 820 MB in ignored `forecasts/.soaring-cache/`. `--cache DIR` chooses another location. A capture lock protects concurrent writers. A stale lock can be removed after the writer exits; a damaged record is repaired by removing its byte file and receipt, then recapturing.
+The complete cache is roughly 820 MB under the ignored `forecasts/.soaring-cache/` directory. Use `--cache DIR` on both commands to store it elsewhere. A lock prevents concurrent writers from changing the same capture. If a writer has exited without removing its lock, remove that stale lock before retrying. To recapture a damaged record, remove its byte file and receipt together.
 
 ## Replay and publication
 
-Replay verifies the cache and runs offline. A shared two-worker JPEG2000 pool decodes fields while regional samples are retained. Native Lambert-grid geometry supplies scanning order, cell centers, wind rotation and site sampling. Cells are included by center point, so boundary polygons can extend half a cell beyond the requested box.
+Replay verifies the cached inputs and decodes them through a shared two-worker JPEG2000 pool. Native Lambert-grid geometry determines scanning order, cell centres, wind rotation and site sampling. Cells are selected by their centres, so polygons at the edge can extend half a cell beyond the requested bounds.
 
-`vendor/derive-0.6.0.mjs` preserves the original pure derivation module and its MIT notice. V2 diagnostics are attached alongside it through the modular `forecasts/soaring/` domain modules (`thermodynamics.mjs`, `convective-lift.mjs`, `boundary-layer-wind.mjs`, `terrain-adjustment.mjs`, `grid-kinematics.mjs`, `diagnostics.mjs`, `grib-column.mjs`, and `audit-agreement.mjs`, re-exported via `science.mjs`). Full-precision inputs are converted and derived before publication rounding; map and site values sample the same canonical cell.
+The vendored `derive-0.6.0.mjs` reproduces the legacy calculations. The [meteorology](../packages/meteorology/README.md) and [soaring](../packages/soaring/README.md) packages calculate the newer diagnostics. Conversion and derivation use full-precision source values before publication rounding. Map and launch outputs sample the same grid cell.
 
-Replay's `--output DIR` selects a destination `soaring/v1` directory. A staged bundle is verified and renamed into `bundles/<manifest-sha256>` before the case pointer changes. The implementation inventory covers the replay's local module dependencies; changing an extracted calculation module changes the bundle hash. Repeating the same code and cache yields the same bytes.
+`--output DIR` selects the destination `soaring/v1` directory. Replay writes a temporary bundle, checks its serialized profile and file hashes, then places it under `bundles/<manifest-sha256>` and updates the case pointer. The manifest records application and package hashes as well as source identities, so identical code and captured inputs produce identical bundle bytes.
 
-The live-build wrapper prunes superseded bundles after a 48-hour grace period. Pages packaging then keeps the current and most recently superseded bundle for each active regional case. Historical cases remain available. The complete upload must fit the 1 GB Pages artifact limit.
+For live builds and Pages retention, see [delivery operations](../forecasts/docs/operations.md#pages-delivery).
 
 ## Bundle contents
 
-- `manifest.json`: case, capture time, versions, source ranges/hashes, units, cell counts and file hashes.
-- `grid.geojson`: native cell polygons, terrain and stable grid-cell identifiers, in hourly-array order.
-- `f14.json`–`f27.json`: baseline and v2 diagnostic arrays, quality, captured-level counts and ceiling flags.
-- `profile.json`: the schema-v2 site forecast with its `soaring` extension.
-- `audit.json`: completeness, conversions, geometry, terrain difference and exact map/profile comparisons.
-- `blanchard-raw.json`: decoded source values used for inspection and fixture provenance.
+- `manifest.json` records the case, capture time, versions, source ranges and hashes, units, cell counts and output checksums.
+- `grid.geojson` contains native polygons, terrain and stable cell identifiers in hourly-array order.
+- `f14.json`–`f27.json` contain baseline and newer diagnostic arrays, quality flags, level counts and ceiling flags.
+- `profile.json` is the site forecast with `soaring` diagnostics.
+- `audit.json` records completeness, conversions, geometry, terrain difference and map/profile agreement.
+- `blanchard-raw.json` retains decoded inputs before conversion and rounding.
 
-Heights are metres MSL, except model PBL depth in metres AGL. Browser unit selection converts the display. Case and capture times provide the scientific timestamps; replay progress uses wall-clock time.
+Diagnostic heights are metres MSL; model PBL depth is metres AGL. The browser converts display units. Source initialization and capture time identify the inputs; neither is replaced with the time at which a replay finishes.
 
-## Interpreting the audit
+## Audit and tests
 
-Quality values are `valid`, `missing` and `insufficient-levels`. A valid column can have zero w* or a null lift ceiling at the selected sink threshold. Missing surface values, terrain or adequate vertical coverage have their own status.
+The case contains 2,259 cells and 14 hours. Its sampled cell is about 1.576 km from Blanchard, at model terrain 221.7 m MSL. The configured launch elevation is 378.5 m from MRDEM30. The audit records that terrain difference, and calculations keep the model column at its original height.
 
-The baseline's first-level crossing and sampled-column ceiling behavior are retained. V2 couples thermal strength and lift height to the resolved parcel/PBL depth. Shallow layers and limited pressure-level coverage remain approximations; their details are in the [diagnostic notes](forecast-improvement-plan.md).
+Column quality is `valid`, `missing` or `insufficient-levels`. A valid column can still have zero W* or no usable lift ceiling. Shallow layers and limited vertical coverage are approximations described in the [diagnostic reference](forecast-improvement-plan.md). Cloud calculations distinguish surface LCL from saturated ambient layers; the source model's heat fluxes already include its modeled smoke effects.
 
-The fixed model cell is about 1.576 km from Blanchard. Its terrain is 221.7 m MSL; the saved launch-context estimate is 378.5 m from MRDEM30. Cloud diagnostics distinguish surface condensation height from saturated ambient layers. HRRR smoke effects are already present in the model heat fluxes.
+Root `pnpm test` exercises archived values, analytic columns, masks, geometry, wind rotation, transport, resume behavior and deterministic replay, along with browser data and selection behavior. These tests answer whether the software reproduces the expected result. [Matched observations](../forecasts/verification/README.md) answer how far that result differs from the atmosphere.
 
-The initial archive contains 2,259 cells and 14 hours. It reproduces the frozen publication and exact map/site values. Those checks establish numerical consistency; matched observations provide the separate forecast-skill evidence.
-
-## Tests and source credits
-
-`pnpm test` in `forecasts/` covers archived Blanchard values, analytic columns, masks, grid geometry, wind rotation, transport validation, resume and deterministic replay. Web tests cover shared selection, profile decoding, units and chart geometry.
-
-[Fixture provenance](../forecasts/soaring/fixtures/README.md) distinguishes original NOAA inventories and decoded values from the small synthetic GRIB transport. Routine offline tests use those compact files. The vendored meteo module retains its MIT attribution to Justin Watts.
+[Fixture provenance](../forecasts/soaring/fixtures/README.md) identifies the original NOAA inventories, decoded values and synthetic GRIB transport used by offline tests. The vendored meteo module retains Justin Watts's MIT attribution.

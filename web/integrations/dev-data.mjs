@@ -20,7 +20,7 @@ export default function devData({ root = "../forecasts/data", sample = false } =
       "astro:server:setup": ({ server, logger }) => {
         const base = resolve(root);
         if (!existsSync(base)) {
-          logger.warn(`${root}/ not found; build forecasts into forecasts/data (see the README)`);
+          logger.warn(`Missing dataset: ${root}. See web/README.md to build forecasts or generate test data.`);
         }
         // The Worker's station endpoint. A file under the forecast root is served
         // as-is. With no file, answer 503 the way the Worker does when WU_API_KEY

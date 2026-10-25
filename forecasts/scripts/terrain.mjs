@@ -21,6 +21,7 @@ import { parseSiteContextJson, parseSitesCatalogueJson } from "@azohra/meteo.bri
 import { cachingOpen, retryingFetch } from "./lib/http.mjs";
 import { storeFromEnv } from "./lib/store.mjs";
 import { mosaic, tilesAround } from "./lib/mosaic.mjs";
+import { terrainPolicy, terrainPolicyId, terrainSourcesMatchPolicy } from "./lib/terrain-policy.mjs";
 
 // The engine's terrain module is not part of its public exports; load it by path.
 const engineDir = dirname(createRequire(import.meta.url).resolve("@azohra/meteo.forecast/package.json"));
@@ -32,7 +33,7 @@ export const GLO90_SOURCE = Object.freeze({
 });
 // The public GLO-30 release omits Armenia. Use the complete GLO-90 release
 // consistently across each terrain window, including neighbouring border tiles.
-export const usesGlo90 = site => site.timeZone === 'Asia/Yerevan';
+export const usesGlo90 = site => terrainPolicy(site) === 'glo90';
 export const glo90Url = (latitude, longitude) => T.glo30Url(latitude, longitude)
   .replace('copernicus-dem-30m', 'copernicus-dem-90m').replaceAll('DSM_COG_10_', 'DSM_COG_30_');
 
@@ -73,7 +74,7 @@ export async function measure(sites, { open = T.openCog, fetchImpl = globalThis.
     return terrain;
   };
   const elevationOf = async (site) =>
-    usesGlo90(site) ? { source: GLO90_SOURCE.id, elevationM: (await terrainOf(site)).elevationM } : T.pickElevation(
+    terrainPolicy(site) !== 'regional-north-america' ? { source: usesGlo90(site) ? GLO90_SOURCE.id : T.GLO30_ID, elevationM: (await terrainOf(site)).elevationM } : T.pickElevation(
       async (url) => T.projectedPoint(await openOnce(url), site.latitude, site.longitude),
       await T.lidarbcUrls(site.latitude, site.longitude, fetchRetry),
     );
@@ -86,15 +87,29 @@ export async function measure(sites, { open = T.openCog, fetchImpl = globalThis.
   const document = roundDocument(await T.buildDocument(sites, { terrainOf, elevationOf, landCoverOf, generatedAt: stamp, log, warn }));
   if (sites.some(usesGlo90)) document.sources.push(GLO90_SOURCE);
   if (parseSiteContextJson(JSON.stringify(document)) === null) throw new Error("the measured site-context.json fails the reader contract");
+  document.measurementPolicies = Object.fromEntries(sites.map(site => [site.slug, terrainPolicyId(site)]));
+  document.measurementTimes = Object.fromEntries(sites.map(site => [site.slug, stamp]));
   return document;
 }
 
-/** True when the context has an entry at exactly each catalogued point (the engine's own freshness rule). */
+/** Same catalogued points, usable elevations and compatible source policies. */
 export function contextIsFresh(sites, context) {
   return context !== null && sites.every((site) => {
-    const point = context.sites[site.slug]?.point;
-    return point !== undefined && point.latitude === site.latitude && point.longitude === site.longitude;
+    const entry = context.sites?.[site.slug], point = entry?.point;
+    return point !== undefined && point.latitude === site.latitude && point.longitude === site.longitude
+      && Number.isFinite(entry.elevation?.elevationM) && terrainSourcesMatchPolicy(entry, site)
+      && (context.measurementPolicies?.[site.slug] === undefined || context.measurementPolicies[site.slug] === terrainPolicyId(site))
+      && Number.isFinite(Date.parse(context.measurementTimes?.[site.slug] ?? context.generatedAt));
   });
+}
+
+/** Add provenance to verified legacy entries without redating retained measurements. */
+export function stampTerrainContext(context, sites) {
+  if (!contextIsFresh(sites, context)) throw new Error('Missing current terrain measurement');
+  return { ...context,
+    measurementPolicies: { ...context.measurementPolicies, ...Object.fromEntries(sites.map(site => [site.slug, terrainPolicyId(site)])) },
+    measurementTimes: { ...context.measurementTimes, ...Object.fromEntries(sites.map(site => [site.slug, context.measurementTimes?.[site.slug] ?? context.generatedAt])) },
+  };
 }
 
 /** Keep measured and retained launch contexts together, with every source credited. */
@@ -107,7 +122,11 @@ export function mergeSiteContexts(cataloguedSites, context, measured) {
     }
     return [site.slug, entry];
   }));
-  const document = { ...measured, sources: [...sources.values()], sites };
+  const policies = { ...context?.measurementPolicies, ...measured.measurementPolicies };
+  const times = Object.fromEntries(cataloguedSites.map(site => [site.slug, measured.sites[site.slug]
+    ? measured.measurementTimes?.[site.slug] ?? measured.generatedAt
+    : context.measurementTimes?.[site.slug] ?? context.generatedAt]));
+  const document = stampTerrainContext({ ...measured, sources: [...sources.values()], sites, measurementPolicies: policies, measurementTimes: times }, cataloguedSites);
   if (!parseSiteContextJson(JSON.stringify(document))) throw new Error('Merged site-context.json fails the reader contract');
   return document;
 }
@@ -126,7 +145,7 @@ async function main() {
     const catalogue = parseSitesCatalogueJson(sitesBytes.toString("utf-8"));
     if (catalogue === null) throw new Error("the published sites.json fails the contract guard");
     const contextBytes = await store.get("site-context.json");
-    const context = contextBytes === null ? null : parseSiteContextJson(contextBytes.toString("utf-8"));
+    const context = contextBytes === null ? null : (parseSiteContextJson(contextBytes.toString("utf-8")) ? JSON.parse(contextBytes.toString("utf-8")) : null);
     if (contextIsFresh(catalogue.sites, context)) {
       console.log("site-context.json is up to date");
       return;

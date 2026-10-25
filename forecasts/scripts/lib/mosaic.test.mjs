@@ -132,12 +132,14 @@ test("measure builds a contract-valid site-context across tile edges", async () 
   assert.match(warnings.join("\n"), /falls back to the GLO-30 surface model/);
 });
 
-test("contextIsFresh follows the engine's rule: same points for every launch", () => {
-  const context = { sites: { "cervidae-peak": { point: { latitude: CERVIDAE.latitude, longitude: CERVIDAE.longitude } } } };
+test("contextIsFresh requires current points, usable elevation and the source policy", () => {
+  const context = { generatedAt: '2026-10-24T12:00:00Z', sites: { "cervidae-peak": { point: { latitude: CERVIDAE.latitude, longitude: CERVIDAE.longitude }, elevation: { source: 'glo30', elevationM: 1500 }, terrain: { source: 'glo30' }, landCover: { source: 'worldcover2021' } } } };
   assert.equal(contextIsFresh([CERVIDAE], context), true);
   assert.equal(contextIsFresh([{ ...CERVIDAE, longitude: -115.9 }], context), false);
   assert.equal(contextIsFresh([CERVIDAE, { ...CERVIDAE, slug: "other" }], context), false);
   assert.equal(contextIsFresh([CERVIDAE], null), false);
+  assert.equal(contextIsFresh([CERVIDAE], { ...context, measurementPolicies: { [CERVIDAE.slug]: 'terrain-v0:old' } }), false);
+  assert.equal(contextIsFresh([CERVIDAE], { ...context, generatedAt: 'unknown' }), false);
 });
 
 test('Armenian measurements consistently use 90 m DEM tiles across tile edges', async () => {
@@ -193,7 +195,10 @@ test('incremental terrain sync preserves US measurements and credits new Armenia
   assert.equal(new Set(merged.sources.map(source => source.id)).size, 3);
   assert.equal(merged.generatedAt, measured.generatedAt);
   assert.ok(parseSiteContextJson(JSON.stringify(merged)));
-  assert.deepEqual(mergeSiteContexts([am], null, measured), measured);
+  assert.deepEqual(mergeSiteContexts([am], null, measured).sites, measured.sites);
+  assert.equal(merged.measurementTimes[CERVIDAE.slug], original.generatedAt);
+  assert.equal(merged.measurementTimes[am.slug], measured.generatedAt);
+  assert.equal(merged.measurementPolicies[am.slug], 'terrain-v1:glo90');
   assert.throws(() => mergeSiteContexts([{ ...am, latitude: 40.4 }], original, measured), /Missing current terrain measurement/);
   assert.throws(() => mergeSiteContexts([CERVIDAE, am], null, measured), /Missing current terrain measurement/);
 });

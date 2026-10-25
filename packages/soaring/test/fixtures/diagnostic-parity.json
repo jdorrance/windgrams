@@ -1,0 +1,608 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "baseline": "pre-workspace source modules captured before extraction",
+    "capturedAt": "2026-10-25",
+    "description": "Fixed source columns exercise heating, stable air, high terrain, and existing missing-flux behavior. Values are characterization fixtures, not observational validation."
+  },
+  "cases": [
+    {
+      "id": "heated-column",
+      "terrainM": 100,
+      "source": {
+        "validAt": "2026-10-24T21:00:00Z",
+        "temperatureC": 24,
+        "dewPointC": 12,
+        "windSpeedMps": 3,
+        "windDirectionDeg": 270,
+        "wind80mSpeedMps": 4,
+        "wind80mDirectionDeg": 280,
+        "sensibleHeatFluxWm2": 180,
+        "latentHeatFluxWm2": 90,
+        "pblHeightM": 1400,
+        "cloudCoverPercent": 20,
+        "precipitationMm": 0,
+        "seaLevelPressureHpa": 1013.25,
+        "levels": [
+          {
+            "pressureHpa": 975,
+            "heightM": 250,
+            "temperatureC": 22,
+            "dewPointC": 15,
+            "windSpeedMps": 4,
+            "windDirectionDeg": 275,
+            "verticalVelocityPaS": 0
+          },
+          {
+            "pressureHpa": 950,
+            "heightM": 500,
+            "temperatureC": 20,
+            "dewPointC": 13,
+            "windSpeedMps": 5,
+            "windDirectionDeg": 280,
+            "verticalVelocityPaS": -0.1
+          },
+          {
+            "pressureHpa": 925,
+            "heightM": 1000,
+            "temperatureC": 16,
+            "dewPointC": 9,
+            "windSpeedMps": 6,
+            "windDirectionDeg": 285,
+            "verticalVelocityPaS": -0.2
+          },
+          {
+            "pressureHpa": 850,
+            "heightM": 1500,
+            "temperatureC": 10,
+            "dewPointC": 3,
+            "windSpeedMps": 7,
+            "windDirectionDeg": 290,
+            "verticalVelocityPaS": -0.30000000000000004
+          },
+          {
+            "pressureHpa": 800,
+            "heightM": 2000,
+            "temperatureC": 6,
+            "dewPointC": -1,
+            "windSpeedMps": 8,
+            "windDirectionDeg": 295,
+            "verticalVelocityPaS": -0.4
+          },
+          {
+            "pressureHpa": 700,
+            "heightM": 3000,
+            "temperatureC": -2,
+            "dewPointC": -9,
+            "windSpeedMps": 9,
+            "windDirectionDeg": 300,
+            "verticalVelocityPaS": -0.5
+          }
+        ]
+      },
+      "v1Hour": {
+        "derived": {
+          "cloudBaseM": 1750
+        }
+      },
+      "options": {
+        "launchElevationM": 250
+      },
+      "expected": {
+        "contractVersion": "2.1.0",
+        "resolvedThermalTopM": 544.4,
+        "thermalTopPlus1CM": 2211.1,
+        "thermalVelocityV2Mps": 1.33,
+        "usableLiftTopV2M": 544.4,
+        "hcritWxtoflyM": 535.4,
+        "dryHcritM": 544.4,
+        "surfaceLclM": 1597.4,
+        "effectiveCloudLimitM": 1750,
+        "mixedLayerLclM": 1286.4,
+        "cuPotentialM": -1052.9,
+        "odPotentialM": -742,
+        "blMeanWindSpeedMps": 4.29,
+        "blMeanWindDirDeg": 277.7,
+        "blTopWindSpeedMps": 5.09,
+        "blTopWindDirDeg": 280.5,
+        "blWindShearMps": 2.21,
+        "buoyancyShearRatio": 0.6,
+        "wind10mSpeedMps": 3,
+        "wind10mDirDeg": 270,
+        "wind80mSpeedMps": 4,
+        "wind80mDirDeg": 280,
+        "windGustMps": null,
+        "wind925SpeedMps": 6,
+        "wind925DirDeg": 285,
+        "wind850SpeedMps": 7,
+        "wind850DirDeg": 290,
+        "maxUpwardVelocityMps": 0.06,
+        "minDownwardVelocityMps": -0,
+        "w925Mps": 0.02,
+        "w850Mps": 0.03,
+        "sensibleHeatFluxWm2": 180,
+        "latentHeatFluxWm2": 90,
+        "cloudCoverPercent": 20,
+        "lowCloudPercent": null,
+        "midCloudPercent": null,
+        "highCloudPercent": null,
+        "precipitationMmHr": 0,
+        "capeJkg": null,
+        "cinJkg": null,
+        "verticalResolution": {
+          "nativeLevelCount": 6,
+          "aboveGroundLevelCount": 6,
+          "isSparseProfile": true,
+          "hasSub925Levels": true,
+          "hasUpperAirAbove600Levels": false,
+          "has80mWind": true,
+          "synthesizedLevels": 0
+        },
+        "experimental": {
+          "terrainAdjustment": {
+            "experimental": true,
+            "launchElevationM": 250,
+            "modelElevationM": 100,
+            "terrainDeltaM": 150,
+            "bracketsLaunchAltitude": true,
+            "launchWindSpeedMps": 4,
+            "launchWindDirectionDeg": 275,
+            "rawMslHeightsPreserved": true,
+            "assumptions": [
+              "Horizontal wind at launchElevationM is vector-interpolated between bracketing model levels only when modelElevationM <= launchElevationM <= highestLevelM.",
+              "Elevation difference alone does not establish slope temperature, moisture, or surface heat flux; raw MSL cloud base and usable-lift heights are preserved unchanged."
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "stable-column",
+      "terrainM": 100,
+      "source": {
+        "validAt": "2026-10-24T21:00:00Z",
+        "temperatureC": 14,
+        "dewPointC": 2,
+        "windSpeedMps": 3,
+        "windDirectionDeg": 270,
+        "wind80mSpeedMps": 4,
+        "wind80mDirectionDeg": 280,
+        "sensibleHeatFluxWm2": -20,
+        "latentHeatFluxWm2": 5,
+        "pblHeightM": 180,
+        "cloudCoverPercent": 20,
+        "precipitationMm": 0,
+        "seaLevelPressureHpa": 1013.25,
+        "levels": [
+          {
+            "pressureHpa": 975,
+            "heightM": 250,
+            "temperatureC": 16,
+            "dewPointC": 9,
+            "windSpeedMps": 4,
+            "windDirectionDeg": 275,
+            "verticalVelocityPaS": 0
+          },
+          {
+            "pressureHpa": 950,
+            "heightM": 500,
+            "temperatureC": 17,
+            "dewPointC": 10,
+            "windSpeedMps": 5,
+            "windDirectionDeg": 280,
+            "verticalVelocityPaS": -0.1
+          },
+          {
+            "pressureHpa": 925,
+            "heightM": 1000,
+            "temperatureC": 16,
+            "dewPointC": 9,
+            "windSpeedMps": 6,
+            "windDirectionDeg": 285,
+            "verticalVelocityPaS": -0.2
+          },
+          {
+            "pressureHpa": 850,
+            "heightM": 1500,
+            "temperatureC": 14,
+            "dewPointC": 7,
+            "windSpeedMps": 7,
+            "windDirectionDeg": 290,
+            "verticalVelocityPaS": -0.30000000000000004
+          },
+          {
+            "pressureHpa": 800,
+            "heightM": 2000,
+            "temperatureC": 10,
+            "dewPointC": 3,
+            "windSpeedMps": 8,
+            "windDirectionDeg": 295,
+            "verticalVelocityPaS": -0.4
+          },
+          {
+            "pressureHpa": 700,
+            "heightM": 3000,
+            "temperatureC": 5,
+            "dewPointC": -2,
+            "windSpeedMps": 9,
+            "windDirectionDeg": 300,
+            "verticalVelocityPaS": -0.5
+          }
+        ]
+      },
+      "v1Hour": {
+        "derived": {
+          "cloudBaseM": 1750
+        }
+      },
+      "options": {
+        "launchElevationM": 250
+      },
+      "expected": {
+        "contractVersion": "2.1.0",
+        "resolvedThermalTopM": null,
+        "thermalTopPlus1CM": 250,
+        "thermalVelocityV2Mps": 0,
+        "usableLiftTopV2M": null,
+        "hcritWxtoflyM": null,
+        "dryHcritM": null,
+        "surfaceLclM": 1583,
+        "effectiveCloudLimitM": 1750,
+        "mixedLayerLclM": 1274,
+        "cuPotentialM": null,
+        "odPotentialM": null,
+        "blMeanWindSpeedMps": 3.78,
+        "blMeanWindDirDeg": 276.4,
+        "blTopWindSpeedMps": 4.12,
+        "blTopWindDirDeg": 275.7,
+        "blWindShearMps": 1.17,
+        "buoyancyShearRatio": 0,
+        "wind10mSpeedMps": 3,
+        "wind10mDirDeg": 270,
+        "wind80mSpeedMps": 4,
+        "wind80mDirDeg": 280,
+        "windGustMps": null,
+        "wind925SpeedMps": 6,
+        "wind925DirDeg": 285,
+        "wind850SpeedMps": 7,
+        "wind850DirDeg": 290,
+        "maxUpwardVelocityMps": 0.06,
+        "minDownwardVelocityMps": -0,
+        "w925Mps": 0.02,
+        "w850Mps": 0.03,
+        "sensibleHeatFluxWm2": -20,
+        "latentHeatFluxWm2": 5,
+        "cloudCoverPercent": 20,
+        "lowCloudPercent": null,
+        "midCloudPercent": null,
+        "highCloudPercent": null,
+        "precipitationMmHr": 0,
+        "capeJkg": null,
+        "cinJkg": null,
+        "verticalResolution": {
+          "nativeLevelCount": 6,
+          "aboveGroundLevelCount": 6,
+          "isSparseProfile": true,
+          "hasSub925Levels": true,
+          "hasUpperAirAbove600Levels": false,
+          "has80mWind": true,
+          "synthesizedLevels": 0
+        },
+        "experimental": {
+          "terrainAdjustment": {
+            "experimental": true,
+            "launchElevationM": 250,
+            "modelElevationM": 100,
+            "terrainDeltaM": 150,
+            "bracketsLaunchAltitude": true,
+            "launchWindSpeedMps": 4,
+            "launchWindDirectionDeg": 275,
+            "rawMslHeightsPreserved": true,
+            "assumptions": [
+              "Horizontal wind at launchElevationM is vector-interpolated between bracketing model levels only when modelElevationM <= launchElevationM <= highestLevelM.",
+              "Elevation difference alone does not establish slope temperature, moisture, or surface heat flux; raw MSL cloud base and usable-lift heights are preserved unchanged."
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "high-terrain-column",
+      "terrainM": 2300,
+      "source": {
+        "validAt": "2026-10-24T21:00:00Z",
+        "temperatureC": 15,
+        "dewPointC": 3,
+        "windSpeedMps": 3,
+        "windDirectionDeg": 270,
+        "wind80mSpeedMps": 4,
+        "wind80mDirectionDeg": 280,
+        "sensibleHeatFluxWm2": 130,
+        "latentHeatFluxWm2": 60,
+        "pblHeightM": 900,
+        "cloudCoverPercent": 20,
+        "precipitationMm": 0,
+        "seaLevelPressureHpa": 1013.25,
+        "levels": [
+          {
+            "pressureHpa": 975,
+            "heightM": 2450,
+            "temperatureC": 14,
+            "dewPointC": 7,
+            "windSpeedMps": 4,
+            "windDirectionDeg": 275,
+            "verticalVelocityPaS": 0
+          },
+          {
+            "pressureHpa": 950,
+            "heightM": 2700,
+            "temperatureC": 12,
+            "dewPointC": 5,
+            "windSpeedMps": 5,
+            "windDirectionDeg": 280,
+            "verticalVelocityPaS": -0.1
+          },
+          {
+            "pressureHpa": 925,
+            "heightM": 3200,
+            "temperatureC": 8,
+            "dewPointC": 1,
+            "windSpeedMps": 6,
+            "windDirectionDeg": 285,
+            "verticalVelocityPaS": -0.2
+          },
+          {
+            "pressureHpa": 850,
+            "heightM": 3700,
+            "temperatureC": 4,
+            "dewPointC": -3,
+            "windSpeedMps": 7,
+            "windDirectionDeg": 290,
+            "verticalVelocityPaS": -0.30000000000000004
+          },
+          {
+            "pressureHpa": 800,
+            "heightM": 4200,
+            "temperatureC": 0,
+            "dewPointC": -7,
+            "windSpeedMps": 8,
+            "windDirectionDeg": 295,
+            "verticalVelocityPaS": -0.4
+          },
+          {
+            "pressureHpa": 700,
+            "heightM": 5200,
+            "temperatureC": -8,
+            "dewPointC": -15,
+            "windSpeedMps": 9,
+            "windDirectionDeg": 300,
+            "verticalVelocityPaS": -0.5
+          }
+        ]
+      },
+      "v1Hour": {
+        "derived": {
+          "cloudBaseM": 3950
+        }
+      },
+      "options": {
+        "launchElevationM": 2450
+      },
+      "expected": {
+        "contractVersion": "2.1.0",
+        "resolvedThermalTopM": 2450,
+        "thermalTopPlus1CM": 2744.4,
+        "thermalVelocityV2Mps": 0.83,
+        "usableLiftTopV2M": 2428,
+        "hcritWxtoflyM": 2417.5,
+        "dryHcritM": 2428,
+        "surfaceLclM": 3784.4,
+        "effectiveCloudLimitM": 3950,
+        "mixedLayerLclM": 3536,
+        "cuPotentialM": -1334.4,
+        "odPotentialM": -1086,
+        "blMeanWindSpeedMps": 3.72,
+        "blMeanWindDirDeg": 276.6,
+        "blTopWindSpeedMps": 4,
+        "blTopWindDirDeg": 275,
+        "blWindShearMps": 1.04,
+        "buoyancyShearRatio": 0.79,
+        "wind10mSpeedMps": 3,
+        "wind10mDirDeg": 270,
+        "wind80mSpeedMps": 4,
+        "wind80mDirDeg": 280,
+        "windGustMps": null,
+        "wind925SpeedMps": 6,
+        "wind925DirDeg": 285,
+        "wind850SpeedMps": 7,
+        "wind850DirDeg": 290,
+        "maxUpwardVelocityMps": 0.06,
+        "minDownwardVelocityMps": -0,
+        "w925Mps": 0.02,
+        "w850Mps": 0.03,
+        "sensibleHeatFluxWm2": 130,
+        "latentHeatFluxWm2": 60,
+        "cloudCoverPercent": 20,
+        "lowCloudPercent": null,
+        "midCloudPercent": null,
+        "highCloudPercent": null,
+        "precipitationMmHr": 0,
+        "capeJkg": null,
+        "cinJkg": null,
+        "verticalResolution": {
+          "nativeLevelCount": 6,
+          "aboveGroundLevelCount": 6,
+          "isSparseProfile": true,
+          "hasSub925Levels": true,
+          "hasUpperAirAbove600Levels": false,
+          "has80mWind": true,
+          "synthesizedLevels": 0
+        },
+        "experimental": {
+          "terrainAdjustment": {
+            "experimental": true,
+            "launchElevationM": 2450,
+            "modelElevationM": 2300,
+            "terrainDeltaM": 150,
+            "bracketsLaunchAltitude": true,
+            "launchWindSpeedMps": 4,
+            "launchWindDirectionDeg": 275,
+            "rawMslHeightsPreserved": true,
+            "assumptions": [
+              "Horizontal wind at launchElevationM is vector-interpolated between bracketing model levels only when modelElevationM <= launchElevationM <= highestLevelM.",
+              "Elevation difference alone does not establish slope temperature, moisture, or surface heat flux; raw MSL cloud base and usable-lift heights are preserved unchanged."
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "legacy-missing-flux",
+      "terrainM": 100,
+      "source": {
+        "validAt": "2026-10-24T21:00:00Z",
+        "temperatureC": 24,
+        "dewPointC": 12,
+        "windSpeedMps": 3,
+        "windDirectionDeg": 270,
+        "wind80mSpeedMps": 4,
+        "wind80mDirectionDeg": 280,
+        "pblHeightM": 1400,
+        "cloudCoverPercent": 20,
+        "precipitationMm": 0,
+        "seaLevelPressureHpa": 1013.25,
+        "levels": [
+          {
+            "pressureHpa": 975,
+            "heightM": 250,
+            "temperatureC": 22,
+            "dewPointC": 15,
+            "windSpeedMps": 4,
+            "windDirectionDeg": 275,
+            "verticalVelocityPaS": 0
+          },
+          {
+            "pressureHpa": 950,
+            "heightM": 500,
+            "temperatureC": 20,
+            "dewPointC": 13,
+            "windSpeedMps": 5,
+            "windDirectionDeg": 280,
+            "verticalVelocityPaS": -0.1
+          },
+          {
+            "pressureHpa": 925,
+            "heightM": 1000,
+            "temperatureC": 16,
+            "dewPointC": 9,
+            "windSpeedMps": 6,
+            "windDirectionDeg": 285,
+            "verticalVelocityPaS": -0.2
+          },
+          {
+            "pressureHpa": 850,
+            "heightM": 1500,
+            "temperatureC": 10,
+            "dewPointC": 3,
+            "windSpeedMps": 7,
+            "windDirectionDeg": 290,
+            "verticalVelocityPaS": -0.30000000000000004
+          },
+          {
+            "pressureHpa": 800,
+            "heightM": 2000,
+            "temperatureC": 6,
+            "dewPointC": -1,
+            "windSpeedMps": 8,
+            "windDirectionDeg": 295,
+            "verticalVelocityPaS": -0.4
+          },
+          {
+            "pressureHpa": 700,
+            "heightM": 3000,
+            "temperatureC": -2,
+            "dewPointC": -9,
+            "windSpeedMps": 9,
+            "windDirectionDeg": 300,
+            "verticalVelocityPaS": -0.5
+          }
+        ]
+      },
+      "v1Hour": {
+        "derived": {
+          "cloudBaseM": 1750
+        }
+      },
+      "options": {
+        "launchElevationM": 250
+      },
+      "expected": {
+        "contractVersion": "2.1.0",
+        "resolvedThermalTopM": 544.4,
+        "thermalTopPlus1CM": 2211.1,
+        "thermalVelocityV2Mps": 0,
+        "usableLiftTopV2M": null,
+        "hcritWxtoflyM": null,
+        "dryHcritM": null,
+        "surfaceLclM": 1597.4,
+        "effectiveCloudLimitM": 1750,
+        "mixedLayerLclM": 1286.4,
+        "cuPotentialM": -1052.9,
+        "odPotentialM": -742,
+        "blMeanWindSpeedMps": 4.29,
+        "blMeanWindDirDeg": 277.7,
+        "blTopWindSpeedMps": 5.09,
+        "blTopWindDirDeg": 280.5,
+        "blWindShearMps": 2.21,
+        "buoyancyShearRatio": 0,
+        "wind10mSpeedMps": 3,
+        "wind10mDirDeg": 270,
+        "wind80mSpeedMps": 4,
+        "wind80mDirDeg": 280,
+        "windGustMps": null,
+        "wind925SpeedMps": 6,
+        "wind925DirDeg": 285,
+        "wind850SpeedMps": 7,
+        "wind850DirDeg": 290,
+        "maxUpwardVelocityMps": 0.06,
+        "minDownwardVelocityMps": -0,
+        "w925Mps": 0.02,
+        "w850Mps": 0.03,
+        "sensibleHeatFluxWm2": null,
+        "latentHeatFluxWm2": null,
+        "cloudCoverPercent": 20,
+        "lowCloudPercent": null,
+        "midCloudPercent": null,
+        "highCloudPercent": null,
+        "precipitationMmHr": 0,
+        "capeJkg": null,
+        "cinJkg": null,
+        "verticalResolution": {
+          "nativeLevelCount": 6,
+          "aboveGroundLevelCount": 6,
+          "isSparseProfile": true,
+          "hasSub925Levels": true,
+          "hasUpperAirAbove600Levels": false,
+          "has80mWind": true,
+          "synthesizedLevels": 0
+        },
+        "experimental": {
+          "terrainAdjustment": {
+            "experimental": true,
+            "launchElevationM": 250,
+            "modelElevationM": 100,
+            "terrainDeltaM": 150,
+            "bracketsLaunchAltitude": true,
+            "launchWindSpeedMps": 4,
+            "launchWindDirectionDeg": 275,
+            "rawMslHeightsPreserved": true,
+            "assumptions": [
+              "Horizontal wind at launchElevationM is vector-interpolated between bracketing model levels only when modelElevationM <= launchElevationM <= highestLevelM.",
+              "Elevation difference alone does not establish slope temperature, moisture, or surface heat flux; raw MSL cloud base and usable-lift heights are preserved unchanged."
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

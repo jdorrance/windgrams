@@ -10,7 +10,7 @@ const sites = {
 };
 const launches = {
   schemaVersion: 1,
-  launches: { "cervidae-peak": { facingDeg: 315, windArcHalfWidthDeg: 45, windMinMph: 5, windMaxMph: 15, gustMaxMph: 20, region: "Boise, ID", notes: "" } },
+  launches: { "cervidae-peak": { countryCode: "US", facingDeg: 315, windArcHalfWidthDeg: 45, windMinMph: 5, windMaxMph: 15, gustMaxMph: 20, region: "Boise, ID", notes: "" } },
 };
 const encode = (value: unknown) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`).toString("base64").replace(/(.{60})/g, "$1\n");
 
@@ -49,6 +49,7 @@ const newLaunch: Launch = {
   latitude: 43.78,
   longitude: -116.08,
   timeZone: "America/Boise",
+  countryCode: "US",
   facingDeg: 203,
   windArcHalfWidthDeg: 45,
   windMinMph: 4,
@@ -75,6 +76,8 @@ test("saveLaunch writes both files in one fast-forward commit", async () => {
   const files = Object.fromEntries(tree.tree.map((e: { path: string; content: string }) => [e.path, JSON.parse(e.content)]));
   assert.deepEqual(files[SITES_PATH].sites.map((s: { slug: string }) => s.slug), ["cervidae-peak", "shafer-butte"]);
   assert.equal(files[LAUNCHES_PATH].launches["shafer-butte"].facingDeg, 203);
+  assert.equal(files[LAUNCHES_PATH].launches["shafer-butte"].countryCode, "US");
+  assert.ok(files[SITES_PATH].sites.every((site: Record<string, unknown>) => !("countryCode" in site)), "country metadata stays outside the strict engine catalogue");
   assert.ok(tree.tree.every((e: { content: string }) => e.content.endsWith("}\n")));
 
   const commit = calls.find((c) => c.path === "/git/commits")!.body;
@@ -98,4 +101,23 @@ test("saveLaunch refuses a duplicate slug without writing", async () => {
   const existing = joinLaunches(sites as never, launches as never)[0];
   await assert.rejects(saveLaunch(config, fetchImpl, existing, "create"), (e: unknown) => e instanceof GitHubError && e.status === 409);
   assert.ok(!calls.some((c) => c.method === "POST"));
+});
+
+
+test("saveLaunch preserves stored country when a legacy update omits it", async () => {
+  const { fetchImpl, calls } = fakeGitHub();
+  const existing = joinLaunches(sites as never, launches as never)[0];
+  // validateLaunchInput normalizes an omitted legacy field to an empty value.
+  await saveLaunch(config, fetchImpl, { ...existing, countryCode: "", notes: "Access confirmed." }, "update");
+  const tree = calls.find(call => call.path === "/git/trees")!.body;
+  const metadata = JSON.parse(tree.tree.find((file: { path: string }) => file.path === LAUNCHES_PATH).content);
+  assert.equal(metadata.launches[existing.slug].countryCode, "US");
+  assert.equal(metadata.launches[existing.slug].notes, "Access confirmed.");
+});
+
+test("saveLaunch rejects an unclassified create before writing Git objects", async () => {
+  const { fetchImpl, calls } = fakeGitHub();
+  await assert.rejects(saveLaunch(config, fetchImpl, { ...newLaunch, countryCode: "" }, "create"),
+    (error: unknown) => error instanceof GitHubError && /Country/.test(error.message));
+  assert.ok(!calls.some(call => call.method === "POST" || call.method === "PATCH"));
 });

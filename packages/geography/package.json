@@ -1,0 +1,25 @@
+{
+  "name": "@windgrams/geography",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Geographic coordinates, bounds and model coverage",
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./build-inventory.json": "./dist/build-inventory.json"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs @windgrams/geography",
+    "test": "node --test test/*.test.mjs",
+    "check": "tsc -p tsconfig.json --noEmit"
+  }
+}

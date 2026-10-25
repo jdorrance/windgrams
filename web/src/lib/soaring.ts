@@ -1,6 +1,26 @@
 import { convertQuantity, feetToMetres, formatQuantity, getUnitSystem, mphToMps, unitLabel, type QuantityKind, type UnitSystem } from './units.ts';
 import type { SiteForecast } from '@azohra/meteo.briefing/contract';
-export * from './soaring-contracts.ts';
+import { containsPolygon, distanceKm, validPosition as validCoordinates } from '@windgrams/geography';
+import type { Grid } from '@windgrams/contracts/regional';
+import { replayModel as explicitReplayModel, type Quality, type ReplayHour, type ReplayManifest, type RegionDescriptor, type RegionCatalogue } from '@windgrams/contracts/regional';
+import legacyReplayModels from '../../../forecasts/soaring/legacy-replay-models.json' with { type: 'json' };
+export type { Grid, Cell, Quality, LevelArrays, ReplayHour, ReplayManifest, RegionDescriptor, RegionCatalogue } from '@windgrams/contracts/regional';
+
+function legacyReplayModel(caseId: string): string | undefined {
+  return Object.hasOwn(legacyReplayModels, caseId)
+    ? legacyReplayModels[caseId as keyof typeof legacyReplayModels] : undefined;
+}
+
+/** Give archives published before model metadata an explicit identity at the host boundary. */
+export function normalizeReplayManifest(manifest: ReplayManifest): ReplayManifest {
+  if (manifest.model || manifest.case.model) return manifest;
+  const model = legacyReplayModel(manifest.case.id);
+  return model ? { ...manifest, model } : manifest;
+}
+
+export function replayModel(manifest: ReplayManifest): string {
+  return explicitReplayModel(normalizeReplayManifest(manifest));
+}
 
 export const DEFAULT_CASE = 'north-sound-20261021-00z';
 export type Layer =
@@ -30,129 +50,6 @@ export type Layer =
   | 'precipitationMmHr'
   | 'capeJkg';
 
-export type Quality = 'valid' | 'missing' | 'insufficient-levels';
-
-export interface LevelArrays {
-  h: (number | null)[];
-  t: (number | null)[];
-  td: (number | null)[];
-  ws: (number | null)[];
-  wd: (number | null)[];
-  vv: (number | null)[];
-}
-
-export interface ReplayHour {
-  forecastHour: number;
-  validAt: string;
-  soaringContractVersion?: string;
-  thermalVelocityMps: (number | null)[];
-  usableLiftTopM: (number | null)[];
-  boundaryLayerTopM: (number | null)[];
-  cloudBaseM: (number | null)[];
-  pblHeightM: (number | null)[];
-  resolvedThermalTopM?: (number | null)[];
-  thermalTopPlus1CM?: (number | null)[];
-  thermalVelocityV2Mps?: (number | null)[];
-  usableLiftTopV2M?: (number | null)[];
-  hcritWxtoflyM?: (number | null)[];
-  dryHcritM?: (number | null)[];
-  surfaceLclM?: (number | null)[];
-  effectiveCloudLimitM?: (number | null)[];
-  mixedLayerLclM?: (number | null)[];
-  cuPotentialM?: (number | null)[];
-  odPotentialM?: (number | null)[];
-  blMeanWindSpeedMps?: (number | null)[];
-  blMeanWindDirDeg?: (number | null)[];
-  blTopWindSpeedMps?: (number | null)[];
-  blTopWindDirDeg?: (number | null)[];
-  blWindShearMps?: (number | null)[];
-  buoyancyShearRatio?: (number | null)[];
-  wind10mSpeedMps?: (number | null)[];
-  wind10mDirDeg?: (number | null)[];
-  wind80mSpeedMps?: (number | null)[];
-  wind80mDirDeg?: (number | null)[];
-  windGustMps?: (number | null)[];
-  wind925SpeedMps?: (number | null)[];
-  wind925DirDeg?: (number | null)[];
-  wind850SpeedMps?: (number | null)[];
-  wind850DirDeg?: (number | null)[];
-  maxUpwardVelocityMps?: (number | null)[];
-  minDownwardVelocityMps?: (number | null)[];
-  w925Mps?: (number | null)[];
-  w850Mps?: (number | null)[];
-  convergence10mX1e5?: (number | null)[];
-  convergence925X1e5?: (number | null)[];
-  sensibleHeatFluxWm2?: (number | null)[];
-  latentHeatFluxWm2?: (number | null)[];
-  cloudCoverPercent?: (number | null)[];
-  lowCloudPercent?: (number | null)[];
-  midCloudPercent?: (number | null)[];
-  highCloudPercent?: (number | null)[];
-  precipitationMmHr?: (number | null)[];
-  capeJkg?: (number | null)[];
-  cinJkg?: (number | null)[];
-  sfcT?: (number | null)[];
-  sfcTd?: (number | null)[];
-  mslp?: (number | null)[];
-  levelsByPressure?: Record<string, LevelArrays>;
-  /** Native model levels use each cell's actual pressure (hPa). */
-  levelsByModel?: Record<string, LevelArrays & { p: (number | null)[] }>;
-  status: Quality[];
-  levelCount: number[];
-  ceilingReached: boolean[];
-}
-
-export interface ReplayManifest {
-  schemaVersion: number;
-  model?: string;
-  semantics?: SiteForecast['semantics'];
-  soaringContractVersion?: string;
-  capturedAt: string;
-  cellCount: number;
-  files?: Record<string, string>;
-  /** Compressed per-cell profiles keep native columns out of eager hourly maps. */
-  cellProfiles?: string;
-  siteCell: number;
-  case: {
-    id: string;
-    model?: string;
-    referenceTime: string;
-    bbox: [number, number, number, number];
-    sinkMps: number;
-    pressureLevels?: number[];
-    site: { slug?: string; name: string; latitude: number; longitude: number; timeZone: string };
-    launchElevation: { elevationM: number };
-  };
-  versions: { algorithm: string };
-  hours: { forecastHour: number; validAt: string; file: string }[];
-}
-
-export interface RegionDescriptor {
-  id: string;
-  name: string;
-  status: string;
-  caseId: string;
-  expandedCaseId?: string;
-  nativeModels?: { model: string; caseId: string; expandedCaseId?: string }[];
-  timeZone: string;
-  morningBriefingLocalHour: number;
-  bbox: [number, number, number, number];
-  primarySite: string;
-  matchedRaobStation?: string;
-  launches: string[];
-  deterministicModels: string[];
-  ensembleModels: string[];
-  sparseAdapters: string[];
-}
-
-export interface RegionCatalogue {
-  schemaVersion: number;
-  soaringContractVersion: string;
-  generatedAt: string;
-  trialRegionId: string;
-  regions: RegionDescriptor[];
-}
-
 export interface LayerSpec {
   id: Layer;
   label: string;
@@ -177,25 +74,25 @@ const depthStops = [0, 1500, 3000, 6000, 10000].map(feetToMetres);
 const cloudStops = [500, 2000, 4000, 7000, 11000].map(feetToMetres);
 const windStops = [0, 5, 12, 20, 30].map(mphToMps);
 const definitions: LayerDefinition[] = [
-  { id: 'thermalVelocityV2Mps', name: 'Thermal strength', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Convective velocity w* · resolved thermal depth.' },
+  { id: 'thermalVelocityV2Mps', name: 'Thermal strength', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Thermal strength (w*) calculated over the estimated thermal depth.' },
   { id: 'usableLiftTopV2M', name: 'Usable lift top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Sink threshold: ' },
   { id: 'hcritWxtoflyM', name: 'Paraglider ceiling', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'WxToFly sink threshold: ' },
   { id: 'dryHcritM', name: 'Dry thermal lift top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Dry parcel estimate.' },
-  { id: 'resolvedThermalTopM', name: 'Thermal top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: depthStops, colors: thermalColors, note: 'Resolved thermal depth.' },
+  { id: 'resolvedThermalTopM', name: 'Thermal top', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: depthStops, colors: thermalColors, note: 'Estimated top of the buoyant thermal layer.' },
   { id: 'thermalVelocityMps', name: 'Thermal strength · legacy', group: 'Thermals', kind: 'lift', stops: [0,.5,1,2,3], colors: thermalColors, note: 'Earlier parcel method.' },
   { id: 'usableLiftTopM', name: 'Usable lift top · legacy', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: topStops, colors: thermalColors, note: 'Sink threshold: ' },
   { id: 'boundaryLayerTopM', name: 'Parcel top · legacy', group: 'Thermals', kind: 'elevation', datum: 'MSL', stops: depthStops, colors: thermalColors, note: 'Earlier parcel method.' },
   { id: 'pblHeightM', name: 'Mixing depth', group: 'Thermals', kind: 'elevation', datum: 'AGL', stops: [0,250,500,1000,2000], colors: thermalColors, note: 'Model boundary-layer depth.' },
-  { id: 'sensibleHeatFluxWm2', name: 'Surface heating', group: 'Thermals', unit: 'W/m²', stops: [-30,0,50,150,300], colors: ['#6b8ea4','#f4f8fa','#c3e1e9','#e8bc52','#c44935'], note: 'Negative: cooling · positive: heating.' },
-  { id: 'surfaceLclM', name: 'Potential cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Surface-parcel condensation level.' },
-  { id: 'effectiveCloudLimitM', name: 'Effective cloud limit', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Model-derived near-saturation ceiling proxy.' },
-  { id: 'mixedLayerLclM', name: 'Mixed-layer cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Mixed-parcel condensation level.' },
-  { id: 'cuPotentialM', name: 'Cumulus potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#289b9c','#1a5f7a'], note: 'Thermal top minus surface LCL · positive: Cu potential.' },
-  { id: 'odPotentialM', name: 'Spreadout potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#7c689c','#4a356b'], note: 'Thermal top minus mixed LCL · positive: spreadout potential.' },
+  { id: 'sensibleHeatFluxWm2', name: 'Surface heating', group: 'Thermals', unit: 'W/m²', stops: [-30,0,50,150,300], colors: ['#6b8ea4','#f4f8fa','#c3e1e9','#e8bc52','#c44935'], note: 'Positive values show heating; negative values show cooling.' },
+  { id: 'surfaceLclM', name: 'Potential cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Height where a rising parcel of surface air would reach saturation.' },
+  { id: 'effectiveCloudLimitM', name: 'Effective cloud limit', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Estimated cloud limit from nearly saturated model layers.' },
+  { id: 'mixedLayerLclM', name: 'Mixed-layer cloud base', group: 'Clouds / rain', kind: 'elevation', datum: 'MSL', stops: cloudStops, colors: cloudBaseColors, note: 'Condensation height after mixing air through the lower layer.' },
+  { id: 'cuPotentialM', name: 'Cumulus potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#289b9c','#1a5f7a'], note: 'Thermal top minus surface condensation height. Positive values suggest cumulus may form.' },
+  { id: 'odPotentialM', name: 'Spreadout potential', group: 'Clouds / rain', kind: 'elevation', stops: [-1500,-500,0,300,1000], colors: ['#e5d9bd','#c3e1e9','#f4f8fa','#7c689c','#4a356b'], note: 'Thermal top minus mixed-layer condensation height. Positive values suggest cloud may spread out.' },
   { id: 'cloudCoverPercent', name: 'Cloud cover', group: 'Clouds / rain', unit: '%', stops: [0,25,50,75,100], colors: cloudColors, note: 'Total cloud fraction.' },
   { id: 'lowCloudPercent', name: 'Low cloud', group: 'Clouds / rain', unit: '%', stops: [0,25,50,75,100], colors: cloudColors, note: 'Low-level cloud fraction.' },
   { id: 'precipitationMmHr', name: 'Rain', group: 'Clouds / rain', kind: 'rainRate', stops: [0,.2,1,3,8], colors: ['#f4f8fa','#b3cde3','#6497b1','#005b96','#03396c'], note: 'Precipitation rate.' },
-  { id: 'capeJkg', name: 'CAPE', group: 'Clouds / rain', unit: 'J/kg', stops: [0,50,200,500,1000], colors: thermalColors, note: 'Convective energy.' },
+  { id: 'capeJkg', name: 'CAPE', group: 'Clouds / rain', unit: 'J/kg', stops: [0,50,200,500,1000], colors: thermalColors, note: 'Energy available to a buoyant rising parcel.' },
   { id: 'wind10mSpeedMps', name: 'Surface wind', group: 'Wind', kind: 'wind', stops: windStops, colors: thermalColors, note: 'Wind at model surface.' },
   { id: 'blMeanWindSpeedMps', name: 'Average boundary-layer wind', group: 'Wind', kind: 'wind', stops: windStops, colors: thermalColors, note: 'Boundary-layer mean wind.' },
   { id: 'blWindShearMps', name: 'Wind shear', group: 'Wind', kind: 'wind', stops: [0,2,4,7,12], colors: thermalColors, note: 'Vector wind change across the boundary layer.' },
@@ -239,18 +136,6 @@ export function refreshReplayLayerLabels(options: Iterable<{ value: string; text
     if (spec) option.textContent = spec.label;
   }
 }
-
-export const SUPPORTED_CASES = new Set([
-  'armenia-icon-eu-live',
-  'north-sound-20261021-00z',
-  'north-sound-expanded-v2',
-  'shenandoah-blue-ridge-20261021-00z',
-  'shenandoah-massanutten-20261021-06z',
-  'tiger-puget-trough-20261021-06z',
-  'columbia-gorge-gap-flow-20261021-06z',
-  'rogue-valley-woodrat-20261021-06z',
-  'intermountain-idaho-utah-v2',
-]);
 
 /**
  * Builds an SVG path string for a cross-section line series using the node array's
@@ -309,19 +194,26 @@ export function crossSectionHeightScale(
 
 export function replayLocation(search: string, dataBase: string) {
   const query = new URLSearchParams(search), caseId = query.get('case') ?? DEFAULT_CASE;
-  if (!SUPPORTED_CASES.has(caseId) && !SUPPORTED_CASES.has(caseId.replace(/-(?:rrfs-)?live$/, ''))) throw new Error(`Unknown replay case: ${caseId}`);
+  // Published catalogues can introduce regions without a web release. Explicit
+  // historical links remain addressable; the fetched manifest verifies identity.
+  if (!/^[a-z0-9][a-z0-9-]{0,159}$/.test(caseId)) throw new Error(`Unknown replay case: ${caseId}`);
   const hour = Number(query.get('hour') ?? 20);
   return {
     caseId,
-    hour: Number.isInteger(hour) && hour >= 1 && hour <= (caseId === 'armenia-icon-eu-live' ? 120 : 84) ? hour : 20,
+    hour: Number.isSafeInteger(hour) && hour >= 0 ? hour : 20,
     root: `${dataBase.replace(/\/$/, '')}/soaring/v1/${caseId}`,
   };
 }
 
 export function hourIndex(hours: { forecastHour: number }[], requested: number) {
+  if (!hours.length) return 0;
   const found = hours.findIndex(h => h.forecastHour === requested);
   if (found >= 0) return found;
-  return hours.length > 6 ? 6 : 0;
+  if (!Number.isFinite(requested)) return 0;
+  return hours.reduce((best, hour, index) =>
+    Math.abs(hour.forecastHour - requested) < Math.abs(hours[best].forecastHour - requested)
+      || (Math.abs(hour.forecastHour - requested) === Math.abs(hours[best].forecastHour - requested)
+        && hour.forecastHour < hours[best].forecastHour) ? index : best, 0);
 }
 
 export function forecastHourAtValidTime(hours: { forecastHour: number; validAt: string }[], validAt: string | null) {
@@ -334,35 +226,37 @@ interface ReplayCellLocation { cellIndex: number; latitude: number; longitude: n
 interface ReplayLaunchLocation extends ReplayCellLocation { slug: string }
 export interface ReplaySelection extends ReplayCellLocation { launchSlug?: string }
 
-const validCoordinates = (point: { latitude: number; longitude: number }) =>
-  Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90
-  && Number.isFinite(point.longitude) && Math.abs(point.longitude) <= 180;
-
-function distanceKm(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
-  const rad = Math.PI / 180;
-  const h = Math.sin((a.latitude - b.latitude) * rad / 2) ** 2
-    + Math.cos(a.latitude * rad) * Math.cos(b.latitude * rad) * Math.sin((a.longitude - b.longitude) * rad / 2) ** 2;
-  return 12742 * Math.asin(Math.sqrt(Math.min(1, Math.max(0, h))));
-}
-
 /** Cell indexes belong to one model grid. Carry geography across runs instead. */
 export function replaySelection(
   query: URLSearchParams,
   cells: readonly ReplayCellLocation[],
   launches: readonly ReplayLaunchLocation[],
   fallbackCell: number,
+  grid?: Pick<Grid, 'features'>,
 ): ReplaySelection {
   const validCells = cells.filter(cell => Number.isInteger(cell.cellIndex) && cell.cellIndex >= 0 && validCoordinates(cell));
+  const footprints = grid ? new Map(grid.features.map(feature => [feature.properties.cellIndex, feature.geometry.coordinates])) : null;
   const nearest = (point: { latitude: number; longitude: number }) => {
     if (!validCoordinates(point) || !validCells.length) return undefined;
-    const cell = validCells.reduce((best, candidate) => distanceKm(candidate, point) < distanceKm(best, point) ? candidate : best);
-    // The regional products use 3 km grids; do not snap an out-of-region link to a distant edge.
-    return distanceKm(cell, point) <= 5 ? cell : undefined;
+    const candidates = footprints
+      ? validCells.filter(cell => {
+          const polygon = footprints.get(cell.cellIndex);
+          return polygon ? containsPolygon(polygon, point) : false;
+        })
+      : validCells;
+    if (!candidates.length) return undefined;
+    const cell = candidates.reduce((best, candidate) => distanceKm(candidate, point) < distanceKm(best, point) ? candidate : best);
+    if (grid) return cell;
+    // Compatibility for callers with centres only. Production readers supply the
+    // native polygons; this fallback derives reach from this grid's spacing.
+    const spacing = validCells.filter(candidate => candidate.cellIndex !== cell.cellIndex)
+      .map(candidate => distanceKm(candidate, cell)).filter(value => value > 0);
+    const reach = spacing.length ? Math.min(...spacing) / Math.SQRT2 : 0;
+    return distanceKm(cell, point) <= reach ? cell : undefined;
   };
   const launch = launches.find(entry => entry.slug === query.get('launch'));
   if (launch && validCoordinates(launch)) {
-    const mapped = validCells.find(cell => cell.cellIndex === launch.cellIndex && distanceKm(cell, launch) <= 5);
-    const cell = mapped ?? nearest(launch);
+    const cell = nearest(launch);
     if (cell) return { cellIndex: cell.cellIndex, latitude: launch.latitude, longitude: launch.longitude, launchSlug: launch.slug };
   }
   const latitude = query.get('lat'), longitude = query.get('lon');
@@ -374,7 +268,8 @@ export function replaySelection(
   }
   const fallback = validCells.find(cell => cell.cellIndex === fallbackCell) ?? validCells[0];
   if (!fallback) throw new Error('Regional forecast has no valid grid locations');
-  const fallbackLaunch = launches.find(entry => entry.cellIndex === fallback.cellIndex && validCoordinates(entry) && distanceKm(entry, fallback) <= 5);
+  const fallbackLaunch = launches.find(entry => entry.cellIndex === fallback.cellIndex && validCoordinates(entry)
+    && nearest(entry)?.cellIndex === fallback.cellIndex);
   return fallbackLaunch
     ? { cellIndex: fallback.cellIndex, latitude: fallbackLaunch.latitude, longitude: fallbackLaunch.longitude, launchSlug: fallbackLaunch.slug }
     : { cellIndex: fallback.cellIndex, latitude: fallback.latitude, longitude: fallback.longitude };
@@ -387,16 +282,14 @@ export function setReplaySelectionQuery(query: URLSearchParams, selection: Repla
   else query.delete('launch');
 }
 
-export function replayModel(manifest: ReplayManifest) {
-  return manifest.model ?? manifest.case.model ?? 'hrrr-conus';
-}
-
 export function modelLabel(model: string) {
-  return ({ 'hrrr-conus': 'HRRR', rrfs: 'RRFS', 'icon-eu': 'ICON-EU' } as Record<string, string>)[model] ?? model;
+  return ({ 'hrrr-conus': 'HRRR', rrfs: 'RRFS', 'icon-eu': 'ICON-EU', unknown: 'Unknown model' } as Record<string, string>)[model] ?? model;
 }
 
 export function nativeModels(region: RegionDescriptor) {
-  return region.nativeModels?.length ? region.nativeModels : [{ model: 'hrrr-conus', caseId: region.caseId, expandedCaseId: region.expandedCaseId }];
+  if (region.nativeModels?.length) return region.nativeModels;
+  const legacyModel = legacyReplayModel(region.caseId);
+  return legacyModel ? [{ model: legacyModel, caseId: region.caseId, expandedCaseId: region.expandedCaseId }] : [];
 }
 
 export function regionForCase(regions: RegionDescriptor[], caseId: string) {
@@ -411,21 +304,23 @@ export function defaultReplayQuery(search: string, catalogue: RegionCatalogue | 
   const requestedRegion = query.get('region');
   const requested = requestedRegion ? catalogue?.regions.find(r => r.id === requestedRegion && r.status === 'active-verified-trial') : undefined;
   if (requestedRegion && !requested) throw new Error('Regional forecast is unavailable.');
-  const region = requested
-    ?? catalogue?.regions.find(r => r.status === 'active-verified-trial' && r.caseId.startsWith('north-sound-')
-    && nativeModels(r).some(entry => entry.caseId.endsWith('-live')));
+  const available = catalogue?.regions.filter(r => r.status === 'active-verified-trial' && nativeModels(r).length) ?? [];
+  const region = requested ?? available.find(r => r.id === catalogue?.trialRegionId) ?? available[0];
   if (region) {
     const requestedModel = query.get('model');
     const selected = nativeModels(region).find(entry => requestedModel ? entry.model === requestedModel : entry.caseId === region.caseId);
     if (requestedModel && !selected) throw new Error(`${modelLabel(requestedModel)} regional forecast is unavailable.`);
-    query.set('case', selected?.caseId ?? region.caseId);
+    if (!nativeModels(region).length) throw new Error('Regional forecast model is unavailable.');
+    query.set('case', selected?.caseId ?? nativeModels(region)[0].caseId);
+  } else if (catalogue) {
+    throw new Error('Regional forecast is unavailable.');
   } else if (query.has('model') && query.get('model') !== 'hrrr-conus') {
     throw new Error(`${modelLabel(query.get('model')!)} regional forecast is unavailable.`);
   }
   return query;
 }
 
-export function historicalLabel(referenceTime: string, rolling = false, model = 'hrrr-conus') {
+export function historicalLabel(referenceTime: string, rolling = false, model = 'unknown') {
   return `${rolling ? 'Forecast run' : 'Historical forecast'} · ${modelLabel(model)} ${referenceTime.slice(0, 10)} · ${referenceTime.slice(11, 16)} UTC`;
 }
 
@@ -485,14 +380,14 @@ export function buildCellSiteForecast(
 ): SiteForecast | null {
   const elev = cellProps.modelElevationM;
   if (elev === null) return null;
-  const pList = manifest.case.pressureLevels ?? [925, 900, 875, 850, 800, 750, 700, 650, 600];
   const siteHours: SiteForecast['hours'] = [];
   for (const h of hours) {
     if (h.status[cellIndex] !== 'valid') return null;
     const levels: (SiteForecast['hours'][number]['levels'][number] & { heightM: number })[] = [];
     const columns = h.levelsByModel
       ? Object.values(h.levelsByModel).map(la => ({ p: la.p[cellIndex], la }))
-      : pList.flatMap(p => h.levelsByPressure?.[String(p)] ? [{ p, la: h.levelsByPressure[String(p)] }] : []);
+      : (manifest.case.pressureLevels ?? Object.keys(h.levelsByPressure ?? {}).map(Number))
+        .flatMap(p => h.levelsByPressure?.[String(p)] ? [{ p, la: h.levelsByPressure[String(p)] }] : []);
     for (const { p, la } of columns) {
       const hm = la.h[cellIndex], tc = la.t[cellIndex], tdc = la.td[cellIndex], ws = la.ws[cellIndex], wd = la.wd[cellIndex];
       if ([p, hm, tc, tdc, ws, wd].some(value => value == null || !Number.isFinite(value)) || p! <= 0) continue;
@@ -550,9 +445,16 @@ export function buildCellSiteForecast(
       },
     });
   }
+  const model = replayModel(manifest);
+  // Older published HRRR/RRFS/ICON bundles predate explicit semantics. New
+  // providers must supply their own interval semantics instead of inheriting HRRR.
+  const semantics = manifest.semantics ?? (['rrfs', 'icon-eu'].includes(model)
+    ? { gust: 'instant' as const, precipitation: 'windowMeanRate' as const }
+    : model === 'hrrr-conus' ? { gust: 'instant' as const, precipitation: 'instantRate' as const, smoke: 'radiativelyCoupled' as const } : null);
+  if (!semantics) return null;
   return {
     schemaVersion: 2,
-    model: replayModel(manifest),
+    model,
     run: { referenceTime: manifest.case.referenceTime, generatedAt: manifest.capturedAt },
     site: {
       id: `cell-${cellProps.gridIndex}`,
@@ -562,9 +464,7 @@ export function buildCellSiteForecast(
       modelElevationM: elev,
       timeZone: manifest.case.site.timeZone,
     },
-    semantics: manifest.semantics ?? (['rrfs', 'icon-eu'].includes(replayModel(manifest))
-      ? { gust: 'instant', precipitation: 'windowMeanRate' }
-      : { gust: 'instant', precipitation: 'instantRate', smoke: 'radiativelyCoupled' }),
+    semantics,
     hours: siteHours,
   };
 }

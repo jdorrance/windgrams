@@ -9,7 +9,7 @@
 //   node scripts/ecmwf.mjs [--sites sites.json] [--output data] [--publish] [--notice]
 //
 // Without --publish nothing leaves the machine. --notice prints a one-line
-// summary per launch as a GitHub Actions notice (used by the Check workflow).
+// summary per launch as a GitHub Actions notice for live smoke checks.
 
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -32,7 +32,6 @@ const sitesPath = resolve(args.sites);
 const sites = parseSites(readFileSync(sitesPath, "utf-8"), sitesPath);
 const getJson = createClient();
 const now = Date.now();
-// "WARN " lines become warning annotations in GitHub Actions (scripts/run-annotated.sh).
 const warn = (message) => console.warn(`WARN ${message}`);
 
 const written = [];

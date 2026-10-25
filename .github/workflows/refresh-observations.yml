@@ -1,0 +1,14 @@
+# Each completion can publish independently of slower providers.
+name: Refresh observations
+on:
+  schedule:
+    - cron: "55 1,7,13,19 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  refresh:
+    uses: ./.github/workflows/refresh-provider.yml
+    with:
+      group: observations

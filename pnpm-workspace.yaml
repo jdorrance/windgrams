@@ -1,0 +1,8 @@
+packages:
+  - forecasts
+  - web
+  - packages/*
+
+# Package releases and live forecast publication are separate operations.
+# Workspace packages remain private until an explicit registry release.
+managePackageManagerVersions: false

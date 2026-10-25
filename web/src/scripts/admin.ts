@@ -56,6 +56,7 @@ function openForm(launch: Launch | null) {
   saveStatus.textContent = "";
   $("form-title").textContent = launch ? `Edit ${launch.name}` : "Add a launch";
   field("name").value = launch?.name ?? "";
+  field("countryCode").value = launch?.countryCode ?? "";
   field("region").value = launch?.region ?? "";
   field("latitude").value = launch ? String(launch.latitude) : "";
   field("longitude").value = launch ? String(launch.longitude) : "";
@@ -113,16 +114,16 @@ async function load() {
   try {
     response = await fetch("/api/admin/launches", { headers: { accept: "application/json" } });
   } catch {
-    status.textContent = "Admin API unavailable.";
+    status.textContent = "Unable to reach the launch editor.";
     return;
   }
   const body = (await response.json().catch(() => ({}))) as ListResponse;
   if (response.status === 401 || response.status === 403) {
-    status.textContent = "Admin sign-in required.";
+    status.textContent = "Sign in to edit launches.";
     return;
   }
   if (!response.ok) {
-    status.textContent = `Admin API: ${body.error ?? response.status}.`;
+    status.textContent = `Unable to load launches: ${body.error ?? response.status}.`;
     return;
   }
   launches = body.launches;
@@ -138,6 +139,7 @@ form.addEventListener("submit", async (event) => {
   const input = {
     name: field("name").value,
     slug: editing?.slug,
+    countryCode: field("countryCode").value,
     region: field("region").value,
     latitude: field("latitude").value,
     longitude: field("longitude").value,
@@ -187,7 +189,7 @@ form.addEventListener("submit", async (event) => {
     const link = document.createElement("a");
     link.href = body.commitUrl;
     link.textContent = "View change";
-    saveStatus.append("Saved · publishing… ", link);
+    saveStatus.append("Saved. Publishing… ", link);
   } finally {
     save.disabled = false;
   }

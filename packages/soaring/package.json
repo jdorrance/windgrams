@@ -1,0 +1,33 @@
+{
+  "name": "@windgrams/soaring",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./build-inventory.json": "./dist/build-inventory.json",
+    "./compatibility": {
+      "types": "./dist/compatibility.d.ts",
+      "import": "./dist/compatibility.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs @windgrams/soaring",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@azohra/meteo.briefing": "0.6.2",
+    "@windgrams/meteorology": "workspace:*",
+    "@windgrams/contracts": "workspace:*"
+  }
+}

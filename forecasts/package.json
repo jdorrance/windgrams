@@ -15,10 +15,11 @@
     "solar": "node scripts/solar.mjs",
     "ecmwf": "node scripts/ecmwf.mjs",
     "raob": "node scripts/raob.mjs",
-    "build:model": "bash scripts/build-local.sh",
+    "build:model": "node scripts/build-covered.mjs --model",
     "validate:rrfs": "node scripts/validate-rrfs.mjs",
     "soaring:capture": "node scripts/soaring.mjs capture",
-    "soaring:replay": "node scripts/soaring.mjs replay"
+    "soaring:replay": "node scripts/soaring.mjs replay",
+    "verify:history": "node verification/score-history.mjs"
   },
   "engines": {
     "node": ">=24"
@@ -27,7 +28,14 @@
   "dependencies": {
     "@azohra/meteo.briefing": "0.6.2",
     "@azohra/meteo.forecast": "0.6.0",
-    "@azohra/meteo.grib": "0.1.4"
+    "@azohra/meteo.grib": "0.1.4",
+    "@windgrams/contracts": "workspace:*",
+    "@windgrams/data-client": "workspace:*",
+    "@windgrams/geography": "workspace:*",
+    "@windgrams/meteorology": "workspace:*",
+    "@windgrams/soaring": "workspace:*",
+    "@windgrams/providers": "workspace:*",
+    "@windgrams/pipeline": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

@@ -1,13 +1,11 @@
-// Rolling forecast-history retention (120 runs = 30 days at 4x/day),
-// explicit observation-matching rules, promotion-gate scoring, and historical soaring case catalogue.
+// Observation matching rules, evaluation targets and historical weather cases.
+// Issued-run storage and retention are implemented in issued-history.mjs.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-
-export const DEFAULT_MAX_ROLLING_RUNS = 120; // 30 days × 4 cycles/day
+import { DEFAULT_MAX_ROLLING_RUNS } from './issued-history.mjs';
+export { DEFAULT_MAX_ROLLING_RUNS, compactSiteDocForHistory, archiveModelRun, mergeHistoryArchives, archivedModelRuns } from './issued-history.mjs';
 
 export const OBSERVATION_MATCHING_RULES = Object.freeze({
-  schemaVersion: 2,
+  schemaVersion: 3,
   raobExactTimeDeltaMinutes: 0,
   raobNearInitMaxTimeDeltaMinutes: 60, // Explicit f01 (+60 min) initialization-step fallback when f00 is not in site profile
   surfaceStationMaxTimeDeltaMinutes: 30,
@@ -33,8 +31,8 @@ export const HISTORICAL_CASE_REGIMES = [
     validWindowUtc: ['2026-10-21T14:00:00Z', '2026-10-22T03:00:00Z'],
     holdoutRole: 'baseline-verification',
     terrainMismatchM: -156.8,
-    stationExposure: 'KUIL RAOB 170 km WSW (coastal marine profile — exceeds 60 km spatial gate, classified as synoptic boundary only); KBLI Bellingham Intl 22 km NNW (lowland bay exposure); Blanchard 3DEP launch 378.5 m vs HRRR cell 221.7 m.',
-    summary: 'Light southerly flow (1.4 m/s 10 m, 5.2 m/s 925 hPa) with 100% high cirrus, shallow 283 m AGL HRRR HPBL (504.3 m MSL thermal top), and v2 W* 0.85 m/s peaking 20–21Z (1–2 PM PDT).'
+    stationExposure: 'KUIL RAOB 170 km WSW: coastal marine context, outside the 60 km matching gate. KBLI 22 km NNW: lowland bay exposure. Frozen Blanchard MRDEM30 elevation 378.5 m MSL; HRRR terrain 221.7 m MSL.',
+    summary: 'Light southerly flow under high cirrus, with a shallow HRRR boundary layer and weak afternoon thermals. The archived-column regression records calculated diagnostics.'
   },
   {
     caseId: 'north-sound-mountain-alpine-20261021-06z',
@@ -201,18 +199,21 @@ export function evaluateRaobMatch({ distanceKm, soundingValidAt, forecastValidAt
   const fcstMs = Date.parse(forecastValidAt);
   const refMs = referenceTime ? Date.parse(referenceTime) : NaN;
   const timeDeltaMinutes = Number.isFinite(obsMs) && Number.isFinite(fcstMs)
-    ? Math.round(Math.abs(fcstMs - obsMs) / 60000)
+    ? Math.abs(fcstMs - obsMs) / 60000
     : Infinity;
   const leadTimeHours = Number.isFinite(fcstMs) && Number.isFinite(refMs)
-    ? Math.round((fcstMs - refMs) / 3600000)
+    ? (fcstMs - refMs) / 3600000
     : null;
 
-  const spatialMatched = typeof distanceKm === 'number' && distanceKm <= OBSERVATION_MATCHING_RULES.raobMaxSiteVerificationDistanceKm;
+  const spatialMatched = Number.isFinite(distanceKm) && distanceKm >= 0 && distanceKm <= OBSERVATION_MATCHING_RULES.raobMaxSiteVerificationDistanceKm;
   const exactTimeMatched = timeDeltaMinutes <= OBSERVATION_MATCHING_RULES.raobExactTimeDeltaMinutes;
-  const nearInitTimeMatched = timeDeltaMinutes <= OBSERVATION_MATCHING_RULES.raobNearInitMaxTimeDeltaMinutes && (leadTimeHours === null || leadTimeHours <= 1);
+  const validLead = leadTimeHours !== null && leadTimeHours >= 0;
+  const nearInitTimeMatched = timeDeltaMinutes <= OBSERVATION_MATCHING_RULES.raobNearInitMaxTimeDeltaMinutes && validLead && leadTimeHours <= 1;
 
   let matchStatus = 'matched';
-  if (!spatialMatched && !exactTimeMatched && !nearInitTimeMatched) {
+  if (!validLead) {
+    matchStatus = 'rejected-invalid-initialization';
+  } else if (!spatialMatched && !exactTimeMatched && !nearInitTimeMatched) {
     matchStatus = 'rejected-time-and-spatial-mismatch';
   } else if (! exactTimeMatched && !nearInitTimeMatched) {
     matchStatus = 'rejected-time-mismatch';
@@ -228,73 +229,6 @@ export function evaluateRaobMatch({ distanceKm, soundingValidAt, forecastValidAt
     timeDeltaMinutes,
     leadTimeHours,
     leadTimeBucket: leadTimeBucketForHours(leadTimeHours),
-  };
-}
-
-/**
- * Compacts a site forecast document for rolling 120-run (30-day) history archival so that
- * 120 runs × 7 models stay well under GitHub Actions cache and artifact limits (~1.5 MB/run
- * instead of ~220 MB/run) while retaining all surface, soaring (v1 + v2), experimental, and
- * standard verification pressure levels (925, 850, 700, 600 hPa + lowest above-ground level).
- */
-export function compactSiteDocForHistory(doc) {
-  if (!doc || typeof doc !== 'object' || !Array.isArray(doc.hours)) return doc;
-  const keepPressures = new Set(OBSERVATION_MATCHING_RULES.pressureLevelsEvaluatedHpa);
-  return {
-    schemaVersion: doc.schemaVersion,
-    model: doc.model,
-    run: doc.run,
-    site: doc.site,
-    soaringMeta: doc.soaringMeta,
-    hours: doc.hours.map(h => {
-      const levels = Array.isArray(h.levels)
-        ? h.levels.filter((l, idx) => idx === 0 || keepPressures.has(l.pressureHpa))
-        : undefined;
-      return {
-        validAt: h.validAt,
-        surface: h.surface,
-        derived: h.derived,
-        soaring: h.soaring,
-        experimental: h.experimental,
-        ...(levels ? { levels } : {}),
-      };
-    }),
-  };
-}
-
-/**
- * Archives an issued model run into an immutable key `history/<model>/<runKey>/`
- * and enforces a 120-run (30-day at 4x/day) bounded rolling window while preserving pinned case runs.
- */
-export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = [] } = {}) {
-  const manifestPath = join(dataRoot, modelSlug, 'manifest.json');
-  if (!existsSync(manifestPath)) return null;
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-  const runKey = runKeyFromIso(manifest.referenceTime);
-  const runDir = join(dataRoot, 'history', modelSlug, runKey);
-  mkdirSync(join(runDir, 'sites'), { recursive: true });
-  writeFileSync(join(runDir, 'manifest.json'), JSON.stringify(manifest) + '\n');
-  for (const site of manifest.sites ?? []) {
-    const src = join(dataRoot, modelSlug, 'sites', `${site.slug}.json`);
-    if (existsSync(src)) {
-      const rawDoc = JSON.parse(readFileSync(src, 'utf8'));
-      const compactDoc = compactSiteDocForHistory(rawDoc);
-      writeFileSync(join(runDir, 'sites', `${site.slug}.json`), JSON.stringify(compactDoc) + '\n');
-    }
-  }
-  const modelHistoryDir = join(dataRoot, 'history', modelSlug);
-  const allRuns = readdirSync(modelHistoryDir).filter(d => /^\d{8}T\d{6}Z$/.test(d)).sort();
-  const unpinned = allRuns.filter(k => !pinnedRunKeys.includes(k));
-  while (unpinned.length > maxRollingRuns) {
-    const oldest = unpinned.shift();
-    rmSync(join(modelHistoryDir, oldest), { recursive: true, force: true });
-  }
-  return {
-    model: modelSlug,
-    referenceTime: manifest.referenceTime,
-    runKey,
-    siteCount: (manifest.sites ?? []).length,
-    maxRollingRuns,
   };
 }
 

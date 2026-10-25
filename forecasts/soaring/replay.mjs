@@ -254,7 +254,7 @@ export async function replay(c, cache, output, { log = console.error } = {}) {
     versions: versionsFor(c),
     nodeMajor: 24,
     codeHashes,
-    dependencyLockSha256: sha256(await readFile(new URL('../pnpm-lock.yaml', import.meta.url))),
+    dependencyLockSha256: sha256(await readFile(new URL('../../pnpm-lock.yaml', import.meta.url))),
     captureSha256: sha256(json(capture)),
     inputs: capture.sources.flatMap(s => [...(s.indices ? Object.values(s.indices) : [s.index]), ...s.records.filter(r => !r.absent)]),
     gridKey: grid.gridKey,

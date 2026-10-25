@@ -6,7 +6,7 @@ import {
   blocksOf, buildRelief, buildSolarTerrain, decodeRelief, deltaDecode, deltaEncode, domainFor, domainForBounds, gridFromFunction, halveLevel, indexIsFresh,
   latToY, lonToX, reliefIsFresh, reliefZoomFor, startSolarTerrain,
   metresPerDegree, metresPerPixel, rayDistances, sampleGrid, skyViewFactor, surfaceLevel, traceHorizons, xToLon, yToLat,
-} from "./solar.mjs";
+} from "../../../packages/providers/src/internal/solar.ts";
 import { usgsUrl } from "../solar.mjs";
 
 const LAT = 43.62332;

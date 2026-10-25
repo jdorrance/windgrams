@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { parseSiteForecast } from "@azohra/meteo.briefing/contract";
-import { buildWindgramView, type WindgramBarb } from "../src/lib/windgram-view.ts";
-import { renderWindgramKey, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
-import { cloudGlyphBounds, freezingGlyphBounds, windBarbGlyph, wingGlyphBounds } from "../src/lib/windgram-glyphs.ts";
-import { displayedBarbs, layoutWindgramMarks, overlaps } from "../src/lib/windgram-label-layout.ts";
-import { WINDGRAM_STABILITY } from "../src/lib/windgram-stability.ts";
+import {  buildWindgramView, type WindgramBarb  } from "./helpers/windgram.ts";
+import {  renderWindgramKey, renderWindgramSvg  } from "./helpers/windgram.ts";
+import {  cloudGlyphBounds, freezingGlyphBounds, windBarbGlyph, wingGlyphBounds  } from "./helpers/windgram.ts";
+import {  displayedBarbs, layoutWindgramMarks, overlaps  } from "./helpers/windgram.ts";
+import {  WINDGRAM_STABILITY  } from "./helpers/windgram.ts";
 
 const fixture = () => {
   const source = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")));

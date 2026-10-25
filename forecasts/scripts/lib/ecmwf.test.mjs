@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   ALOFT_FIELDS, SURFACE_FIELDS, aloftUrl, buildManifest, buildSiteDocument, createClient, fetchSiteDocument, metaUrl, readResponse, runFromMeta, surfaceUrl,
-} from "./ecmwf.mjs";
+} from "../../../packages/providers/src/internal/ecmwf.ts";
 
 const SITE = { slug: "cervidae-peak", name: "Cervidae Peak", latitude: 43.62332, longitude: -115.98076, timeZone: "America/Boise" };
 const NOW = Date.parse("2026-09-30T04:20:00Z");
@@ -77,10 +77,30 @@ test("a broken aloft response does not stop the launch", () => {
   assert.match(warnings[0], /winds aloft left empty/);
 });
 
+test("truncated arrays cannot publish undefined weather and invalid timelines fail clearly", () => {
+  const brokenCore = response(SURFACE_FIELDS);
+  brokenCore.hourly.wind_speed_10m.pop();
+  assert.throws(() => buildSiteDocument({ site: SITE, surface: brokenCore, aloft: null, now: NOW }), /wind_speed_10m length differs/);
+  const partial = response(SURFACE_FIELDS);
+  partial.hourly.cape.pop();
+  partial.hourly.temperature_2m[4] = Infinity;
+  const warnings = [];
+  const doc = buildSiteDocument({ site: SITE, surface: partial, aloft: null, now: NOW, warn: message => warnings.push(message) });
+  assert.ok(doc.hours.every(hour => hour.capeJkg === null));
+  assert.equal(doc.hours[0].temperatureC, null);
+  assert.match(warnings[0], /cape length differs/);
+  for (const time of [START, NaN, Infinity, 1e20]) {
+    const invalid = response(SURFACE_FIELDS);
+    invalid.hourly.time[1] = time;
+    assert.throws(() => readResponse(invalid, SURFACE_FIELDS, { label: 'test' }), /hourly times/);
+  }
+});
+
 test("run times come from Open-Meteo's model metadata", () => {
   assert.equal(runFromMeta({ last_run_initialisation_time: 1790726400 }), "2026-09-30T00:00:00Z");
   assert.equal(runFromMeta(null), null);
   assert.equal(runFromMeta({}), null);
+  for (const time of [Infinity, NaN, 1e20, -1]) assert.equal(runFromMeta({ last_run_initialisation_time: time }), null);
 });
 
 test("the client retries rate limits, keeps Open-Meteo's reason, and the fetch tolerates missing metadata", async () => {

@@ -1,0 +1,14 @@
+# Each completion can publish independently of slower providers.
+name: Refresh rrfs
+on:
+  schedule:
+    - cron: "55 3,9,15,21 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  refresh:
+    uses: ./.github/workflows/refresh-provider.yml
+    with:
+      group: rrfs

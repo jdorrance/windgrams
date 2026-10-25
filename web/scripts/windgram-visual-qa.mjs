@@ -17,19 +17,22 @@ const revision = arg('--baseline', manifest.baselineRevision);
 const selected = arg('--fixtures', '').split(',').filter(Boolean);
 const fixtures = manifest.fixtures.filter(entry => !selected.length || selected.includes(entry.id));
 assert.ok(fixtures.length, 'At least one known fixture is required');
-assert.equal(sha256(readFileSync(repoRoot + 'web/pnpm-lock.yaml')), manifest.dependencyLockSha256,
-  'Dependency lock changed: review and explicitly refresh fixture provenance before comparing');
+const capturedLock = execFileSync('git', ['show', `${manifest.baselineRevision}:web/pnpm-lock.yaml`], { cwd: repoRoot });
+assert.equal(sha256(capturedLock), manifest.dependencyLockSha256, 'Captured baseline dependency lock differs from fixture provenance');
+const briefing = JSON.parse(readFileSync(repoRoot + 'web/node_modules/@azohra/meteo.briefing/package.json', 'utf8'));
+assert.equal(briefing.version, '0.6.2', 'Review visual fixture compatibility when updating the forecast reader');
 mkdirSync(output, { recursive: true });
 
 // Git objects freeze every local library dependency, not just the entry module.
-// Both versions use the exact dependency lock recorded with the fixtures.
+// Both renderers use the pinned reader version; the original lock remains fixture provenance.
 const snapshot = mkdtempSync(tmpdir() + '/windgram-visual-baseline-');
 const archive = execFileSync('git', ['archive', revision, 'web/src/lib', 'web/src/styles/global.css'], { cwd: repoRoot });
 execFileSync('tar', ['-xf', '-', '-C', snapshot], { input: archive });
 symlinkSync(repoRoot + 'web/node_modules', snapshot + '/web/node_modules', 'dir');
 writeFileSync(snapshot + '/web/package.json', '{"type":"module"}\n');
 async function modules(root) {
-  const module = name => import(pathToFileURL(root + '/web/src/lib/' + name + '.ts').href);
+  const current = root === repoRoot.replace(/\/$/, '');
+  const module = name => import(pathToFileURL(root + (current && name !== 'published-lift' ? '/packages/windgram/src/' : '/web/src/lib/') + (current && name === 'windgram-chart' ? 'windgram-svg' : name) + '.ts').href);
   const [view, chart, sampling, published, stability] = await Promise.all([
     module('windgram-view'), module('windgram-chart'), module('windgram-sampling'),
     module('published-lift'), module('windgram-stability'),
@@ -91,6 +94,8 @@ const state = view => ({ width: view.width, height: view.height, floorM: view.fl
   axisEnd: view.timeAxis.at(-1)?.validAt, emptyAxisTicks: view.timeAxis.filter(tick => tick.hourIndex === null).length });
 const sourceHashes = () => Object.fromEntries([
   ...readdirSync(repoRoot + 'web/src/lib').filter(name => name.endsWith('.ts')).sort().map(name => 'web/src/lib/' + name),
+  ...readdirSync(repoRoot + 'packages/windgram/src').filter(name => name.endsWith('.ts')).sort().map(name => 'packages/windgram/src/' + name),
+  ...readdirSync(repoRoot + 'packages/windgram/src/styles').filter(name => name.endsWith('.css')).sort().map(name => 'packages/windgram/src/styles/' + name),
   'web/src/styles/global.css',
 ].map(path => [path, sha256(readFileSync(repoRoot + path))]));
 const workingFiles = sourceHashes();
@@ -111,7 +116,7 @@ for (const entry of fixtures) {
   const oldPhysics = physics(before, oldProfile), newPhysics = physics(after, newProfile);
   assert.deepEqual(newPhysics, oldPhysics, entry.id + ' source physics');
   for (const [module, profile] of [[before, oldProfile], [after, newProfile]]) {
-    const fallback = module.buildWindgramView(profile, { timeZone: entry.timeZone, compact: true,
+    const fallback = module.buildWindgramView(profile, { timeZone: entry.timeZone, compact: true, unitSystem: 'imperial',
       widthPx: 356, heightRange: 'soaring', hours: { dateKey: entry.day, timeZone: entry.timeZone } });
     assert.deepEqual(fallback.ground, { elevationM: profile.site.modelElevationM, source: 'model' });
     const reading = module.readWindgram(fallback, 0, fallback.floorM + 100);

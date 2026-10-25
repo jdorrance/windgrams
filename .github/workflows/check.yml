@@ -1,25 +1,32 @@
-# Checks every change before it reaches main. Uses no secrets and never
-# publishes the dataset, so it also runs on pull requests.
-#   forecasts: frozen install, sites.json validation, type checks, unit tests, an engine dry
-#              run for each model, and a live NWS fetch without publishing
-#   web:       unit tests, type checks, the sample dataset (validated against
-#              the meteo contract), and a production build of the site
+# Offline checks for pull requests and main. Live upstream probes run separately.
 name: Check
 
 on:
   pull_request:
   push:
     branches: [main]
-    paths:
-      - "forecasts/**"
-      - "web/**"
-      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm run check:boundaries
+      - run: pnpm run check:api
+      - name: Offline tests and kernel coverage
+        run: pnpm run test:coverage
+      - run: pnpm run test:consumer
+
   icon-decoder:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -43,51 +50,13 @@ jobs:
         working-directory: forecasts
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        with:
-          package_json_file: forecasts/package.json
-          cache: true
-          cache_dependency_path: forecasts/pnpm-lock.yaml
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        with:
-          node-version: 24
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-pnpm
       - name: Validate sites.json
         run: pnpm run check
       - name: Backend type checks
         run: pnpm run check:types
-      - name: Unit tests
-        run: pnpm test
       - name: Engine dry run
-        run: |
-          for model in hrrr-conus rrfs gfs hrdps-continental rdps gdps geps; do
-            pnpm exec meteo forecast build --model "$model" --sites ./sites.json --output data --dry-run
-          done
-      # Fetches the live NWS forecast for every launch without publishing it,
-      # so a change in api.weather.gov's responses shows up here first. NWS
-      # has occasional outages, so a failure here does not block the check.
-      # Bound each optional smoke process so slow external services cannot
-      # consume the entire job timeout and cancel otherwise-passing checks.
-      - name: NWS live fetch (no publish)
-        continue-on-error: true
-        run: timeout --kill-after=10s 90s pnpm run nws --output nws-smoke
-      # Fetches the live ECMWF forecast from Open-Meteo without publishing; its
-      # notice annotation lists the hours and how many values each field has.
-      - name: ECMWF live fetch (no publish)
-        continue-on-error: true
-        run: timeout --kill-after=10s 90s scripts/run-annotated.sh "ECMWF smoke" pnpm run ecmwf --output ecmwf-smoke --notice
-      # Fetches the latest weather-balloon soundings without publishing; its
-      # notice annotation shows what the archive returned.
-      - name: Balloon soundings live fetch (no publish)
-        continue-on-error: true
-        run: timeout --kill-after=10s 90s scripts/run-annotated.sh "balloon smoke" pnpm run raob --output raob-smoke --notice
-      # Reads the real USGS elevation tiles for a small square around each
-      # launch and builds its sunlight tiles, without publishing. Its notice
-      # annotation shows the launch's measured slope, facing and horizons.
-      # Launches with a whole range as their area get the small square too.
-      - name: Sunlight terrain live read (no publish)
-        continue-on-error: true
-        run: timeout --kill-after=10s 90s scripts/run-annotated.sh "sunlight terrain smoke" pnpm run solar --output solar-smoke --radius-km 2 --max-distance-km 20 --ignore-areas
+        run: node scripts/check-engines.mjs
 
   web:
     runs-on: ubuntu-latest
@@ -97,17 +66,7 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-        with:
-          package_json_file: web/package.json
-          cache: true
-          cache_dependency_path: web/pnpm-lock.yaml
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        with:
-          node-version: 24
-      - run: pnpm install --frozen-lockfile
-      - name: Unit tests
-        run: pnpm test
+      - uses: ./.github/actions/setup-pnpm
       - name: Type checks
         run: pnpm run check
       - name: Sample dataset
@@ -116,3 +75,20 @@ jobs:
         run: pnpm run dev-data --solar-site wa-blanchard --solar-site va-woodstock
       - name: Build
         run: pnpm run build
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+      - run: pnpm --dir web exec playwright install --with-deps chromium
+      - name: Offline browser checks
+        run: pnpm --dir web test:browser
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: browser-failures
+          path: web/test-results
+          if-no-files-found: ignore
+          retention-days: 7

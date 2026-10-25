@@ -1,29 +1,22 @@
-// Coarse acquisition envelopes exclude unrelated continents before a download.
-// Each model's actual grid lookup remains the final point-coverage check.
-const envelopes = {
-  'hrrr-conus': [-126, 21, -60, 53],
-  rrfs: [-126, 21, -60, 53],
-  'hrdps-continental': [-170, 20, -40, 85],
-  'hrdps-west': [-170, 20, -40, 85],
-  rdps: [-170, 20, -40, 85],
-  'icon-eu': [-23.5, 29.5, 62.5, 70.5],
-};
-
-export function modelCoversSite(model, site) {
-  const { latitude, longitude } = site;
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
-  const bounds = envelopes[model];
-  return !bounds || longitude >= bounds[0] && latitude >= bounds[1] && longitude <= bounds[2] && latitude <= bounds[3];
+import legacyModels from '../../soaring/legacy-replay-models.json' with { type: 'json' };
+import policy from '../../provider-policy.json' with { type: 'json' };
+import { modelCoversSite, modelDescriptor } from '@windgrams/providers/registry';
+export { modelCoversSite };
+export const REGION_INDEXES = policy.regionIndexes;
+export const REGIONAL_MERGE_OPTIONS = { primaryModel: policy.primaryRegionalModel, preferredModels: policy.preferredRegionalModels };
+export function regionIndexName(id) {
+  const entry = REGION_INDEXES.find(entry => entry.model === id);
+  if (!entry) throw new Error(`${id} has no configured regional index`);
+  return entry.file;
 }
-
+export function regionSupportsModel(region, id) {
+  return modelDescriptor(id).nativeGrid && (region.regionalModels ?? policy.defaultRegionalModels).includes(id);
+}
+const US_PREFIXES = new Set('al ak az ar ca co ct de dc fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj nm ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy pr vi gu mp as'.split(' '));
 export function nwsCoversSite(site) {
-  // The catalogue currently contains US launches and Armenia. Preserve Alaska,
-  // Hawaii and US territories when an existing/new US catalogue uses them.
-  return /^(America\/(New_York|Chicago|Denver|Los_Angeles|Boise|Phoenix|Detroit|Indiana\/|Kentucky\/|North_Dakota\/|Anchorage|Juneau|Sitka|Metlakatla|Yakutat|Nome|Adak)|Pacific\/(Honolulu|Guam|Saipan|Pago_Pago)|America\/(Puerto_Rico|St_Thomas))/.test(site.timeZone ?? '');
+  if (site.country !== undefined) return site.country === 'US';
+  return typeof site.slug === 'string' && US_PREFIXES.has(site.slug.split('-')[0]);
 }
 
-export function regionSupportsModel(region, model) {
-  return (region.regionalModels ?? ['hrrr-conus', 'rrfs']).includes(model);
-}
-
-export const regionIndexName = model => model === 'hrrr-conus' ? 'regions.json' : `regions-${model}.json`;
+/** Explicit archive migration; newly published manifests carry their model. */
+export const legacyCaseModel = caseId => Object.hasOwn(legacyModels, caseId) ? legacyModels[caseId] : undefined;

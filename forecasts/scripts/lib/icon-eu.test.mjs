@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseForecastManifest, parseSiteForecast } from '@azohra/meteo.briefing/contract';
 import { postprocessPointForecast } from '../../soaring/point-postprocess.mjs';
-import { iconBounds, iconReferenceTime, iconFieldUrl, discoverIconRun, iconDewPointC, iconHourlyFlux,
-  iconHourlyPrecipitation, iconSource, normalizeIconExtract, deriveIconProfile, buildIconPointProfiles, writeIconAcquisition, readIconAcquisition, ICON_MODEL_LEVELS } from './icon-eu.mjs';
+import { discoverIconRun, normalizeIconExtract, deriveIconProfile, buildIconPointProfiles, writeIconAcquisition, readIconAcquisition, ICON_MODEL_LEVELS } from './icon-eu.mjs';
+import { iconBounds, iconReferenceTime, iconFieldUrl, iconDewPointC, iconHourlyFlux, iconHourlyPrecipitation, iconSource } from '../../../packages/providers/src/internal/icon-native.ts';
 
 const fixture = JSON.parse(readFileSync(new URL('./icon-native-fixture.json', import.meta.url), 'utf8'));
 const copy = () => structuredClone(fixture);

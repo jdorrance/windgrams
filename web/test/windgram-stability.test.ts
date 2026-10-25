@@ -4,9 +4,9 @@ afterEach(() => setUnitSystem("imperial"));
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast } from "@azohra/meteo.briefing/contract";
-import { buildWindgramView, heightToY } from "../src/lib/windgram-view.ts";
-import { renderWindgramKey, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
-import { WINDGRAM_STABILITY, stabilityRange } from "../src/lib/windgram-stability.ts";
+import {  buildWindgramView, heightToY  } from "./helpers/windgram.ts";
+import {  renderWindgramKey, renderWindgramSvg  } from "./helpers/windgram.ts";
+import {  WINDGRAM_STABILITY, stabilityRange  } from "./helpers/windgram.ts";
 
 function uniformLapseView(lapseCPer1000Ft: number) {
   const profile = parseSiteForecast(JSON.parse(readFileSync(new URL("../dev-data-src/convective-cycle.profile.json", import.meta.url), "utf8")))!;

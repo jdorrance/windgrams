@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { barbGeometry, barbPaths } from "../src/lib/wind-barb.ts";
-import { cloudGlyphBounds, freezingGlyphBounds, windBarbGlyph, wingGlyphBounds } from "../src/lib/windgram-glyphs.ts";
-import { resolveWindgramPresentation } from "../src/lib/windgram-presentation.ts";
+import {  barbGeometry, barbPaths  } from "./helpers/windgram.ts";
+import {  cloudGlyphBounds, freezingGlyphBounds, windBarbGlyph, wingGlyphBounds  } from "./helpers/windgram.ts";
+import {  resolveWindgramPresentation  } from "./helpers/windgram.ts";
 
 const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-8, `${a} ≈ ${b}`);
 

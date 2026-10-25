@@ -1,24 +1,26 @@
 ---
-import { launchCountry, LAUNCH_COUNTRIES } from "../lib/forecast-capabilities.ts";
+import { launchCountry, launchCountries } from "../lib/forecast-capabilities.ts";
 import Base from "../layouts/Base.astro";
 import { launches } from "../lib/catalog.ts";
 import { href } from "../lib/site.ts";
 const markers = launches.map((l) => ({ slug: l.slug, name: l.name, latitude: l.latitude, longitude: l.longitude, country: launchCountry(l) }));
-const regions: string[] = [];
+const countries = launchCountries(launches);
+const grouped = new Map<string, { region: string; country: string; launches: typeof launches }>();
 for (const launch of launches) {
-  if (launch.region && !regions.includes(launch.region)) regions.push(launch.region);
+  const country = launchCountry(launch);
+  const region = launch.region || launch.name;
+  const key = `${country}:${region}`;
+  const group = grouped.get(key) ?? { region, country, launches: [] };
+  group.launches.push(launch);
+  grouped.set(key, group);
 }
-const groups = regions.map((region) => ({
-  region,
-  country: launchCountry(launches.find(launch => launch.region === region)!),
-  launches: launches.filter((launch) => launch.region === region),
-}));
+const groups = [...grouped.values()];
 ---
 
 <Base current="launches">
   <div class="launch-index-heading">
     <h1>Launches</h1>
-    <label><span class="sr-only">Country</span><select id="launch-country" aria-label="Country">{LAUNCH_COUNTRIES.map(country => <option value={country.code}>{country.label}</option>)}</select></label>
+    <label><span class="sr-only">Country</span><select id="launch-country" aria-label="Country">{countries.map(country => <option value={country.code}>{country.label}</option>)}</select></label>
   </div>
   <p class="muted" style="margin-top:6px">Windgrams, soundings and soaring forecasts.</p>
 
@@ -27,8 +29,8 @@ const groups = regions.map((region) => ({
 
   {
     groups.map((group) => (
-      <section class="state-group" data-country={group.country} hidden={group.country !== "US"} aria-labelledby={`state-${group.region.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
-        <h2 id={`state-${group.region.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
+      <section class="state-group" data-country={group.country} hidden={group.country !== countries[0]?.code} aria-labelledby={`state-${group.country}-${group.region.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
+        <h2 id={`state-${group.country}-${group.region.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
           {group.region} <span class="muted">{group.launches.length}</span>
         </h2>
         <div class="launch-grid">

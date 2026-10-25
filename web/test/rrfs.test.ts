@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parsePublishedProfileJson, publishedLift } from '../src/lib/published-lift.ts';
-import { buildWindgramView, readWindgram } from '../src/lib/windgram-view.ts';
-import { renderWindgramSvg, renderWindgramDiagnosticsSvg } from '../src/lib/windgram-chart.ts';
+import {  buildWindgramView, readWindgram  } from "./helpers/windgram.ts";
+import {  renderWindgramSvg, renderWindgramDiagnosticsSvg  } from "./helpers/windgram.ts";
 import { buildSounding } from '../src/lib/skewt.ts';
 
 // Actual NOAA RRFS 2026-10-23 06Z f001–f084, decoded and postprocessed at

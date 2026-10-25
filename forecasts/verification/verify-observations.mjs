@@ -1,9 +1,5 @@
-// Track 3: Matched Observation Verification & Cross-Model Spread Scorer.
-//
-// Enforces strict spatial (<= 60 km, preferred <= 50 km) and temporal
-// (exact validAt match, or explicit +60 min f01 initialization step when f00 is not in profile)
-// matching rules, stratifies skill by lead time and weather regime, and strictly separates
-// observation verification skill from cross-model forecast spread.
+// Compare issued forecasts with nearby balloon soundings, grouped by match tier,
+// lead time and weather regime. Cross-model spread is reported separately.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -21,6 +17,7 @@ import { summarizeModelWindowSpread } from '../soaring/model-comparison.mjs';
 const finite = n => typeof n === 'number' && Number.isFinite(n);
 const round2 = n => (finite(n) ? Math.round(n * 100) / 100 : null);
 const round1 = n => (finite(n) ? Math.round(n * 10) / 10 : null);
+export const EVALUATOR_VERSION = '3.0.0'; // Evaluation policy only; forecast method remains 2.1.0.
 
 export const MATCHED_RAOB_SITE_PAIRS = Object.freeze([
   {
@@ -104,13 +101,11 @@ export function localDaytimeWindowMs(
   };
 }
 
-function findMatchingHour(hours, soundingValidAt) {
-  let matched = (hours ?? []).find(h => h.validAt === soundingValidAt);
+function findMatchingHour(hours, soundingValidAt, referenceTime) {
+  let matched = (hours ?? []).find(h => Date.parse(h.validAt) === Date.parse(soundingValidAt));
   if (!matched) {
-    matched = (hours ?? []).find(h => {
-      const dtMin = Math.abs(Date.parse(h.validAt) - Date.parse(soundingValidAt)) / 60000;
-      return dtMin <= OBSERVATION_MATCHING_RULES.raobNearInitMaxTimeDeltaMinutes;
-    });
+    matched = [...(hours ?? [])].filter(h => evaluateRaobMatch({ distanceKm: 0, soundingValidAt, forecastValidAt: h.validAt, referenceTime }).matched)
+      .sort((a, b) => Math.abs(Date.parse(a.validAt) - Date.parse(soundingValidAt)) - Math.abs(Date.parse(b.validAt) - Date.parse(soundingValidAt)))[0];
   }
   return matched ?? null;
 }
@@ -122,6 +117,13 @@ export function verifyModelAgainstRaob(dataRoot, modelSlug, pair, targetSounding
 
   const raobDoc = JSON.parse(readFileSync(raobPath, 'utf8'));
   const modelDoc = JSON.parse(readFileSync(modelPath, 'utf8'));
+  return compareRaobProfile(raobDoc, modelDoc, pair, targetSoundingValidAt);
+}
+
+/** Compare already issued values; never recalculate forecast diagnostics during observation scoring. */
+export function compareRaobProfile(raobDoc, modelDoc, pair, targetSoundingValidAt) {
+  const modelSlug = modelDoc.model;
+  if (pair.stationId && pair.stationId !== raobDoc.station?.id) return null;
   const soundingsNewestFirst = [...(raobDoc.soundings ?? [])]
     .filter(s => Number.isFinite(Date.parse(s?.validAt)))
     .sort((a, b) => Date.parse(b.validAt) - Date.parse(a.validAt));
@@ -130,13 +132,13 @@ export function verifyModelAgainstRaob(dataRoot, modelSlug, pair, targetSounding
   let sounding = null;
   let matchedHour = null;
   if (targetSoundingValidAt) {
-    sounding = soundingsNewestFirst.find(s => s.validAt === targetSoundingValidAt) ?? null;
+    sounding = soundingsNewestFirst.find(s => Date.parse(s.validAt) === Date.parse(targetSoundingValidAt)) ?? null;
     if (!sounding) return null;
-    matchedHour = findMatchingHour(modelDoc.hours, sounding.validAt);
+    matchedHour = findMatchingHour(modelDoc.hours, sounding.validAt, modelDoc.run?.referenceTime);
   } else {
     // Select the latest eligible observation that matches a forecast hour in the run
     for (const candidate of soundingsNewestFirst) {
-      const hour = findMatchingHour(modelDoc.hours, candidate.validAt);
+      const hour = findMatchingHour(modelDoc.hours, candidate.validAt, modelDoc.run?.referenceTime);
       if (hour) {
         sounding = candidate;
         matchedHour = hour;
@@ -208,6 +210,10 @@ export function verifyModelAgainstRaob(dataRoot, modelSlug, pair, targetSounding
     ...matchEval,
     metrics: {
       levelsCompared: levelComparisons.length,
+      temperatureSamples: tempErrors.length,
+      dewPointSamples: dewErrors.length,
+      windVectorSamples: vecErrors.length,
+      windSpeedSamples: spdErrors.length,
       temperatureMaeC: tempErrors.length ? round2(tempErrors.reduce((a, b) => a + Math.abs(b), 0) / tempErrors.length) : null,
       temperatureBiasC: tempErrors.length ? round2(tempErrors.reduce((a, b) => a + b, 0) / tempErrors.length) : null,
       dewPointMaeC: dewErrors.length ? round2(dewErrors.reduce((a, b) => a + Math.abs(b), 0) / dewErrors.length) : null,
@@ -216,6 +222,29 @@ export function verifyModelAgainstRaob(dataRoot, modelSlug, pair, targetSounding
     },
     levelComparisons,
   };
+}
+
+/** Keep exact and near-initialization evidence separate, including independent metric support. */
+export function summarizeVerifications(comparisons) {
+  const summarize = rows => {
+    const mean = key => {
+      const supported = rows.filter(row => finite(row.metrics[key])), values = supported.map(row => row.metrics[key]);
+      return { comparisons: values.length, independentStationDays: new Set(supported.map(row => `${row.station.id}:${row.soundingValidAt.slice(0, 10)}`)).size,
+        mean: values.length ? round2(values.reduce((a, b) => a + b, 0) / values.length) : null };
+    };
+    return { comparisons: rows.length, independentStationDays: new Set(rows.map(row => `${row.station.id}:${row.soundingValidAt.slice(0, 10)}`)).size,
+      independentStationTimes: new Set(rows.map(row => `${row.station.id}:${Date.parse(row.soundingValidAt)}`)).size,
+      models: [...new Set(rows.map(row => row.model))].sort(),
+      temperatureMaeC: mean('temperatureMaeC'), temperatureBiasC: mean('temperatureBiasC'), dewPointMaeC: mean('dewPointMaeC'),
+      meanProfileWindVectorRmseMps: mean('windVectorRmseMps'), windSpeedBiasMps: mean('windSpeedBiasMps') };
+  };
+  const grouped = (rows, key) => Object.fromEntries([...new Set(rows.map(row => row[key]))].sort().map(value => [value, summarize(rows.filter(row => row[key] === value))]));
+  return { matchedCount: comparisons.length, stationDayConvention: 'station ID and UTC observation date; reused sites/models are not independent days',
+    independentStationDays: summarize(comparisons).independentStationDays,
+    byMatchTier: Object.fromEntries(['exact-valid-time', 'near-init-f01-60min'].map(tier => {
+      const rows = comparisons.filter(row => row.matchTier === tier);
+      return [tier, { ...summarize(rows), byModel: grouped(rows, 'model'), byRegime: grouped(rows, 'regime'), byLeadTimeBucket: grouped(rows, 'leadTimeBucket') }];
+    })) };
 }
 
 export function buildBlanchardCrossModelSpread(
@@ -274,36 +303,6 @@ export function buildSkillReport(
     }
   }
 
-  const byRegime = {};
-  const byLeadTimeBucket = {};
-  for (const item of matchedPairVerifications) {
-    const rBucket = (byRegime[item.regime] ??= { count: 0, tempMaeSum: 0, windVecRmseSum: 0, models: new Set() });
-    const lBucket = (byLeadTimeBucket[item.leadTimeBucket] ??= { count: 0, tempMaeSum: 0, windVecRmseSum: 0, models: new Set() });
-    if (finite(item.metrics.temperatureMaeC) && finite(item.metrics.windVectorRmseMps)) {
-      rBucket.count += 1;
-      rBucket.tempMaeSum += item.metrics.temperatureMaeC;
-      rBucket.windVecRmseSum += item.metrics.windVectorRmseMps;
-      rBucket.models.add(item.model);
-
-      lBucket.count += 1;
-      lBucket.tempMaeSum += item.metrics.temperatureMaeC;
-      lBucket.windVecRmseSum += item.metrics.windVectorRmseMps;
-      lBucket.models.add(item.model);
-    }
-  }
-
-  const summarizeBuckets = obj => Object.fromEntries(
-    Object.entries(obj).map(([key, stats]) => [
-      key,
-      {
-        comparisons: stats.count,
-        models: [...stats.models],
-        meanTemperatureMaeC: stats.count ? round2(stats.tempMaeSum / stats.count) : null,
-        meanWindVectorRmseMps: stats.count ? round2(stats.windVecRmseSum / stats.count) : null,
-      },
-    ]),
-  );
-
   const rejectedLegacyKuilBlynF14 = evaluateRaobMatch({
     distanceKm: 113.0,
     soundingValidAt: '2026-10-21T00:00:00Z',
@@ -321,7 +320,8 @@ export function buildSkillReport(
   const daytimeWindow = localDaytimeWindowMs(localDate, timeZone);
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    evaluatorVersion: EVALUATOR_VERSION,
     evaluatedAt,
     matchingRules: OBSERVATION_MATCHING_RULES,
     promotionGates: {
@@ -335,11 +335,9 @@ export function buildSkillReport(
       meetsProspectiveGateCapacity: true,
     },
     observationVerificationSkill: {
-      note: 'True observation verification skill requires matched valid times and station-to-launch proximity <= 60 km. Model agreement alone is not skill.',
+      note: 'Fixed-case matched comparisons; exact-time and near-initialization evidence are separate. This report does not establish prospective daytime forecast skill.',
       targetSoundingValidAt,
-      matchedCount: matchedPairVerifications.length,
-      byLeadTimeBucket: summarizeBuckets(byLeadTimeBucket),
-      byRegime: summarizeBuckets(byRegime),
+      ...summarizeVerifications(matchedPairVerifications),
       matchedPairs: matchedPairVerifications,
       rejectedMismatchedComparisons: [
         {

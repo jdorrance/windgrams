@@ -57,6 +57,7 @@ const detailsPath = resolve(dirname(path), "../web/src/data/launches.json");
 if (existsSync(detailsPath)) {
   const details = JSON.parse(readFileSync(detailsPath, "utf-8")).launches ?? {};
   for (const site of sites) {
+    if (details[site.slug] && !/^[A-Z]{2}$/.test(details[site.slug].countryCode ?? "")) errors.push(`"${site.slug}": countryCode must be a two-letter country code in launch metadata`);
     if (!(site.slug in details)) errors.push(`"${site.slug}": missing from web/src/data/launches.json (add launch metadata; unknown wind settings use null)`);
   }
   for (const slug of Object.keys(details)) {

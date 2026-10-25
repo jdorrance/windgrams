@@ -3,13 +3,34 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildCovered, launchOutsideGrid, stageModelBuild } from "./build-covered.mjs";
+import { buildCovered, launchOutsideGrid, stageModelBuild, buildModel } from "./build-covered.mjs";
+import { engineTerrain } from './terrain.mjs';
+import { validateCurrentDiagnostics } from './lib/diagnostic-completeness.mjs';
 
 const sites = [
   { slug: "va-daniels", name: "Daniels", latitude: 38.3105, longitude: -78.512 },
   { slug: "nc-jones-knob", name: "Jones Knob", latitude: 35.0786, longitude: -83.2937 },
   { slug: "nc-burkemont-mountain", name: "Burkemont Mountain", latitude: 35.6551, longitude: -81.7009 },
 ];
+
+test('readiness retry settings stay with the build and invalid settings fail before acquisition', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'readiness-settings-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const catalogue = join(root, 'sites.json');
+  writeFileSync(catalogue, JSON.stringify({ sites }));
+  let probed = false;
+  const values = { model: 'rrfs', sites: catalogue, output: join(root, 'data'), 'readiness-attempts': '6', 'readiness-delay-ms': '60000' };
+  await assert.rejects(() => buildModel(values, { probe: async (model, options) => {
+    probed = true;
+    assert.equal(model, 'rrfs');
+    assert.deepEqual(options, { maxAttempts: 6, retryDelayMs: 60000 });
+    return { selectedCycle: null };
+  } }), /no complete upstream run/);
+  assert.equal(probed, true);
+  for (const invalid of [{ 'readiness-attempts': '0' }, { 'readiness-delay-ms': '-1' }, { 'readiness-attempts': '6.5' }]) {
+    await assert.rejects(() => buildModel({ ...values, ...invalid }, { probe: () => assert.fail('No network for invalid retry settings') }), /must be an integer/);
+  }
+});
 
 test("launchOutsideGrid matches a coordinate and a site name", () => {
   const coordinate = "error: hrdps-continental build failed: (35.0786, -83.2937) is outside the model grid (nearest gridpoint 84 km away)";
@@ -102,4 +123,86 @@ test('semantic RRFS errors after postprocessing cannot replace last-good output'
     return finish();
   }), /exceeds thermal top/);
   assert.equal(JSON.parse(readFileSync(join(root, 'rrfs', 'manifest.json'))).referenceTime, oldRun);
+});
+
+test('operator backfills a same-run catalogue, skips complete work and repairs a truncated horizon', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'operator-backfill-'));
+  t.after(() => rmSync(output, { recursive: true, force: true }));
+  const fixture = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+  const first = { slug: fixture.site.id, name: fixture.site.name, latitude: fixture.site.latitude, longitude: fixture.site.longitude, timeZone: fixture.site.timeZone };
+  const second = { ...first, slug: 'wa-neighbour', name: 'Neighbour', latitude: first.latitude + 0.01 };
+  const catalogue = join(output, 'catalogue.json');
+  const setSites = selected => writeFileSync(catalogue, JSON.stringify({ sites: selected }));
+  let acquisitions = 0;
+  const measurements = [];
+  const measureImpl = async selected => {
+    measurements.push(selected.map(site => site.slug));
+    return { schemaVersion: 3, generatedAt: `2026-10-24T${measurements.length === 1 ? '12' : '13'}:00:00Z`, sources: [engineTerrain.SOURCES.glo30, engineTerrain.SOURCES.worldcover2021],
+      sites: Object.fromEntries(selected.map(site => [site.slug, { point: { latitude: site.latitude, longitude: site.longitude },
+        elevation: { source: 'glo30', elevationM: 500 }, terrain: { source: 'glo30', elevationM: 500, slopeDeg: 10, aspectDeg: 180, relief: [{ radiusKm: 1, minM: 100, maxM: 700, percentile: 50 }] },
+        landCover: { source: 'worldcover2021', atLaunch: 'grassland', fractions: [{ radiusKm: 1, byClass: { grassland: 1 } }] } }])) };
+  };
+  const adapterFactory = () => ({ acquire: async request => {
+    acquisitions++;
+    assert.equal(request.run.referenceTime, fixture.run.referenceTime);
+    mkdirSync(join(request.outputRoot, 'rrfs/sites'), { recursive: true });
+    for (const site of request.sites) {
+      const doc = structuredClone(fixture); doc.site = { ...doc.site, ...site, id: site.slug }; delete doc.site.slug;
+      writeFileSync(join(request.outputRoot, 'rrfs/sites', `${site.slug}.json`), JSON.stringify(doc));
+    }
+    writeFileSync(join(request.outputRoot, 'rrfs/manifest.json'), JSON.stringify({ model: 'rrfs', referenceTime: fixture.run.referenceTime, generatedAt: fixture.run.generatedAt,
+      forecastHours: 84, firstForecastHour: 1, lastForecastHour: 84, sites: request.sites.map(site => ({ slug: site.slug, name: site.name })) }));
+  } });
+  const values = { model: 'rrfs', sites: catalogue, output, 'reference-time': fixture.run.referenceTime };
+  const dependencies = { measureImpl, adapterFactory, log: () => {}, probe: () => { throw new Error('Pinned run must skip readiness probes'); } };
+  setSites([first]); assert.equal((await buildModel(values, dependencies)).changed, true);
+  setSites([first, second]); assert.equal((await buildModel(values, dependencies)).changed, true);
+  assert.equal((await buildModel(values, dependencies)).changed, false);
+  assert.equal(acquisitions, 2);
+  // A method-only repair reuses complete retained source levels, preserves the issued revision,
+  // and does not download a different set of inputs for the same initialization.
+  const firstPath = join(output, 'rrfs/sites', `${first.slug}.json`), beforeRepair = JSON.parse(readFileSync(firstPath));
+  const originalLevels = structuredClone(beforeRepair.hours.map(hour => hour.levels));
+  beforeRepair.soaringMeta.contractVersion = '2.0.0';
+  for (const hour of beforeRepair.hours) delete hour.soaring;
+  writeFileSync(firstPath, JSON.stringify(beforeRepair));
+  assert.equal((await buildModel(values, dependencies)).changed, true);
+  assert.equal(acquisitions, 2);
+  const repaired = JSON.parse(readFileSync(firstPath));
+  validateCurrentDiagnostics(repaired);
+  assert.deepEqual(repaired.hours.map(hour => hour.levels), originalLevels);
+  assert.equal((await buildModel(values, dependencies)).changed, false);
+  assert.deepEqual(measurements, [[first.slug], [second.slug]]);
+  const context = JSON.parse(readFileSync(join(output, 'site-context-rrfs.json')));
+  assert.equal(context.measurementTimes[first.slug], '2026-10-24T12:00:00Z');
+  assert.equal(context.measurementTimes[second.slug], '2026-10-24T13:00:00Z');
+  assert.equal(context.measurementPolicies[second.slug], 'terrain-v1:regional-north-america');
+  const manifestPath = join(output, 'rrfs/manifest.json'), manifest = JSON.parse(readFileSync(manifestPath));
+  manifest.forecastHours = 1; manifest.lastForecastHour = 1; writeFileSync(manifestPath, JSON.stringify(manifest));
+  for (const site of [first, second]) {
+    const path = join(output, 'rrfs/sites', `${site.slug}.json`), doc = JSON.parse(readFileSync(path));
+    doc.hours = doc.hours.slice(0, 1); writeFileSync(path, JSON.stringify(doc));
+  }
+  assert.equal((await buildModel(values, dependencies)).changed, true);
+  assert.equal(acquisitions, 3);
+  assert.equal(JSON.parse(readFileSync(manifestPath)).forecastHours, 84);
+});
+
+test('diagnostic completeness accepts retained ensemble policy and rejects incomplete deterministic metadata', () => {
+  const doc = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
+  validateCurrentDiagnostics(doc);
+  const missing = structuredClone(doc); delete missing.hours[0].soaring;
+  assert.throws(() => validateCurrentDiagnostics(missing), /missing soaring diagnostics/);
+  const nullified = structuredClone(doc); nullified.hours[0].soaring = null;
+  assert.throws(() => validateCurrentDiagnostics(nullified), /unexplained unavailable/);
+  assert.throws(() => validateCurrentDiagnostics({ ...doc, soaringMeta: { ...doc.soaringMeta, contractVersion: '2.0.0' } }), /outdated soaring method/);
+  validateCurrentDiagnostics({ model: 'geps', run: { members: 21 }, hours: [{}], soaringMeta: { contractVersion: '2.1.0', modelKind: 'ensemble-percentiles',
+    nonlinearMedianPostprocessRefused: true, postprocessAction: 'retained-upstream-member-percentiles' } });
+});
+
+test('empty regional coverage skips readiness, terrain and acquisition', async t => {
+  const output = mkdtempSync(join(tmpdir(), 'operator-empty-')); t.after(() => rmSync(output, { recursive: true, force: true }));
+  const catalogue = join(output, 'sites.json'); writeFileSync(catalogue, JSON.stringify({ sites: [{ slug: 'nz-test', latitude: -44, longitude: 169 }] }));
+  const forbidden = () => { throw new Error('No external work expected'); };
+  assert.deepEqual(await buildModel({ model: 'hrrr-conus', sites: catalogue, output }, { probe: forbidden, measureImpl: forbidden, adapterFactory: forbidden }), { changed: false, reason: 'no-covered-sites' });
 });

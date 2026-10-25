@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast, type SiteForecast } from "@azohra/meteo.briefing/contract";
-import { buildWindgramView, windgramDayHours, windgramHours, type WindgramOptions } from "../src/lib/windgram-view.ts";
-import { renderWindgramSvg } from "../src/lib/windgram-chart.ts";
+import {  buildWindgramView, windgramDayHours, windgramHours, type WindgramOptions  } from "./helpers/windgram.ts";
+import {  renderWindgramSvg  } from "./helpers/windgram.ts";
 
 type Hour = SiteForecast["hours"][number];
 const options: WindgramOptions = { timeZone: "America/Boise", compact: true, launch: { elevationM: 1200 } };

@@ -11,10 +11,12 @@
 //                           front of the previous flight
 //   status/refresh.json     what the last run found, to check that it works
 //
-// The documents are built by the same code the forecast scripts use
-// (forecasts/scripts/lib), so both writers publish the same format.
+// Provider and sounding builders are shared with the forecast scripts.
 
-import { createClient as createNwsClient, fetchOfficeDocument, officeProductsChanged, paths as nwsPaths } from "../../forecasts/scripts/lib/nws.mjs";
+import {
+  createClient as createNwsClient, fetchOfficeDocument, officeProductsChanged, paths as nwsPaths,
+  type NwsOfficeDocument, type NwsProduct,
+} from "@windgrams/providers/nws";
 import {
   buildSiteDocument,
   createClient as createRaobClient,
@@ -30,15 +32,6 @@ export interface DatasetStore {
   put(key: string, value: string, options?: { contentType?: string; cacheControl?: string }): Promise<unknown>;
 }
 
-interface OfficeProduct {
-  id: string;
-  issuanceTime: string;
-  text: string;
-}
-interface OfficeDocument {
-  office: string;
-  products: { afd: OfficeProduct | null; srg: OfficeProduct | null };
-}
 interface Sounding {
   validAt: string;
   levels: unknown[];
@@ -87,6 +80,22 @@ async function readJson<T>(bucket: DatasetStore, key: string): Promise<T | null>
   }
 }
 
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function officeProduct(value: unknown): value is NwsProduct | null {
+  return value === null || (record(value)
+    && ["id", "productCode", "issuanceTime", "text"].every(key => typeof value[key] === "string")
+    && (value.productName === null || typeof value.productName === "string"));
+}
+
+function officeDocument(value: unknown, office: string): value is NwsOfficeDocument {
+  return record(value) && value.schemaVersion === 1 && value.office === office
+    && typeof value.source === "string" && typeof value.generatedAt === "string"
+    && record(value.products) && officeProduct(value.products.afd) && officeProduct(value.products.srg);
+}
+
 const writeJson = (bucket: DatasetStore, key: string, doc: unknown, pretty = false) =>
   bucket.put(key, `${pretty ? JSON.stringify(doc, null, 1) : JSON.stringify(doc)}\n`, JSON_METADATA);
 
@@ -100,10 +109,11 @@ async function refreshOffices(bucket: DatasetStore, fetchImpl: typeof fetch, now
   const out: OfficeStatus[] = [];
   for (const office of offices) {
     const key = nwsPaths.office(office);
-    const previous = await readJson<OfficeDocument>(bucket, key);
+    const cached = await readJson<unknown>(bucket, key);
+    const previous = officeDocument(cached, office) ? cached : null;
     const warnings: string[] = [];
     try {
-      const doc: OfficeDocument = await fetchOfficeDocument(office, getJson, { now, warn: (m: string) => warnings.push(m), previous });
+      const doc = await fetchOfficeDocument(office, getJson, { now, warn: (m: string) => warnings.push(m), previous });
       const updated = officeProductsChanged(previous, doc);
       if (updated) await writeJson(bucket, key, doc, true);
       out.push({

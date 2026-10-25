@@ -1,0 +1,44 @@
+# Bounded probes of upstream services. Forecasts stay local to this runner.
+name: Live smoke
+
+on:
+  schedule:
+    - cron: "23 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-smoke
+  cancel-in-progress: true
+
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: forecasts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+      - name: NWS
+        id: nws
+        continue-on-error: true
+        run: node scripts/live-smoke.mjs nws
+      - name: ECMWF
+        id: ecmwf
+        continue-on-error: true
+        run: node scripts/live-smoke.mjs ecmwf
+      - name: Balloon soundings
+        id: raob
+        continue-on-error: true
+        run: node scripts/live-smoke.mjs raob
+      - name: Sunlight terrain
+        id: solar
+        continue-on-error: true
+        run: node scripts/live-smoke.mjs solar
+      - name: Report failed probes
+        if: ${{ !cancelled() && contains(steps.*.outcome, 'failure') }}
+        run: exit 1

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "defaultPolicy": "glo30",
+  "policies": {
+    "glo30": { "id": "glo30", "elevationSources": ["glo30"], "terrainSource": "glo30", "landCoverSource": "worldcover2021" },
+    "glo90": { "id": "glo90", "elevationSources": ["glo90"], "terrainSource": "glo90", "landCoverSource": "worldcover2021" },
+    "regional-north-america": { "id": "regional-north-america", "elevationSources": ["glo30", "mrdem30", "lidarbc"], "terrainSource": "glo30", "landCoverSource": "worldcover2021" }
+  },
+  "rules": [
+    { "policy": "glo90", "country": "AM" },
+    { "policy": "glo90", "region": "am" },
+    { "policy": "glo90", "slugPrefix": "am-" },
+    { "policy": "regional-north-america", "bounds": [-170, 15, -40, 85] }
+  ]
+}

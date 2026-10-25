@@ -7,7 +7,7 @@ import unittest
 import sys
 sys.dont_write_bytecode = True
 
-spec = importlib.util.spec_from_file_location('icon_decode', Path(__file__).with_name('icon-decode.py'))
+spec = importlib.util.spec_from_file_location('icon_decode', Path(__file__).resolve().parents[3] / 'packages/providers/src/internal/icon-decode.py')
 icon = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(icon)
 FIXTURE = json.loads(Path(__file__).with_name('icon-native-fixture.json').read_text())

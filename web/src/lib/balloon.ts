@@ -254,7 +254,7 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
     findings.push({
       key: "thermals",
       title: "Thermals",
-      text: morning && !fromHigh ? "Stable morning parcel · forecast-high estimate unavailable." : `Stable surface parcel at ${f(choice.start.temperatureC)}.`,
+      text: morning && !fromHigh ? "The morning parcel is stable; the forecast high is unavailable." : `Stable surface parcel at ${f(choice.start.temperatureC)}.`,
       tone: "neutral",
     });
   }
@@ -276,7 +276,7 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
         findings.push({
           key: "top",
           title: "Launch reference",
-          text: `Profile ends at ${referenceHeight(top)}, near or below launch elevation ${referenceHeight(launchM)} · thermal ceiling unresolved.`,
+          text: `The sounding ends at ${referenceHeight(top)}, near or below launch elevation (${referenceHeight(launchM)}). The thermal ceiling is unresolved.`,
           tone: "neutral",
         });
       } else {
@@ -302,14 +302,14 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
       findings.push({
         key: "clouds",
         title: "Clouds",
-        text: `LCL ${referenceHeight(s.lclM)} above profile top ${referenceHeight(top)} · cloud reach unresolved.`,
+        text: `Condensation height (${referenceHeight(s.lclM)}) is above the sounding’s top (${referenceHeight(top)}). Whether thermals reach cloud is unresolved.`,
         tone: "neutral",
       });
     } else {
       findings.push({ key: "clouds", title: "Clouds", text: `Blue thermals · LCL ${referenceHeight(s.lclM)} above parcel top.`, tone: "neutral" });
     }
   } else if (!choice.hasDewPoint) {
-    findings.push({ key: "clouds", title: "Clouds", text: "Humidity unavailable · cloud estimate unavailable.", tone: "neutral" });
+    findings.push({ key: "clouds", title: "Clouds", text: "Cloud estimate unavailable without humidity.", tone: "neutral" });
   }
   const deck = s.cloudLayers.find((l) => !l.grounded);
   if (deck) findings.push({ key: "clouds", title: "Cloud layer", text: `Near-saturated layer ${ftText(deck.baseM)}–${referenceHeight(deck.topM)}.`, tone: "caution" });
@@ -354,8 +354,8 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
   if (top === null) headline = "Stable surface parcel.";
   else if (profileLimited) {
     headline = fromHigh
-      ? `At forecast high ${f(choice.start.temperatureC)} · thermals ≥ ${referenceHeight(top)} (profile-limited)${choice.hasDewPoint && s.lclM !== null ? (s.lclM <= top + 100 ? ` · Cu base ${referenceHeight(s.lclM)}` : " · cloud reach unresolved") : ""}.`
-      : `Thermals ≥ ${referenceHeight(top)} (profile-limited) · ${time.format(new Date(choice.validAt))}.`;
+      ? `At forecast high ${f(choice.start.temperatureC)} · thermals ≥ ${referenceHeight(top)} (sounding ends here)${choice.hasDewPoint && s.lclM !== null ? (s.lclM <= top + 100 ? ` · Cu base ${referenceHeight(s.lclM)}` : " · cloud reach unresolved") : ""}.`
+      : `Thermals ≥ ${referenceHeight(top)} (sounding ends here) · ${time.format(new Date(choice.validAt))}.`;
   } else if (fromHigh) headline = `At forecast high ${f(choice.start.temperatureC)} · thermals to ${referenceHeight(top)}${choice.hasDewPoint && s.lclM !== null ? (s.lclM <= top + 100 ? ` · Cu base ${referenceHeight(s.lclM)}` : " · blue") : ""}.`;
   else headline = `Thermals to ${referenceHeight(top)} · ${time.format(new Date(choice.validAt))}.`;
   return { headline, findings };

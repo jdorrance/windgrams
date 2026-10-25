@@ -19,6 +19,8 @@ export interface SiteEntry {
 }
 
 export interface LaunchDetails {
+  /** ISO 3166-1 alpha-2 country; empty for legacy records awaiting classification. */
+  countryCode: string;
   /** Direction the launch faces (degrees true); also the centre of the wind window. */
   facingDeg: number | null;
   /** Half-width of the acceptable wind-direction arc around facingDeg, degrees. */
@@ -55,6 +57,7 @@ export interface DirectionArc {
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export const DEFAULT_DETAILS: LaunchDetails = {
+  countryCode: "",
   facingDeg: null,
   windArcHalfWidthDeg: null,
   windMinMph: null,
@@ -168,6 +171,8 @@ export function validateLaunchInput(input: Record<string, unknown>, displayUnits
   const windMinMph = optionalNum(input.windMinMph);
   const windMaxMph = optionalNum(input.windMaxMph);
   const gustMaxMph = optionalNum(input.gustMaxMph);
+  const countryCode = typeof input.countryCode === "string" ? input.countryCode.trim().toUpperCase() : "";
+  if (input.countryCode !== undefined && !/^[A-Z]{2}$/.test(countryCode)) errors.push("Country: two-letter code, e.g. US, AM or NZ.");
   const region = typeof input.region === "string" ? input.region.trim().slice(0, 80) : "";
   const notes = typeof input.notes === "string" ? input.notes.trim().slice(0, 2000) : "";
 
@@ -197,6 +202,7 @@ export function validateLaunchInput(input: Record<string, unknown>, displayUnits
       latitude: round5(latitude),
       longitude: round5(longitude),
       timeZone,
+      countryCode,
       facingDeg: facingDeg === null ? null : Math.round(facingDeg),
       windArcHalfWidthDeg: windArcHalfWidthDeg === null ? null : Math.round(windArcHalfWidthDeg),
       windMinMph,
@@ -222,6 +228,8 @@ export function applyLaunch(
   if (mode === "create" && exists) return { error: `A launch with slug "${launch.slug}" already exists.` };
   if (mode === "update" && !exists) return { error: `No launch with slug "${launch.slug}".` };
 
+  const countryCode = launch.countryCode || launches.launches[launch.slug]?.countryCode || "";
+  if (!/^[A-Z]{2}$/.test(countryCode)) return { error: "Country: two-letter code, e.g. US, AM or NZ." };
   const previousSite = sites.sites.find(s => s.slug === launch.slug);
   const site: SiteEntry = {
     ...previousSite,
@@ -234,6 +242,7 @@ export function applyLaunch(
   const details: LaunchDetails = {
     ...launches.launches[launch.slug],
     ...(launch.source ? { source: launch.source } : {}),
+    countryCode,
     facingDeg: launch.facingDeg,
     windArcHalfWidthDeg: launch.windArcHalfWidthDeg,
     windMinMph: launch.windMinMph,

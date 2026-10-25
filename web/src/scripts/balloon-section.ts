@@ -118,8 +118,8 @@ export function createBalloonSection(options: BalloonSectionOptions) {
         choice.kind === 'balloon' ? `Sounding valid ${when} · ${utc}` : `NWS model forecast for ${when}`;
       document.getElementById('balloon-note')!.textContent =
         choice.kind === 'balloon'
-          ? `${station ? `${station.name} · ${formatQuantity(station.distanceKm, 'distance')} from ${launchName} · ` : ''}${formatQuantity(elevation, 'elevation')} MSL. Observation cycle shown.${choice.hasDewPoint ? '' : ' Humidity unavailable.'}${choice.start.source === 'forecast-high' ? ' Parcel starts at station forecast high.' : ''} NWS / Iowa Environmental Mesonet.`
-          : 'NWS station model · temperature and wind · heights MSL. Humidity unavailable.';
+          ? `${station ? `${station.name} · ${formatQuantity(station.distanceKm, 'distance')} from ${launchName} · ` : ''}${formatQuantity(elevation, 'elevation')} MSL.${choice.hasDewPoint ? '' : ' Humidity unavailable.'}${choice.start.source === 'forecast-high' ? ' The rising parcel starts at the forecast high for the station.' : ''} NWS / Iowa Environmental Mesonet.`
+          : 'NWS model temperature and wind at the station, with heights above sea level (MSL). Humidity is unavailable.';
     };
 
     tabs.replaceChildren(

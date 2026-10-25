@@ -1,36 +1,36 @@
-# Soaring project status
+# Forecast evaluation and development
 
-Original plan: October 22, 2026, at commit `dd1223e`. Status reviewed October 24, 2026. This record replaces the earlier phase estimates with the current implementation and remaining work.
+The next scientific questions are how well the published forecasts describe observed wind and thermals, where their errors are systematic, and whether a higher-resolution regional model improves useful guidance. Answering them requires forecasts saved before the observations arrive, enough independent weather days, and comparisons separated by lead time and weather regime.
 
-## Delivered
+Use [issued-history evaluation](../forecasts/verification/README.md) to score archived forecasts against supplied soundings. The [diagnostic reference](forecast-improvement-plan.md) describes the quantities being evaluated.
 
-- Point forecasts for HRRR, HRDPS, RRFS, RDPS, GFS, GDPS and GEPS in their published coverage; ICON-EU for 40 reviewed Armenian launches. NWS and balloon guidance serve US sites; ECMWF adds global context.
-- Native HRRR/RRFS regional maps for North Sound and Shenandoah–Blue Ridge, plus ICON-EU for Armenia; location and forecast-hour selection synchronize the map, windgram and sounding.
-- Hourly site comparisons, regional diagnostics and terrain cross-sections from published model data.
-- Versioned v2 thermal diagnostics, distinct 1 m/s and 225 ft/min lift ceilings, surface and mixed-layer LCL, layer winds, shear and native-grid convergence.
-- Immutable regional bundles, resumable source capture, a 120-run forecast archive and observation-matching utilities.
-- Availability probes and separate general, RRFS and ICON-EU refresh schedules.
-- A full-day mobile windgram, shared Imperial/Metric preference, WxToFly colors, potential-LCL symbols and RH >94% hatching.
+## Forecast coverage
 
-The [diagnostic notes](forecast-improvement-plan.md) describe the calculations and approximations. [Regional operations](../forecasts/soaring/README.md) and the [fixed HRRR replay](soaring-replay.md) provide reproducible commands.
+The operator builds HRRR, HRDPS, RRFS, RDPS, GFS, GDPS and GEPS point forecasts within their configured coverage, plus ICON-EU for Armenian launches. NWS and balloon soundings provide US context; the ECMWF adapter supplies additional surface and upper-air guidance.
 
-## Experimental work
+North Sound and Shenandoah–Blue Ridge have native HRRR/RRFS maps, and Armenia has an ICON-EU map. These views share forecast-hour and location selection with the windgram, sounding and terrain cross-section. The other regional entries currently support point comparisons.
 
-`forecasts/wrf/` contains North Sound domain settings, namelists and a runner scaffold for a 3 km parent / 1 km nest. The Dockerfile installs dependencies and copies those settings. The default runner writes dry-run estimates; a real integration expects WRF/WPS executables, geographic inputs and forcing to be supplied separately. Runtime, cost and forecast benefit still need measurements from completed integrations.
+The [region configuration](../forecasts/soaring/regions.json) lists enabled models and publication settings. Build commands are in [regional operations](../forecasts/soaring/README.md); the [North Sound replay](soaring-replay.md) provides a fixed numerical example.
 
-Additional regional entries identify candidate areas for grid publication. Their point comparisons and configuration are distinct from the three active regional forecast areas.
+## Evaluation backlog
 
-## Evaluation still to do
+The retained comparison report covers eight near-initialization comparisons using three station observation times on one date. Comparisons that share a sounding also share the same atmospheric evidence. The sample is useful for checking matching and scoring, but too narrow to estimate performance across seasons, terrain or weather regimes.
 
-The verification code reports sounding matches, errors and forecast spread. The project still needs a sustained prospective record across weather regimes, warm-season thermal cases, and representative terrain exposures. The 120-run retention limit provides about 30 days at four cycles per day; the archive's actual span depends on successful builds.
+Collect a prospective sample spanning warm-season thermals, marine intrusions, inversions, strong winds and different terrain exposures. Summaries should keep exact-time errors, near-initialization comparisons and cross-model spread separate. Report each metric's usable sample count and independent station-days, since temperature, dew point and wind can have different missing data.
 
-The original promotion targets remain project goals: at least 30 independent evaluation days, a 10% reduction in daytime wind-vector error against the HRRR baseline, stable cloud-base and hazardous-wind performance, and 95% morning delivery by the regional deadline. Evidence for those targets belongs in measured reports before expanding the WRF experiment.
+The archive retains 120 rolling runs plus pinned cases—about 30 days at four successful cycles per day. Its ordinary records preserve issued values for scoring. Full source columns must be retained separately for studies that recalculate diagnostics under a proposed method change.
 
-Potential additions include further native-grid regions, richer atmospheric levels, pressure-gradient views, observation and webcam links, and run-to-run comparisons. Their priority depends on forecast value, data availability and measured operating cost.
+The [near-neutral parcel-depth discontinuity](refactor-plan.md#open-near-neutral-parcel-depth-discontinuity) needs a targeted numerical correction and an impact study before changing method 2.1.0. Further atmospheric levels, regional maps, pressure-gradient views and run comparisons should be chosen according to the errors they help explain and the cost of acquiring and serving their data.
+
+## Experimental WRF work
+
+[`forecasts/wrf/`](../forecasts/wrf/) contains a North Sound configuration with a 3 km parent domain and a 1 km nest. The runner's default mode estimates the work involved. Running the integration requires WRF/WPS executables, geographic inputs and forcing data. Runtime and cost must be measured from completed integrations.
+
+The proposed criteria for operational WRF use are 30 independent evaluation days, at least 10% lower daytime wind-vector error than HRRR, stable cloud-base and hazardous-wind performance, and delivery before the regional morning deadline on at least 95% of days. These targets still need measured evidence. Compare both atmospheric performance and delivery reliability before deciding whether the nest merits routine operation.
 
 ## References
 
-- [WxToFly windgram explanation](http://wxtofly.net/windgramexplain.html): display colors, units and 225 ft/min glider threshold.
-- [DrJack parameter definitions](http://www.drjack.info/RASP/INFO/parameters.html): RASP diagnostic definitions for comparison with this project's parcel-based estimates.
-- [UCAR WPS namelist guidance](https://www2.mmm.ucar.edu/wrf/users/namelist_best_prac_wps.html): nesting and domain setup.
-- [NWS RRFS implementation notice](https://www.weather.gov/media/notification/pdf_2026/scn26-048_Updated_RRFS_and_REFS_Implementation.aaf.pdf): transition scheduled for November 3, 2026 in the October 15 update.
+- [WxToFly guide](http://wxtofly.net/windgramexplain.html): windgram display scale and the 225 ft/min threshold.
+- [DrJack parameters](http://www.drjack.info/RASP/INFO/parameters.html): RASP quantities for comparison with the parcel estimates used here.
+- [UCAR WPS guidance](https://www2.mmm.ucar.edu/wrf/users/namelist_best_prac_wps.html): nesting and domain setup.
+- [NWS RRFS transition notice](https://www.weather.gov/media/notification/pdf_2026/scn26-048_Updated_RRFS_and_REFS_Implementation.aaf.pdf): the source notice consulted for the October 2026 integration.

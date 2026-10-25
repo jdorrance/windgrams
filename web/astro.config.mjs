@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import devData from "./integrations/dev-data.mjs";
+import { localDataConfiguration } from "./config/data-mode.mjs";
 
 // WINDGRAMS_SITE is the public origin, including a project-site repo path
 // (https://owner.github.io/windgrams). WINDGRAMS_BASE is "/" or "/windgrams".
@@ -9,6 +10,7 @@ const site = process.env.WINDGRAMS_SITE || "https://example.com";
 const base = !process.env.WINDGRAMS_BASE || process.env.WINDGRAMS_BASE === "/"
   ? "/"
   : `/${process.env.WINDGRAMS_BASE.replace(/^\/+|\/+$/g, "")}`;
+const dataset = localDataConfiguration();
 
 export default defineConfig({
   // Static pages. Forecast documents are copied to dist/data at publish time.
@@ -19,7 +21,7 @@ export default defineConfig({
   // Compression drops the line break between a word and a link that starts the
   // next source line ("under the<a>…"), gluing them together on the page.
   compressHTML: false,
-  integrations: [devData({ root: "../forecasts/data" })],
+  integrations: [devData(dataset)],
   vite: {
     // Launch pages are built from ../forecasts/sites.json.
     server: { fs: { allow: [".."] } },

@@ -474,8 +474,8 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   const windParts: string[] = [];
   if (launchM !== null) {
     if (atLaunch) windParts.push(`Launch (${referenceHeightText(launchM)} MSL): ${windText(atLaunch)}.`);
-    else if (launchM < sounding.modelElevationM) windParts.push(`Launch ${referenceHeightText(launchM)} MSL · Model terrain ${referenceHeightText(sounding.modelElevationM)} MSL · Launch wind unavailable.`);
-    else windParts.push(`Launch ${referenceHeightText(launchM)} MSL · Wind unavailable.`);
+    else if (launchM < sounding.modelElevationM) windParts.push(`Launch wind unavailable: launch at ${referenceHeightText(launchM)} MSL is below model terrain at ${referenceHeightText(sounding.modelElevationM)} MSL.`);
+    else windParts.push(`Wind unavailable at launch elevation (${referenceHeightText(launchM)} MSL).`);
   }
   if (launchM === null || !atLaunch) {
     const surfaceWind = windAtHeight(sounding.points, surfaceWindHeight);
@@ -484,7 +484,7 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   if (topHeight !== windReference) {
     windParts.push(atTop ? `Aloft (${heightText(topHeight)} MSL): ${windText(atTop)}.` : `Aloft (${heightText(topHeight)} MSL): Unavailable.`);
   }
-  windParts.push(`Model column · Terrain ${referenceHeightText(sounding.modelElevationM)} MSL.`);
+  windParts.push(`Model terrain: ${referenceHeightText(sounding.modelElevationM)} MSL.`);
   findings.push({ key: "wind", title: "Wind", text: windParts.join(" "), tone: "neutral" });
 
   // Storms: the model's CAPE counts energy for air lifted to condensation. On a

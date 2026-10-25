@@ -2,8 +2,8 @@ import { afterEach, test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast } from "@azohra/meteo.briefing/contract";
-import { buildWindgramView, heightToY, readWindgram, type WindgramView } from "../src/lib/windgram-view.ts";
-import { mountWindgramInspector, renderWindgramSvg } from "../src/lib/windgram-chart.ts";
+import {  buildWindgramView, heightToY, readWindgram, type WindgramView  } from "./helpers/windgram.ts";
+import {  mountWindgramInspector, renderWindgramSvg  } from "./helpers/windgram.ts";
 import { setUnitSystem } from "../src/lib/units.ts";
 
 const originalDOMPoint = globalThis.DOMPoint;

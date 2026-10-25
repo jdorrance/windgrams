@@ -1,76 +1,88 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { pagesUrls } from '../../scripts/pages-config.mjs';
 
 const workflow = readFileSync(new URL('../../.github/workflows/pages.yml', import.meta.url), 'utf8');
-const providerJobs = ['noaa-cloud', 'rrfs', 'dwd', 'eccc', 'observations', 'terrain'];
+const groups = ['noaa-cloud', 'rrfs', 'dwd', 'eccc', 'observations', 'terrain'];
+const refresh = readFileSync(new URL('../../.github/workflows/refresh-provider.yml', import.meta.url), 'utf8');
 
-function selectedProviders(eventName, { schedule, refresh = 'all' } = {}) {
-  return providerJobs.filter(job => {
-    const block = workflow.split(`\n  ${job}:\n`)[1]?.split(/\n  [a-z][a-z-]*:\n/)[0];
-    const condition = block?.match(/^    if: (.*)$/m)?.[1];
-    assert.ok(condition, `${job} has an explicit scheduling condition`);
-    return Function('github', 'inputs', `return (${condition});`)({ event_name: eventName, event: { schedule } }, { refresh });
+test('provider completions publish independently while preserving schedules', () => {
+  for (const group of groups) {
+    const source = readFileSync(new URL(`../../.github/workflows/refresh-${group}.yml`, import.meta.url), 'utf8');
+    assert.ok(source.includes(`name: Refresh ${group}`));
+    assert.ok(workflow.includes(`Refresh ${group}`));
+    assert.ok(source.includes('uses: ./.github/workflows/refresh-provider.yml'));
+    assert.ok(source.includes(`group: ${group}`));
+    const schedule = group === 'rrfs' ? '55 3,9,15,21 * * *' : group === 'dwd' ? '55 4,10,16,22 * * *' : '55 1,7,13,19 * * *';
+    assert.ok(source.includes(schedule));
+  }
+  const publish = workflow.split('  publish:')[1];
+  assert.equal(publish.includes('needs:'), false, 'publisher has no provider completion barrier');
+  assert.match(publish, /concurrency:\n      group: pages/);
+  assert.match(workflow, /types: \[completed\]/);
+  assert.match(workflow, /head_repository.full_name == github.repository/);
+  assert.match(refresh, /group: refresh-\$\{\{ inputs.group \}\}/);
+});
+
+test('publication seeds, collects, validates, assembles and measures before deploying', () => {
+  const publish = workflow.split('  publish:')[1];
+  const commands = ['scripts/seed-published.mjs', 'scripts/collect-refresh-artifacts.mjs',
+    'scripts/prepare-publication.mjs', 'pnpm run build', 'scripts/prepare-pages.mjs', 'actions/upload-pages-artifact@', 'actions/deploy-pages@'];
+  let previous = -1;
+  for (const command of commands) { const index = publish.indexOf(command); assert.ok(index > previous, command); previous = index; }
+  assert.match(publish, /--dry-run/);
+  assert.match(publish, /if: inputs.dry_run\n        run: node forecasts\/scripts\/prepare-publication.mjs .* --dry-run/);
+  assert.match(publish, /!inputs.dry_run/);
+  assert.match(publish, /PUBLIC_WINDGRAMS_DATA_BASE:/);
+  assert.match(publish, /ref: main/);
+});
+
+test('refresh always packs retained products and preserves native decoder setup', () => {
+  assert.match(refresh, /Pack validated and retained products\n        if: always\(\)/);
+  assert.match(refresh, /include-hidden-files: true/);
+  assert.match(refresh, /retention-days: 2/);
+  assert.match(refresh, /python3.12 -m venv .venv-icon/);
+  assert.match(refresh, /NODE_OPTIONS: --max-old-space-size=6144/);
+  assert.match(refresh, /scripts\/refresh-provider.mjs/);
+  const monitor = readFileSync(new URL('../../.github/workflows/served-data.yml', import.meta.url), 'utf8');
+  assert.match(monitor, /17 \* \* \* \*/);
+  assert.match(monitor, /scripts\/monitor-served.mjs/);
+});
+
+test('Pages resolves reader paths and rejects malformed publication configuration', () => {
+  const run = (env = {}) => pagesUrls({ GITHUB_REPOSITORY: 'pilot/windgrams', ...env });
+  assert.deepEqual(run(), { site: 'https://pilot.github.io/windgrams', base: '/windgrams', data: 'https://pilot.github.io/windgrams/data' });
+  assert.equal(run({ WINDGRAMS_DATA_BASE: '/forecast/' }).data, 'https://pilot.github.io/forecast');
+  assert.equal(run({ WINDGRAMS_DATA_BASE: '/' }).data, 'https://pilot.github.io');
+  assert.equal(run({ WINDGRAMS_SITE: 'https://flying.example/apps/windgrams', WINDGRAMS_DATA_BASE: '/forecast' }).data, 'https://flying.example/forecast');
+  assert.equal(run({ WINDGRAMS_DATA_BASE: 'https://weather.example/datasets/' }).data, 'https://weather.example/datasets');
+  assert.deepEqual(run({ GITHUB_REPOSITORY: 'pilot/pilot.github.io' }), { site: 'https://pilot.github.io', base: '/', data: 'https://pilot.github.io/data' });
+  assert.equal(run({ GITHUB_REPOSITORY: 'Pilot/pilot.github.io' }).base, '/');
+  for (const value of ['/forecast?key=x', '/forecast#run', '//other.example/data', '/\\other.example/data', 'https://user:secret@other.example/data', 'https://other.example/data?key=x', 'https://other.example/data#run', 'javascript:alert(1)']) {
+    assert.throws(() => run({ WINDGRAMS_DATA_BASE: value }), /Data origin/);
+  }
+  for (const value of ['javascript:alert(1)', 'https://user:secret@site.example', 'https://site.example/?x=1']) {
+    assert.throws(() => run({ WINDGRAMS_SITE: value }), /Site/);
+  }
+  for (const value of ['relative', '//other.example', '/path?query', '/path\nextra']) {
+    assert.throws(() => run({ WINDGRAMS_BASE: value }), /Base/);
+  }
+});
+
+test('Pages configuration command writes the exact job outputs used by acquisition and build', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'windgrams-url-test-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const output = join(directory, 'output');
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('../../scripts/pages-config.mjs', import.meta.url))], {
+    encoding: 'utf8', env: { ...process.env, GITHUB_REPOSITORY: 'pilot/windgrams', GITHUB_OUTPUT: output,
+      WINDGRAMS_SITE: '', WINDGRAMS_BASE: '', WINDGRAMS_DATA_BASE: '/forecast' },
   });
-}
-
-test('targeted manual RRFS refresh builds only RRFS while default manual refresh builds all providers', () => {
-  assert.deepEqual(selectedProviders('workflow_dispatch', { refresh: 'rrfs' }), ['rrfs']);
-  assert.deepEqual(selectedProviders('workflow_dispatch', { refresh: 'all' }), providerJobs);
-  assert.deepEqual(selectedProviders('workflow_dispatch'), providerJobs);
-});
-
-test('scheduled provider windows and cache-only pushes remain unchanged', () => {
-  assert.deepEqual(selectedProviders('schedule', { schedule: '55 1,7,13,19 * * *' }), providerJobs.filter(job => job !== 'rrfs' && job !== 'dwd'));
-  assert.deepEqual(selectedProviders('schedule', { schedule: '55 3,9,15,21 * * *' }), ['rrfs']);
-  assert.deepEqual(selectedProviders('push'), []);
-});
-
-test('targeted deployment preserves other datasets and requires a complete RRFS run', () => {
-  const publish = workflow.split('\n  publish:\n')[1];
-  const seed = publish.indexOf('for group in noaa-cloud rrfs dwd eccc observations terrain soaring; do');
-  const merge = publish.indexOf('- name: Merge forecast documents');
-  const validate = publish.indexOf('- name: Validate the requested RRFS forecast dataset before deployment');
-  const deploy = publish.indexOf('uses: actions/deploy-pages@');
-  assert.ok(seed > 0 && merge > seed && validate > merge && deploy > validate);
-  assert.match(publish, /if: github.event_name == 'workflow_dispatch' && inputs.refresh == 'rrfs'\n        working-directory: forecasts\n        run: node scripts\/validate-rrfs\.mjs --data data --sites sites\.json/);
-});
-
-test('ICON has an independent scheduled and manual refresh window', () => {
-  assert.deepEqual(selectedProviders('workflow_dispatch', { refresh: 'icon-eu' }), ['dwd']);
-  assert.deepEqual(selectedProviders('schedule', { schedule: '55 4,10,16,22 * * *' }), ['dwd']);
-  const dwd = workflow.split('\n  dwd:\n')[1].split('\n  eccc:\n')[0];
-  assert.match(dwd, /scripts\/build-icon\.mjs --sites sites\.json --output data --validate-only/);
-  const publish = workflow.split('\n  publish:\n')[1];
-  assert.ok(publish.indexOf('Validate requested ICON profiles') < publish.indexOf('actions/deploy-pages@'));
-});
-
-test('ICON publication combines provider data and terrain before validating a requested deployment', () => {
-  const publish = workflow.split('\n  publish:\n')[1];
-  const seed = publish.indexOf('for group in noaa-cloud rrfs dwd eccc observations terrain soaring; do');
-  const merge = publish.indexOf('- name: Merge forecast documents');
-  const terrain = publish.indexOf('scripts/merge-armenia-terrain.mjs');
-  const validate = publish.indexOf('- name: Validate requested ICON profiles');
-  const deploy = publish.indexOf('uses: actions/deploy-pages@');
-  assert.ok(seed > 0 && merge > seed && terrain > merge && validate > terrain && deploy > validate);
-  assert.match(publish, /if: github.event_name == 'workflow_dispatch' && inputs.refresh == 'icon-eu'\n        working-directory: forecasts\n        run: node scripts\/build-icon\.mjs --sites sites\.json --output data --validate-only/);
-  const dwd = workflow.split('\n  dwd:\n')[1].split('\n  eccc:\n')[0];
-  assert.match(dwd, /runs-on: ubuntu-24\.04/);
-  assert.match(dwd, /python3\.12 -m venv \.venv-icon/);
-  assert.match(dwd, /ICON_PYTHON: \$\{\{ github.workspace \}\}\/forecasts\/\.venv-icon\/bin\/python/);
-  assert.match(dwd, /NODE_OPTIONS: --max-old-space-size=6144/);
-  assert.match(dwd, /- name: Pack\n        if: always\(\)/);
-});
-
-test('publication prunes merged rolling bundles and checks the finished Pages artifact before upload', () => {
-  const publish = workflow.split('\n  publish:\n')[1];
-  const overlay = publish.indexOf('- name: Merge forecast documents');
-  const catalogue = publish.indexOf('scripts/merge-soaring-regions.mjs');
-  const prune = publish.indexOf('scripts/pages-artifact.mjs --prune-data data');
-  const build = publish.indexOf('pnpm run build');
-  const copy = publish.indexOf('cp -a ../forecasts/data/. dist/data/');
-  const check = publish.indexOf('scripts/pages-artifact.mjs --check-site dist');
-  const upload = publish.indexOf('uses: actions/upload-pages-artifact@');
-  assert.ok(overlay > 0 && catalogue > overlay && prune > catalogue && build > prune);
-  assert.ok(copy > build && check > copy && upload > check);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(output, 'utf8'), 'site=https://pilot.github.io/windgrams\nbase=/windgrams\ndata=https://pilot.github.io/forecast\n');
+  assert.match(workflow, /run: node scripts\/pages-config\.mjs/);
 });

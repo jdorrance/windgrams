@@ -161,7 +161,7 @@ export class Sunlight {
       this.index = null;
     }
     if (!this.index) {
-      status.textContent = "Sunlight map pending.";
+      status.textContent = "Sunlight map unavailable.";
       const section = document.getElementById("sun-section");
       if (section) section.hidden = true;
       return;
@@ -172,7 +172,7 @@ export class Sunlight {
     const threeButton = $("sun-view").querySelector<HTMLButtonElement>('[data-view="3d"]')!;
     if (!this.index.relief) {
       threeButton.disabled = true;
-      threeButton.title = "3D terrain pending.";
+      threeButton.title = "3D terrain unavailable.";
     }
     const surface = this.index.sources.surface;
     const { area, radiusKm } = this.index.inputs;
@@ -306,7 +306,7 @@ export class Sunlight {
     try {
       const module = await import("./sunlight3d.ts");
       if (!module.webglAvailable()) {
-        status.textContent = "3D unavailable · use 2D view.";
+        status.textContent = "3D is unavailable. Use the 2D map.";
         return;
       }
       const meta = index.relief;
@@ -324,7 +324,7 @@ export class Sunlight {
       if (this.selected && !this.selected.isLaunch) this.three.setSelected({ lat: this.selected.latlng.lat, lon: this.selected.latlng.lng });
       status.hidden = true;
     } catch {
-      status.textContent = "3D terrain unavailable · use 2D view.";
+      status.textContent = "3D terrain is unavailable. Use the 2D map.";
       this.threeLoading = null;
     }
   }
@@ -408,7 +408,8 @@ export class Sunlight {
   private rebuildFrames(newDay: boolean) {
     if (!this.dateKey) return;
     const midnight = localInstantMs(this.dateKey, 0, this.launch.timeZone);
-    const daylight = sunriseSunset(midnight, midnight + 86_400_000, this.launch.latitude, this.launch.longitude);
+    const nextMidnight = localInstantMs(this.dateKey, 24, this.launch.timeZone);
+    const daylight = sunriseSunset(midnight, nextMidnight, this.launch.latitude, this.launch.longitude);
     const slider = $<HTMLInputElement>("sun-time");
     if (!daylight) {
       this.steps = [];

@@ -1,47 +1,40 @@
 # Website
 
-Astro builds the static launch, regional soaring and About pages. Node 24 and pnpm 10.28.0 are the development toolchain.
+The website uses Astro for pages and TypeScript for maps, charts and controls.
+
+Complete the [workspace setup](../README.md#start-locally). Run commands below from `web/`.
 
 ## Run and preview
 
-`pnpm dev` serves `../forecasts/data` at `/data`. Build that dataset using the [repository commands](../README.md).
-
-`pnpm preview` builds the site, links the complete local dataset into `dist/data`, and starts Astro's preview server. Launch profiles, regional bundles and optional sunlight tiles share that link.
-
-For the GitHub Pages path:
-
 ```sh
-WINDGRAMS_BASE=/windgrams pnpm preview --host 127.0.0.1 --port 4323
+pnpm dev
+pnpm preview
 ```
 
-`pnpm build` creates the production site. The Pages workflow adds the published forecast documents and excludes the larger history and sunlight trees.
+`dev` serves `../forecasts/data` at `/data`. [Build a local forecast](../forecasts/README.md#local-data) first, or use the synthetic example below. `preview` builds the site and links the same dataset into `dist/data`, including sunlight tiles when available.
 
-## Regional coverage
+To preview the Pages path, run `WINDGRAMS_BASE=/windgrams pnpm preview --host 127.0.0.1 --port 4323`. `pnpm build` creates site assets; the [Pages workflow](../.github/workflows/pages.yml) adds forecast data.
 
-The launch index separates United States and Armenia, with a session-persisted country selector and `?country=AM` deep link. Cards retain names only. Armenian sites use `Asia/Yerevan` and prefer ICON-EU; published global models provide comparisons. US model priority stays unchanged. The provider capability helper scopes NWS and the US balloon archive to US launches.
+To work offline with a small synthetic dataset:
 
-Unknown launch direction, wind arc and speed/gust limits are `null`. Charts omit unknown limit bands and suitability marks; station readings retain measured wind with neutral unknown-limit text. Admin inputs accept blanks, preserve stored values across unit changes, and retain catalogue attribution on save.
+```sh
+pnpm dev-data --site wa-blanchard --skip-solar
+pnpm dev:fixtures
+# Or build and serve the same fixtures:
+pnpm preview:fixtures
+```
 
-The Armenia Soaring case is `armenia-icon-eu-live`, selected by `/soaring/?region=armenia`. Production ICON bundles contain compressed scalar map hours and a `cellProfiles` template for individual compressed profiles. The browser loads profiles on selection, validates their grid/run/time identity, and retains eight in an LRU cache. Plain JSON and HTTP-decoded gzip both work. Native `levelsByModel[level].p` arrays remain supported for engineering replays; pressure-level arrays remain supported for HRRR/RRFS. ICON windgram axis ticks interpolate median height at fixed isobars; source soundings retain native floating pressures. This keeps hour-dependent model pressure from creating duplicate height ticks. US-only discussions and observational checks appear where those products are available.
+Open `/launches/wa-blanchard` or `/soaring?case=synthetic-archive`. The fixture commands
+set `WINDGRAMS_DATA_MODE=fixtures`, serve `web/dev-data` and show a “Synthetic test data”
+banner. Unset `PUBLIC_WINDGRAMS_DATA_BASE` before using them.
 
-The regional time slider spans the published horizon. Its windgram shows daylight for the selected hour's local date, in either height view; sounding and map retain the exact selected forecast hour. Layers with no finite values in that model's horizon are omitted, including unsupported ICON vertical motion and convergence.
+## Working on the app
 
-## Display conventions
+Pages are in `src/pages/`; their browser code is in `src/scripts/`. `src/lib/` contains chart helpers, launch selection and unit preferences. The [windgram package](../packages/windgram/README.md) renders windgrams; the [toolkit guide](../docs/toolkit.md) describes the other shared packages.
 
-- Imperial is the default. The header setting persists in browser storage, with session storage and a `units` URL parameter as fallbacks. Switching units reloads the current page while retaining model, day, time and location parameters.
-- Imperial uses ft, mi, °F, mph, ft/min, in or in/h, and inHg. Metric uses m, km, °C, km/h, m/s, mm or mm/h, and hPa. Lapse-rate labels use °F per 1,000 ft or °C/km. Temperature differences scale without an absolute-temperature offset.
-- Wind barbs use knots in Imperial (half/full/flag: 5/10/50 kt) and m/s in Metric (2.5/5/25 m/s). General wind-speed labels use mph or km/h.
-- Source JSON and diagnostic contracts retain their physical units, including metres, kilometres, °C, m/s, mm and hPa. Shared formatters convert the display; calculations, thresholds and stored forecasts stay unchanged. Saved launch wind limits remain mph; admin forms convert metric edits on save and preserve unchanged values exactly.
-- Verbatim NWS bulletins retain their original units. CAPE uses J/kg, solar radiation uses W/m² and smoke uses µg/m³ in both settings.
-- Windgram colors and breakpoints follow [WxToFly](http://wxtofly.net/windgramexplain.html). The mobile chart fits the selected day's hours.
-- The mobile toolbar shows three forecast days beside a compact model picker. The closed picker shows the model name; its native menu retains resolution and ensemble details. Swipe the day tabs for later dates.
-- Mobile height stays fixed while browser controls open and close; rotation or a width change refits the chart. The focused view starts at launch elevation, or model terrain where higher. Its top follows the highest usable ceiling in the displayed hours, including ensemble p75, with at least 500 m headroom and 1,000 m above model terrain. **Full height** restores the terrain-to-launch layer and upper winds. Missing lift diagnostics retain the full upper profile; a day of zero w* uses the lower layer. Desktop keeps the full profile. Surface rows retain model-surface values.
-- Both mobile views span sunrise to sunset at the forecast location, bracketed by available forecast samples. The time range follows the local date and daylight, independent of lift strength. Hour controls follow the visible window; **Full height** expands the height range and keeps the same hours. Polar days/nights and forecasts outside daylight keep the supplied hours. Multi-day profiles retain the hours between the first sunrise and last sunset.
-- The launch page's info icon opens the selected date, timezone and model run details. Hour controls sit below the windgram. Hover or tap an hour for AGL and MSL height at the blue usable-lift line; left/right arrows change hour. Missing or offscreen lift ceilings hide the marker. Tap outside or press Escape to clear. AGL is MSL height minus launch terrain elevation, falling back to model terrain. The callout labels the model-terrain fallback. The reference stays fixed when the display height range changes; ceilings below it have negative AGL. Values follow Imperial / Metric.
-- Background color represents lapse rate. Colours interpolate between source-layer centres and forecast hours; source lapse rates remain layer averages. Inversion boundaries and missing-data gaps stay at their source heights. White crosshatching marks RH above 94%; outlined clouds mark potential LCL.
-- Paragliders use published `hcritWxtoflyM` at 225 ft/min sink. The blue line uses `usableLiftTopV2M` at 1 m/s. A missing 225 ft/min diagnostic leaves that symbol empty.
-- Heights are MSL. Model terrain and catalogue launch elevation have separate references. Balloon times include local zone and UTC cycle.
-- `published-lift.ts` selects the published diagnostic family. The same values drive the regional views, windgram and model sounding.
+Use [display rules](docs/display.md) when changing charts or controls. They cover units, height references, missing data, model selection and saved preferences. See [regional operations](../forecasts/soaring/README.md) to build map forecasts.
+
+Station panels use the optional Worker at `/api/stations/<id>`. Its provider key stays in the Worker, which is deployed separately from the static site.
 
 ## Checks
 
@@ -51,6 +44,11 @@ pnpm check
 pnpm build
 ```
 
-`pnpm run dev-data` generates synthetic contract fixtures in `web/dev-data`; source attribution is in [dev-data-src/README.md](dev-data-src/README.md).
+The [fixture guide](dev-data-src/README.md) describes the generated examples. Use [visual QA](test/fixtures/windgram-visual/README.md) to compare windgram screenshots against frozen profiles.
 
-Station pages use the optional Worker at `/api/stations/<id>`. Its provider key stays in the Worker. GitHub Pages serves static weather data; station measurements depend on a connected API deployment.
+Run `pnpm exec playwright install chromium` once to install the browser. Then
+`pnpm test:browser` generates a repeatable one-launch dataset, builds a fixture
+preview on port 4397 and checks model switching, chart lifecycle, stale notices
+and archived replay. The tests use local forecast files and replace external map
+tiles, so they run without live weather services. Failed runs retain Playwright traces in
+`test-results/`.

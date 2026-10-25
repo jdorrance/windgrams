@@ -4,8 +4,9 @@ import { gunzipSync } from "node:zlib";
 import { sunPosition, sunriseSunset, sunVector } from "../src/lib/sun.ts";
 import { airMass, azimuthWeights, clearSky, litFraction, onSurface, withClouds } from "../src/lib/irradiance.ts";
 import { RAMP, decodeTile, pointIrradiance, pointTerrain, rampLut, renderTile, type Frame, type SolarIndex } from "../src/lib/solar-tile.ts";
-// The tile encoder lives with the forecast operator; the round trip below keeps both sides in step.
-import { buildSolarTerrain, domainFor, gridFromFunction, latToY, lonToX, metresPerDegree } from "../../forecasts/scripts/lib/solar.mjs";
+// Public producer and private coordinate fixtures exercise the browser decoder round trip.
+import { buildSolarTerrain, domainFor, gridFromFunction } from "@windgrams/providers/solar";
+import { latToY, lonToX, metresPerDegree } from "../../packages/providers/src/internal/solar.ts";
 
 const LAT = 43.62332;
 const LON = -115.98076;

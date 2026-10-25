@@ -1,5 +1,5 @@
 // Builds the synthetic dataset the Check workflow validates against the meteo
-// contract. `pnpm dev` does not serve it; the dev server serves forecasts/data.
+// contract. Opt in with `pnpm dev:fixtures` or `pnpm preview:fixtures` to serve it.
 //
 // Every document is synthetic: the meteogram profiles are meteo's
 // "convective-cycle" scenario re-timed onto today's local days for each launch
@@ -7,7 +7,7 @@
 // run through the same builder the NWS workflow uses. Each document is checked
 // with the contract parsers the site uses in production.
 //
-// Usage: node scripts/make-dev-data.mjs [--out dev-data] [--solar-site SLUG ...]
+// Usage: node scripts/make-dev-data.mjs [--out dev-data] [--site SLUG ...] [--solar-site SLUG ...] [--skip-solar] [--now ISO]
 // --solar-site limits only the expensive synthetic terrain maps. All forecast
 // profiles and their contract validation still cover every launch.
 
@@ -23,14 +23,18 @@ import {
   parseSitesCatalogueJson,
   siteForecastSchema,
 } from "@azohra/meteo.briefing/contract";
-import { buildManifest, buildSiteDocument, paths as nwsPaths } from "../../forecasts/scripts/lib/nws.mjs";
-import { buildSolarTerrain, domainFor, expandBounds, gridFromFunction, metresPerDegree } from "../../forecasts/scripts/lib/solar.mjs";
-import { ALOFT_FIELDS, SURFACE_FIELDS, buildManifest as buildEcmwfManifest, buildSiteDocument as buildEcmwfDocument, paths as ecmwfPaths } from "../../forecasts/scripts/lib/ecmwf.mjs";
+import { buildManifest, buildSiteDocument, paths as nwsPaths } from "@windgrams/providers/nws";
+import { buildSolarTerrain, domainFor, expandBounds, gridFromFunction, metresPerDegree } from "@windgrams/providers/solar";
+import { ALOFT_FIELDS, SURFACE_FIELDS, buildManifest as buildEcmwfManifest, buildSiteDocument as buildEcmwfDocument, paths as ecmwfPaths } from "@windgrams/providers/ecmwf";
 import { SCHEMA_VERSION as STATION_SCHEMA, SOURCE as STATION_SOURCE, dashboardUrl, parseWuCurrent, parseWuHistory } from "../src/lib/station.ts";
+import { writeRegionalFixture } from './regional-fixture.mjs';
 
 const { values: args } = parseArgs({ options: {
   out: { type: "string", default: "dev-data" },
   "solar-site": { type: "string", multiple: true },
+  site: { type: "string", multiple: true },
+  "skip-solar": { type: "boolean", default: false },
+  now: { type: "string" },
 } });
 const out = resolve(args.out);
 const HOUR = 3_600_000;
@@ -38,19 +42,26 @@ const HEIGHT_SHIFT_M = 480; // scenario terrain 900 m -> sample launch terrain 1
 const LAUNCH_ELEVATION_M = 1480;
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf-8"));
-const sites = readJson("../../forecasts/sites.json");
+const catalogue = readJson("../../forecasts/sites.json");
+const selectedSites = new Set(args.site ?? catalogue.sites.map(site => site.slug));
+for (const slug of selectedSites) {
+  if (!catalogue.sites.some(site => site.slug === slug)) throw new Error(`Unknown --site: ${slug}`);
+}
+const sites = { ...catalogue, sites: catalogue.sites.filter(site => selectedSites.has(site.slug)) };
 const models = readJson("../dev-data-src/models.json");
 const scenario = readJson("../dev-data-src/convective-cycle.profile.json");
 const ensembleScenario = readJson("../dev-data-src/ensemble-wide.profile.json");
-const solarSlugs = new Set(args["solar-site"] ?? sites.sites.map(site => site.slug));
+const solarSlugs = new Set(args["skip-solar"] ? [] : args["solar-site"] ?? sites.sites.map(site => site.slug));
 for (const slug of solarSlugs) {
   if (!sites.sites.some(site => site.slug === slug)) throw new Error(`Unknown --solar-site: ${slug}`);
 }
 const solarSites = sites.sites.filter(site => solarSlugs.has(site.slug));
+const now = args.now === undefined ? Date.now() : Date.parse(args.now);
+if (!Number.isFinite(now)) throw new Error('--now must be a valid ISO timestamp');
 
 function write(key, value, parse) {
   const text = `${JSON.stringify(value, null, 1)}\n`;
-  if (parse && parse(text) === null) throw new Error(`${key} fails the contract guard`);
+  if (parse && parse(text) === null) throw new Error(`${key} failed validation`);
   const file = join(out, key);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, text);
@@ -149,7 +160,6 @@ function ensembleProfile(model, site, referenceTime, stepHours, count) {
 // ── build ────────────────────────────────────────────────────────────────
 
 rmSync(out, { recursive: true, force: true });
-const now = Date.now();
 const zone = sites.sites[0]?.timeZone ?? "America/Boise";
 // Runs start at local midnight so the sample covers whole local days.
 const hrrrRef = localMidnight(zone, now);
@@ -185,6 +195,7 @@ for (const [model, ref, step, count, build] of [
   runs[model] = { referenceTime: iso(ref), generatedAt };
 }
 write("runs.json", { schemaVersion: 1, runs }, parseRunsIndexJson);
+writeRegionalFixture(out, profile('hrrr-conus', sites.sites[0], hrrrRef, 1, 48));
 console.log(`Validated model profiles for all ${sites.sites.length} launches (including 84 RRFS hours each).`);
 
 write(
@@ -297,7 +308,7 @@ for (const site of sites.sites) {
         endTime: new Date(start + (18 + i * 12) * HOUR).toISOString(),
         isDaytime: i % 2 === 0,
         shortForecast: i % 2 ? "Clear" : "Sunny",
-        detailedForecast: `Sample text, not a forecast. ${i % 2 ? "Clear, with a low around 45." : "Sunny, with a high near 75. Northwest wind 5 to 10 mph."}`,
+        detailedForecast: `Synthetic test forecast. ${i % 2 ? "Clear, with a low around 45." : "Sunny, with a high near 75. Northwest wind 5 to 10 mph."}`,
       })),
     },
   };
@@ -316,7 +327,7 @@ write(nwsPaths.office("BOI"), {
       productCode: "AFD",
       productName: "Area Forecast Discussion",
       issuanceTime: new Date(now - 3 * HOUR).toISOString(),
-      text: "SAMPLE AREA FORECAST DISCUSSION\nThis is sample text for local development. It is not a forecast.\n\n.SHORT TERM...\nHigh pressure keeps skies mostly clear. Afternoon northwest winds 10 to 15 mph over the ridges.\n",
+      text: "SAMPLE AREA FORECAST DISCUSSION\nSynthetic forecast for local testing.\n\n.SHORT TERM...\nHigh pressure keeps skies mostly clear. Afternoon northwest winds 10 to 15 mph over the ridges.\n",
     },
     // A real Boise Soaring Forecast (29 September 2026), kept as a test fixture.
     srg: {
@@ -436,7 +447,7 @@ for (const site of solarSites) {
   const bounds = domainFor(site.latitude, site.longitude, radiusKm).bounds;
   const fine = gridFromFunction(elevation, { ...expandBounds(bounds, 100), dLon: 1 / 10800, dLat: 1 / 10800 });
   const coarse = gridFromFunction(elevation, { ...expandBounds(bounds, maxDistanceKm * 1000 + 500), dLon: 1 / 3600, dLat: 1 / 3600 });
-  const sample = { id: "sample", name: "Synthetic sample terrain (not real)", resolutionM: 10, licence: "–", url: "" };
+  const sample = { id: "sample", name: "Synthetic test terrain", resolutionM: 10, licence: "–", url: "" };
   const { index, tiles, relief } = buildSolarTerrain(site, { fine, coarse, radiusKm, maxDistanceKm, sources: { surface: sample, horizon: { ...sample, resolutionM: 30 } } });
   for (const tile of tiles) {
     const file = join(out, "solar", site.slug, index.tiles.path.replace("{z}", tile.z).replace("{x}", tile.x).replace("{y}", tile.y));
@@ -522,4 +533,4 @@ for (const site of solarSites) {
   }
 }
 
-console.log(`✓ Sample dataset for ${sites.sites.length} launch(es) written to ${out}`);
+console.log(`✓ Synthetic dataset for ${sites.sites.length} launches written to ${out}`);

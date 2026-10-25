@@ -9,10 +9,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { MODELS } from '@windgrams/providers/registry';
 import { cataloguedModelSlugs } from "@azohra/meteo.forecast";
 import { parseRunsIndexJson } from "@azohra/meteo.briefing/contract";
 
-export function runsIndexFromDisk(output, slugs = [...new Set([...cataloguedModelSlugs(), 'icon-eu'])]) {
+export function runsIndexFromDisk(output, slugs = [...new Set([...cataloguedModelSlugs(), ...MODELS.map(model => model.id)])]) {
   const runs = {};
   for (const slug of slugs) {
     const path = join(output, slug, "manifest.json");

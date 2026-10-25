@@ -61,6 +61,7 @@ test("catalog slugs are prefixed by state and a second site with the same name g
     ["va-daniels", `va-daniels-${Math.round(0.4 * 100)}n${Math.round(0.4 * 100)}e`],
   );
   assert.equal(launchesFile.launches["va-daniels"].region, "Virginia");
+  assert.equal(launchesFile.launches["va-daniels"].countryCode, "US");
   assert.equal(launchesFile.launches["va-daniels"].notes, "Grassy slope.");
   assert.equal(slugify("Woodrat Mountain"), "woodrat-mountain");
   assert.equal(launchesFile.launches["va-daniels"].windMinMph, null);
@@ -86,6 +87,7 @@ test("Armenia includes every reviewed free-flight source record and seven additi
     assert.ok(site.latitude >= 38.8 && site.latitude <= 41.3 && site.longitude >= 43.4 && site.longitude <= 46.7, site.slug);
     assert.equal("elevationM" in site, false, "unverified source altitudes must not become forecast terrain");
     const launch = catalog.launchesFile.launches[site.slug];
+    assert.equal(launch.countryCode, "AM");
     assert.equal(launch.windMinMph, null);
     assert.equal(launch.windMaxMph, null);
     assert.equal(launch.gustMaxMph, null);

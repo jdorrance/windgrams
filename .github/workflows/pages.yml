@@ -1,409 +1,67 @@
-# Publishes the static site and the forecast documents it fetches from /data.
-#
-# Scheduled around documented complete-run availability rather than cycle
-# initialization time (Track 5 / Feedback 7):
-#   - Cron runs at `55 1,7,13,19 * * *` UTC (115 minutes after 00, 06, 12, 18Z
-#     initialization, right after HRRR complete-run availability at ~107 minutes).
-#   - RRFS refreshes at `55 3,9,15,21 * * *` UTC (235 minutes after init),
-#     after both f084 CONUS products are normally available. Its own later run
-#     publishes over the previous dataset without rebuilding other providers.
-#   - Before each model build, `scripts/check-readiness.mjs` probes upstream
-#     complete-run availability with bounded retries and evaluates regional
-#     freshness deadlines against each region's local morning briefing window
-#     (08:00 local time in America/Los_Angeles, America/Boise, America/New_York).
-#
-# Provider jobs run independently; ICON uses its own later refresh window:
-#   noaa-cloud   HRRR, then GFS          NOAA cloud buckets, byte-ranged
-#   rrfs         RRFS                    noaa-rrfs-ops-pds, its own bucket
-#   dwd          ICON-EU                 native DWD cells, 78 hours, 04:55/10:55/16:55/22:55 UTC
-#   eccc         HRDPS, RDPS, GDPS, GEPS Datamart, one whole-domain GRIB at a time
-#   observations NWS, Open-Meteo, IEM    three hosts, in parallel with each other
-#   terrain      site-context.json       elevation tiles, only when launches moved
-
+# Short serialized publication. Provider refreshes complete independently.
 name: Pages
-
 on:
-  schedule:
-    - cron: "55 1,7,13,19 * * *"
-    - cron: "55 3,9,15,21 * * *"
-    - cron: "55 4,10,16,22 * * *"
+  workflow_run:
+    workflows: [Refresh noaa-cloud, Refresh rrfs, Refresh dwd, Refresh eccc, Refresh observations, Refresh terrain]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       refresh:
-        description: Forecast providers to refresh before publishing
+        description: Refresh providers, or publish completed artifacts
         type: choice
         required: true
         default: all
-        options:
-          - all
-          - rrfs
-          - icon-eu
+        options: [all, rrfs, icon-eu, none]
+      dry_run:
+        description: Validate collected artifacts without deployment
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
+      - "packages/**"
+      - "scripts/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.package.json"
       - "web/**"
       - "forecasts/**"
       - ".github/workflows/pages.yml"
+      - ".github/workflows/refresh*.yml"
       - ".github/actions/setup-pnpm/**"
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
+permissions:
+  contents: read
 jobs:
-  urls:
+  dispatch:
+    if: github.event_name == 'workflow_dispatch' && inputs.refresh != 'none' && !inputs.dry_run
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    outputs:
-      site: ${{ steps.urls.outputs.site }}
-      base: ${{ steps.urls.outputs.base }}
-      data: ${{ steps.urls.outputs.data }}
-    steps:
-      - id: urls
-        env:
-          WINDGRAMS_SITE: ${{ vars.WINDGRAMS_SITE }}
-          WINDGRAMS_BASE: ${{ vars.WINDGRAMS_BASE }}
-          WINDGRAMS_DATA_BASE: ${{ vars.WINDGRAMS_DATA_BASE }}
-        run: |
-          set -eu
-          owner="${GITHUB_REPOSITORY%%/*}"
-          repo="${GITHUB_REPOSITORY#*/}"
-          if [ "$repo" = "${owner}.github.io" ]; then
-            default_site="https://${owner}.github.io"
-            default_base="/"
-          else
-            default_site="https://${owner}.github.io/${repo}"
-            default_base="/${repo}"
-          fi
-          site="${WINDGRAMS_SITE:-$default_site}"
-          base="${WINDGRAMS_BASE:-$default_base}"
-          data="${WINDGRAMS_DATA_BASE:-${site%/}/data}"
-          echo "site=$site" >> "$GITHUB_OUTPUT"
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "data=$data" >> "$GITHUB_OUTPUT"
-
-  noaa-cloud:
-    needs: urls
-    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && github.event.schedule != '55 4,10,16,22 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh == 'all')
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
     permissions:
       contents: read
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-pnpm
         with:
-          package-json: forecasts/package.json
-          lockfile: forecasts/pnpm-lock.yaml
-          working-directory: forecasts
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+          ref: main
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
-          restore-keys: forecast-data-
-      - name: Seed the previous profiles and soaring bundles
-        working-directory: forecasts
-        env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: |
-          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group noaa-cloud
-          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group soaring || true
-      - name: Probe complete-run availability and build HRRR and GFS
-        working-directory: forecasts
-        env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: |
-          set -euo pipefail
-          models=$(node scripts/seed-published.mjs --list noaa-cloud)
-          test -n "$models"
-          for model in $models; do
-            echo "::group::$model"
-            node scripts/check-readiness.mjs --model "$model" || true
-            node scripts/build-covered.mjs --model "$model" --sites ./sites.json --output ./data
-            echo "::endgroup::"
-          done
-          echo "::group::soaring-3km-regional"
-          SOARING_CAPTURE_CONCURRENCY=8 node scripts/build-live-soaring.mjs --output ./data
-          echo "::endgroup::"
-      - name: Pack
-        working-directory: forecasts
-        run: sh scripts/pack-provider.sh noaa-cloud slice
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: data-noaa-cloud
-          path: forecasts/slice
-          if-no-files-found: error
-          retention-days: 1
-
-  rrfs:
-    needs: urls
-    if: github.event_name != 'push' && (github.event.schedule == '55 3,9,15,21 * * *' || (github.event_name == 'workflow_dispatch' && (inputs.refresh == 'all' || inputs.refresh == 'rrfs')))
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    permissions:
-      contents: read
-      actions: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-pnpm
-        with:
-          package-json: forecasts/package.json
-          lockfile: forecasts/pnpm-lock.yaml
-          working-directory: forecasts
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
-          restore-keys: forecast-data-
-      - name: Seed the previous profiles and soaring bundles
-        working-directory: forecasts
-        env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: |
-          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group rrfs
-          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group soaring
-      - name: Probe complete-run availability and build RRFS
-        working-directory: forecasts
-        env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: |
-          set -euo pipefail
-          reference_time=$(node scripts/check-readiness.mjs --model rrfs --attempts 6 --retry-delay-ms 60000 --reference-time-only)
-          node scripts/build-covered.mjs --model rrfs --reference-time "$reference_time" --sites ./sites.json --output ./data
-      - name: Build RRFS regional soaring maps
-        working-directory: forecasts
-        run: SOARING_CAPTURE_CONCURRENCY=8 node scripts/build-live-soaring.mjs --model rrfs --output ./data
-      - name: Pack
-        if: always()
-        working-directory: forecasts
-        run: sh scripts/pack-provider.sh rrfs slice
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always()
-        with:
-          name: data-rrfs
-          path: forecasts/slice
-          if-no-files-found: error
-          retention-days: 1
-
-  dwd:
-    needs: urls
-    if: github.event_name != 'push' && (github.event.schedule == '55 4,10,16,22 * * *' || (github.event_name == 'workflow_dispatch' && (inputs.refresh == 'all' || inputs.refresh == 'icon-eu')))
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
-    permissions:
-      contents: read
-      actions: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-pnpm
-        with:
-          package-json: forecasts/package.json
-          lockfile: forecasts/pnpm-lock.yaml
-          working-directory: forecasts
-      - name: Install the native ICON GRIB decoder
-        working-directory: forecasts
-        run: |
-          python3.12 -m venv .venv-icon
-          .venv-icon/bin/pip install --disable-pip-version-check -r scripts/lib/icon-requirements.txt
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
-          restore-keys: forecast-data-
-      - name: Seed the previous ICON profiles, terrain and regional bundles
-        working-directory: forecasts
-        env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: |
-          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group dwd
-          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group terrain
-          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group soaring
-      - name: Build and validate native ICON-EU for Armenia
-        working-directory: forecasts
-        env:
-          ICON_PYTHON: ${{ github.workspace }}/forecasts/.venv-icon/bin/python
-          NODE_OPTIONS: --max-old-space-size=6144
-        run: |
-          node scripts/build-icon.mjs --sites sites.json --output data
-          node scripts/build-icon.mjs --sites sites.json --output data --validate-only
-      - name: Pack
-        if: always()
-        working-directory: forecasts
-        run: sh scripts/pack-provider.sh dwd slice
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always()
-        with:
-          name: data-dwd
-          path: forecasts/slice
-          if-no-files-found: error
-          retention-days: 1
-
-  eccc:
-    needs: urls
-    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && github.event.schedule != '55 4,10,16,22 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh == 'all')
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    permissions:
-      contents: read
-      actions: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Free disk for whole-domain GRIB
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
-          df -h /
-      - uses: ./.github/actions/setup-pnpm
-        with:
-          package-json: forecasts/package.json
-          lockfile: forecasts/pnpm-lock.yaml
-          working-directory: forecasts
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
-          restore-keys: forecast-data-
-      - name: Seed the previous profiles
-        working-directory: forecasts
-        env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group eccc
-      - name: Probe complete-run availability and build HRDPS, RDPS, GDPS, and GEPS
-        working-directory: forecasts
-        env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: |
-          set -euo pipefail
-          models=$(node scripts/seed-published.mjs --list eccc)
-          test -n "$models"
-          for model in $models; do
-            echo "::group::$model"
-            node scripts/check-readiness.mjs --model "$model" || true
-            node scripts/build-covered.mjs --model "$model" --sites ./sites.json --output ./data
-            echo "::endgroup::"
-          done
-      - name: Pack
-        working-directory: forecasts
-        run: sh scripts/pack-provider.sh eccc slice
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: data-eccc
-          path: forecasts/slice
-          if-no-files-found: error
-          retention-days: 1
-
-  observations:
-    needs: urls
-    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && github.event.schedule != '55 4,10,16,22 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh == 'all')
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-      actions: write
-    env:
-      WINDGRAMS_STORE: file
-      WINDGRAMS_DATA_DIR: ${{ github.workspace }}/forecasts/data
-      NWS_USER_AGENT: ${{ vars.NWS_USER_AGENT || format('Windgrams/0.1 ({0}/{1})', github.server_url, github.repository) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-pnpm
-        with:
-          package-json: forecasts/package.json
-          lockfile: forecasts/pnpm-lock.yaml
-          working-directory: forecasts
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
-          restore-keys: forecast-data-
-      - name: Seed the previous text forecasts
-        working-directory: forecasts
-        env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: |
-          mkdir -p data
-          cp sites.json data/sites.json
-          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group observations
-      - name: Fetch NWS, ECMWF, and balloons
-        working-directory: forecasts
-        run: |
-          set -uo pipefail
-          status=0
-          node scripts/nws.mjs --output data --publish &
-          nws=$!
-          node scripts/ecmwf.mjs --output data --publish &
-          ecmwf=$!
-          node scripts/raob.mjs --output data --publish &
-          raob=$!
-          wait "$nws" || status=1
-          wait "$ecmwf" || status=1
-          wait "$raob" || status=1
-          exit "$status"
-      - name: Pack
-        working-directory: forecasts
-        run: sh scripts/pack-slice.sh slice nws ecmwf raob sites.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: data-observations
-          path: forecasts/slice
-          if-no-files-found: error
-          retention-days: 1
-
-  terrain:
-    needs: urls
-    if: github.event_name != 'push' && github.event.schedule != '55 3,9,15,21 * * *' && github.event.schedule != '55 4,10,16,22 * * *' && (github.event_name != 'workflow_dispatch' || inputs.refresh == 'all')
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    permissions:
-      contents: read
-      actions: write
-    env:
-      WINDGRAMS_STORE: file
-      WINDGRAMS_DATA_DIR: ${{ github.workspace }}/forecasts/data
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-pnpm
-        with:
-          package-json: forecasts/package.json
-          lockfile: forecasts/pnpm-lock.yaml
-          working-directory: forecasts
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
-          restore-keys: forecast-data-
-      - name: Measure site context when launches moved
-        working-directory: forecasts
-        env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: |
-          mkdir -p data
-          cp sites.json data/sites.json
-          node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group terrain
-          node scripts/terrain.mjs --sync
-      - name: Pack
-        working-directory: forecasts
-        run: sh scripts/pack-slice.sh slice site-context.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.3.0
-        with:
-          name: data-terrain
-          path: forecasts/slice
-          if-no-files-found: error
-          retention-days: 1
+          node-version: 24
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REFRESH: ${{ inputs.refresh }}
+        run: node scripts/dispatch-refresh.mjs "$REFRESH"
 
   publish:
-    needs: [urls, noaa-cloud, rrfs, dwd, eccc, observations, terrain]
     if: >-
-      always() &&
-      needs.urls.result == 'success' &&
-      (needs.noaa-cloud.result == 'success' || needs.noaa-cloud.result == 'skipped') &&
-      (needs.rrfs.result == 'success' || needs.rrfs.result == 'skipped' || needs.rrfs.result == 'failure') &&
-      (needs.dwd.result == 'success' || needs.dwd.result == 'skipped' || needs.dwd.result == 'failure') &&
-      (needs.eccc.result == 'success' || needs.eccc.result == 'skipped') &&
-      (needs.observations.result == 'success' || needs.observations.result == 'skipped') &&
-      (needs.terrain.result == 'success' || needs.terrain.result == 'skipped')
+      (github.event_name != 'workflow_dispatch' || inputs.refresh == 'none' || inputs.dry_run) &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       contents: read
       actions: write
@@ -412,112 +70,59 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-pnpm
         with:
-          package-json: forecasts/package.json
-          lockfile: forecasts/pnpm-lock.yaml
-          working-directory: forecasts
+          ref: main
       - uses: ./.github/actions/setup-pnpm
-        with:
-          package-json: web/package.json
-          lockfile: web/pnpm-lock.yaml
-          working-directory: web
+      - id: urls
+        env:
+          WINDGRAMS_SITE: ${{ vars.WINDGRAMS_SITE }}
+          WINDGRAMS_BASE: ${{ vars.WINDGRAMS_BASE }}
+          WINDGRAMS_DATA_BASE: ${{ vars.WINDGRAMS_DATA_BASE }}
+        run: node scripts/pages-config.mjs
       - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        id: dataset
         with:
           path: forecasts/data
           key: forecast-data-${{ github.run_id }}
           restore-keys: forecast-data-
-      - name: Preserve the complete previous dataset before overlaying refreshed providers
-        if: github.event_name != 'push'
+      - name: Seed the last complete publication
         working-directory: forecasts
         env:
-          METEO_DATA_BASE: ${{ needs.urls.outputs.data }}
-        run: |
-          set -eu
-          for group in noaa-cloud rrfs dwd eccc observations terrain soaring; do
-            node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --group "$group"
-          done
-      - name: Report RRFS refresh failure while retaining last-good data
-        if: needs.rrfs.result == 'failure'
-        run: |
-          echo '::warning::RRFS refresh failed. Publishing other models with the last complete RRFS profiles and regional bundles.'
-          echo '### RRFS refresh failed' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Other providers are being published. RRFS retains its last complete run; the RRFS job contains the failure details.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Report ICON refresh failure while retaining last-good data
-        if: needs.dwd.result == 'failure'
-        run: |
-          echo '::warning::ICON-EU refresh failed. Retaining the last complete Armenian profiles and map.'
-          echo 'ICON-EU retains its last complete run; see the DWD job for failure details.' >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        if: github.event_name != 'push'
-        with:
-          pattern: data-*
-          path: incoming
-      - name: Merge forecast documents
-        if: github.event_name != 'push'
-        run: |
-          set -eu
-          mkdir -p forecasts/data
-          find incoming -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' dir; do
-            if [ -d "$dir/slice" ]; then
-              cp -a "$dir/slice"/. forecasts/data/
-            else
-              cp -a "$dir"/. forecasts/data/
-            fi
-          done
-          rm -f forecasts/data/EMPTY
-          node forecasts/scripts/merge-armenia-terrain.mjs --output forecasts/data --sites forecasts/sites.json
-      - name: Require a cached dataset
-        if: github.event_name == 'push' && steps.dataset.outputs.cache-matched-key == ''
-        run: |
-          echo "No forecast dataset is cached yet. Run the Pages workflow once by hand so a scheduled publish can fill it."
-          exit 1
-      - name: Validate the requested RRFS forecast dataset before deployment
-        if: github.event_name == 'workflow_dispatch' && inputs.refresh == 'rrfs'
-        working-directory: forecasts
-        run: node scripts/validate-rrfs.mjs --data data --sites sites.json
-      - name: Validate requested ICON profiles and regional maps before deployment
-        if: github.event_name == 'workflow_dispatch' && inputs.refresh == 'icon-eu'
-        working-directory: forecasts
-        run: node scripts/build-icon.mjs --sites sites.json --output data --validate-only
-      - name: Catalogue, matched observation verification, and run index
-        working-directory: forecasts
-        run: |
-          set -eu
-          mkdir -p data
-          cp sites.json data/sites.json
-          node scripts/write-models-catalogue.mjs --output data
-          node scripts/merge-soaring-regions.mjs --output data
-          node scripts/pages-artifact.mjs --prune-data data
-          node verification/verify-observations.mjs ./data
-          node scripts/write-runs-index.mjs --output data
-      - name: Require complete regional maps for a requested RRFS refresh
-        if: github.event_name == 'workflow_dispatch' && inputs.refresh == 'rrfs'
-        working-directory: forecasts
-        run: node scripts/build-live-soaring.mjs --model rrfs --output data --validate-only
-      - name: Build the site
+          METEO_DATA_BASE: ${{ steps.urls.outputs.data }}
+        run: node scripts/seed-published.mjs --output data --from "$METEO_DATA_BASE" --all --best-effort
+      - name: Collect completed provider artifacts
+        run: node scripts/collect-refresh-artifacts.mjs incoming
+      - name: Validate publication candidates
+        if: inputs.dry_run
+        run: node forecasts/scripts/prepare-publication.mjs --incoming incoming --output forecasts/data --dry-run
+      - name: Merge and validate publication
+        if: ${{ !inputs.dry_run }}
+        run: node forecasts/scripts/prepare-publication.mjs --incoming incoming --output forecasts/data
+      - name: Build site
+        if: ${{ !inputs.dry_run }}
         working-directory: web
         env:
-          WINDGRAMS_SITE: ${{ needs.urls.outputs.site }}
-          WINDGRAMS_BASE: ${{ needs.urls.outputs.base }}
-        run: |
-          set -eu
-          pnpm run build
-          mkdir -p dist/data
-          cp -a ../forecasts/data/. dist/data/
-          rm -rf dist/data/EMPTY dist/data/history dist/data/solar
-          node ../forecasts/scripts/pages-artifact.mjs --check-site dist
+          WINDGRAMS_SITE: ${{ steps.urls.outputs.site }}
+          WINDGRAMS_BASE: ${{ steps.urls.outputs.base }}
+          PUBLIC_WINDGRAMS_DATA_BASE: ${{ vars.WINDGRAMS_DATA_BASE }}
+        run: pnpm run build
+      - name: Assemble and measure Pages artifact
+        if: ${{ !inputs.dry_run }}
+        run: node scripts/prepare-pages.mjs
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+        if: ${{ !inputs.dry_run }}
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
+        if: ${{ !inputs.dry_run }}
         with:
           path: web/dist
       - id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+        if: ${{ !inputs.dry_run }}
       - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        if: success()
+        if: ${{ success() && !inputs.dry_run }}
         with:
           path: forecasts/data
           key: forecast-data-${{ github.run_id }}

@@ -3,13 +3,11 @@ import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { packProviderArtifact } from './pack-provider.mjs';
 
 test('provider artifacts cannot overwrite another model with seeded old data', t => {
   const root = mkdtempSync(join(tmpdir(), 'pack-provider-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(join(root, 'scripts'));
-  for (const name of ['pack-provider.sh', 'pack-slice.sh']) cpSync(new URL(name, import.meta.url), join(root, 'scripts', name));
   const files = [
     'hrrr-conus/manifest.json', 'gfs/manifest.json', 'rrfs/manifest.json', 'geps/manifest.json', 'icon-eu/manifest.json',
     'history/hrrr-conus/run.json', 'history/gfs/run.json', 'history/rrfs/run.json', 'history/geps/run.json', 'history/icon-eu/run.json',
@@ -19,6 +17,14 @@ test('provider artifacts cannot overwrite another model with seeded old data', t
     'site-context.json', 'site-context-armenia.json',
   ];
   for (const key of files) { const path = join(root, 'data', key); mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, '{}'); }
+  writeFileSync(join(root, 'data/soaring/v1/regions.json'), JSON.stringify({ regions: [{ id: 'north', caseId: 'north-live', nativeModels: [{ model: 'hrrr-conus', caseId: 'north-live' }] }, { id: 'historical', caseId: 'north-historical', nativeModels: [{ model: 'hrrr-conus', caseId: 'north-historical' }] }] }));
+  // Current regional artifacts declare model ownership; paths do not encode policy.
+  for (const [caseId, model] of [['north-rrfs-live', 'rrfs'], ['armenia-icon-eu-live', 'icon-eu'], ['armenia-icon-eu-20261024', 'icon-eu']]) {
+    const dir = join(root, 'data/soaring/v1', caseId), bundle = `bundles/${'a'.repeat(64)}`;
+    mkdirSync(join(dir, bundle), { recursive: true });
+    writeFileSync(join(dir, 'index.json'), JSON.stringify({ bundle }));
+    writeFileSync(join(dir, bundle, 'manifest.json'), JSON.stringify({ model }));
+  }
   const expected = {
     'noaa-cloud': files.filter(key => !key.includes('rrfs') && !key.includes('geps') && !key.includes('icon-eu') && !key.startsWith('site-context')),
     rrfs: files.filter(key => key.includes('rrfs')),
@@ -26,8 +32,7 @@ test('provider artifacts cannot overwrite another model with seeded old data', t
     dwd: files.filter(key => key.includes('icon-eu') || key === 'site-context-armenia.json'),
   };
   for (const provider of Object.keys(expected)) {
-    const result = spawnSync('sh', ['scripts/pack-provider.sh', provider, `slice-${provider}`], { cwd: root, encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr);
+    packProviderArtifact(provider, join(root, `slice-${provider}`), join(root, 'data'));
     for (const key of files) assert.equal(existsSync(join(root, `slice-${provider}`, key)), expected[provider].includes(key), `${provider}: ${key}`);
   }
 });

@@ -1,0 +1,52 @@
+{
+  "name": "@windgrams/windgram",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./scene": {
+      "types": "./dist/scene.d.ts",
+      "import": "./dist/scene.js"
+    },
+    "./svg": {
+      "types": "./dist/svg.d.ts",
+      "import": "./dist/svg.js"
+    },
+    "./format": {
+      "types": "./dist/format.d.ts",
+      "import": "./dist/format.js"
+    },
+    "./dom": {
+      "types": "./dist/dom.d.ts",
+      "import": "./dist/dom.js"
+    },
+    "./build-inventory.json": "./dist/build-inventory.json",
+    "./svg/external": {
+      "types": "./dist/svg-external.d.ts",
+      "import": "./dist/svg-external.js"
+    },
+    "./styles.css": "./dist/generated/styles.css"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs @windgrams/windgram",
+    "check": "node scripts/build-styles.mjs && tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@azohra/meteo.briefing": "0.6.2",
+    "@windgrams/contracts": "workspace:*",
+    "@windgrams/meteorology": "workspace:*"
+  }
+}

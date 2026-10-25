@@ -1,0 +1,9 @@
+.about-content {
+  margin-top: 20px;
+}
+
+.about-content p,
+.about-content ul,
+.about-content section > details {
+  margin-top: 8px;
+}

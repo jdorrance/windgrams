@@ -5,8 +5,8 @@ import {
   buildStabilityFieldPaths,
   contourComponents,
   temperatureContours,
-} from "../src/lib/windgram-geometry.ts";
-import { placeTemperatureLabels } from "../src/lib/windgram-label-layout.ts";
+ } from "./helpers/windgram.ts";
+import {  placeTemperatureLabels  } from "./helpers/windgram.ts";
 import type { HourSampling } from "@azohra/meteo.briefing/meteogram";
 
 const makeSamplingHour = (validAt: string, temps: [number, number][]): HourSampling => ({

@@ -1,20 +1,20 @@
 # Windgram visual QA
 
-These fixtures freeze the October 24, 2026 Dog comparison. The JSON manifest records source URLs, run times, publication times, original file hashes, selected-hour hashes, and compressed-file hashes. Real fixtures contain complete, unchanged hour records for one local calendar day. No forecast is fetched by this QA workflow.
+These frozen profiles from October 24, 2026 let you compare renderers offline. [`manifest.json`](manifest.json) lists the source URLs, run and publication times, and file and hour hashes. Each profile contains unchanged hourly records for one local day:
 
-- Dog RRFS: October 24 06Z, 24 selected hours, 9 native levels.
-- Dog HRRR: October 24 12Z, 18 selected hours, 9 native levels.
-- Dog HRDPS: October 24 12Z, 18 selected hours, 11 native levels.
-- Dog GFS: October 24 06Z, 8 selected hours, 8 native levels.
-- Aparan ICON-EU: October 24 06Z, 13 selected hours, 29 native levels. Its first forecast is 11 AM local; the missing morning tests daylight padding.
+- Dog RRFS: 06Z, 24 hours, 9 native levels.
+- Dog HRRR: 12Z, 18 hours, 9 levels.
+- Dog HRDPS: 12Z, 18 hours, 11 levels.
+- Dog GFS: 06Z, 8 hours, 8 levels.
+- Aparan ICON-EU: 06Z, 13 hours, 29 levels. Starts at 11 AM local to test missing morning coverage.
 
-The Dog records came from `/tmp/dog-model-audit`, saved during the earlier live-site comparison. The normal `forecasts/data` cache held older Dog runs when these fixtures were frozen. ICON came from the existing `forecasts/data/icon-eu/sites/am-aparan.json`. The source URLs identify mutable published endpoints; the recorded hashes identify the frozen versions.
+Dog profiles came from the earlier live-site comparison; ICON came from the local forecast cache. The manifest retains their capture paths. Published URLs are mutable; hashes identify these frozen versions.
 
-Three clearly labelled synthetic scenarios reuse `web/dev-data-src/convective-cycle.profile.json` (MIT, Justin Watts, 2026). `scenarios.mjs` places its fictional site at 45°N, 0°E with UTC display hours. The strong-lift case retains its source weather values. The inversion case sets alternating warm/cold layers and dry air. The cloud case adds a 75% cloud layer with near-saturated air. These two visual stress cases retain synthetic lift diagnostics; they are illustrative combinations, not internally recomputed forecasts.
+Three synthetic scenarios reuse [`convective-cycle.profile.json`](../../../dev-data-src/convective-cycle.profile.json) (MIT, Justin Watts, 2026), placed at 45°N, 0°E with UTC hours. [`scenarios.mjs`](scenarios.mjs) retains the source strong-lift weather, creates alternating dry inversions, or adds 75% cloud with near-saturated air. The latter two retain synthetic lift diagnostics without recalculation; they test appearance only.
 
 ## Run
 
-From the repository root, with Node 24 and the existing web dependencies installed:
+Complete the [workspace setup](../../../../README.md#start-locally), then run from the repository root:
 
 ```sh
 node --test web/test/windgram-visual-fixtures.test.ts
@@ -22,20 +22,20 @@ node web/scripts/windgram-visual-qa.mjs --out /tmp/windgram-visual-qa
 python3 -m http.server 4331 --bind 127.0.0.1 --directory /tmp/windgram-visual-qa
 ```
 
-The script takes the baseline and its local library dependencies directly from Git revision `b4a0824cb3d9370d959222b59f54daab0942735f`. It renders the working library separately. Both use the dependency lock recorded in `manifest.json`; a changed lock fails the comparison. `--baseline <revision>` selects an explicit alternative. `--fixtures dog-rrfs,aparan-icon-eu` limits a diagnostic run. Temporary baseline directories can be removed after QA.
+The runner compares the current renderer with the Git revision pinned in the manifest. It extracts that revision's dependencies and checks the archived lock hash and installed forecast-reader version. Use `--baseline REVISION` to choose another baseline or `--fixtures dog-rrfs,aparan-icon-eu` to run fewer cases. You can remove temporary baseline directories afterward.
 
-The full matrix contains eight scenarios × four viewports (320×667, 390×844, 844×390, 1280×900) × imperial/metric × focused/full height: 128 before/after pairs, 256 SVGs. The harness uses 17 px margins, so a 390 px viewport supplies a 356 px chart container. The baseline receives the specified viewport height; the revised renderer determines height from width. Each version uses its actual SVG renderer, key renderer, and global stylesheet.
+The full matrix is eight scenarios × four viewports × two units × two height ranges: 128 pairs, 256 SVGs. Viewports are 320×667, 390×844, 844×390 and 1280×900. A 17 px outer margin gives a 356 px chart at 390 px width. Baseline height follows its viewport; current height follows width.
 
-Open this URL through CUA for screenshots:
+Open in a browser at the matching viewport:
 
 ```text
 http://127.0.0.1:4331/?fixture=dog-rrfs&viewport=390x844&units=imperial&range=soaring&version=before
 ```
 
-Switch `version=after` for the matching scene. `range=full` selects full height. Add `clean=1` to hide QA controls and metadata. The page is a static renderer harness; selected-hour controls, hover/tap, resizing, navigation and launch-page layout require a separate browser check on the application. Viewport parameters set scene geometry; use the matching browser viewport for the final screenshot. This matrix supplies one local-day selection; explicit-hour and multi-day selection behavior stays covered by the application tests.
+Use `version=after` for the matching current render, `range=full` for full height and `clean=1` to hide QA controls. This static harness covers render output; selection, inspection, resizing and navigation need an application browser check.
 
-## Acceptance checks
+## Checks
 
-`report.json` records the baseline, source and fixture hashes, run/publication timestamps, physical-data hashes, and before/after dimensions for every pair. The script checks parsed forecast records, all native column samples, lapse-rate category boundaries and assignments, published lift diagnostics, source immutability, finite SVG output, and AGL relative to both launch and model terrain. Inspector readings are compared at native heights, layer midpoints and the lift line throughout the common visible range. Changes to displayed hours or empty daylight columns are recorded separately; each rendered forecast hour must still refer to a real source record.
+`report.json` records provenance, physics hashes and dimensions. Assertions cover parsed records, native samples, lapse classifications, published lift diagnostics, source immutability, finite SVG coordinates and AGL from both launch and model terrain. Inspector values are compared at native levels, layer midpoints and the lift line within the shared visible range. Rendered hours must map to source records; daylight cropping and empty columns are recorded separately.
 
-The checks allow presentation changes: geometry, labels, spacing, colours within a category, and daylight cropping. They do not verify meteorological accuracy against observations or assert that WxToFly used the same model run. The manifest's WxToFly image reference, when present, records the captured layout comparison and its measured plot bounds only. Human screenshot review remains required for legibility, overlaps, and interaction quality.
+Inspect screenshots for clipping, overlapping labels and legibility. Geometry, spacing and colours within a category may change while the checks above still pass. Use the captured WxToFly image as a layout reference; assessing forecast skill requires matched model runs and observations.

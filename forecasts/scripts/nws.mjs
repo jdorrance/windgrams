@@ -39,7 +39,6 @@ const sitesPath = resolve(args.sites);
 const sites = parseSites(readFileSync(sitesPath, "utf-8"), sitesPath).filter(nwsCoversSite);
 const getJson = createClient({ userAgent: process.env.NWS_USER_AGENT || DEFAULT_USER_AGENT });
 const now = Date.now();
-// "WARN " lines become warning annotations in GitHub Actions (scripts/run-annotated.sh).
 const warn = (message) => console.warn(`WARN ${message}`);
 
 const written = []; // [key, bytes] in upload order

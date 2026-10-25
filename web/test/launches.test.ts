@@ -20,7 +20,7 @@ const sites: SitesFile = {
 const launches: LaunchesFile = {
   schemaVersion: 1,
   launches: {
-    "cervidae-peak": { facingDeg: 315, windArcHalfWidthDeg: 45, windMinMph: 5, windMaxMph: 15, gustMaxMph: 20, region: "Boise, ID", notes: "" },
+    "cervidae-peak": { countryCode: "US", facingDeg: 315, windArcHalfWidthDeg: 45, windMinMph: 5, windMaxMph: 15, gustMaxMph: 20, region: "Boise, ID", notes: "" },
   },
 };
 
@@ -29,6 +29,7 @@ const input = {
   latitude: "43.78",
   longitude: "-116.08",
   timeZone: "America/Boise",
+  countryCode: "US",
   facingDeg: "202.5",
   windArcHalfWidthDeg: "45",
   windMinMph: "4",
@@ -66,6 +67,7 @@ test("validateLaunchInput normalizes a good submission", () => {
     latitude: 43.78,
     longitude: -116.08,
     timeZone: "America/Boise",
+  countryCode: "US",
     facingDeg: 203,
     windArcHalfWidthDeg: 45,
     windMinMph: 4,
@@ -134,4 +136,24 @@ test("editing preserves catalogue attribution", () => {
   const result = applyLaunch(sites, withSource, { ...joinLaunches(sites, launches)[0], name: "Revised" }, "update");
   assert.ok(!("error" in result));
   assert.deepEqual(result.launches.launches["cervidae-peak"].source, source);
+});
+
+test('the catalogue writer rejects unclassified creates and preserves legacy update country', () => {
+  const legacyInput = { ...input, countryCode: undefined };
+  const parsed = validateLaunchInput(legacyInput);
+  assert.ok('launch' in parsed);
+  const before = JSON.stringify({ sites, launches });
+  for (const countryCode of ['', 'U', 'United States']) {
+    const result = applyLaunch(sites, launches, { ...parsed.launch, countryCode }, 'create');
+    assert.ok('error' in result);
+    assert.match(result.error, /Country/);
+  }
+  assert.equal(JSON.stringify({ sites, launches }), before);
+  const existing = joinLaunches(sites, launches)[0];
+  const updated = applyLaunch(sites, launches, { ...existing, countryCode: '', notes: 'Access confirmed.' }, 'update');
+  assert.ok(!('error' in updated));
+  assert.equal(updated.launches.launches[existing.slug].countryCode, 'US');
+  assert.equal(updated.launches.launches[existing.slug].notes, 'Access confirmed.');
+  const invalidUpdate = applyLaunch(sites, launches, { ...existing, countryCode: 'USA' }, 'update');
+  assert.ok('error' in invalidUpdate);
 });

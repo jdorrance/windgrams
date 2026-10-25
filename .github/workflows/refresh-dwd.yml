@@ -1,0 +1,14 @@
+# Each completion can publish independently of slower providers.
+name: Refresh dwd
+on:
+  schedule:
+    - cron: "55 4,10,16,22 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  refresh:
+    uses: ./.github/workflows/refresh-provider.yml
+    with:
+      group: dwd

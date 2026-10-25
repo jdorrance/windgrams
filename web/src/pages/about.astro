@@ -1,62 +1,68 @@
 ---
 import Base from "../layouts/Base.astro";
+import "../styles/about.css";
 ---
 
-<Base title="About" current="about" description="Models, chart symbols, heights and forecast updates.">
+<Base title="About" current="about" description="How to read the windgram, compare models and interpret soaring conditions.">
   <h1>About Windgrams</h1>
-  <div class="stack" style="margin-top:20px">
+  <div class="stack about-content">
     <section class="card">
       <h2>Choose a forecast</h2>
-      <p style="margin-top:8px">
-        Pick a launch, model, day and hour. Strongest thermals selects the hour with the highest forecast thermal strength.
-        The windgram fits the full day on a phone; tap a column for that hour's conditions and sounding.
-        Choose Imperial or Metric in the header. Your selection is saved in this browser.
+      <p>
+        Pick a launch, model and day, then tap an hour to see its wind, lift and sounding.
+        Strongest thermals jumps to the hour with the highest forecast thermal strength, w*.
+        The chart runs from sunrise to sunset; hatching marks hours with missing forecasts.
+        Choose Imperial or Metric in the header to save your preferred units.
       </p>
-      <p style="margin-top:8px">
-        Choose United States or Armenia on the launch map. Armenia uses ICON-EU, with GFS and available global models for comparison.
-        HRRR and HRDPS cover the next two days. RRFS extends to 84 hours; RDPS adds another regional forecast.
-        GFS and GDPS show the longer trend. GEPS shows the median and spread of 21 ensemble members.
-        The Soaring map offers HRRR and RRFS for North Sound and Shenandoah–Blue Ridge, and ICON-EU for Armenia.
-        ICON-EU resolves weather at roughly 6.5 km; narrow valleys, ridge exposure and launch gusts remain local effects.
-      </p>
+      <p>Model grids smooth narrow valleys and ridges. Compare the forecast with local terrain, launch exposure and the wind you observe.</p>
+      <details>
+        <summary>Models and coverage</summary>
+        <p>
+          Choose United States or Armenia on the launch map. Each launch offers the models that cover it.
+          GEPS shows the median and spread of an ensemble, giving a sense of how much its forecasts differ.
+          The Soaring page maps HRRR and RRFS over North Sound and Shenandoah–Blue Ridge, and ICON-EU over Armenia.
+        </p>
+      </details>
     </section>
-    <section class="card">
+    <section class="card" id="chart-key">
       <h2>Read the windgram</h2>
-      <ul style="margin-top:8px">
-        <li><strong>Background:</strong> temperature change with height, using <a href="http://wxtofly.net/windgramexplain.html">WxToFly's color scale</a>. Red and orange show rapid cooling; gray shows an inversion.</li>
-        <li><strong>Lift w*:</strong> forecast convective strength. Stronger values suggest stronger thermals; climb rates vary within them.</li>
-        <li><strong>Wind barbs:</strong> wind direction and speed. Feathers point toward the source of the wind.</li>
-        <li><strong>Paraglider:</strong> the ceiling for a <span data-unit="lift" data-value="1.143">225 ft/min</span> sink rate. The blue line uses <span data-unit="lift" data-value="1">197 ft/min</span>.</li>
-        <li><strong>Outlined cloud:</strong> potential condensation height. White crosshatching marks humidity above 94%; diagonal hatching marks model cloud.</li>
-        <li><strong>Temperature lines:</strong> equal temperature across the day. Snowflakes mark the lowest freezing level.</li>
+      <ul>
+        <li><strong>Background:</strong> how quickly air cools with height, using <a href="http://wxtofly.net/windgramexplain.html">WxToFly's color scale</a>. Red and orange show rapid cooling; gray shows an inversion.</li>
+        <li><strong>Lift w*:</strong> a measure of forecast thermal strength. Your climb rate will vary within each thermal.</li>
+        <li><strong>Wind barbs:</strong> wind direction and speed at each height. The staff points toward the wind's source; feathers show speed.</li>
+        <li><strong>Paraglider:</strong> estimated lift top for a <span data-unit="lift" data-value="1.143">225 ft/min</span> sink rate. The blue line uses <span data-unit="lift" data-value="1">197 ft/min</span>.</li>
+        <li><strong>Outlined cloud:</strong> the height where a rising surface parcel could form cloud. White crosshatching shows humidity above 94%; diagonal hatching shows model cloud cover of at least 30%.</li>
+        <li><strong>Temperature lines:</strong> connect equal temperatures across the day. Snowflakes mark the lowest freezing level.</li>
       </ul>
-      <p style="margin-top:8px">A higher potential cloud base can occur as thermals weaken. Compare thermal strength, usable height and wind for the same hour.</p>
+      <p>Peak lift and highest cloud base can occur at different hours. Compare lift, usable height and wind together.</p>
     </section>
     <section class="card">
       <h2>Heights and soundings</h2>
-      <p style="margin-top:8px">
-        Chart heights are above mean sea level (MSL). The launch line comes from a terrain elevation estimate at the
-        catalogued coordinates. Model terrain is smoother and can sit above or below the launch. Vegetation and buildings
-        can affect surface-model elevations.
+      <p>
+        Chart heights are above mean sea level (MSL). Hover or tap the blue lift line to see its height
+        above ground (AGL). This uses launch elevation where available and model terrain elsewhere;
+        the readout names the reference. Launch elevation comes from terrain data at the launch coordinates.
+        Model terrain is smoother, and some terrain datasets include vegetation and buildings.
       </p>
-      <p style="margin-top:8px">
-        The model sounding shows temperature, moisture and wind through the selected forecast column. Balloon soundings
-        describe the nearby upper-air station; its name and distance appear with the chart. Times show the local time zone
-        and the nominal UTC observation cycle. Morning thermal estimates use the day's NWS forecast high when available.
-      </p>
-    </section>
-    <section class="card">
-      <h2>Updates and other guidance</h2>
-      <p style="margin-top:8px">
-        Forecast refreshes start at 01:55, 07:55, 13:55 and 19:55 UTC. RRFS starts two hours later; ICON-EU starts at 04:55, 10:55, 16:55 and 22:55 UTC.
-        Run labels show the forecast currently published; delayed feeds retain their last complete run.
-        US pages include NWS forecasts, discussions and nearby balloon observations. ECMWF guidance adds a global comparison.
-        Connected station panels show timestamped measurements. Local terrain, exposure and changing weather also shape launch conditions.
+      <p>
+        A model sounding shows temperature, moisture and wind above the selected location and hour.
+        A balloon sounding shows measurements from a nearby weather station; its distance and observation
+        time appear beside the chart. Morning balloon thermal estimates start at the NWS forecast high
+        when it is available, so they describe possible afternoon heating.
       </p>
     </section>
-    <section class="card">
-      <h2>Sources</h2>
-      <p style="margin-top:8px">
+    <details class="card">
+      <summary>Forecast updates</summary>
+      <p>
+        Updates follow each model's schedule. Forecast details show the model run and publication time;
+        a notice appears when a forecast is old or an update is delayed. A failed update leaves the last
+        complete forecast available. On US launch pages, compare it with the NWS forecast, discussion
+        and balloon sounding. Weather station panels show the time of the latest measurement.
+      </p>
+    </details>
+    <details class="card" id="sources">
+      <summary>Sources and licences</summary>
+      <p>
         Models: <a href="https://opendata.dwd.de/weather/nwp/v1/m/icon-eu/p/">DWD ICON-EU</a>
         (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), <a href="https://www.noaa.gov/">NOAA</a> and
         <a href="https://eccc-msc.github.io/open-data/licence/readme_en/">Environment and Climate Change Canada</a>,
@@ -71,7 +77,7 @@ import Base from "../layouts/Base.astro";
         Additional site research: <a href="https://skyclub.am/paragliding-guided-tours/flying-sites/">Sky Club</a>.
         Source links appear in Launch info.
       </p>
-      <p style="margin-top:8px">
+      <p>
         Launch terrain uses Copernicus GLO-30, GLO-90 in Armenia, and available regional elevation data. Sunlight terrain uses
         <a href="https://www.usgs.gov/3d-elevation-program">USGS 3DEP</a> with a Copernicus fallback.
         Produced using Copernicus WorldDEM-30 and WorldDEM-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018,
@@ -82,6 +88,6 @@ import Base from "../layouts/Base.astro";
         <a href="https://open.canada.ca/en/open-government-licence-canada">Open Government Licence – Canada</a>
         and the <a href="https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc">Open Government Licence – British Columbia</a>.
       </p>
-    </section>
+    </details>
   </div>
 </Base>

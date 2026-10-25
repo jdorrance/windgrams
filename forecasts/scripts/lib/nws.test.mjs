@@ -12,7 +12,7 @@ import {
   officeProductsChanged,
   parseDuration,
   parseValidTime,
-} from "./nws.mjs";
+} from "../../../packages/providers/src/internal/nws.ts";
 
 const HOUR = 3_600_000;
 const NOW = Date.parse("2026-09-29T18:30:00Z");
@@ -125,6 +125,16 @@ test("expandLayer gives every hour of an interval the interval's value", () => {
   const hours = expandLayer({ values: [{ validTime: "2026-09-29T18:00:00+00:00/PT3H", value: 7 }] });
   assert.deepEqual([...hours.values()], [7, 7, 7]);
   assert.equal(expandLayer(undefined).size, 0);
+});
+
+test("expired or entirely missing core forecasts fail before replacing last-good data", () => {
+  assert.throws(() => buildSiteDocument({ site, point, grid: makeGrid(), hourly, forecast,
+    now: Date.parse('2026-10-02T00:00:00Z') }), /no temperature or wind forecast from now on/);
+  const empty = makeGrid({
+    temperature: { uom: 'wmoUnit:degC', values: [{ validTime: '2026-09-29T18:00:00Z/PT6H', value: null }] },
+    windSpeed: { uom: 'wmoUnit:km_h-1', values: [{ validTime: '2026-09-29T18:00:00Z/PT6H', value: null }] },
+  });
+  assert.throws(() => buildSiteDocument({ site, point, grid: empty, hourly, forecast, now: NOW }), /no temperature or wind forecast from now on/);
 });
 
 test("convert applies declared units and rejects unknown ones", () => {

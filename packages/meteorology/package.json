@@ -1,0 +1,35 @@
+{
+  "name": "@windgrams/meteorology",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./thermodynamics": {
+      "types": "./dist/thermodynamics.d.ts",
+      "import": "./dist/thermodynamics.js"
+    },
+    "./sun": {
+      "types": "./dist/sun.d.ts",
+      "import": "./dist/sun.js"
+    },
+    "./build-inventory.json": "./dist/build-inventory.json"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs @windgrams/meteorology",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@azohra/meteo.briefing": "0.6.2"
+  }
+}

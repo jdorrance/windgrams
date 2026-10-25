@@ -68,8 +68,9 @@ const station = stationEntry && (() => {
       <p id="meteogram-meta"></p>
     </div>
     <h2 class="sr-only" id="meteogram-title">Soaring meteogram</h2>
+    <p id="forecast-freshness" class="notice forecast-freshness" role="status" hidden></p>
     <p id="sample-notice" class="notice sample" hidden>
-      Demo data · local development.
+      Synthetic test data.
     </p>
     <p id="forecast-error" class="notice" role="alert" hidden>
       Forecast unavailable. <button id="forecast-reload" type="button" class="button secondary">Reload</button>
@@ -101,13 +102,10 @@ const station = stationEntry && (() => {
     </details>
     <details class="windgram-guide">
       <summary>Chart details</summary>
-      <p>Time left to right · height MSL. Launch elevation uses terrain at the saved coordinates.</p>
-      <p>Hover or tap an hour for lift top AGL. Tap outside to clear. Reference: launch terrain, or model terrain where launch elevation is unavailable.</p>
-      <p>Colours: lapse rate, smoothed between layers and hours. Red/orange: rapid cooling aloft. Grey: inversion. Cyan line: freezing; snowflakes: lowest freezing level.</p>
-      <p>Wind barbs point toward the wind source. Feather values follow the selected units. Faint barbs: interpolated levels. Tap a column or use left/right arrows to select an hour.</p>
-      <p>White crosshatching: RH &gt;94%. Diagonal hatching: model cloud ≥30%. Cloud outlines: potential condensation level. Compare with thermal reach.</p>
-      <p>Paraglider ceiling: <Unit kind="lift" value={1.143} /> sink. Blue lift line: <Unit kind="lift" value={1} /> sink. Ensemble: median and middle 50% range.</p>
-      <p>Palette and physical thresholds: <a href="http://wxtofly.net/windgramexplain.html">WxToFly</a>. Values follow Imperial / Metric. Rain and surface forecasts: Weather details.</p>
+      <p>Time runs left to right; heights are above mean sea level (MSL). Tap a column or use the left and right arrow keys to select an hour.</p>
+      <p>Hover or tap the blue line for lift top above ground (AGL), measured from launch terrain where available or model terrain otherwise. Tap outside the chart to clear the readout.</p>
+      <p>Ensemble forecasts show the median and middle 50% range. Open Weather details for rain and surface conditions.</p>
+      <p><a href={`${href("about")}#chart-key`}>Chart symbols and lift estimates →</a></p>
     </details>
   </section>
 
@@ -125,7 +123,7 @@ const station = stationEntry && (() => {
       <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong> <span class="muted" id="launch-elevation-source"></span></li>
       <li>Times in {zoneName}</li>
     </ul>
-    {launch.notes && <div class="notice"><p class="muted">Site notes · launch catalogue</p><p>{launchNoteParts(launch.notes).map(part => 'text' in part ? part.text : <Unit kind={part.kind} value={part.value} />)}</p></div>}
+    {launch.notes && <div class="notice"><p class="muted">Launch notes</p><p>{launchNoteParts(launch.notes).map(part => 'text' in part ? part.text : <Unit kind={part.kind} value={part.value} />)}</p></div>}
     <a href={href()}>Browse launches →</a>
   </div>
 
@@ -140,7 +138,7 @@ const station = stationEntry && (() => {
       <div id="station-body" hidden>
         <div class="station-now">
           <div class="station-wind">
-            <svg id="station-compass" class="station-compass" viewBox="0 0 112 112" width="112" height="112" role="img" aria-label="Wind source bearing · green sector: launch window"></svg>
+            <svg id="station-compass" class="station-compass" viewBox="0 0 112 112" width="112" height="112" role="img" aria-label="Wind direction. The green sector marks the launch wind window."></svg>
             <div>
               <p class="station-hero" id="station-wind" aria-live="polite"></p>
               <p class="station-gust" id="station-gust"></p>
@@ -159,8 +157,8 @@ const station = stationEntry && (() => {
         </details>
       </div>
       <p class="muted station-note">
-        Station observations · refresh 2 min. Launch sector {facing} ±{launch.windArcHalfWidthDeg}°.
-        Verify wind at launch. <a href={station.url}>Weather Underground</a>.
+        Updates every 2 minutes. The launch wind window is {facing} ±{launch.windArcHalfWidthDeg}°.
+        Check wind at launch. <a href={station.url}>Weather Underground</a>.
       </p>
     </section>
   )}
@@ -202,9 +200,9 @@ const station = stationEntry && (() => {
       <details style="margin-top:14px">
         <summary>How to read a Skew-T</summary>
         <div class="muted skewt-howto">
-          <p>Height MSL. Orange: temperature. Green: dew point. Close lines: near saturation, cloud possible. Slanted grid: equal temperature.</p>
-          <p>Dashed line: rising parcel. Shading: positive buoyancy. Parcel/environment crossing: thermal-top estimate. Condensation within the thermal layer: Cu potential.</p>
-          <p>Temperature increasing with height: inversion. Stable layers can cap lift. Wind barbs: source direction and speed at each level.</p>
+          <p>Orange shows air temperature and green shows dew point, with height above mean sea level. Where the lines come close, the air is nearly saturated and cloud may form. Slanted grid lines mark equal temperatures.</p>
+          <p>The dashed line follows a rising parcel of air. Shading shows where it is warmer than the surrounding air and can keep rising. Where the lines cross gives an estimate of thermal top; condensation below that height suggests cumulus may form.</p>
+          <p>An inversion is a layer where temperature rises with height. It can cap thermals. Wind barbs show direction and speed at each level.</p>
         </div>
       </details>
     </div>
@@ -264,9 +262,9 @@ const station = stationEntry && (() => {
       </details>
       <details style="margin-top:10px">
         <summary>How this is calculated</summary>
-        <p class="muted">Orange intensity: sunlight reaching the slope. Calculation uses terrain slope, aspect, horizon and sky view at 15-minute intervals. <span id="sun-terrain"></span>.</p>
-        <p class="muted">Clear-atmosphere estimate. Selected model cloud cover applies uniformly across the map. Tap a slope for its daylight curve.</p>
-        <p class="muted">3D terrain spacing: <span id="sun-relief-spacing">—</span>. True vertical scale; optional ×2 relief.</p>
+        <p class="muted">Brighter orange shows more sunlight reaching the slope. The estimate uses slope, aspect, horizon and sky view at 15-minute intervals. <span id="sun-terrain"></span>.</p>
+        <p class="muted">The estimate starts with a clear atmosphere, then applies the selected model’s cloud cover across the whole map. Tap a slope to see how its sunlight changes through the day.</p>
+        <p class="muted">3D terrain points are spaced <span id="sun-relief-spacing">—</span> apart. Heights use true scale unless you select ×2 relief.</p>
       </details>
     </div>
   </section>
@@ -291,7 +289,7 @@ const station = stationEntry && (() => {
     </div>
     <details style="margin-top:14px">
       <summary>About this forecast</summary>
-      <p class="muted">IFS · <Unit kind="resolution" value={9} /> surface grid. Upper winds: <Unit kind="pressure" value={850} /> and <Unit kind="pressure" value={700} />, from the 0.25° product. Mixing depth: model boundary layer. Thermal strength unavailable in this feed.
+      <p class="muted">ECMWF IFS supplies surface forecasts on a <Unit kind="resolution" value={9} /> grid and upper winds at <Unit kind="pressure" value={850} /> and <Unit kind="pressure" value={700} /> from its 0.25° product. Mixing depth is the model’s boundary-layer depth. This feed has no thermal-strength estimate.
       </p>
     </details>
   </section>

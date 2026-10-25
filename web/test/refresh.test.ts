@@ -118,6 +118,28 @@ test("nothing is rewritten when NWS has nothing new, or when it fails", async ()
   assert.match(status.offices[0].error ?? "", /keeping the previous one/);
 });
 
+test("invalid or misplaced cached office documents are replaced with provider documents", async () => {
+  const valid = office(product("srg-1", "SRG", "2026-09-29T13:05:00+00:00", "OLD SRG"));
+  for (const cached of [
+    { office: "BOI", products: valid.products },
+    { ...valid, office: "SEW" },
+    { ...valid, products: { ...valid.products, srg: { id: "srg-1" } } },
+  ]) {
+    const data = dataset({ "nws/offices/BOI.json": cached });
+    const { fetchImpl, calls } = fakeFetch({
+      ...lists("srg-1"),
+      [`${NWS}/products/afd-1`]: { ...valid.products.afd, productText: "AFD TEXT" },
+      [`${NWS}/products/srg-1`]: { ...valid.products.srg, productText: "OLD SRG" },
+    });
+    const status = await refresh(data.bucket, { now: Date.parse("2026-09-30T12:20:00Z"), fetchImpl, retryDelayMs: 1 });
+    assert.equal(status.offices[0].updated, true);
+    assert.ok(calls.includes(`${NWS}/products/afd-1`));
+    assert.ok(calls.includes(`${NWS}/products/srg-1`));
+    assert.equal(data.read("nws/offices/BOI.json").schemaVersion, 1);
+    assert.equal(data.read("nws/offices/BOI.json").office, "BOI");
+  }
+});
+
 test("the morning balloon is fetched once due and goes in front of last evening's", async () => {
   // 12:30 UTC: too early to look for the 12 UTC flight.
   let data = dataset();

@@ -9,41 +9,12 @@
 // Select it with WINDGRAMS_STORE. The file provider is the default and reads
 // WINDGRAMS_DATA_DIR.
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import { fileStore } from "@windgrams/pipeline";
 
 const providers = new Map();
 
 export function registerStoreProvider(name, create) {
   providers.set(name, create);
-}
-
-function fileStore(root) {
-  const base = resolve(root);
-  const pathFor = (key) => {
-    if (typeof key !== "string" || key === "" || key.startsWith("/") || key.includes("..")) {
-      throw new Error(`invalid dataset key: ${key}`);
-    }
-    const path = resolve(base, key);
-    if (path !== base && !path.startsWith(base + sep)) throw new Error(`invalid dataset key: ${key}`);
-    return path;
-  };
-  return {
-    name: `file:${base}`,
-    async put(key, body) {
-      const path = pathFor(key);
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, body);
-    },
-    async get(key) {
-      try {
-        return readFileSync(pathFor(key));
-      } catch (error) {
-        if (error.code === "ENOENT") return null;
-        throw error;
-      }
-    },
-  };
 }
 
 registerStoreProvider("file", (env) => {

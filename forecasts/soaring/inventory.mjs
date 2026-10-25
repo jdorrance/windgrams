@@ -5,11 +5,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sha256 } from './common.mjs';
+import { packageBuildHashes } from '@windgrams/pipeline';
 
 const SOARING_DIR = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Shared soaring science and derivation modules owned by `forecasts/soaring/`.
+ * Application modules used in regional calculations. Package distributions are
+ * hashed separately by computeImplementationCodeHashes.
  */
 export const SCIENCE_IMPLEMENTATION_FILES = Object.freeze([
   'audit-agreement.mjs',
@@ -40,7 +42,6 @@ export const CONUS_REPLAY_INVENTORY = Object.freeze(
     'grid.mjs',
     'replay.mjs',
     ...SCIENCE_IMPLEMENTATION_FILES,
-    '../pnpm-lock.yaml',
     '../scripts/lib/model-feeds.mjs',
   ].sort(),
 );
@@ -56,7 +57,6 @@ export const ICON_REPLAY_INVENTORY = Object.freeze(
     './grid.mjs',
     './icon-replay.mjs',
     ...SCIENCE_IMPLEMENTATION_FILES.map(f => `./${f}`),
-    '../pnpm-lock.yaml',
     '../scripts/lib/icon-decode.py',
     '../scripts/lib/icon-eu.mjs',
     '../scripts/lib/icon-requirements.txt',
@@ -80,13 +80,12 @@ export function canonicalInventoryPath(relPath) {
  * @param {(relPath: string) => Buffer | string} [readBytes]
  * @returns {Record<string, string>}
  */
-export function computeImplementationCodeHashes(
-  inventory,
-  readBytes = relPath => readFileSync(resolve(SOARING_DIR, relPath)),
-) {
+export function computeImplementationCodeHashes(inventory, readBytes) {
+  const packageHashes = readBytes ? {} : packageBuildHashes(['@windgrams/soaring', '@windgrams/providers', '@windgrams/pipeline'], import.meta.resolve);
+  readBytes ??= relPath => readFileSync(resolve(SOARING_DIR, relPath));
   const sorted = [...inventory].sort();
   /** @type {Record<string, string>} */
-  const hashes = {};
+  const hashes = { ...packageHashes };
   for (const relPath of sorted) {
     hashes[relPath] = sha256(readBytes(relPath));
   }

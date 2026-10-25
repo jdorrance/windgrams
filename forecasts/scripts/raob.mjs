@@ -7,7 +7,7 @@
 //   node scripts/raob.mjs [--sites sites.json] [--output data] [--publish] [--notice]
 //
 // A launch with no station within 300 km is skipped. --notice prints a one-line
-// summary per station as a GitHub Actions notice (used by the Check workflow).
+// summary per station as a GitHub Actions notice for live smoke checks.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

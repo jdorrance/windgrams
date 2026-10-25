@@ -13,16 +13,16 @@ import { postprocessAndArchiveModelOutput } from './build-covered.mjs';
 import { archiveModelRun } from '../verification/history.mjs';
 import { enrichBundleWithSidecars, initialRegionSidecars, regionPublication, validateNativeRegions } from './build-live-soaring.mjs';
 import { mergeSoaringRegionFiles } from './merge-soaring-regions.mjs';
-import { contextIsFresh, measure } from './terrain.mjs';
-import { armeniaTerrainFragment } from './merge-armenia-terrain.mjs';
+import { contextIsFresh, measure, stampTerrainContext } from './terrain.mjs';
+import { armeniaTerrainFragment } from './armenia-terrain-fragment.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const read = path => JSON.parse(path.endsWith('.gz') ? gunzipSync(readFileSync(path)).toString() : readFileSync(path, 'utf8'));
 const write = (path, value) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, JSON.stringify(value) + '\n'); };
-const amSites = sites => sites.filter(site => site.timeZone === 'Asia/Yerevan');
+const amSites = sites => sites.filter(site => site.country === 'AM' || site.slug.startsWith('am-'));
 
 // Native columns are large. Keep the current and previous complete ICON bundle
-// for open browser tabs; US models retain their existing 48-hour policy.
+// for open browser tabs; the final publication applies the same bound to all models.
 export function pruneIconBundles(root, caseId) {
   const caseRoot = join(root, caseId), bundles = join(caseRoot, 'bundles');
   const active = read(join(caseRoot, 'index.json')).bundle.replace('bundles/', '');
@@ -80,16 +80,21 @@ export async function ensureArmeniaTerrain(output, sites, measureImpl = measure)
   const pending = sites.filter(site => !contextIsFresh([site], old) || old.sites[site.slug]?.elevation?.source !== 'glo90'
     || !Number.isFinite(old.sites[site.slug]?.elevation?.elevationM));
   if (!pending.length) {
-    write(join(output, 'site-context-armenia.json'), armeniaTerrainFragment(old, sites));
-    return old;
+    const stamped = stampTerrainContext(old, sites);
+    write(path, stamped);
+    write(join(output, 'site-context-armenia.json'), armeniaTerrainFragment(stamped, sites));
+    return stamped;
   }
   const measured = await measureImpl(pending);
-  const context = { ...measured, sites: { ...old?.sites, ...measured.sites },
+  const measurementTimes = Object.fromEntries(Object.keys(old?.sites ?? {}).map(slug => [slug, old.measurementTimes?.[slug] ?? old.generatedAt]));
+  for (const slug of Object.keys(measured.sites)) measurementTimes[slug] = measured.measurementTimes?.[slug] ?? measured.generatedAt;
+  const context = { ...measured, measurementTimes, measurementPolicies: { ...old?.measurementPolicies, ...measured.measurementPolicies }, sites: { ...old?.sites, ...measured.sites },
     sources: [...new Map([...(old?.sources ?? []), ...measured.sources].map(source => [source.id, source])).values()] };
   const fragment = armeniaTerrainFragment(context, sites);
-  write(path, context);
-  write(join(output, 'site-context-armenia.json'), fragment);
-  return context;
+  const stamped = stampTerrainContext(context, sites);
+  write(path, stamped);
+  write(join(output, 'site-context-armenia.json'), { ...fragment, measurementTimes: stamped.measurementTimes, measurementPolicies: stamped.measurementPolicies });
+  return stamped;
 }
 
 /** All source and derived documents are complete before any live pointer moves. */

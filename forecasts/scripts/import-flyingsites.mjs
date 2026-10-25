@@ -153,6 +153,7 @@ export function buildCatalog(features, states) {
       timeZone: site.timeZone,
     });
     launches[slug] = {
+      countryCode: "US",
       facingDeg: site.facingDeg,
       windArcHalfWidthDeg: site.windArcHalfWidthDeg,
       windMinMph: null,
@@ -192,6 +193,7 @@ export function buildCountryCatalog(catalog) {
     }
     sites.push({ slug, name, latitude, longitude, timeZone });
     launches[slug] = {
+      countryCode,
       facingDeg, windArcHalfWidthDeg,
       windMinMph: null, windMaxMph: null, gustMaxMph: null,
       region, notes, source,

@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "evaluatedAt": "2026-10-22T12:00:00Z",
   "matchingRules": {
-    "schemaVersion": 2,
+    "schemaVersion": 3,
     "raobExactTimeDeltaMinutes": 0,
     "raobNearInitMaxTimeDeltaMinutes": 60,
     "surfaceStationMaxTimeDeltaMinutes": 30,
@@ -20,25 +20,25 @@
         "id": "f00-f06",
         "minHours": 0,
         "maxHours": 6,
-        "label": "Near-Initialization / Nowcast (f00\u2013f06)"
+        "label": "Near-Initialization / Nowcast (f00–f06)"
       },
       {
         "id": "f07-f12",
         "minHours": 7,
         "maxHours": 12,
-        "label": "Short-Range (f07\u2013f12)"
+        "label": "Short-Range (f07–f12)"
       },
       {
         "id": "f13-f24",
         "minHours": 13,
         "maxHours": 24,
-        "label": "Day-1 Soaring Window (f13\u2013f24)"
+        "label": "Day-1 Soaring Window (f13–f24)"
       },
       {
         "id": "f25-f48",
         "minHours": 25,
         "maxHours": 48,
-        "label": "Day-2 Outlook (f25\u2013f48)"
+        "label": "Day-2 Outlook (f25–f48)"
       }
     ]
   },
@@ -60,46 +60,287 @@
     "meetsProspectiveGateCapacity": true
   },
   "observationVerificationSkill": {
-    "note": "True observation verification skill requires matched valid times and station-to-launch proximity <= 60 km. Model agreement alone is not skill.",
+    "note": "Dated fixed-case comparisons: eight near-initialization comparisons share three station observations on one date. These do not establish prospective daytime forecast skill.",
+    "targetSoundingValidAt": "2026-10-21T00:00:00Z",
     "matchedCount": 8,
-    "byLeadTimeBucket": {
-      "f00-f06": {
+    "stationDayConvention": "station ID and UTC observation date; reused sites/models are not independent days",
+    "independentStationDays": 3,
+    "byMatchTier": {
+      "exact-valid-time": {
+        "comparisons": 0,
+        "independentStationDays": 0,
+        "independentStationTimes": 0,
+        "models": [],
+        "temperatureMaeC": {
+          "comparisons": 0,
+          "independentStationDays": 0,
+          "mean": null
+        },
+        "temperatureBiasC": {
+          "comparisons": 0,
+          "independentStationDays": 0,
+          "mean": null
+        },
+        "dewPointMaeC": {
+          "comparisons": 0,
+          "independentStationDays": 0,
+          "mean": null
+        },
+        "meanProfileWindVectorRmseMps": {
+          "comparisons": 0,
+          "independentStationDays": 0,
+          "mean": null
+        },
+        "windSpeedBiasMps": {
+          "comparisons": 0,
+          "independentStationDays": 0,
+          "mean": null
+        },
+        "byModel": {},
+        "byRegime": {},
+        "byLeadTimeBucket": {}
+      },
+      "near-init-f01-60min": {
         "comparisons": 8,
+        "independentStationDays": 3,
+        "independentStationTimes": 3,
         "models": [
           "hrrr-conus",
           "rdps"
         ],
-        "meanTemperatureMaeC": 0.76,
-        "meanWindVectorRmseMps": 4.47
-      }
-    },
-    "byRegime": {
-      "valley-inversion-break": {
-        "comparisons": 4,
-        "models": [
-          "hrrr-conus",
-          "rdps"
-        ],
-        "meanTemperatureMaeC": 0.55,
-        "meanWindVectorRmseMps": 4.46
-      },
-      "willamette-lowland": {
-        "comparisons": 2,
-        "models": [
-          "hrrr-conus",
-          "rdps"
-        ],
-        "meanTemperatureMaeC": 0.46,
-        "meanWindVectorRmseMps": 3.15
-      },
-      "appalachian-ridge-thermal": {
-        "comparisons": 2,
-        "models": [
-          "hrrr-conus",
-          "rdps"
-        ],
-        "meanTemperatureMaeC": 1.47,
-        "meanWindVectorRmseMps": 5.81
+        "temperatureMaeC": {
+          "comparisons": 8,
+          "independentStationDays": 3,
+          "mean": 0.76
+        },
+        "temperatureBiasC": {
+          "comparisons": 8,
+          "independentStationDays": 3,
+          "mean": -0.08
+        },
+        "dewPointMaeC": {
+          "comparisons": 8,
+          "independentStationDays": 3,
+          "mean": 3
+        },
+        "meanProfileWindVectorRmseMps": {
+          "comparisons": 8,
+          "independentStationDays": 3,
+          "mean": 4.47
+        },
+        "windSpeedBiasMps": {
+          "comparisons": 8,
+          "independentStationDays": 3,
+          "mean": -1.53
+        },
+        "byModel": {
+          "hrrr-conus": {
+            "comparisons": 4,
+            "independentStationDays": 3,
+            "independentStationTimes": 3,
+            "models": [
+              "hrrr-conus"
+            ],
+            "temperatureMaeC": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": 0.66
+            },
+            "temperatureBiasC": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": -0.19
+            },
+            "dewPointMaeC": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": 2.66
+            },
+            "meanProfileWindVectorRmseMps": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": 4.67
+            },
+            "windSpeedBiasMps": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": -1.93
+            }
+          },
+          "rdps": {
+            "comparisons": 4,
+            "independentStationDays": 3,
+            "independentStationTimes": 3,
+            "models": [
+              "rdps"
+            ],
+            "temperatureMaeC": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": 0.86
+            },
+            "temperatureBiasC": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": 0.02
+            },
+            "dewPointMaeC": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": 3.35
+            },
+            "meanProfileWindVectorRmseMps": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": 4.26
+            },
+            "windSpeedBiasMps": {
+              "comparisons": 4,
+              "independentStationDays": 3,
+              "mean": -1.14
+            }
+          }
+        },
+        "byRegime": {
+          "appalachian-ridge-thermal": {
+            "comparisons": 2,
+            "independentStationDays": 1,
+            "independentStationTimes": 1,
+            "models": [
+              "hrrr-conus",
+              "rdps"
+            ],
+            "temperatureMaeC": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": 1.47
+            },
+            "temperatureBiasC": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": -0.7
+            },
+            "dewPointMaeC": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": 4.63
+            },
+            "meanProfileWindVectorRmseMps": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": 5.81
+            },
+            "windSpeedBiasMps": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": 0.63
+            }
+          },
+          "valley-inversion-break": {
+            "comparisons": 4,
+            "independentStationDays": 1,
+            "independentStationTimes": 1,
+            "models": [
+              "hrrr-conus",
+              "rdps"
+            ],
+            "temperatureMaeC": {
+              "comparisons": 4,
+              "independentStationDays": 1,
+              "mean": 0.55
+            },
+            "temperatureBiasC": {
+              "comparisons": 4,
+              "independentStationDays": 1,
+              "mean": -0.05
+            },
+            "dewPointMaeC": {
+              "comparisons": 4,
+              "independentStationDays": 1,
+              "mean": 2.49
+            },
+            "meanProfileWindVectorRmseMps": {
+              "comparisons": 4,
+              "independentStationDays": 1,
+              "mean": 4.46
+            },
+            "windSpeedBiasMps": {
+              "comparisons": 4,
+              "independentStationDays": 1,
+              "mean": -2.85
+            }
+          },
+          "willamette-lowland": {
+            "comparisons": 2,
+            "independentStationDays": 1,
+            "independentStationTimes": 1,
+            "models": [
+              "hrrr-conus",
+              "rdps"
+            ],
+            "temperatureMaeC": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": 0.46
+            },
+            "temperatureBiasC": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": 0.46
+            },
+            "dewPointMaeC": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": 2.41
+            },
+            "meanProfileWindVectorRmseMps": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": 3.15
+            },
+            "windSpeedBiasMps": {
+              "comparisons": 2,
+              "independentStationDays": 1,
+              "mean": -1.06
+            }
+          }
+        },
+        "byLeadTimeBucket": {
+          "f00-f06": {
+            "comparisons": 8,
+            "independentStationDays": 3,
+            "independentStationTimes": 3,
+            "models": [
+              "hrrr-conus",
+              "rdps"
+            ],
+            "temperatureMaeC": {
+              "comparisons": 8,
+              "independentStationDays": 3,
+              "mean": 0.76
+            },
+            "temperatureBiasC": {
+              "comparisons": 8,
+              "independentStationDays": 3,
+              "mean": -0.08
+            },
+            "dewPointMaeC": {
+              "comparisons": 8,
+              "independentStationDays": 3,
+              "mean": 3
+            },
+            "meanProfileWindVectorRmseMps": {
+              "comparisons": 8,
+              "independentStationDays": 3,
+              "mean": 4.47
+            },
+            "windSpeedBiasMps": {
+              "comparisons": 8,
+              "independentStationDays": 3,
+              "mean": -1.53
+            }
+          }
+        }
       }
     },
     "matchedPairs": [
@@ -742,11 +983,10 @@
         "leadTimeBucket": "f00-f06",
         "reason": "Rejected for local site skill: 170 km separation between coastal Quillayute RAOB and inland North Sound ridge exceeds 60 km spatial gate; retained only as synoptic upstream boundary context."
       }
-    ],
-    "targetSoundingValidAt": "2026-10-21T00:00:00Z"
+    ]
   },
   "crossModelSpreadSummary": {
-    "note": "Cross-model spread measures inter-model disagreement and grid-elevation smoothing differences across Wa-Blanchard (2026-10-21 7:00\u201320:00 America/Los_Angeles, 2026-10-21T14:00:00Z\u20132026-10-22T03:00:00Z), NOT observation verification skill. Unsupported ECMWF and NWS W* and usable-lift fields remain explicitly null, and empty comparison windows report null rather than 0.",
+    "note": "Cross-model spread measures inter-model disagreement and grid-elevation smoothing differences across Wa-Blanchard (2026-10-21 7:00–20:00 America/Los_Angeles, 2026-10-21T14:00:00Z–2026-10-22T03:00:00Z), NOT observation verification skill. Unsupported ECMWF and NWS W* and usable-lift fields remain explicitly null, and empty comparison windows report null rather than 0.",
     "daytimeWindow": {
       "localDate": "2026-10-21",
       "timeZone": "America/Los_Angeles",
@@ -765,15 +1005,15 @@
         "referenceTime": "2026-10-21T00:00:00Z",
         "modelElevationM": 221.7,
         "coverageSamples": 14,
-        "coverageSpanHours": 13.0,
+        "coverageSpanHours": 13,
         "status": "available",
         "peakWstarV2Mps": 0.88,
         "peakUsableLiftTopV2M": 498.1,
-        "peakResolvedThermalTopM": 536.0,
+        "peakResolvedThermalTopM": 536,
         "minSurfaceLclM": 864.3,
         "minEffectiveCloudLimitM": 861.9,
         "meanWindSpeedMps": 1.13,
-        "maxTempC": 17.0
+        "maxTempC": 17
       },
       {
         "model": "rrfs",
@@ -799,7 +1039,7 @@
         "referenceTime": "2026-10-21T06:00:00Z",
         "modelElevationM": 186.9,
         "coverageSamples": 14,
-        "coverageSpanHours": 13.0,
+        "coverageSpanHours": 13,
         "status": "available",
         "peakWstarV2Mps": 0.78,
         "peakUsableLiftTopV2M": 277.2,
@@ -816,7 +1056,7 @@
         "referenceTime": "2026-10-21T00:00:00Z",
         "modelElevationM": 243.9,
         "coverageSamples": 14,
-        "coverageSpanHours": 13.0,
+        "coverageSpanHours": 13,
         "status": "available",
         "peakWstarV2Mps": 1.2,
         "peakUsableLiftTopV2M": 615.2,
@@ -833,7 +1073,7 @@
         "referenceTime": "2026-10-21T00:00:00Z",
         "modelElevationM": 77.4,
         "coverageSamples": 5,
-        "coverageSpanHours": 12.0,
+        "coverageSpanHours": 12,
         "status": "available",
         "peakWstarV2Mps": 0.91,
         "peakUsableLiftTopV2M": 299.3,
@@ -850,7 +1090,7 @@
         "referenceTime": "2026-10-21T00:00:00Z",
         "modelElevationM": 30.8,
         "coverageSamples": 5,
-        "coverageSpanHours": 12.0,
+        "coverageSpanHours": 12,
         "status": "available",
         "peakWstarV2Mps": 0.92,
         "peakUsableLiftTopV2M": 298.8,
@@ -867,14 +1107,14 @@
         "referenceTime": "2026-10-21T00:00:00Z",
         "modelElevationM": 45.6,
         "coverageSamples": 5,
-        "coverageSpanHours": 12.0,
+        "coverageSpanHours": 12,
         "status": "available",
         "peakWstarV2Mps": null,
         "peakUsableLiftTopV2M": null,
         "peakLegacyWstarMps": 0.59,
         "peakLegacyUsableLiftTopM": 72.7,
-        "minEffectiveCloudLimitM": 172.0,
-        "meanWindSpeedMps": 1.0,
+        "minEffectiveCloudLimitM": 172,
+        "meanWindSpeedMps": 1,
         "maxTempC": 14.6
       },
       {
@@ -883,7 +1123,7 @@
         "referenceTime": "2026-10-20T18:00:00Z",
         "modelElevationM": 386,
         "coverageSamples": 14,
-        "coverageSpanHours": 13.0,
+        "coverageSpanHours": 13,
         "status": "available",
         "peakWstarV2Mps": null,
         "peakUsableLiftTopV2M": null,
@@ -898,7 +1138,7 @@
         "referenceTime": "2026-10-21T06:26:42+00:00",
         "modelElevationM": 0,
         "coverageSamples": 13,
-        "coverageSpanHours": 12.0,
+        "coverageSpanHours": 12,
         "status": "available",
         "peakWstarV2Mps": null,
         "peakUsableLiftTopV2M": null,
@@ -908,5 +1148,6 @@
         "unsupportedReason": "Missing surface sensible/latent heat fluxes and dense vertical profile levels."
       }
     ]
-  }
+  },
+  "evaluatorVersion": "3.0.0"
 }

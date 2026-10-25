@@ -1,0 +1,68 @@
+# Shared runner setup; host commands own acquisition and product validation.
+name: Refresh provider
+on:
+  workflow_call:
+    inputs:
+      group:
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: refresh-${{ inputs.group }}
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ inputs.group == 'eccc' && 360 || inputs.group == 'observations' && 60 || 180 }}
+    env:
+      WINDGRAMS_STORE: file
+      WINDGRAMS_DATA_DIR: ${{ github.workspace }}/forecasts/data
+      ICON_PYTHON: ${{ github.workspace }}/forecasts/.venv-icon/bin/python
+      NODE_OPTIONS: --max-old-space-size=6144
+      SOARING_CAPTURE_CONCURRENCY: 8
+      NWS_USER_AGENT: ${{ vars.NWS_USER_AGENT || format('Windgrams/0.1 ({0}/{1})', github.server_url, github.repository) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Reserve space for Canadian GRIBs
+        if: inputs.group == 'eccc'
+        run: node scripts/prepare-refresh-runner.mjs eccc
+      - uses: ./.github/actions/setup-pnpm
+      - id: urls
+        env:
+          WINDGRAMS_SITE: ${{ vars.WINDGRAMS_SITE }}
+          WINDGRAMS_BASE: ${{ vars.WINDGRAMS_BASE }}
+          WINDGRAMS_DATA_BASE: ${{ vars.WINDGRAMS_DATA_BASE }}
+        run: node scripts/pages-config.mjs
+      - name: Install native decoder
+        if: inputs.group == 'dwd'
+        working-directory: forecasts
+        run: |
+          python3.12 -m venv .venv-icon
+          .venv-icon/bin/pip install --disable-pip-version-check -r scripts/lib/icon-requirements.txt
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: forecasts/data
+          key: forecast-data-${{ github.run_id }}
+          restore-keys: forecast-data-
+      - name: Refresh owned products
+        working-directory: forecasts
+        env:
+          METEO_DATA_BASE: ${{ steps.urls.outputs.data }}
+          REFRESH_GROUP: ${{ inputs.group }}
+        run: node scripts/refresh-provider.mjs --group "$REFRESH_GROUP"
+      - name: Pack validated and retained products
+        if: always()
+        working-directory: forecasts
+        env:
+          REFRESH_GROUP: ${{ inputs.group }}
+        run: node scripts/pack-refresh.mjs "$REFRESH_GROUP"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: data-${{ inputs.group }}
+          path: forecasts/slice
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 2

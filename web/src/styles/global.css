@@ -286,6 +286,10 @@ main {
   background: #fff4d6;
   color: #5b4300;
 }
+.forecast-freshness:not([hidden]) {
+  margin: .65rem 0;
+  font-size: .875rem;
+}
 
 :root[data-theme="dark"] .notice.sample {
   background: #3a2e0a;

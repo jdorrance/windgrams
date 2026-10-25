@@ -4,7 +4,7 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
 ---
 
 <Base title="Admin" current="admin" description="Add and edit launches.">
-  <h1>Launches admin</h1>
+  <h1>Manage launches</h1>
   <p id="admin-status" class="muted" style="margin-top:6px">Checking your sign-in…</p>
 
   <section class="card" style="margin-top:20px" id="list-card" hidden>
@@ -44,6 +44,10 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
         <span class="hint" id="slug-hint"></span>
       </div>
       <div class="field">
+        <label for="f-country">Country code</label>
+        <input type="text" id="f-country" name="countryCode" minlength="2" maxlength="2" required placeholder="US / AM / NZ" />
+      </div>
+      <div class="field">
         <label for="f-region">Region</label>
         <input type="text" id="f-region" name="region" maxlength="80" placeholder="Region" />
       </div>
@@ -57,9 +61,10 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
       </div>
       <div class="field">
         <label for="f-tz">Time zone</label>
-        <select id="f-tz" name="timeZone">
+        <input id="f-tz" name="timeZone" list="time-zones" required />
+        <datalist id="time-zones">
           {TIME_ZONES.map((tz) => <option value={tz}>{tz.replace("America/", "").replace("Pacific/", "").replace("Asia/", "").replace("_", " ")}</option>)}
-        </select>
+        </datalist>
       </div>
 
       <fieldset class="field wide">
@@ -75,7 +80,7 @@ import { COMPASS_16, TIME_ZONES } from "../../lib/launches.ts";
             ))
           }
         </div>
-        <span class="hint">Centre of the wind window.</span>
+        <span class="hint">Choose the direction at the centre of the launch wind window.</span>
       </fieldset>
 
       <div class="field">

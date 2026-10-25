@@ -1,0 +1,67 @@
+{
+  "name": "@windgrams/providers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Weather-model downloads, run discovery and source adapters",
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./registry": {
+      "types": "./dist/registry.d.ts",
+      "default": "./dist/registry.js"
+    },
+    "./readiness": {
+      "types": "./dist/readiness.d.ts",
+      "default": "./dist/readiness.js"
+    },
+    "./icon": {
+      "types": "./dist/icon.d.ts",
+      "default": "./dist/icon.js"
+    },
+    "./build-inventory.json": "./dist/build-inventory.json",
+    "./terrain-policy": {
+      "types": "./dist/terrain-policy.d.ts",
+      "default": "./dist/terrain-policy.js"
+    },
+    "./icon-decoder": "./dist/internal/icon-decode.py",
+    "./icon-requirements": "./dist/internal/icon-requirements.txt",
+    "./nws": {
+      "types": "./dist/nws.d.ts",
+      "default": "./dist/nws.js"
+    },
+    "./ecmwf": {
+      "types": "./dist/ecmwf.d.ts",
+      "default": "./dist/ecmwf.js"
+    },
+    "./solar": {
+      "types": "./dist/solar.d.ts",
+      "default": "./dist/solar.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs @windgrams/providers",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@azohra/meteo.forecast": "0.6.0",
+    "@azohra/meteo.briefing": "0.6.2",
+    "@windgrams/contracts": "workspace:*",
+    "@windgrams/geography": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  }
+}

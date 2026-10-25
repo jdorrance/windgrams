@@ -1,7 +1,7 @@
 import { formatQuantity, getUnitSystem } from '../lib/units.ts';
 import { createReplayProfileCache, readRegionalJson } from '../lib/regional-data.ts';
 import { parsePublishedProfileJson } from '../lib/published-lift.ts';
-import { type SiteForecast } from '@azohra/meteo.briefing/contract';
+import { parseModelCatalogue, type SiteForecast } from '@azohra/meteo.briefing/contract';
 import { localDateKey } from '@azohra/meteo.briefing/derive';
 import { DATA_BASE } from '../lib/site.ts';
 import { windgramDayHours } from '../lib/windgram-view.ts';
@@ -18,6 +18,9 @@ import {
   renderRegionalLaunchesTables,
 } from '../lib/launch-comparison.ts';
 import {
+  validateRegionCatalogue,
+  validateReplayManifest,
+  validateReplayHour,
   validateCrossSectionDoc,
   validateLaunchesDoc,
   validateReplayAudit,
@@ -37,6 +40,7 @@ import {
   historicalLabel,
   modelLabel,
   nativeModels,
+  normalizeReplayManifest,
   regionForCase,
   replayLocation,
   replayModel,
@@ -45,22 +49,19 @@ import {
   setReplaySelectionQuery,
   type Layer,
   type RegionCatalogue,
-  type ReplayHour,
-  type ReplayManifest,
 } from '../lib/soaring.ts';
 import { createSoaringMap } from './soaring-map.ts';
 import { createKeyedAsyncLoader, createWindgramController } from './windgram-controller.ts';
 import { createPageLifecycle } from './page-lifecycle.ts';
+import { createFreshnessNotice } from './freshness-notice.ts';
 
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const set = (id: string, text: string) => { const node = el(id); if (node) node.textContent = text; };
 
-const read = readRegionalJson;
-
-async function readOptional<T>(url: string, validate?: (raw: unknown) => T | null): Promise<T | null> {
+async function readOptional<T>(url: string, validate: (raw: unknown) => T | null, signal: AbortSignal): Promise<T | null> {
   try {
-    const raw = await read<unknown>(url);
-    return validate ? validate(raw) : (raw as T);
+    const raw = await readRegionalJson(url, { signal });
+    return validate(raw);
   } catch {
     return null;
   }
@@ -85,29 +86,47 @@ async function main() {
     onRestore() { if (initialized) update(); },
   });
   const eventOptions = { signal: lifetime.signal };
+  const read = (url: string) => readRegionalJson(url, { signal: lifetime.signal });
+  const modelCatalogue = readOptional(`${DATA_BASE.replace(/\/$/, '')}/models.json`, parseModelCatalogue, lifetime.signal);
   set('map-barb-units', getUnitSystem() === 'metric' ? '· 2.5 / 5 / 25 m/s' : '· 5 / 10 / 50 kt');
-  const regionsCatalogue = await readOptional<RegionCatalogue>(`${DATA_BASE.replace(/\/$/, '')}/soaring/v1/regions.json`);
+  const regionsCatalogue = await readOptional<RegionCatalogue>(`${DATA_BASE.replace(/\/$/, '')}/soaring/v1/regions.json`, validateRegionCatalogue, lifetime.signal);
   if (lifetime.disposed) return;
   const query = defaultReplayQuery(window.location.search, regionsCatalogue);
   const location = replayLocation(query.toString(), DATA_BASE);
-  const pointer = await read<{ bundle: string }>(`${location.root}/index.json`);
+  const pointer = await read(`${location.root}/index.json`);
   if (lifetime.disposed) return;
-  if (!/^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)) throw new Error('Invalid replay bundle pointer');
+  if (pointer === null || typeof pointer !== 'object' || !('bundle' in pointer) || typeof pointer.bundle !== 'string' || !/^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)) throw new Error('Invalid replay bundle pointer');
   const root = `${location.root}/${pointer.bundle}`;
-  const manifest = await read<ReplayManifest>(`${root}/manifest.json`);
+  const parsedManifest = validateReplayManifest(await read(`${root}/manifest.json`));
   if (lifetime.disposed) return;
-  if (manifest.schemaVersion !== 1 || manifest.case.id !== location.caseId) throw new Error('Replay manifest mismatch');
+  if (!parsedManifest || parsedManifest.schemaVersion !== 1 || parsedManifest.case.id !== location.caseId) throw new Error('Replay manifest mismatch');
+  const manifest = normalizeReplayManifest(parsedManifest);
   const activeModel = replayModel(manifest);
+  if (activeModel === 'unknown') throw new Error('Regional forecast is missing its model identity.');
+  if (!manifest.hours.length) throw new Error('Regional forecast has no published hours.');
+  const catalogue = await modelCatalogue;
+  if (lifetime.disposed) return;
+  const freshnessNotice = createFreshnessNotice(el('replay-freshness'), () => ({
+    referenceTime: manifest.case.referenceTime,
+    validUntil: manifest.hours.at(-1)?.validAt,
+    policy: catalogue?.models.find(model => model.slug === activeModel),
+    historical: !location.caseId.endsWith('-live'),
+  }), lifetime.signal);
+  freshnessNotice.refresh();
   const activeRegionMeta = regionForCase(regionsCatalogue?.regions ?? [], location.caseId);
-  const optionalBundle = <T>(name: string, validate?: (raw: unknown) => T | null) =>
+  const optionalBundle = <T>(name: string, validate: (raw: unknown) => T | null) =>
     manifest.files && !Object.hasOwn(manifest.files, name)
       ? Promise.resolve<T | null>(null)
-      : readOptional<T>(`${root}/${name}`, validate);
+      : readOptional<T>(`${root}/${name}`, validate, lifetime.signal);
   const [rawGrid, profileData, rawAudit, hours, launchesDoc, crossSectionDoc, verificationDoc] = await Promise.all([
-    read<unknown>(`${root}/grid.geojson`),
-    read<unknown>(`${root}/profile.json`),
-    read<unknown>(`${root}/audit.json`),
-    Promise.all(manifest.hours.map(h => read<ReplayHour>(`${root}/${h.file}`))),
+    read(`${root}/grid.geojson`),
+    read(`${root}/profile.json`),
+    read(`${root}/audit.json`),
+    Promise.all(manifest.hours.map(async h => {
+      const hour = validateReplayHour(await read(`${root}/${h.file}`), manifest.cellCount);
+      if (!hour || hour.validAt !== h.validAt || hour.forecastHour !== h.forecastHour) throw new Error('Regional hour differs from its manifest');
+      return hour;
+    })),
     optionalBundle('launches.json', validateLaunchesDoc),
     optionalBundle('cross-section.json', validateCrossSectionDoc),
     optionalBundle('verification.json', validateVerificationDoc),
@@ -143,7 +162,7 @@ async function main() {
 
   const launches = launchesDoc?.launches ?? [];
   const launchByCell = new Map(launches.map(launch => [launch.cellIndex, launch]));
-  let selection = replaySelection(query, grid.features.map(feature => feature.properties), launches, manifest.siteCell);
+  let selection = replaySelection(query, grid.features.map(feature => feature.properties), launches, manifest.siteCell, grid);
   let selectedCell = selection.cellIndex;
   const launchForCell = (cellIndex: number) =>
     (cellIndex === selection.cellIndex && selection.launchSlug ? launches.find(launch => launch.slug === selection.launchSlug) : undefined)
@@ -281,7 +300,7 @@ async function main() {
     elevationM: manifest.case.launchElevation.elevationM,
   });
   const profileCache = new Map<number, SiteForecast | null>();
-  const remoteProfiles = manifest.cellProfiles ? createReplayProfileCache(root, manifest) : null;
+  const remoteProfiles = manifest.cellProfiles ? createReplayProfileCache(root, manifest, read) : null;
   const remoteProfileLoader = remoteProfiles
     ? createKeyedAsyncLoader<number, SiteForecast>({
         load: async cellIndex => {
@@ -319,7 +338,7 @@ async function main() {
   set('audit-summary', 'About this forecast');
   set(
     'audit-results',
-    `${audit.mapProfileAgreement.valuesChecked.toLocaleString('en-US')} map/profile values checked · ${audit.mapProfileAgreement.hours} hours. Sample ${formatQuantity(audit.sampledCell.distanceKm, 'distance')}. Terrain: model ${formatQuantity(audit.terrain.modelElevationM, 'elevation')} / launch ${formatQuantity(audit.terrain.launch.elevationM, 'elevation')} MSL.${inv ? ` ${inv.availablePressureLevelsCount} pressure levels available.` : ''}`,
+    `${audit.mapProfileAgreement.valuesChecked.toLocaleString('en-US')} map and profile values were checked across ${audit.mapProfileAgreement.hours} hours. The sampled grid point is ${formatQuantity(audit.sampledCell.distanceKm, 'distance')} from launch. Model terrain is ${formatQuantity(audit.terrain.modelElevationM, 'elevation')} MSL; launch elevation is ${formatQuantity(audit.terrain.launch.elevationM, 'elevation')} MSL.${inv ? ` The source provides ${inv.availablePressureLevelsCount} pressure levels.` : ''}`,
   );
   el('audit-limitations').replaceChildren();
   el<HTMLAnchorElement>('audit-download').href = `${root}/audit.json`;
@@ -343,7 +362,7 @@ async function main() {
   if (verificationDoc?.wrfPilotDomain && el('wrf-lifecycle-summary')) {
     const w = verificationDoc.wrfPilotDomain;
     const grids = w.domains.map(domain => formatQuantity(domain.dxM / 1000, 'resolution')).join(' → ');
-    set('wrf-lifecycle-summary', `WRF-ARW pilot configuration · planned North Sound grids: ${grids}.`);
+    set('wrf-lifecycle-summary', `Planned WRF-ARW trial over North Sound, with grid spacing of ${grids}.`);
   }
   if (launchesDoc?.nwsOffice?.products?.afd?.text && el('nws-afd-text')) {
     set('nws-afd-text', launchesDoc.nwsOffice.products.afd.text.trim());
@@ -493,7 +512,7 @@ async function main() {
       }
     }
     const notice = hour.status[selectedCell] === 'insufficient-levels'
-      ? 'Lift unavailable · limited vertical data.'
+      ? 'Too few forecast levels to estimate lift.'
       : hour.status[selectedCell] === 'missing'
         ? 'Lift unavailable.'
         : hour.ceilingReached[selectedCell] ? 'Thermals extend beyond profile top.' : '';
@@ -655,6 +674,7 @@ async function main() {
 }
 
 main().catch(error => {
+  if (error instanceof Error && error.name === 'AbortError') return;
   console.error(error);
   set('replay-status', 'Forecast unavailable.');
   el('replay-status').hidden = false;

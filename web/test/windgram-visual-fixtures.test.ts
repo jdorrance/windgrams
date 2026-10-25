@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { manifest, loadVisualFixture } from './fixtures/windgram-visual/scenarios.mjs';
 import { parsePublishedProfileJson } from '../src/lib/published-lift.ts';
-import { buildWindgramView, hourSampling, readWindgram } from '../src/lib/windgram-view.ts';
+import {  buildWindgramView, hourSampling, readWindgram  } from "./helpers/windgram.ts";
 
 test('frozen Dog and ICON records retain provenance, source times and native levels', () => {
   const published = manifest.fixtures.filter(entry => entry.kind === 'published');

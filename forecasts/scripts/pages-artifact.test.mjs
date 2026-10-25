@@ -56,7 +56,9 @@ test('Pages size guard counts exact upload bytes and rejects 1 GB, empty trees a
   const root = fixture(t);
   assert.throws(() => checkPagesArtifact(root), /empty/);
   mkdirSync(join(root, 'data')); writeFileSync(join(root, 'index.html'), 'hello'); writeFileSync(join(root, 'data', 'cell.json.gz'), 'gzip');
-  assert.deepEqual(checkPagesArtifact(root), { bytes: 9, files: 2, remainingBytes: PAGES_MAX_BYTES - 9 });
+  assert.deepEqual(checkPagesArtifact(root), { bytes: 9, files: 2, remainingBytes: PAGES_MAX_BYTES - 9, warning: false });
+  truncateSync(join(root, 'data', 'cell.json.gz'), 800_000_000 - 5);
+  assert.equal(checkPagesArtifact(root).warning, true);
   truncateSync(join(root, 'data', 'cell.json.gz'), PAGES_MAX_BYTES - 5);
   assert.throws(() => checkPagesArtifact(root), /1000000000 bytes/);
   truncateSync(join(root, 'data', 'cell.json.gz'), 4);

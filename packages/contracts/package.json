@@ -1,0 +1,36 @@
+{
+  "name": "@windgrams/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./regional": {
+      "types": "./dist/regional.d.ts",
+      "import": "./dist/regional.js"
+    },
+    "./published-lift": {
+      "types": "./dist/published-lift.d.ts",
+      "import": "./dist/published-lift.js"
+    },
+    "./build-inventory.json": "./dist/build-inventory.json"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs @windgrams/contracts",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@azohra/meteo.briefing": "0.6.2",
+    "zod": "4.6.5"
+  }
+}

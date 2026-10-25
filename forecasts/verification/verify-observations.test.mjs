@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { MATCHED_RAOB_SITE_PAIRS, buildBlanchardCrossModelSpread, buildSkillReport, localDaytimeWindowMs, verifyModelAgainstRaob } from './verify-observations.mjs';
+import { MATCHED_RAOB_SITE_PAIRS, buildBlanchardCrossModelSpread, buildSkillReport, localDaytimeWindowMs, verifyModelAgainstRaob, summarizeVerifications } from './verify-observations.mjs';
+import { evaluateRaobMatch } from './history.mjs';
 
 test('RRFS participates in matched observation verification and deterministic model comparisons', t => {
   const root = mkdtempSync(join(tmpdir(), 'rrfs-verification-'));
@@ -66,4 +67,24 @@ test('RRFS participates in matched observation verification and deterministic mo
   const edtWindow = localDaytimeWindowMs('2026-10-21', 'America/New_York');
   assert.equal(edtWindow.windowStartIso, '2026-10-21T11:00:00Z');
   assert.equal(edtWindow.windowEndIso, '2026-10-22T00:00:00Z');
+});
+
+test('evaluation requires a finite nonnegative lead and exact time is not rounded', () => {
+  const input = { distanceKm: 18, soundingValidAt: '2026-10-21T00:00:00Z', forecastValidAt: '2026-10-21T01:00:00Z', referenceTime: '2026-10-21T00:00:00Z' };
+  assert.equal(evaluateRaobMatch(input).matchTier, 'near-init-f01-60min');
+  for (const referenceTime of [null, 'invalid', '2026-10-22T00:00:00Z']) assert.equal(evaluateRaobMatch({ ...input, referenceTime }).matched, false);
+  assert.equal(evaluateRaobMatch({ ...input, referenceTime: '2026-10-20T22:00:00Z' }).matched, false);
+  assert.equal(evaluateRaobMatch({ ...input, forecastValidAt: '2026-10-21T00:00:20Z' }).matchTier, 'near-init-f01-60min');
+  assert.equal(evaluateRaobMatch({ ...input, distanceKm: -1 }).matched, false);
+});
+
+test('each metric retains its own support and exact/near-init observations never pool', () => {
+  const row = { model: 'hrrr-conus', station: { id: 'KMFR' }, soundingValidAt: '2026-10-21T00:00:00Z', regime: 'test', leadTimeBucket: 'f00-f06', matchTier: 'exact-valid-time',
+    metrics: { temperatureMaeC: 2, temperatureBiasC: 2, dewPointMaeC: null, windVectorRmseMps: null, windSpeedBiasMps: null } };
+  const result = summarizeVerifications([row, { ...row, model: 'rdps', metrics: { ...row.metrics, temperatureMaeC: null, windVectorRmseMps: 4 } },
+    { ...row, matchTier: 'near-init-f01-60min', metrics: { ...row.metrics, temperatureMaeC: 20 } }]);
+  assert.equal(result.independentStationDays, 1);
+  assert.deepEqual(result.byMatchTier['exact-valid-time'].temperatureMaeC, { comparisons: 1, independentStationDays: 1, mean: 2 });
+  assert.deepEqual(result.byMatchTier['exact-valid-time'].meanProfileWindVectorRmseMps, { comparisons: 1, independentStationDays: 1, mean: 4 });
+  assert.equal(result.byMatchTier['near-init-f01-60min'].temperatureMaeC.mean, 20);
 });

@@ -1,15 +1,32 @@
 node_modules/
+.pnpm-store/
+packages/*/dist/
+.package-artifacts/
+web/dist/
+web/.astro/
 forecasts/data/
 .DS_Store
 .env
 .env.*
+!.env.example
+!.env.*.example
 worker-bundle/
+.wrangler/
+coverage/
 
 # Original NOAA byte ranges; never served by the web app.
 forecasts/.soaring-cache/
 
 # Local ecCodes decoder environment.
 forecasts/.venv-icon/
+__pycache__/
+*.pyc
+
+# Local upstream probes.
+forecasts/*-smoke/
 
 # Generated screenshots and local visual QA reports.
 artifacts/windgram-visual/
+web/test-results/
+web/playwright-report/
+.codex-attachments/

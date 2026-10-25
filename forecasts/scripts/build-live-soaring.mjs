@@ -313,7 +313,7 @@ export async function buildLiveSoaring(values, { captureImpl = capture, replayIm
   );
   if (!referenceTime) {
     if (model === 'rrfs' || model === 'icon-eu') throw new Error(`No ${model.toUpperCase()} referenceTime available for the required native regional build`);
-    log(`No ${model} referenceTime available; keeping seeded soaring bundles.`);
+    log(`No ${model} initialization time is available; keeping the saved regional forecasts.`);
     return;
   }
   if (values['validate-only']) return validateNativeRegions(dataRoot, model, referenceTime);
@@ -331,7 +331,7 @@ export async function buildLiveSoaring(values, { captureImpl = capture, replayIm
   const activeRegions = (regionsDoc.regions ?? []).filter(r => r.status === 'active-verified-trial' && typeof r.caseId === 'string' && regionSupportsModel(r, model));
   if (activeRegions.length === 0) {
     if (model === 'rrfs') throw new Error('No active RRFS regions configured');
-    log('No active-verified-trial regions configured; skipping.');
+    log('No active regional forecasts configured; skipping.');
     return;
   }
 

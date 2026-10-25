@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { gunzipSync } from "node:zlib";
-import { buildRelief, decodeRelief as decodeInNode, domainFor, gridFromFunction } from "../../forecasts/scripts/lib/solar.mjs";
+import { domainFor, gridFromFunction } from "@windgrams/providers/solar";
+import { buildRelief, decodeRelief as decodeInNode } from "../../packages/providers/src/internal/solar.ts";
 import { decodeRelief, heightAt, latLonToPixel, metresPerPixel, pixelToLatLon, type ReliefMeta } from "../src/lib/relief.ts";
 
 const LAT = 43.62332;

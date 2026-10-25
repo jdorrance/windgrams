@@ -18,12 +18,13 @@ const optional = ['windGustMps', 'capeJkg', 'cinJkg', 'pblHeightM', 'lowCloudPer
  * @param {{ longitude: number }} cell
  * @param {number} hour
  * @param {Record<string, any>} raw
+ * @returns {import("@windgrams/contracts").AtmosphericColumn | null}
  */
 export function cellSource(c, grid, cell, hour, raw) {
   const surfaceWind = wind(grid, cell.longitude, raw.u, raw.v);
   const required = ['temperature', 'dewpoint', 'cloudCoverPercent', 'latentHeatFluxWm2', 'sensibleHeatFluxWm2', 'precipitationMm', 'seaLevelPressureHpa'];
   if (!surfaceWind || !required.every(k => finite(raw[k]))) return null;
-  /** @type {Record<string, any>} */
+  /** @type {import("@windgrams/contracts").AtmosphericColumn & { levels: import("@windgrams/contracts").AtmosphericLevel[] }} */
   const source = {
     validAt: validAt(c, hour),
     temperatureC: raw.temperature - 273.15,
@@ -54,7 +55,7 @@ export function cellSource(c, grid, cell, hour, raw) {
     const get = (/** @type {string} */ key) => raw[`${p}.${key}`];
     const w = wind(grid, cell.longitude, get('UGRD'), get('VGRD'));
     if (!w || !['TMP', 'DPT', 'HGT'].every(k => finite(get(k)))) continue;
-    /** @type {Record<string, any>} */
+    /** @type {import("@windgrams/contracts").AtmosphericLevel} */
     const level = {
       pressureHpa: p,
       heightM: get('HGT'),
@@ -75,7 +76,7 @@ export function cellSource(c, grid, cell, hour, raw) {
  *
  * @param {Record<string, any>} c
  * @param {number | null | undefined} terrain
- * @param {Record<string, any> | null | undefined} source
+ * @param {import("@windgrams/contracts").AtmosphericColumn | null | undefined} source
  * @param {string} capturedAt
  */
 export function deriveCell(c, terrain, source, capturedAt) {

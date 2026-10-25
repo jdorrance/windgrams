@@ -1,0 +1,27 @@
+name: Served data
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: served-data
+  cancel-in-progress: true
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-pnpm
+      - id: urls
+        env:
+          WINDGRAMS_SITE: ${{ vars.WINDGRAMS_SITE }}
+          WINDGRAMS_BASE: ${{ vars.WINDGRAMS_BASE }}
+          WINDGRAMS_DATA_BASE: ${{ vars.WINDGRAMS_DATA_BASE }}
+        run: node scripts/pages-config.mjs
+      - name: Check the published dataset
+        env:
+          DATA_BASE: ${{ steps.urls.outputs.data }}
+        run: node forecasts/scripts/monitor-served.mjs --from "$DATA_BASE"

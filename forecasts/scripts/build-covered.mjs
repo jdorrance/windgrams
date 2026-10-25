@@ -1,5 +1,5 @@
-// Builds one model, leaving out launches the grid does not cover,
-// then runs model-aware v2.1.0 soaring post-processing and 120-run (30-day) rolling history archival.
+// Build one model for the launches its grid covers, then derive soaring diagnostics
+// and archive the issued run.
 //
 // meteo forecast build fails the whole model when any launch is outside the
 // grid. That launch is removed and the build starts again. The first check
@@ -8,77 +8,40 @@
 //   node scripts/build-covered.mjs --model hrdps-continental --sites sites.json --output data
 
 import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from 'node:crypto';
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { postprocessPointForecast } from "../soaring/point-postprocess.mjs";
 import { archiveModelRun, DEFAULT_MAX_ROLLING_RUNS } from "../verification/history.mjs";
-import { configureModelFeeds, modelFeedEnvironment } from "./lib/model-feeds.mjs";
 import { probeCycleReadiness } from "./check-readiness.mjs";
-import { loadRrfsBuilder } from './lib/rrfs-builder.mjs';
 import { validateRrfsProfile } from './validate-rrfs.mjs';
+import { validateCurrentDiagnostics } from './lib/diagnostic-completeness.mjs';
 import { modelCoversSite } from './lib/model-coverage.mjs';
 
-const COORDINATE = /\(([-0-9.]+),\s*([-0-9.]+)\) is outside the model grid/;
-const NAMED = /build failed:\s+(.+?) is outside the model grid/;
-
-/** The launch named in an "outside the model grid" error, or null. */
-export function launchOutsideGrid(text, sites) {
-  const coordinate = text.match(COORDINATE);
-  if (coordinate) {
-    const latitude = Number(coordinate[1]);
-    const longitude = Number(coordinate[2]);
-    return sites.find((site) => Math.abs(site.latitude - latitude) < 1e-4 && Math.abs(site.longitude - longitude) < 1e-4) ?? null;
-  }
-  const named = text.match(NAMED);
-  if (!named) return null;
-  return sites.find((site) => site.name === named[1]) ?? null;
-}
+import { buildCovered, launchOutsideGrid, stageModel, validateModelDirectory, hasCompleteModel, planModelBuild, terrainPrerequisites, postprocessProfiles, catalogueFingerprint, packageBuildHashes } from '@windgrams/pipeline';
+import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
+import { createLegacyAdapter } from '@windgrams/providers';
+import { modelDescriptor } from '@windgrams/providers/registry';
+import { measure, contextIsFresh, stampTerrainContext } from './terrain.mjs';
+export { buildCovered, launchOutsideGrid };
 
 /**
- * Runs `run` with the launches it can cover. `run` returns `{ status, text }`
- * and receives the launches still included.
- */
-export async function buildCovered(model, sites, run, log = console.log) {
-  let remaining = sites.slice();
-  const dropped = [];
-  for (;;) {
-    if (remaining.length === 0) throw new Error(`${model}: every launch is outside the model grid`);
-    const result = await run(remaining);
-    if (result.status === 0) return { dropped, kept: remaining };
-    const site = launchOutsideGrid(result.text, remaining);
-    if (!site) throw new Error(result.text.trim() || `${model} build failed`);
-    remaining = remaining.filter((item) => item.slug !== site.slug);
-    dropped.push(site.slug);
-    log(`${model}: skipping ${site.slug} (${site.name}), outside the model grid`);
-  }
-}
-
-/**
- * Applies model-aware v2.1.0 soaring post-processing to all generated site profiles for `model`
- * and archives the run in the 120-run (30-day) rolling history directory.
+ * Derive soaring diagnostics for the model's site profiles and archive the issued run.
  */
 export function postprocessAndArchiveModelOutput(outputRoot, modelSlug, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS } = {}) {
-  const sitesDir = join(outputRoot, modelSlug, "sites");
-  if (!existsSync(sitesDir)) return { postprocessedCount: 0, archived: null };
+  const postprocessedCount = postprocessProfiles(outputRoot, modelSlug, {
+    id: 'windgrams-soaring', version: SOARING_CONTRACT_VERSION,
+    derive: (document, context) => postprocessPointForecast(document, context),
+  });
 
-  const contextPath = join(outputRoot, "site-context.json");
-  const contextDoc = existsSync(contextPath) ? JSON.parse(readFileSync(contextPath, "utf8")) : null;
-  const elevations = contextDoc?.sites ?? {};
-
-  let postprocessedCount = 0;
-  for (const file of readdirSync(sitesDir)) {
-    if (!file.endsWith(".json")) continue;
-    const slug = file.slice(0, -5);
-    const filePath = join(sitesDir, file);
-    const rawDoc = JSON.parse(readFileSync(filePath, "utf8"));
-    const launchElevationM = elevations[slug]?.elevation?.elevationM ?? null;
-    const updatedDoc = postprocessPointForecast(rawDoc, { modelSlug, launchElevationM });
-    writeFileSync(filePath, `${JSON.stringify(updatedDoc, null, 2)}\n`);
-    postprocessedCount += 1;
-  }
+  const manifestPath = join(outputRoot, modelSlug, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  manifest.diagnosticMethod = { id: 'windgrams-soaring', version: SOARING_CONTRACT_VERSION };
+  manifest.diagnosticBuild = { implementationSha256: createHash('sha256')
+    .update(JSON.stringify(packageBuildHashes(['@windgrams/soaring'], import.meta.resolve))).digest('hex') };
+  writeFileSync(manifestPath, JSON.stringify(manifest) + '\n');
 
   const archived = archiveModelRun(outputRoot, modelSlug, {
     maxRollingRuns,
@@ -87,82 +50,105 @@ export function postprocessAndArchiveModelOutput(outputRoot, modelSlug, { maxRol
   return { postprocessedCount, archived };
 }
 
-async function runMeteo(model, output, catalogue, referenceTime, maxSteps) {
-  if (model === 'rrfs') {
-    // The pinned package's CLI does not expose referenceTime. Use the same
-    // builder directly so readiness and build cannot select different cycles.
-    configureModelFeeds();
-    const { build } = await loadRrfsBuilder();
-    try {
-      const built = await build({ sitesPath: catalogue, outputRoot: output, referenceTime, history: false, ...(maxSteps ? { maxSteps } : {}) });
-      return { status: 0, text: built ? 'RRFS built' : 'RRFS already published' };
-    } catch (error) {
-      return { status: 1, text: `rrfs build failed: ${error.message}` };
-    }
-  }
-  const args = ["exec", "meteo", "forecast", "build", "--model", model, "--sites", catalogue, "--output", output, "--no-history"];
-  if (maxSteps) args.push('--max-steps', String(maxSteps));
-  return new Promise((resolve) => {
-    const child = spawn("pnpm", args, { env: modelFeedEnvironment() });
-    let text = "";
-    const take = (chunk) => {
-      const line = chunk.toString();
-      text += line;
-      process.stdout.write(line);
-    };
-    child.stdout.on("data", take);
-    child.stderr.on("data", take);
-    child.on("error", error => resolve({ status: 1, text: error.message }));
-    child.on("close", (status) => resolve({ status: status ?? 1, text }));
+/** Keep last-good model files intact until every profile is built and checked. */
+export async function stageModelBuild(outputRoot, model, build, finish = postprocessAndArchiveModelOutput, options = {}) {
+  const result = await stageModel({ outputRoot, model, build, finish, ...options,
+    validateProfile: (document, run, slug) => {
+      validateCurrentDiagnostics(document, run, slug);
+      if (model === 'rrfs') validateRrfsProfile(document, run, slug, { horizon: document.hours.length });
+      options.validateProfile?.(document, run, slug);
+    },
+    afterPublish: post => {
+      if (post.archived) post.archived = archiveModelRun(outputRoot, model, { pinnedRunKeys: ['20261021T000000Z', '20261021T060000Z'] });
+      return post;
+    },
   });
+  return { ...result, post: result.post ?? { postprocessedCount: 0, archived: null } };
 }
 
-/** Keep last-good model files intact until every profile is built and checked. */
-export async function stageModelBuild(outputRoot, model, build, finish = postprocessAndArchiveModelOutput) {
-  mkdirSync(outputRoot, { recursive: true });
-  const staging = mkdtempSync(join(outputRoot, `.build-${model}-`));
-  const current = join(outputRoot, model);
-  const backup = join(staging, 'previous');
-  try {
-    const context = join(outputRoot, 'site-context.json');
-    if (existsSync(context)) cpSync(context, join(staging, 'site-context.json'));
-    const result = await build(staging);
-    const manifestPath = join(staging, model, 'manifest.json');
-    if (!existsSync(manifestPath)) {
-      if (!existsSync(join(current, 'manifest.json'))) throw new Error(`${model}: no complete output or last-good manifest`);
-      return { result, changed: false, post: { postprocessedCount: 0, archived: null } };
-    }
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    if (manifest.model !== model || !manifest.sites?.length || !Number.isFinite(Date.parse(manifest.referenceTime))) {
-      throw new Error(`${model}: invalid staged manifest`);
-    }
-    for (const site of manifest.sites) {
-      const document = JSON.parse(readFileSync(join(staging, model, 'sites', `${site.slug}.json`), 'utf8'));
-      if (document.run?.referenceTime !== manifest.referenceTime) throw new Error(`${model}: ${site.slug} run differs from manifest`);
-    }
-    const oldManifest = join(current, 'manifest.json');
-    if (existsSync(oldManifest) && Date.parse(JSON.parse(readFileSync(oldManifest, 'utf8')).referenceTime) > Date.parse(manifest.referenceTime)) {
-      throw new Error(`${model}: refusing to replace a newer last-good run with ${manifest.referenceTime}`);
-    }
-    const post = finish(staging, model);
-    if (model === 'rrfs') {
-      for (const site of manifest.sites) {
-        const document = JSON.parse(readFileSync(join(staging, model, 'sites', `${site.slug}.json`), 'utf8'));
-        validateRrfsProfile(document, manifest.referenceTime, site.slug, { horizon: manifest.forecastHours });
-      }
-    }
-    if (existsSync(current)) renameSync(current, backup);
-    try { renameSync(join(staging, model), current); }
-    catch (error) {
-      if (existsSync(backup)) renameSync(backup, current);
-      throw error;
-    }
-    // Archive against the real history root so retention includes previous runs.
-    if (post.archived) post.archived = archiveModelRun(outputRoot, model, {
-      pinnedRunKeys: ['20261021T000000Z', '20261021T060000Z'],
-    });
-    return { result, changed: true, post };
-  } finally { rmSync(staging, { recursive: true, force: true }); }
+export async function ensurePointTerrain(output, sites, measureImpl = measure) {
+  const path = join(output, 'site-context.json');
+  const previous = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+  const missing = new Set([...terrainPrerequisites(previous, sites), ...sites.filter(site => !contextIsFresh([site], previous)).map(site => site.slug)]);
+  const measured = missing.size ? await measureImpl(sites.filter(site => missing.has(site.slug))) : null;
+  const retainedTimes = Object.fromEntries(Object.keys(previous?.sites ?? {}).map(slug => [slug, previous.measurementTimes?.[slug] ?? previous.generatedAt]));
+  const measuredTimes = Object.fromEntries(Object.keys(measured?.sites ?? {}).map(slug => [slug, measured.measurementTimes?.[slug] ?? measured.generatedAt]));
+  const context = stampTerrainContext({ ...previous, ...measured,
+    measurementPolicies: { ...previous?.measurementPolicies, ...measured?.measurementPolicies },
+    measurementTimes: { ...retainedTimes, ...measuredTimes }, sites: { ...previous?.sites, ...measured?.sites },
+    sources: [...new Map([...(previous?.sources ?? []), ...(measured?.sources ?? [])].map(source => [source.id, source])).values()] }, sites);
+  if (terrainPrerequisites(context, sites).length) throw new Error('Missing required measured launch terrain');
+  mkdirSync(output, { recursive: true });
+  writeFileSync(path, JSON.stringify(context) + '\n');
+  return context;
+}
+
+/** Application wiring for reusable acquisition, planning and complete publication. */
+export async function buildModel(values, { probe = probeCycleReadiness, adapterFactory = createLegacyAdapter, measureImpl = measure, log = console.log } = {}) {
+  const model = modelDescriptor(values.model);
+  if (values['max-steps'] !== undefined && (!Number.isInteger(Number(values['max-steps'])) || Number(values['max-steps']) < 1)) throw new Error('--max-steps must be a positive integer');
+  const readinessOptions = {};
+  for (const [flag, key, minimum] of [['readiness-attempts', 'maxAttempts', 1], ['readiness-delay-ms', 'retryDelayMs', 0]]) {
+    if (values[flag] === undefined) continue;
+    const value = Number(values[flag]);
+    if (!Number.isSafeInteger(value) || value < minimum) throw new Error(`--${flag} must be an integer >= ${minimum}`);
+    readinessOptions[key] = value;
+  }
+  if (model.id === 'icon-eu') throw new Error('ICON point/native publication uses build-icon.mjs');
+  const catalogue = JSON.parse(readFileSync(values.sites ?? 'sites.json', 'utf8'));
+  if (!Array.isArray(catalogue.sites)) throw new Error('Site catalogue has no sites');
+  const sites = catalogue.sites.filter(site => modelCoversSite(model.id, site));
+  if (!sites.length) return { changed: false, reason: 'no-covered-sites' };
+  const output = resolve(values.output ?? 'data');
+  const readiness = values['reference-time'] ? null : await probe(model.id, readinessOptions);
+  const referenceTime = values['reference-time'] ?? readiness?.selectedCycle?.referenceTime;
+  if (!referenceTime) throw new Error(`${model.id}: no complete upstream run; retaining last-good output`);
+  const expectedForecastHours = model.forecastHours.slice(0, values['max-steps'] === undefined ? model.forecastHours.length : Number(values['max-steps']));
+  const run = { model: model.id, provider: model.provider, product: model.id, referenceTime };
+  const manifestPath = join(output, model.id, 'manifest.json');
+  const old = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : null;
+  const requestedSiteHash = catalogueFingerprint(sites);
+  const exclusions = old?.referenceTime === referenceTime && old?.coverage?.requestedSiteHash === requestedSiteHash ? old.coverage.excluded ?? [] : [];
+  const expectedSites = sites.filter(site => !exclusions.includes(site.slug)).map(site => site.slug);
+  const inventoryMatches = JSON.stringify([...(old?.sites ?? []).map(site => site.slug)].sort()) === JSON.stringify([...expectedSites].sort());
+  const contextPath = join(output, 'site-context.json');
+  const context = existsSync(contextPath) ? JSON.parse(readFileSync(contextPath, 'utf8')) : null;
+  const completeness = { model: model.id, expectedSites, referenceTime, expectedForecastHours, siteLocations: sites };
+  const retainedSourcesComplete = hasCompleteModel(output, completeness);
+  const diagnosticsCurrent = retainedSourcesComplete && hasCompleteModel(output, { ...completeness, validateProfile: validateCurrentDiagnostics });
+  const validateProfile = (document, run, slug) => {
+    validateCurrentDiagnostics(document, run, slug);
+    if (model.id === 'rrfs') validateRrfsProfile(document, run, slug, { horizon: document.hours.length });
+  };
+  const complete = hasCompleteModel(output, { ...completeness, validateProfile }) && terrainPrerequisites(context, sites).length === 0 && contextIsFresh(sites, context);
+  const plan = planModelBuild({ run, publishedRun: old?.referenceTime, inventoryMatches, complete });
+  // New locations need measured terrain before diagnostics, independent of Actions job order.
+  const measuredContext = await ensurePointTerrain(output, sites, measureImpl);
+  writeFileSync(join(output, `site-context-${model.jobGroup}.json`), JSON.stringify({ ...measuredContext, sites: Object.fromEntries(sites.map(site => [site.slug, measuredContext.sites[site.slug]])) }) + '\n');
+  if (!plan) { validateModelDirectory(output, { ...completeness, referenceTime: undefined, validateProfile }); log(`${model.id}: a complete forecast for this run or a newer run is already published`); return { changed: false, reason: 'current' }; }
+  if (plan.reason === 'repair' && retainedSourcesComplete && !diagnosticsCurrent) {
+    // Preserve the issued revision before reprocessing its full retained source levels.
+    archiveModelRun(output, model.id, { pinnedRunKeys: ['20261021T000000Z', '20261021T060000Z'] });
+    const repaired = await stageModelBuild(output, model.id, async staging => cpSync(join(output, model.id), join(staging, model.id), { recursive: true }),
+      postprocessAndArchiveModelOutput, completeness);
+    log(`${model.id}: repaired diagnostics from retained source profiles`);
+    return repaired;
+  }
+  const adapter = adapterFactory(model.id, { log });
+  let coverage;
+  const result = await stageModelBuild(output, model.id, async staging => coverage = await buildCovered(model.id, sites, async selected => {
+    try { await adapter.acquire({ run, sites: selected, outputRoot: staging, maxSteps: values['max-steps'] === undefined ? undefined : Number(values['max-steps']) }); return { status: 0, text: 'built' }; }
+    catch (error) { return { status: 1, text: `${model.id} build failed: ${error.message}` }; }
+  }, log), (staging, id) => {
+    const path = join(staging, id, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(path, 'utf8'));
+    manifest.trial = expectedForecastHours.length !== model.forecastHours.length;
+    manifest.coverage = { requestedSiteHash, excluded: coverage.dropped, reason: 'outside-native-grid' };
+    writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');
+    return postprocessAndArchiveModelOutput(staging, id);
+  }, { referenceTime, expectedForecastHours, siteLocations: sites, expectedSitesAfterBuild: result => result.kept.map(site => site.slug) });
+  log(`${model.id}: post-processed ${result.post.postprocessedCount} profiles (${plan.reason})`);
+  return result;
 }
 
 async function main() {
@@ -173,6 +159,8 @@ async function main() {
       output: { type: "string", default: "data" },
       'reference-time': { type: 'string' },
       'max-steps': { type: 'string' },
+      'readiness-attempts': { type: 'string' },
+      'readiness-delay-ms': { type: 'string' },
     },
   });
   if (!values.model) throw new Error("usage: node scripts/build-covered.mjs --model SLUG --sites sites.json --output data");
@@ -183,34 +171,14 @@ async function main() {
     await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, args, { stdio: 'inherit' });
       child.on('error', reject);
-      child.on('close', code => code === 0 ? resolve() : reject(new Error(`ICON build exited ${code}`)));
+      child.on('close', (code, signal) => code === 0 ? resolve() : reject(new Error(`ICON build exited ${signal ?? code}`)));
     });
     return;
   }
-  if (values['reference-time'] && values.model !== 'rrfs') throw new Error('--reference-time is supported for rrfs');
   const maxSteps = values['max-steps'] === undefined ? undefined : Number(values['max-steps']);
   if (maxSteps !== undefined && (!Number.isInteger(maxSteps) || maxSteps < 1)) throw new Error('--max-steps must be a positive integer');
-  configureModelFeeds();
-  let referenceTime = values['reference-time'];
-  if (values.model === 'rrfs' && !referenceTime) {
-    const readiness = await probeCycleReadiness('rrfs');
-    if (!readiness.ready) throw new Error('RRFS has no complete pressure and surface run; keeping last-good output');
-    referenceTime = readiness.selectedCycle.referenceTime;
-    console.log(`rrfs: selected ${referenceTime}${readiness.fallback ? ' (previous complete cycle)' : ''}`);
-  }
-  const catalogue = JSON.parse(readFileSync(values.sites, "utf8"));
-  if (!Array.isArray(catalogue.sites)) throw new Error(`${values.sites} has no sites`);
-  const directory = mkdtempSync(join(tmpdir(), "windgrams-sites-"));
-  try {
-    const { result, post, changed } = await stageModelBuild(resolve(values.output), values.model, staging =>
-      buildCovered(values.model, catalogue.sites.filter(site => modelCoversSite(values.model, site)), sites => {
-        const path = join(directory, 'sites.json');
-        writeFileSync(path, JSON.stringify({ ...catalogue, sites }));
-        return runMeteo(values.model, staging, path, referenceTime, maxSteps);
-      }));
-    if (result.dropped.length > 0) console.log(`${values.model}: built ${result.kept.length}, skipped ${result.dropped.join(", ")}`);
-    console.log(`${values.model}: ${changed ? `post-processed ${post.postprocessedCount} site profile(s) (contract v2.1.0)` : 'kept current last-good output'}`);
-  } finally { rmSync(directory, { recursive: true, force: true }); }
+  await buildModel(values);
+
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

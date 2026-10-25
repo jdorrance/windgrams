@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { SOARING_CONTRACT_VERSION } from '../soaring/science.mjs';
+import { mergeRegionCatalogues } from '@windgrams/pipeline';
+import { REGION_INDEXES, REGIONAL_MERGE_OPTIONS } from './lib/model-coverage.mjs';
 
 export function isPublishedCase(root, caseId) {
   if (typeof caseId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(caseId)) return false;
@@ -24,43 +26,18 @@ export function isPublishedCase(root, caseId) {
 }
 
 export function mergeRegionIndexes(primary, rrfs, isPublished, iconEu = null) {
-  const base = primary ?? rrfs ?? iconEu ?? { regions: [] };
-  const overlays = [['rrfs', rrfs], ['icon-eu', iconEu]].map(([model, index]) => ({
-    model, regions: new Map((index?.regions ?? []).map(region => [region.id, region])),
-  }));
-  const allRegions = new Map((base.regions ?? []).map(region => [region.id, region]));
-  for (const overlay of overlays) for (const region of overlay.regions.values()) if (!allRegions.has(region.id)) allRegions.set(region.id, region);
-  const regions = [...allRegions.values()].flatMap(region => {
-    const native = new Map((region.nativeModels ?? []).filter(item => isPublished(item.caseId)).map(item => [item.model, item]));
-    if (typeof region.caseId === 'string' && isPublished(region.caseId)) {
-      const model = (region.nativeModels ?? []).find(item => item.caseId === region.caseId)?.model
-        ?? (region.caseId.includes('-icon-eu-') ? 'icon-eu' : region.caseId.endsWith('-rrfs-live') ? 'rrfs' : 'hrrr-conus');
-      native.set(model, { model, caseId: region.caseId });
-    }
-    for (const overlay of overlays) for (const item of overlay.regions.get(region.id)?.nativeModels ?? []) {
-      // An artifact owns its own model. A seeded copy of another provider's
-      // index must never replace that provider's freshly built pointer.
-      if (item.model === overlay.model && isPublished(item.caseId)) native.set(item.model, item);
-    }
-    if (region.status === 'active-verified-trial' && !native.size) return [];
-    const preferred = native.get('hrrr-conus') ?? native.get('rrfs') ?? native.get('icon-eu') ?? [...native.values()][0];
-    const merged = { ...region, ...(preferred ? { caseId: preferred.caseId } : {}), nativeModels: [...native.values()] };
-    if (merged.expandedCaseId && !isPublished(merged.expandedCaseId)) delete merged.expandedCaseId;
-    return [merged];
-  });
-  return { ...base, soaringContractVersion: SOARING_CONTRACT_VERSION, regions };
+  return { ...mergeRegionCatalogues(primary, [{ model: 'rrfs', index: rrfs }, { model: 'icon-eu', index: iconEu }], isPublished, REGIONAL_MERGE_OPTIONS), soaringContractVersion: SOARING_CONTRACT_VERSION };
 }
 
 export function mergeSoaringRegionFiles(output) {
   const root = join(output, 'soaring', 'v1');
-  const primaryPath = join(root, 'regions.json');
-  const rrfsPath = join(root, 'regions-rrfs.json');
-  const iconPath = join(root, 'regions-icon-eu.json');
-  if (!existsSync(primaryPath) && !existsSync(rrfsPath) && !existsSync(iconPath)) return;
-  const primary = existsSync(primaryPath) ? JSON.parse(readFileSync(primaryPath)) : null;
-  const rrfs = existsSync(rrfsPath) ? JSON.parse(readFileSync(rrfsPath)) : null;
-  const iconEu = existsSync(iconPath) ? JSON.parse(readFileSync(iconPath)) : null;
-  writeFileSync(primaryPath, `${JSON.stringify(mergeRegionIndexes(primary, rrfs, caseId => isPublishedCase(root, caseId), iconEu), null, 2)}\n`);
+  const indexes = REGION_INDEXES.map(entry => ({ model: entry.model, path: join(root, entry.file) }));
+  if (!indexes.some(item => existsSync(item.path))) return;
+  const overlays = indexes.map(item => ({ model: item.model, index: existsSync(item.path) ? JSON.parse(readFileSync(item.path)) : null }));
+  const primary = overlays.find(item => item.model === 'hrrr-conus')?.index ?? null;
+  const result = mergeRegionCatalogues(primary, overlays.filter(item => item.model !== 'hrrr-conus'), caseId => isPublishedCase(root, caseId), REGIONAL_MERGE_OPTIONS);
+  writeFileSync(join(root, 'regions.json'), JSON.stringify({ ...result, soaringContractVersion: SOARING_CONTRACT_VERSION }, null, 2) + '\n');
+
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

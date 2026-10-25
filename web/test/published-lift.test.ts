@@ -10,7 +10,7 @@ import {
   publishedWxtoflyLiftTop,
   parsePublishedProfileJson,
 } from '../src/lib/published-lift.ts';
-import { buildWindgramView } from '../src/lib/windgram-view.ts';
+import {  buildWindgramView  } from "./helpers/windgram.ts";
 import { buildSounding, readSounding } from '../src/lib/skewt.ts';
 
 const read = (name: string) => JSON.parse(readFileSync(new URL(`../../forecasts/soaring/${name}`, import.meta.url), 'utf8'));
@@ -20,6 +20,21 @@ const golden = read('fixtures/blanchard-published.json');
 const hours = JSON.parse(readFileSync(new URL('./fixtures/blanchard-map-hours.json', import.meta.url), 'utf8')).hours as ReplayHour[];
 const manifest = { case: c, capturedAt: golden.run.generatedAt, siteCell: 0, hours } as ReplayManifest;
 const cell = { ...raw.cell, id: 'test-cell', gridIndex: 1, modelElevationM: raw.terrain };
+
+test('profile validation preserves provider metadata, native levels and valid published values', () => {
+  const input = structuredClone(golden);
+  input.providerMetadata = { grid: 'native' };
+  input.hours[0].levels[0].modelLevel = 62;
+  input.hours[0].soaring = { thermalVelocityV2Mps: 0, surfaceLclM: 1250.125,
+    nativeSource: { product: 'model-levels' }, hcritWxtoflyM: 'malformed' };
+  const parsed = parsePublishedProfileJson(JSON.stringify(input))!;
+  assert.deepEqual((parsed as typeof input).providerMetadata, input.providerMetadata);
+  assert.deepEqual(parsed.hours[0].levels, input.hours[0].levels);
+  assert.deepEqual(Reflect.get(parsed.hours[0].soaring!, 'nativeSource'), { product: 'model-levels' });
+  assert.equal(parsed.hours[0].soaring!.thermalVelocityV2Mps, 0);
+  assert.equal(parsed.hours[0].soaring!.surfaceLclM, 1250.125);
+  assert.equal(parsed.hours[0].soaring!.hcritWxtoflyM, null);
+});
 
 test('every archived map hour agrees with the cell windgram and sounding, including zero lift', () => {
   const profile = buildCellSiteForecast(manifest, hours, 0, cell)!;

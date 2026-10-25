@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type { SiteForecast } from '@azohra/meteo.briefing/contract';
+import { createForecastClient } from '@windgrams/data-client';
 import { createReplayProfileCache } from '../src/lib/regional-data.ts';
 import type { ReplayManifest } from '../src/lib/soaring.ts';
 import { createKeyedAsyncLoader } from '../src/scripts/windgram-controller.ts';
@@ -180,4 +181,36 @@ test('bfcache suspends playback while retaining resources and listeners until fi
   assert.equal(releases, 1, 'cleanup is idempotent');
   lifetime.onDispose(() => { releases++; });
   assert.equal(releases, 2, 'late-created resources are released immediately');
+});
+
+test('forecast profile reads survive bfcache suspension and abort on final departure', async () => {
+  const target = new EventTarget();
+  const lifetime = createPageLifecycle({}, target);
+  const started = deferred<AbortSignal[]>();
+  const signals: AbortSignal[] = [];
+  const urls: string[] = [];
+  const client = createForecastClient({
+    baseUrl: '/windgrams/data', signal: lifetime.signal,
+    fetch: async (url, init) => {
+      const signal = init?.signal;
+      assert.ok(signal);
+      urls.push(String(url));
+      signals.push(signal);
+      if (signals.length === 2) started.resolve(signals);
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+    },
+  });
+  const pending = client.loadProfile('gfs', 'wa-dog');
+  await started.promise;
+  const initialUrls = [...urls];
+  target.dispatchEvent(transition('pagehide', true));
+  assert.ok(signals.every(signal => !signal.aborted), 'a cached page retains its pending profile');
+  target.dispatchEvent(transition('pageshow', true));
+  target.dispatchEvent(transition('pagehide', false));
+  await assert.rejects(pending, error => error === lifetime.signal.reason);
+  assert.ok(signals.every(signal => signal.aborted));
+  assert.deepEqual(urls, initialUrls, 'departure never starts another profile request');
+  assert.deepEqual(urls, ['/windgrams/data/gfs/manifest.json', '/windgrams/data/gfs/sites/wa-dog.json']);
 });

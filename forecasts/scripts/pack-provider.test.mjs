@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { packProviderArtifact } from './pack-provider.mjs';
@@ -35,4 +35,25 @@ test('provider artifacts cannot overwrite another model with seeded old data', t
     packProviderArtifact(provider, join(root, `slice-${provider}`), join(root, 'data'));
     for (const key of files) assert.equal(existsSync(join(root, `slice-${provider}`, key)), expected[provider].includes(key), `${provider}: ${key}`);
   }
+});
+
+test('provider packing omits retired live and historical grids while preserving point history', t => {
+  const root = mkdtempSync(join(tmpdir(), 'pack-retired-grids-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const data = join(root, 'data'), slice = join(root, 'slice');
+  for (const key of ['hrrr-conus/manifest.json', 'history/hrrr-conus/evidence.json',
+    'soaring/v1/north-sound-20261021-00z-live/index.json', 'soaring/v1/north-sound-expanded-v2/index.json',
+    'soaring/v1/shenandoah-blue-ridge-20261021-00z/index.json']) {
+    mkdirSync(dirname(join(data, key)), { recursive: true });
+    writeFileSync(join(data, key), 'retained bytes');
+  }
+  const index = { trialRegionId: 'north-sound', regions: [{ id: 'north-sound', caseId: 'north-sound-20261021-00z-live' }] };
+  writeFileSync(join(data, 'soaring/v1/regions.json'), JSON.stringify(index));
+  packProviderArtifact('noaa-cloud', slice, data);
+  assert.equal(existsSync(join(slice, 'soaring/v1/north-sound-20261021-00z-live')), false);
+  assert.equal(existsSync(join(slice, 'soaring/v1/north-sound-expanded-v2')), false);
+  assert.equal(existsSync(join(slice, 'soaring/v1/shenandoah-blue-ridge-20261021-00z')), false);
+  assert.deepEqual(JSON.parse(readFileSync(join(slice, 'soaring/v1/regions.json'))).regions, []);
+  assert.equal(readFileSync(join(slice, 'history/hrrr-conus/evidence.json'), 'utf8'), 'retained bytes');
+  assert.equal(readFileSync(join(data, 'soaring/v1/north-sound-expanded-v2/index.json'), 'utf8'), 'retained bytes');
 });

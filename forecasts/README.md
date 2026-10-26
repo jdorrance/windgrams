@@ -16,7 +16,7 @@ node scripts/write-runs-index.mjs --output data
 
 Replace `hrrr-conus` with a model from the [registry](../packages/providers/src/registry.ts). A build selects a complete upstream run, checks which launches it covers, measures missing launch terrain, and derives the forecast. It replaces the previous model directory only after the new profiles pass validation. If acquisition or processing fails, the previous complete run remains available.
 
-[Preview the dataset](../web/README.md#run-and-preview), add [regional grids](soaring/README.md), or build [optional products](docs/operations.md#optional-products).
+[Preview the dataset](../web/README.md#run-and-preview), inspect the [Armenian regional grid](soaring/README.md), or build [optional products](docs/operations.md#optional-products).
 
 ## RRFS
 

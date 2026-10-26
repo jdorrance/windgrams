@@ -40,3 +40,31 @@ test('dataset assembly rejects aliased input/output overlap before changing data
   }
   assert.equal(existsSync(join(source, 'new')), false);
 });
+
+test('public assembly excludes every retired grid generation while keeping Armenia and point forecasts', t => {
+  const root = mkdtempSync(join(tmpdir(), 'dataset-retired-grids-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const source = join(root, 'source'), output = join(root, 'output');
+  const retired = ['north-sound-20261021-00z', 'north-sound-20261021-00z-live', 'north-sound-expanded-v2',
+    'shenandoah-blue-ridge-20261021-00z-rrfs-live', 'shenandoah-massanutten-20261021-06z',
+    'tiger-puget-trough-20261021-06z-live', 'columbia-gorge-gap-flow-20261021-06z',
+    'rogue-valley-woodrat-20261021-06z-rrfs-live', 'intermountain-idaho-utah-v2'];
+  for (const caseId of [...retired, 'armenia-icon-eu-live']) {
+    mkdirSync(join(source, 'soaring/v1', caseId), { recursive: true });
+    writeFileSync(join(source, 'soaring/v1', caseId, 'index.json'), '{}');
+  }
+  mkdirSync(join(source, 'rrfs/sites'), { recursive: true });
+  writeFileSync(join(source, 'rrfs/sites/va-daniels.json'), '{}');
+  writeFileSync(join(source, 'soaring/v1/regions.json'), JSON.stringify({ trialRegionId: 'north-sound', regions: [
+    { id: 'north-sound', caseId: retired[0] }, { id: 'shenandoah-blue-ridge', caseId: retired[3] },
+    { id: 'armenia', caseId: 'armenia-icon-eu-live' },
+  ] }));
+  prepareDataset(source, output);
+  for (const caseId of retired) {
+    assert.equal(existsSync(join(output, 'soaring/v1', caseId)), false);
+    assert.equal(existsSync(join(source, 'soaring/v1', caseId)), true, 'assembly never removes source evidence');
+  }
+  assert.equal(existsSync(join(output, 'rrfs/sites/va-daniels.json')), true);
+  assert.equal(existsSync(join(output, 'soaring/v1/armenia-icon-eu-live/index.json')), true);
+  assert.deepEqual(JSON.parse(readFileSync(join(output, 'soaring/v1/regions.json'))).regions.map(region => region.id), ['armenia']);
+});

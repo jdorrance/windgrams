@@ -25,8 +25,10 @@ export function loadRegionConfiguration(soaringV1Root) {
   if (!existsSync(publishedPath)) return { ...defaults, soaringContractVersion: SOARING_CONTRACT_VERSION };
   const published = JSON.parse(readFileSync(publishedPath, 'utf8'));
   const regions = new Map(defaults.regions.map(region => [region.id, region]));
-  for (const region of published.regions ?? []) regions.set(region.id, { ...regions.get(region.id), ...region });
-  return { ...defaults, ...published, soaringContractVersion: SOARING_CONTRACT_VERSION, regions: [...regions.values()] };
+  // Tracked configuration owns eligibility; retained publications supply metadata
+  // only for regions that are still configured.
+  for (const region of published.regions ?? []) if (regions.has(region.id)) regions.set(region.id, { ...regions.get(region.id), ...region });
+  return { ...defaults, ...published, trialRegionId: defaults.trialRegionId, soaringContractVersion: SOARING_CONTRACT_VERSION, regions: [...regions.values()] };
 }
 
 export function initialRegionSidecars(region) {
@@ -58,7 +60,7 @@ export function regionPublication(regionsDoc, model, soaringV1Root) {
 export function validateNativeRegions(dataRoot, model, referenceTime) {
   const root = join(dataRoot, 'soaring', 'v1');
   const configured = loadRegionConfiguration(root).regions.filter(region => region.status === 'active-verified-trial' && regionSupportsModel(region, model));
-  if (!configured.length) throw new Error(`No active native ${model} regions configured`);
+  if (!configured.length) return { model, referenceTime, regions: 0 };
   const path = join(root, regionIndexName(model));
   if (!existsSync(path)) throw new Error(`Missing native ${model} region catalogue`);
   const catalogue = JSON.parse(readFileSync(path, 'utf8'));
@@ -308,7 +310,12 @@ export async function buildLiveSoaring(values, { captureImpl = capture, replayIm
     throw new Error('Build ICON-EU points and native maps together with node scripts/build-icon.mjs --sites sites.json --output data');
   }
   const soaringV1Root = join(dataRoot, 'soaring', 'v1');
-  const regionsPath = join(soaringV1Root, 'regions.json');
+  const regionsDoc = loadRegionConfiguration(soaringV1Root);
+  const activeRegions = regionsDoc.regions.filter(r => r.status === 'active-verified-trial' && typeof r.caseId === 'string' && regionSupportsModel(r, model));
+  if (!activeRegions.length) {
+    log(`No active ${model} regional forecasts configured; skipping.`);
+    return { model, regions: 0 };
+  }
 
   const modelManifestPath = join(dataRoot, model, 'manifest.json');
   const referenceTime = values['reference-time'] ?? (
@@ -323,7 +330,6 @@ export async function buildLiveSoaring(values, { captureImpl = capture, replayIm
   }
   if (values['validate-only']) return validateNativeRegions(dataRoot, model, referenceTime);
 
-  const regionsDoc = loadRegionConfiguration(soaringV1Root);
   mkdirSync(soaringV1Root, { recursive: true });
   const modelRegionsPath = join(soaringV1Root, regionIndexName(model));
   if (model !== 'hrrr-conus' && existsSync(modelRegionsPath)) {
@@ -333,13 +339,6 @@ export async function buildLiveSoaring(values, { captureImpl = capture, replayIm
       if (entry) region.nativeModels = [...(region.nativeModels ?? []).filter(m => m.model !== model), entry];
     }
   }
-  const activeRegions = (regionsDoc.regions ?? []).filter(r => r.status === 'active-verified-trial' && typeof r.caseId === 'string' && regionSupportsModel(r, model));
-  if (activeRegions.length === 0) {
-    if (model === 'rrfs') throw new Error('No active RRFS regions configured');
-    log('No active regional forecasts configured; skipping.');
-    return;
-  }
-
   const templateId = r => r.templateCaseId ?? r.caseId.replace(/-live$/, '');
   const liveId = r => `${templateId(r)}${model === 'rrfs' ? '-rrfs' : ''}-live`;
   const pendingRegions = activeRegions.filter(r => {

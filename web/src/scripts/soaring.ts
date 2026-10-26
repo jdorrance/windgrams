@@ -186,7 +186,7 @@ async function main() {
   const launchSelect = el<HTMLSelectElement>('replay-launch-select');
   const barbsCheckbox = el<HTMLInputElement>('toggle-barbs');
 
-  if (regionSelect && regionsCatalogue?.regions?.length) {
+  if (regionSelect) {
     regionSelect.replaceChildren();
     if (!activeRegionMeta) {
       const current = document.createElement('option');
@@ -196,7 +196,7 @@ async function main() {
       current.disabled = true;
       regionSelect.append(current);
     }
-    for (const r of regionsCatalogue.regions) {
+    for (const r of regionsCatalogue?.regions ?? []) {
       const opt = document.createElement('option');
       opt.value = r.id;
       const available = r.status === 'active-verified-trial';
@@ -208,7 +208,8 @@ async function main() {
     regionSelect.addEventListener('change', () => {
       const nextUrl = new URL(window.location.href);
       setReplaySelectionQuery(nextUrl.searchParams, selection);
-      const region = regionsCatalogue.regions.find(r => r.id === regionSelect.value)!;
+      const region = regionsCatalogue?.regions.find(r => r.id === regionSelect.value);
+      if (!region) return;
       const selected = nativeModels(region).find(entry => entry.model === activeModel) ?? nativeModels(region)[0];
       nextUrl.searchParams.set('case', selected.caseId);
       nextUrl.searchParams.set('model', selected.model);
@@ -217,6 +218,7 @@ async function main() {
       nextUrl.searchParams.delete('hour');
       window.location.href = nextUrl.toString();
     }, eventOptions);
+    regionSelect.disabled = !regionsCatalogue?.regions.some(region => region.status === 'active-verified-trial');
   }
   if (modelSelect) {
     const models = activeRegionMeta ? nativeModels(activeRegionMeta) : [{ model: activeModel, caseId: location.caseId }];

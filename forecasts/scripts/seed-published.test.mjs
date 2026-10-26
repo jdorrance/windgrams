@@ -219,6 +219,24 @@ test('soaring seed preserves hashed bytes and follows native RRFS pointers', asy
   assert.equal(groupHasLocal(output, 'soaring'), true);
 });
 
+test('old CDN catalogues cannot reseed retired grids or advertise their pointers', async () => {
+  const docs = soaringDocuments('current', 'icon-eu', 'armenia', true), asked = [];
+  const retired = [
+    { id: 'north-sound', caseId: 'north-sound-20261021-00z-live', nativeModels: [{ model: 'rrfs', caseId: 'north-sound-20261021-00z-rrfs-live' }] },
+    { id: 'shenandoah-blue-ridge', caseId: 'shenandoah-blue-ridge-20261021-00z-live' },
+  ];
+  for (const key of ['soaring/v1/regions.json', 'soaring/v1/regions-icon-eu.json']) {
+    const catalogue = JSON.parse(docs.get(key));
+    docs.set(key, Buffer.from(JSON.stringify({ ...catalogue, trialRegionId: 'north-sound', regions: [...retired, ...catalogue.regions] })));
+  }
+  const files = await collectGroup('soaring', { getBytes: async key => { asked.push(key); return docs.get(key) ?? null; } });
+  assert.equal(asked.some(key => /\/north-sound|\/shenandoah/.test(key)), false, 'retired bytes need not exist for a complete seed');
+  assert.equal(files.has('soaring/v1/armenia-icon-eu-live/index.json'), true);
+  const catalogue = JSON.parse(files.get('soaring/v1/regions.json'));
+  assert.deepEqual(catalogue.regions.map(region => region.id), ['armenia']);
+  assert.equal(catalogue.trialRegionId, 'armenia');
+});
+
 test('soaring seed reuses only hash-verified immutable bytes and always refreshes pointers and catalogues', async () => {
   const docs = soaringDocuments('cached', 'icon-eu', 'armenia', true);
   const asked = [], cacheAsked = [];

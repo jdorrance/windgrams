@@ -7,6 +7,8 @@ export interface ArtifactSelectionOptions {
   extraPaths?: readonly string[];
   regionIndexes?: readonly { model: string; file: string }[];
   resolveLegacyCase?: (caseId: string) => string | undefined;
+  /** Omit retired regional products without affecting point forecasts or issued history. */
+  includeRegionalCase?: (caseId: string) => boolean;
 }
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 function readObject(path: string): Record<string, unknown> {
@@ -32,7 +34,7 @@ function overlaps(first: string, second: string): boolean {
 }
 
 /** Select a provider's files using model metadata or resolveLegacyCase for older regional archives. */
-export function providerArtifactPaths(root: string, group: string, { extraPaths = [], regionIndexes = [], resolveLegacyCase }: ArtifactSelectionOptions = {}): string[] {
+export function providerArtifactPaths(root: string, group: string, { extraPaths = [], regionIndexes = [], resolveLegacyCase, includeRegionalCase = () => true }: ArtifactSelectionOptions = {}): string[] {
   const models = PROVIDER_GROUPS[group];
   if (!models) throw new Error(`Unknown provider group: ${group}`);
   const paths = [...extraPaths];
@@ -63,7 +65,7 @@ export function providerArtifactPaths(root: string, group: string, { extraPaths 
     }
   }
   if (existsSync(regions)) for (const entry of readdirSync(regions, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() || !includeRegionalCase(entry.name)) continue;
     let owner = knownModel(owners.get(entry.name) ?? resolveLegacyCase?.(entry.name));
     if (owner && !models.includes(owner)) continue;
     const pointerPath = join(regions, entry.name, 'index.json');

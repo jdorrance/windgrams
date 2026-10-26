@@ -8,6 +8,7 @@ import { PROVIDER_GROUPS, MODELS } from '@windgrams/providers/registry';
 import { validateRegionCatalogue } from '@windgrams/contracts/regional';
 import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
 import { REGION_INDEXES, legacyCaseModel } from './lib/model-coverage.mjs';
+import { isRetiredRegionalCase, publicRegionCatalogue } from './lib/retired-regions.mjs';
 import { copyImmutable, newerProduct, pointProduct, publicationOwnedName, readJson, regionalProduct, replaceTree, timestamp, validateFileTree, writeJson } from './lib/artifact-products.mjs';
 import { acceptsDiagnosticMethod } from './lib/diagnostic-completeness.mjs';
 import { mergeHistoryArchives } from '../verification/history.mjs';
@@ -81,7 +82,7 @@ export function mergeArtifacts(incoming, output, { sites = readJson(new URL('../
 
     const regions = join(source, 'soaring/v1'), published = join(output, 'soaring/v1');
     if (existsSync(regions)) {
-      for (const item of readdirSync(regions, { withFileTypes: true }).filter(item => item.isDirectory())) attempt(`soaring/${item.name}`, () => {
+      for (const item of readdirSync(regions, { withFileTypes: true }).filter(item => item.isDirectory() && !isRetiredRegionalCase(item.name))) attempt(`soaring/${item.name}`, () => {
         const method = priorMethod(`soaring/${item.name}`), retained = method !== null;
         const next = regionalProduct(regions, item.name, models, { retained });
         if (retained && next.manifest.soaringContractVersion !== method) throw new Error('Retained regional method differs from artifact declaration');
@@ -107,7 +108,7 @@ export function mergeArtifacts(incoming, output, { sites = readJson(new URL('../
         if (!existsSync(path)) continue;
         attempt(key, () => {
           const method = priorMethod(key), retained = method !== null;
-          const next = validateRegionCatalogue(readJson(path)), previous = tryRead(join(output, key));
+          const next = publicRegionCatalogue(validateRegionCatalogue(readJson(path))), previous = tryRead(join(output, key));
           if (!next || !acceptsDiagnosticMethod(next.soaringContractVersion, { retained })) throw new Error('Invalid regional catalogue');
           if (retained && next.soaringContractVersion !== method) throw new Error('Retained catalogue method differs from artifact declaration');
           if (retained && previous) return false;

@@ -15,14 +15,10 @@ import { href } from '../lib/site';
       <div class="replay-controls">
         <div class="control-row">
           <label>Region
-            <select id="replay-region-select">
-              <option value="north-sound">North Sound & Olympic Peninsula, WA</option>
-            </select>
+            <select id="replay-region-select"></select>
           </label>
           <label>Model
-            <select id="replay-model-select">
-              <option value="hrrr-conus">HRRR</option>
-            </select>
+            <select id="replay-model-select"></select>
           </label>
           <label>Show
             <select id="replay-layer">
@@ -30,9 +26,7 @@ import { href } from '../lib/site';
             </select>
           </label>
           <label>Launch
-            <select id="replay-launch-select">
-              <option value="wa-blanchard">Blanchard</option>
-            </select>
+            <select id="replay-launch-select"></select>
           </label>
         </div>
         <div class="hour-controls">
@@ -59,7 +53,7 @@ import { href } from '../lib/site';
         </div>
         <aside class="cell-inspection">
           <p class="eyebrow">SELECTED LOCATION</p>
-          <h2 id="cell-title">Blanchard</h2>
+          <h2 id="cell-title">Selected location</h2>
           <dl id="cell-values"></dl>
           <p id="cell-notice" class="muted" hidden></p>
           <details class="cell-details">
@@ -68,7 +62,7 @@ import { href } from '../lib/site';
             <dl id="cell-extra-values"></dl>
             <p id="cell-quality" class="muted"></p>
           </details>
-          <button id="select-blanchard" type="button">Back to Blanchard</button>
+          <button id="select-blanchard" type="button">Back to launch</button>
           <p class="muted">Tap a location for its forecast.</p>
         </aside>
       </div>

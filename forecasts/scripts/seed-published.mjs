@@ -2,6 +2,7 @@ import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
 import { diagnosticMethodDowngrade } from './lib/diagnostic-completeness.mjs';
 import { pointProduct } from './lib/artifact-products.mjs';
 import { REGION_INDEXES } from './lib/model-coverage.mjs';
+import { isRetiredRegionalCase, publicRegionCatalogue } from './lib/retired-regions.mjs';
 // Copies an already published dataset onto disk so a builder that finds
 // nothing new to write does not deploy an empty directory.
 //
@@ -83,7 +84,13 @@ export async function collectGroup(group, { get, getBytes, getCachedBytes, sites
   }
 
   if (group === "soaring") {
-    const indexes = await Promise.all(REGION_INDEXES.map(entry => take(`soaring/v1/${entry.file}`)));
+    const indexes = await Promise.all(REGION_INDEXES.map(async entry => {
+      const key = `soaring/v1/${entry.file}`, index = await take(key);
+      if (!index) return index;
+      const filtered = publicRegionCatalogue(index);
+      if (filtered !== index) files.set(key, getBytes ? Buffer.from(JSON.stringify(filtered) + '\n') : filtered);
+      return filtered;
+    }));
     const caseIds = new Set();
     for (const r of indexes.flatMap(index => index?.regions ?? [])) {
       if (r?.status === "active-verified-trial" && typeof r.caseId === "string") {
@@ -94,8 +101,8 @@ export async function collectGroup(group, { get, getBytes, getCachedBytes, sites
       }
     }
     const advertisedCases = new Set(caseIds);
-    caseIds.add('north-sound-20261021-00z');
     for (const caseId of caseIds) {
+      if (isRetiredRegionalCase(caseId)) continue;
       if (!/^[a-zA-Z0-9_-]+$/.test(caseId)) throw new Error(`Invalid soaring case id: ${caseId}`);
       const pointer = await take(`soaring/v1/${caseId}/index.json`);
       if (!pointer) {
@@ -148,7 +155,7 @@ export function groupHasLocal(output, group) {
           .filter(Boolean).some(caseId => isPublishedCase(root, caseId)))) return true;
       } catch { /* Try other independently published model indexes. */ }
     }
-    return isPublishedCase(root, 'north-sound-20261021-00z');
+    return false;
   }
   if (group === "observations") {
     return existsSync(join(output, nwsPaths.manifest())) || existsSync(join(output, ecmwfPaths.manifest())) || existsSync(join(output, "raob"));

@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSy
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { isRetiredRegionalCase, publicRegionCatalogue } from '../forecasts/scripts/lib/retired-regions.mjs';
 
 // Resolve existing ancestors too: a new output can sit below a directory symlink.
 function physicalPath(path) {
@@ -29,6 +30,7 @@ export function prepareDataset(source, destination) {
         const path = join(directory, name), key = relative(input, path).split(sep).join('/');
         const parts = key.split('/');
         if (parts[0] === 'solar' || parts.includes('history') || name === 'EMPTY' || name.startsWith('.')) continue;
+        if (parts[0] === 'soaring' && parts[1] === 'v1' && isRetiredRegionalCase(parts[2])) continue;
         const stat = lstatSync(path);
         if (stat.isSymbolicLink()) throw new Error(`Dataset contains a symbolic link: ${key}`);
         if (stat.isDirectory()) { visit(path); continue; }
@@ -36,7 +38,10 @@ export function prepareDataset(source, destination) {
         const target = join(staging, key);
         mkdirSync(dirname(target), { recursive: true });
         const immutable = parts.includes('bundles');
-        if (!immutable && name.endsWith('.json')) writeFileSync(target, `${JSON.stringify(JSON.parse(readFileSync(path, 'utf8')))}\n`);
+        if (!immutable && name.endsWith('.json')) {
+          const document = JSON.parse(readFileSync(path, 'utf8'));
+          writeFileSync(target, `${JSON.stringify(parts[0] === 'soaring' && parts[1] === 'v1' && /^regions(?:-[a-z0-9-]+)?\.json$/.test(name) ? publicRegionCatalogue(document) : document)}\n`);
+        }
         else copyFileSync(path, target);
         const bytes = lstatSync(target).size;
         const product = parts[0] === 'soaring' ? parts.slice(0, 3).join('/') : parts[0];

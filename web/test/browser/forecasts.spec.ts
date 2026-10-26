@@ -201,6 +201,27 @@ test('northern Mexican launches offer published regional point forecasts', async
   await expect(page.locator('#launch-info')).toContainText('America/Tijuana');
 });
 
+test('US launch forecasts remain available after their regional maps are retired', async ({ page }) => {
+  const regionalRequests: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.includes('/soaring/v1/')) regionalRequests.push(path);
+  });
+  await page.goto(launch);
+  await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+  await page.locator('#soaring-nav-link').click();
+  await expect(page).toHaveURL(/country=US/);
+  await expect(page.locator('#replay-status')).toHaveText('Regional map unavailable.');
+  await expect(page.locator('#soaring-map canvas')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'United States launches', exact: true })).toBeVisible();
+  for (const region of ['north-sound', 'shenandoah-blue-ridge']) {
+    await page.goto(`/soaring?region=${region}`);
+    await expect(page.locator('#replay-status')).toHaveText('Regional map unavailable.');
+    await expect(page.locator('#replay-content')).toBeHidden();
+  }
+  expect(regionalRequests.every(path => path.endsWith('/regions.json'))).toBe(true);
+});
+
 test('a current forecast shows a failed refresh without hiding the chart or changing its age', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-10-25T14:00:00Z'));
   await page.route('**/health/noaa-cloud.json', route => route.fulfill({ json: {

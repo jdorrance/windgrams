@@ -10,6 +10,7 @@ import { copyIssuedHistoryTree } from '../verification/issued-history.mjs';
 import { mergeArtifacts } from './merge-artifacts.mjs';
 import { pointProduct, publicationOwnedName, regionalProduct, readJson, writeJson } from './lib/artifact-products.mjs';
 import { REGION_INDEXES } from './lib/model-coverage.mjs';
+import { isRetiredRegionalCase, publicRegionCatalogue } from './lib/retired-regions.mjs';
 import { mergeSiteContextFiles } from './merge-site-contexts.mjs';
 import { mergeSoaringRegionFiles } from './merge-soaring-regions.mjs';
 import { prunePublishedBundles } from './pages-artifact.mjs';
@@ -48,6 +49,18 @@ export function preparePublication(incoming, output, catalogue = readJson(new UR
 }
 
 function prepareCandidate(incoming, output, catalogue) {
+  // Only the staged public dataset loses retired generated grids. Source fixtures
+  // and the issued-history tree keep their existing lifecycle and retention.
+  const regionalRoot = join(output, 'soaring/v1');
+  if (existsSync(regionalRoot)) {
+    for (const name of readdirSync(regionalRoot)) if (isRetiredRegionalCase(name)) rmSync(join(regionalRoot, name), { recursive: true, force: true });
+    for (const entry of REGION_INDEXES) {
+      const path = join(regionalRoot, entry.file);
+      if (existsSync(path)) {
+        try { writeJson(path, publicRegionCatalogue(readJson(path))); } catch { /* Invalid catalogues are quarantined below. */ }
+      }
+    }
+  }
   const merged = mergeArtifacts(incoming, output, { sites: catalogue.sites });
   const validated = [];
   const unavailable = [];
@@ -64,7 +77,7 @@ function prepareCandidate(incoming, output, catalogue) {
   // Leave its issued archive intact; the served monitor reports the missing product.
   for (const item of unavailable) rmSync(join(output, item.model), { recursive: true });
   const unavailableRegions = [];
-  const regionalRoot = join(output, 'soaring/v1'), activeCases = new Map();
+  const activeCases = new Map();
   for (const entry of REGION_INDEXES) {
     const path = join(regionalRoot, entry.file);
     if (!existsSync(path)) continue;

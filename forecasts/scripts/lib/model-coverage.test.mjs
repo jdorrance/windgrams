@@ -34,6 +34,9 @@ test('native region model eligibility remains separate from point models', () =>
   const regions = JSON.parse(readFileSync(new URL('../../soaring/regions.json', import.meta.url))).regions;
   const active = regions.filter(region => region.status === 'active-verified-trial');
   assert.deepEqual(active.filter(region => regionSupportsModel(region, 'icon-eu')).map(region => region.id), ['armenia']);
-  assert.deepEqual(active.filter(region => regionSupportsModel(region, 'rrfs')).map(region => region.id), ['north-sound', 'shenandoah-blue-ridge']);
+  for (const model of ['hrrr-conus', 'rrfs']) {
+    assert.deepEqual(active.filter(region => regionSupportsModel(region, model)), []);
+    for (const slug of ['wa-blanchard', 'va-woodstock']) assert.equal(modelCoversSite(model, sites.find(site => site.slug === slug)), true);
+  }
   assert.ok(active.every(region => !regionSupportsModel(region, 'gfs')));
 });

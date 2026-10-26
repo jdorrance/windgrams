@@ -4,6 +4,7 @@ import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rea
 import { dirname, join } from 'node:path';
 
 export const DEFAULT_MAX_ROLLING_RUNS = 120;
+export const DEFAULT_PINNED_RUN_KEYS = Object.freeze(['20261021T000000Z', '20261021T060000Z']);
 const runPattern = /^\d{8}T\d{6}Z$/;
 const hashPattern = /^[a-f0-9]{64}$/;
 const slugPattern = /^[a-zA-Z0-9_-]+$/;
@@ -102,17 +103,31 @@ function writeIndex(runRoot, revisions, latest = revisions.at(-1)) {
   finally { rmSync(staging, { recursive: true, force: true }); }
 }
 
-function prune(modelRoot, maxRollingRuns, pinnedRunKeys) {
+function validateRetention({ maxRollingRuns, pinnedRunKeys, minimumCalendarDays }) {
   if (!Number.isSafeInteger(maxRollingRuns) || maxRollingRuns < 1) throw new Error('History retention must be a positive run count');
+  if (!Array.isArray(pinnedRunKeys) || pinnedRunKeys.some(key => !runPattern.test(key))) throw new Error('Pinned history runs require UTC run keys');
+  if (!Number.isSafeInteger(minimumCalendarDays) || minimumCalendarDays < 0 || minimumCalendarDays > 120) throw new Error('Calendar retention must be 0–120 UTC days');
+}
+
+function prune(modelRoot, maxRollingRuns, pinnedRunKeys, minimumCalendarDays) {
   if (!existsSync(modelRoot)) return;
-  const rolling = readdirSync(modelRoot).filter(key => runPattern.test(key) && !pinnedRunKeys.includes(key)).sort();
-  for (const key of rolling.slice(0, Math.max(0, rolling.length - maxRollingRuns))) rmSync(join(modelRoot, key), { recursive: true });
+  const all = readdirSync(modelRoot).filter(key => runPattern.test(key)).sort();
+  const rolling = all.filter(key => !pinnedRunKeys.includes(key));
+  // Anchor to the newest retained initialization, never the wall clock: importing an
+  // old study cannot erase it merely because the present date is later.
+  const latest = all.at(-1), utcDay = key => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(4, 6)) - 1, Number(key.slice(6, 8)));
+  const cutoff = latest && minimumCalendarDays > 0 ? utcDay(latest) - (minimumCalendarDays - 1) * 86400000 : Infinity;
+  for (const key of rolling.slice(0, Math.max(0, rolling.length - maxRollingRuns))) {
+    if (utcDay(key) < cutoff) rmSync(join(modelRoot, key), { recursive: true });
+  }
 }
 
 /** Identical issued content is idempotent. A changed method/build/content adds a revision. */
-export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = [], retainFullColumns = false } = {}) {
+export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = [], retainFullColumns = false, retainFullColumnSites = [], minimumCalendarDays = 0 } = {}) {
   if (!slugPattern.test(modelSlug)) throw new Error('Invalid history model');
-  if (!Number.isSafeInteger(maxRollingRuns) || maxRollingRuns < 1) throw new Error('History retention must be a positive run count');
+  validateRetention({ maxRollingRuns, pinnedRunKeys, minimumCalendarDays });
+  if (!Array.isArray(retainFullColumnSites) || retainFullColumnSites.some(site => typeof site !== 'string' || !slugPattern.test(site))
+    || new Set(retainFullColumnSites).size !== retainFullColumnSites.length) throw new Error('Full-column sites require distinct site slugs');
   const modelRoot = join(dataRoot, modelSlug), manifestPath = join(modelRoot, 'manifest.json');
   if (!existsSync(manifestPath)) return null;
   const manifest = read(manifestPath), runKey = keyFor(manifest.referenceTime);
@@ -126,7 +141,7 @@ export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_
     sourceFiles[file] = sha(bytes);
     payloads[file] = Buffer.from(json(compactSiteDocForHistory(document)));
     methods.add(document.soaringMeta?.contractVersion ?? 'unrecorded');
-    if (retainFullColumns) payloads[`full-columns/${file}`] = bytes;
+    if (retainFullColumns || retainFullColumnSites.includes(slug)) payloads[`full-columns/${file}`] = bytes;
   }
   const descriptor = { schemaVersion: 1, representation: 'compact-scoring', sourceFiles,
     files: Object.fromEntries(Object.entries(payloads).map(([file, bytes]) => [file, sha(bytes)])), methods: [...methods].sort(), build: manifest.diagnosticBuild ?? null };
@@ -147,14 +162,15 @@ export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_
   const previousLatest = existsSync(join(runRoot, 'index.json')) ? read(join(runRoot, 'index.json')).latest : revisions.at(-1);
   if (!revisions.includes(revisionId)) revisions.push(revisionId);
   writeIndex(runRoot, revisions, created ? revisionId : previousLatest ?? revisionId);
-  prune(join(dataRoot, 'history', modelSlug), maxRollingRuns, pinnedRunKeys);
-  return { model: modelSlug, referenceTime: manifest.referenceTime, runKey, revisionId, created, siteCount: manifest.sites.length, maxRollingRuns };
+  prune(join(dataRoot, 'history', modelSlug), maxRollingRuns, pinnedRunKeys, minimumCalendarDays);
+  return { model: modelSlug, referenceTime: manifest.referenceTime, runKey, revisionId, created, siteCount: manifest.sites.length,
+    fullColumnSites: manifest.sites.filter(site => retainFullColumns || retainFullColumnSites.includes(site.slug)).map(site => site.slug), maxRollingRuns, minimumCalendarDays };
 }
 
 /** Validate all incoming revisions before copying; never replace an issued revision or legacy root. */
-export function mergeHistoryArchives(incomingRoot, outputRoot, model, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = ['20261021T000000Z', '20261021T060000Z'] } = {}) {
+export function mergeHistoryArchives(incomingRoot, outputRoot, model, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = DEFAULT_PINNED_RUN_KEYS, minimumCalendarDays = 0 } = {}) {
   if (!slugPattern.test(model)) throw new Error('Invalid history model');
-  if (!Number.isSafeInteger(maxRollingRuns) || maxRollingRuns < 1) throw new Error('History retention must be a positive run count');
+  validateRetention({ maxRollingRuns, pinnedRunKeys, minimumCalendarDays });
   const incoming = join(incomingRoot, 'history', model), output = join(outputRoot, 'history', model);
   if (!existsSync(incoming)) return { copiedRevisions: 0 };
   if (lstatSync(incoming).isSymbolicLink() || existsSync(output) && lstatSync(output).isSymbolicLink()) throw new Error('History model directories must not be symlinks');
@@ -190,7 +206,7 @@ export function mergeHistoryArchives(incomingRoot, outputRoot, model, { maxRolli
     const latest = !oldLatest || ids.includes(oldLatest) && ids.indexOf(sourceLatest) > ids.indexOf(oldLatest) ? sourceLatest : oldLatest;
     if (order.length) writeIndex(target, order, latest);
   }
-  prune(output, maxRollingRuns, pinnedRunKeys);
+  prune(output, maxRollingRuns, pinnedRunKeys, minimumCalendarDays);
   return { copiedRevisions };
 }
 

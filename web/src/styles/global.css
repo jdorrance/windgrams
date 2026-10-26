@@ -716,6 +716,13 @@ details[open] > summary {
   font-weight: 600;
 }
 
+.forecast-wind-basis {
+  margin: .5rem 0 0;
+  font-size: .82rem;
+  color: var(--ink-2);
+}
+.forecast-data-support dt { font-weight: 600; }
+.forecast-data-support dd { margin: .2rem 0 .8rem; }
 .forecast-wind-note {
   margin: 8px 0 0;
   color: var(--ink-2);

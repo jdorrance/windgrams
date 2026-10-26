@@ -48,6 +48,10 @@
     "./solar": {
       "types": "./dist/solar.d.ts",
       "default": "./dist/solar.js"
+    },
+    "./noaa": {
+      "types": "./dist/noaa.d.ts",
+      "default": "./dist/noaa.js"
     }
   },
   "scripts": {
@@ -62,7 +66,8 @@
     "@azohra/meteo.forecast": "0.6.0",
     "@azohra/meteo.briefing": "0.6.2",
     "@windgrams/contracts": "workspace:*",
-    "@windgrams/geography": "workspace:*"
+    "@windgrams/geography": "workspace:*",
+    "@azohra/meteo.grib": "0.1.4"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

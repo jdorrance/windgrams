@@ -4,6 +4,7 @@ import {
   buildLaunchComparisonRows,
   buildMultimodelComparisonRow,
   buildRegionalLaunchTableRows,
+  formatRegionalWind,
 } from '../src/lib/launch-comparison.ts';
 import {
   validateCrossSectionDoc,
@@ -191,6 +192,13 @@ test('regional summary and detail rows share explicit units despite the global p
     const imperial = buildRegionalLaunchTableRows([launch], hour, 0, 'imperial')[0];
     assert.equal(imperial.simpleReadings[0], '197 ft/min');
     assert.equal(imperial.simpleReadings[1], 'Unavailable');
+    hour.wind10mSpeedMps![0] = 0;
+    hour.wind10mDirDeg![0] = null;
+    const calm = buildRegionalLaunchTableRows([launch], hour, 0, 'metric')[0];
+    assert.equal(calm.simpleReadings[3], 'Calm');
+    assert.equal(calm.detailCells.surfaceWindText, 'Calm');
+    assert.equal(formatRegionalWind(5, null, { bearing: true, system: 'metric' }), 'Direction unavailable · 18 km/h');
+    assert.equal(formatRegionalWind(null, 270), null);
   } finally {
     setUnitSystem('imperial');
   }
@@ -327,8 +335,8 @@ test('Stage 2: comparison view-model handles deterministic V2, absent V2, explic
   assert.equal(hrrrRow.wstar.primaryText, '0.45 m/s');
   assert.equal(hrrrRow.usableLiftTop.family, 'unavailable');
   assert.equal(hrrrRow.usableLiftTop.primaryText, '–');
-  // Calm 0 m/s wind and 0% cloud cover are preserved as real zeroes
-  assert.ok(hrrrRow.windText.includes('0 km/h'));
+  // Calm is valid weather without an invented southerly direction.
+  assert.equal(hrrrRow.windText, 'Calm');
   assert.equal(hrrrRow.cloudCoverSuffix, ' (0%)');
   // Surface LCL (1315 m) and distinct effective cloud limit (981 m) are both shown
   assert.equal(hrrrRow.cloudSegments.length, 2);

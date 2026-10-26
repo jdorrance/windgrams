@@ -91,13 +91,25 @@ GitHub documents that [scheduled events can be delayed or dropped](https://docs.
 
 ### Publication and retention
 
-When upgrading the soaring diagnostic method, merge the code and request a full
-refresh with `gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=all`.
+Pages waits for the checked-out `main` commit's successful `Check` run before
+preparing a deployment. A failed check or a 15-minute timeout stops publication;
+repair or rerun Check before retrying Pages with `refresh=none`. The dry-run path
+can inspect candidate data while checks are unresolved.
+
+Science source or dependency changes on `main` automatically dispatch all four
+model producer groups through [Refresh science changes](../../.github/workflows/refresh-science.yml).
+For recovery, request a full refresh with
+`gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=all`.
 Point builders can reprocess complete retained source profiles for the same run;
-regional maps need a replay using the new method. Old artifacts are rejected by
-method identity, and an unsuccessful preparation leaves the served dataset in
-place. Verify the new method on point manifests and regional bundles after the
-refreshes publish; a website build alone does not upgrade forecast calculations.
+regional maps need a replay using the new method. During the 2.2 → 2.3 rollout,
+validated 2.2 products may remain available with their original method labels
+until each producer supplies its replacement. Compatible older artifacts can
+recover a missing product but cannot replace a valid product; new candidates
+must use the current method. The [publication policy](../scripts/lib/diagnostic-completeness.mjs)
+owns this explicit compatibility exception. Verify the new method on point
+manifests and regional bundles after the refreshes publish; a website build alone
+does not upgrade forecast calculations. The served monitor reports retained
+method versions while continuing to enforce freshness and product identity.
 
 For a local rehearsal with downloaded artifacts in `../incoming`:
 
@@ -112,6 +124,10 @@ Complete newer products replace their retained counterparts. Older runs, partial
 Preparation works in a temporary copy of the forecast products. If no point model is complete, or terrain validation fails, the original dataset is unchanged. Sunlight and scratch caches are transferred without copying their bytes. A dry run performs the same preparation and checks, then discards the temporary result.
 
 Seeding checks immutable files against SHA-256 hashes. Pages keeps each active regional case's current and previous bundle, plus historical cases. Packaging compacts ordinary JSON, preserves bundle bytes and reports size by product. It warns at 800 MB and stops at 1 GB. Forecast history stays in provider artifacts and caches rather than Pages; see [history retention](../verification/README.md#source-columns-and-retention). Refresh artifacts expire after two days, with the published dataset and saved cache providing the fallback.
+
+Archive capacity is a separate release gate from Pages size. The forecast provider workflows schedule four refreshes per UTC day: at four distinct initializations per day, the existing 120-run floor already covers 30 days. The added 30-day minimum increases retention only at a higher run cadence; retaining four full source columns adds bytes on every run. Sampling the four regression profiles in the October 26 baseline projects about 19.3 GB of uncompressed compact records across seven models at 120 runs each, before ICON, full columns, additional revisions, pins and temporary copies. This is a size extrapolation from one publication, not a measured archive or an assumed hosting quota.
+
+Before promoting this retention policy, rehearse a representative 30-day archive with the actual model cadence, revisions, pins and selected full columns. Record on-disk bytes, compressed cache/artifact bytes, peak space during publication staging, and restore/merge/archive durations; verify they fit the configured runners, storage budgets and job timeouts with measured headroom. If they do not, move or compress archive storage with hash-verified round trips before promotion. Do not silently shorten retention or replace first-issued evidence to make a job pass.
 
 ### Site and data locations
 

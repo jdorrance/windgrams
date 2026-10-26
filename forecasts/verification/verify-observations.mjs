@@ -226,13 +226,14 @@ export function compareRaobProfile(raobDoc, modelDoc, pair, targetSoundingValidA
 
 /** Keep exact and near-initialization evidence separate, including independent metric support. */
 export function summarizeVerifications(comparisons) {
+  const stationDay = row => `${row.station.id}:${new Date(row.soundingValidAt).toISOString().slice(0, 10)}`;
   const summarize = rows => {
     const mean = key => {
       const supported = rows.filter(row => finite(row.metrics[key])), values = supported.map(row => row.metrics[key]);
-      return { comparisons: values.length, independentStationDays: new Set(supported.map(row => `${row.station.id}:${row.soundingValidAt.slice(0, 10)}`)).size,
+      return { comparisons: values.length, independentStationDays: new Set(supported.map(stationDay)).size,
         mean: values.length ? round2(values.reduce((a, b) => a + b, 0) / values.length) : null };
     };
-    return { comparisons: rows.length, independentStationDays: new Set(rows.map(row => `${row.station.id}:${row.soundingValidAt.slice(0, 10)}`)).size,
+    return { comparisons: rows.length, independentStationDays: new Set(rows.map(stationDay)).size,
       independentStationTimes: new Set(rows.map(row => `${row.station.id}:${Date.parse(row.soundingValidAt)}`)).size,
       models: [...new Set(rows.map(row => row.model))].sort(),
       temperatureMaeC: mean('temperatureMaeC'), temperatureBiasC: mean('temperatureBiasC'), dewPointMaeC: mean('dewPointMaeC'),

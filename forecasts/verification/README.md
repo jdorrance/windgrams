@@ -2,6 +2,12 @@
 
 The evaluator compares saved forecasts with supplied balloon soundings. It reads the values issued for each run, matches them to observation times and stations, and reports errors with the number of usable comparisons. Scoring uses the original published values.
 
+## Compare published forecasts with WxToFly
+
+The [scientific review tooling](wxtofly/README.md) has explicit capture and offline compare operations. It preserves the live publication, accounts for shared products and evidence gaps, and produces an interactive report without changing forecast calculations.
+
+The [XC Skies supplement](xcskies/README.md) records authenticated PointCast response data separately and compares atmospheric profiles at exact UTC times and common above-ground heights. Its original-source hashes, field definitions and retrospective-history limitations remain explicit.
+
 ## Score archived forecasts
 
 Run from `forecasts/`:
@@ -20,7 +26,7 @@ Station matches prefer a separation of at most 50 km and allow at most 60 km. A 
 
 Each metric has its own sample count because temperature, dew point and wind can be missing at different levels. Independent station-days count a station ID and UTC observation date once, even when several launches or models use that sounding. Reports also distinguish individual station observation times. These counts describe how much independent evidence supports the summary.
 
-Evaluator version 3.0.0 identifies the matching and scoring rules. Forecast method 2.1.0 identifies the calculations being scored. The two version numbers advance independently, and cross-model spread is reported separately from error against observations.
+Evaluator version 3.0.0 identifies the matching and scoring rules. Each issued profile records the forecast method being scored; that version advances independently of the evaluator. Cross-model spread is reported separately from error against observations.
 
 The saved [`skill-report.json`](skill-report.json) contains eight near-initialization comparisons using three station observation times on one date. It provides a dated example of matching and scoring. The [evaluation plan](../../docs/soaring-forecast-plan.md) describes the broader weather and terrain coverage needed to estimate forecast skill.
 
@@ -40,4 +46,28 @@ Older run directories retain their original files and are labeled `legacy` in th
 
 Ordinary archived `sites/` records keep selected pressure levels and issued diagnostics for scoring. Recalculating diagnostics from a complete atmospheric column requires the full source profiles. To retain those for a method-impact study, call `archiveModelRun` with `retainFullColumns: true` for an explicitly pinned run; it writes the original bytes under `full-columns/sites/`.
 
-Retention counts runs. The default keeps 120 rolling runs plus pins, preserving every revision within each retained run.
+Operator builds now also pass `retainFullColumnSites` for Blanchard, Tiger, Rampart and Baker Summit where those sites exist in the model inventory. Their first-issued full profile bytes are retained alongside compact scoring records on every run, with hashes checked by the same revision reader. Other sites remain compact. The staged and post-publish archive calls use the same selection, so they do not create a second issue solely because one call retained more source data. This preserves all *published source levels* at these cases; it does not recover unpublished model layers or substitute GRIB wire bytes.
+
+Operator builds and artifact merges share [`history-policy.mjs`](history-policy.mjs): at least 30 UTC initialization dates, plus the most recent 120 rolling runs and pins, preserving every revision within each retained run. The calendar floor is anchored to the newest retained initialization, so importing an old study does not erase it because of today's date. `archiveModelRun` and `mergeHistoryArchives` expose `minimumCalendarDays` (0–120); their library default remains zero for callers that explicitly want run-count-only retention. This retains available days prospectively; it cannot restore deleted archives.
+
+`verify:history` now reports `archiveCalendarCoverage`: retained runs and selected first-issued runs per UTC day, absent initialization dates, and retained runs omitted by the scoring limit. A day with one run is not a complete daily inventory. Its separate independent station-day counts retain the existing observation matching rules. Increase `--max-runs` up to 120 to inspect more retained runs; the report makes the remaining selection gap explicit.
+
+## Independent diagnostic experiment
+
+Run after `pnpm build:packages` from the repository root:
+
+```sh
+node forecasts/verification/thermal-experiment.mjs --output /tmp/thermal-reference.json
+```
+
+The default uses 14 frozen HRRR source columns, one RRFS column, and three DWD ICON cells containing 30 native levels each. The ICON sensitivity experiment retains nine existing nodes spread across the original column; it records their native indices, pressures and heights. This tests loss of vertical detail in real weather without inventing new levels. `--input FILE` accepts an array of `{id, model, referenceTime, terrainM, column, evidence}` records, where `column` contains full source weather in the atmospheric-column units. Use retained full columns, never compact scoring profiles. Output creation refuses to overwrite an existing file. The result records the input hash, current method, per-field differences, diagnostic branches, cloud crossing brackets, source-pressure choice, and a controlled removal of sampled levels. It never rewrites issued history.
+
+[`thermal-reference.mjs`](thermal-reference.mjs) independently resolves parcel depth, potential LCL, ambient saturation crossing, the resulting cloud cap, W* and both sink ceilings from source weather. It does not use published top/cap values as inputs or import production calculations. [`thermal-experiment.mjs`](thermal-experiment.mjs) compares those results against the production path in a separate experiment. Analytic tests and a synthetic inversion-removal case exercise the reference independently. Passing this test establishes numerical agreement with the declared policy, not observed forecast accuracy or validation of a dense native-level product.
+
+## Scientific comparison definitions
+
+[`definitions.mjs`](definitions.mjs) owns the provider inventory and distinctions among vertical velocity/horizontal convergence, native PBL/parcel thermal top, LCL/CCL/ambient cloud base, and sink thresholds. The legacy inventory re-exports those definitions. [`comparability.mjs`](comparability.mjs) gates normalized quantities, height references, exact UTC times, accumulation/mean intervals and verified initialization/native-cell identity. WxToFly and XC rows retain qualified forecast disagreement while exposing `strictSameRunIssue`; the strict cohort excludes unknown runs and incompatible definitions. Runtime routing metadata alone cannot establish a PointCast column's initialization.
+
+## Review tooling ownership
+
+[`evidence-store.mjs`](evidence-store.mjs) owns immutable bytes, hashing, bounded HTTP reads and exclusive capture directories. Provider modules own their decoders and scientific meanings. Each review keeps profile comparison, evidence capture, interpretation and HTML rendering separate; public compare entry points retain their original exports. Malformed products are retained as evidence and excluded with a reason. Completed captures cannot accept additional responses.

@@ -12,6 +12,7 @@ import { writeIconRegionalBundle } from '../soaring/icon-replay.mjs';
 import { assertAgreement } from '../soaring/science.mjs';
 import { postprocessAndArchiveModelOutput } from './build-covered.mjs';
 import { archiveModelRun } from '../verification/history.mjs';
+import { OPERATOR_HISTORY_POLICY } from '../verification/history-policy.mjs';
 import { enrichBundleWithSidecars, initialRegionSidecars, regionPublication, validateNativeRegions } from './build-live-soaring.mjs';
 import { mergeSoaringRegionFiles } from './merge-soaring-regions.mjs';
 import { contextIsFresh, measure, stampTerrainContext } from './terrain.mjs';
@@ -145,7 +146,7 @@ export async function buildIconDataset({ output, sites, acquired, context, expec
       for (const relative of backed.reverse()) renameSync(join(staging, 'previous', relative), join(output, relative));
       throw error;
     }
-    archiveModelRun(output, 'icon-eu');
+    archiveModelRun(output, 'icon-eu', OPERATOR_HISTORY_POLICY);
     mergeSoaringRegionFiles(output);
     log(`ICON-EU complete: ${validated.sites} launches, ${validated.cells} native cells, ${validated.hours} hours`);
     return validated;

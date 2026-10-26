@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { archiveModelRun, archivedModelRuns, mergeHistoryArchives } from './history.mjs';
 import { scoreHistory } from './score-history.mjs';
+import { calendarHistoryCoverage } from './history-coverage.mjs';
 
 function workspace(t) { const root = mkdtempSync(join(tmpdir(), 'issued-history-')); t.after(() => rmSync(root, { recursive: true, force: true })); return root; }
 function issue(root, { referenceTime = '2026-10-21T00:00:00Z', temperatureC = 10, version = '2.1.0', build = 'a' } = {}) {
@@ -36,6 +37,30 @@ test('issued revisions are idempotent, preserve source identity and add changed 
   assert.deepEqual(readFileSync(join(run, 'revisions', full.revisionId, 'full-columns/sites/or-woodrat-mountain.json')), readFileSync(join(root, 'hrrr-conus/sites/or-woodrat-mountain.json')));
 });
 
+test('selected full-column sites are saved with the first issue without broad archive duplication', t => {
+  const root = workspace(t); issue(root);
+  const live = join(root, 'hrrr-conus'), originalPath = join(live, 'sites/or-woodrat-mountain.json');
+  const original = readFileSync(originalPath), other = JSON.parse(original); other.site.id = 'unselected-site';
+  writeFileSync(join(live, 'sites/unselected-site.json'), JSON.stringify(other));
+  const manifestPath = join(live, 'manifest.json'), manifest = JSON.parse(readFileSync(manifestPath));
+  manifest.sites.push({ slug: 'unselected-site' }); writeFileSync(manifestPath, JSON.stringify(manifest));
+  const options = { retainFullColumnSites: ['or-woodrat-mountain', 'outside-this-model'], minimumCalendarDays: 30 };
+  const first = archiveModelRun(root, 'hrrr-conus', options);
+  assert.deepEqual(first.fullColumnSites, ['or-woodrat-mountain']);
+  const selected = archivedModelRuns(root, 'hrrr-conus')[0];
+  assert.equal(selected.revisionId, first.revisionId);
+  assert.deepEqual(readFileSync(join(selected.directory, 'full-columns/sites/or-woodrat-mountain.json')), original);
+  assert.deepEqual(readdirSync(join(selected.directory, 'full-columns/sites')), ['or-woodrat-mountain.json']);
+  assert.equal(JSON.parse(readFileSync(join(selected.directory, 'sites/or-woodrat-mountain.json'))).hours[0].levels.length, 2);
+  const repeat = archiveModelRun(root, 'hrrr-conus', options);
+  assert.equal(repeat.created, false); assert.equal(repeat.revisionId, first.revisionId);
+  const changed = JSON.parse(original); changed.hours[0].surface.temperatureC = 50;
+  writeFileSync(originalPath, JSON.stringify(changed)); archiveModelRun(root, 'hrrr-conus', options);
+  assert.equal(archivedModelRuns(root, 'hrrr-conus')[0].revisionId, first.revisionId);
+  assert.deepEqual(readFileSync(join(selected.directory, 'full-columns/sites/or-woodrat-mountain.json')), original);
+  assert.throws(() => archiveModelRun(root, 'hrrr-conus', { retainFullColumnSites: ['../outside'] }), /distinct site slugs/);
+});
+
 test('history merges validated immutable revisions, retains all issues and refuses corrupt inputs before copy', t => {
   const incoming = workspace(t), output = workspace(t); issue(incoming);
   const a = archiveModelRun(incoming, 'hrrr-conus');
@@ -60,6 +85,32 @@ test('retention counts runs and legacy issue files are never overwritten', t => 
   for (const day of [22, 23, 24]) { issue(root, { referenceTime: `2026-10-${day}T00:00:00Z` }); archiveModelRun(root, 'hrrr-conus', { maxRollingRuns: 1, pinnedRunKeys: [first.runKey] }); }
   assert.deepEqual(readdirSync(join(root, 'history/hrrr-conus')).sort(), [first.runKey, '20261024T000000Z']);
   assert.equal(readdirSync(join(legacy, 'revisions')).length, 2);
+});
+
+test('optional calendar retention keeps whole UTC dates in addition to run count and pins', t => {
+  const root = workspace(t);
+  for (const referenceTime of ['2026-10-20T00:00:00Z', '2026-10-21T00:00:00Z', '2026-10-22T00:00:00Z',
+    '2026-10-22T23:00:00Z', '2026-10-23T00:00:00Z', '2026-10-23T01:00:00Z']) {
+    issue(root, { referenceTime });
+    archiveModelRun(root, 'hrrr-conus', { maxRollingRuns: 1, minimumCalendarDays: 2, pinnedRunKeys: ['20261020T000000Z'] });
+  }
+  assert.deepEqual(readdirSync(join(root, 'history/hrrr-conus')).sort(), ['20261020T000000Z', '20261022T000000Z',
+    '20261022T230000Z', '20261023T000000Z', '20261023T010000Z']);
+  const selected = archivedModelRuns(root, 'hrrr-conus', { maxRuns: 1 });
+  const coverage = calendarHistoryCoverage({ dataRoot: root, models: ['hrrr-conus'], from: '2026-10-20T00:00:00Z',
+    to: '2026-10-23T23:59:59Z', selectedRuns: selected }).byModel[0];
+  assert.equal(coverage.retainedRunCount, 5); assert.equal(coverage.selectedFirstIssuedRunCount, 1);
+  assert.equal(coverage.unselectedRunCount, 4); assert.deepEqual(coverage.missingInitializationDates, ['2026-10-21']);
+  assert.deepEqual(coverage.days.map(value => value.retainedRuns), [1, 0, 2, 2]);
+  assert.throws(() => archiveModelRun(root, 'hrrr-conus', { minimumCalendarDays: 121 }), /Calendar retention/);
+  assert.throws(() => mergeHistoryArchives(root, workspace(t), 'hrrr-conus', { minimumCalendarDays: -1 }), /Calendar retention/);
+});
+
+test('calendar coverage uses UTC dates through daylight-saving transitions', t => {
+  const root = workspace(t);
+  const coverage = calendarHistoryCoverage({ dataRoot: root, models: ['hrrr-conus'], from: '2026-11-01T00:00:00-04:00', to: '2026-11-02T00:00:00-05:00' });
+  assert.equal(coverage.requestedUtcDates, 2);
+  assert.deepEqual(coverage.byModel[0].missingInitializationDates, ['2026-11-01', '2026-11-02']);
 });
 
 test('conflicting legacy history is rejected without overwriting the original issue', t => {
@@ -99,6 +150,7 @@ test('bounded offline scorer selects original issued values and reports independ
   assert.equal(report.comparisons[0].metrics.temperatureMaeC, 0); assert.equal(report.byMatchTier['exact-valid-time'].temperatureMaeC.comparisons, 1);
   assert.equal(report.byMatchTier['near-init-f01-60min'].comparisons, 0);
   assert.throws(() => scoreHistory({ ...opts, maxRuns: 121 }), /bounded history/);
+  assert.throws(() => scoreHistory({ ...opts, from: '2026-10-21T00:00:00' }), /UTC observation window/);
   assert.throws(() => scoreHistory({ ...opts, to: '2027-10-22T00:00:00Z' }), /120 days/);
   assert.equal(scoreHistory({ ...opts, from: '2026-10-23T00:00:00Z', to: '2026-10-24T00:00:00Z' }).status, 'no-matched-observations');
 });

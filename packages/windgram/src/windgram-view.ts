@@ -113,6 +113,8 @@ export interface WindgramHour extends PublicHour {
   inWindWindow: boolean | null;
 }
 export interface WindgramView extends WindgramLayout {
+  modelElevationM: number;
+  hasWindWindow: boolean;
   presentation: WindgramPresentation;
   anchors: HeightAnchor[];
   hours: WindgramHour[];
@@ -204,6 +206,8 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     floorM,
     topM,
     ground: { elevationM: launchElevationM ?? modelFloorM, source: launchElevationM === null ? "model" : "launch" },
+    modelElevationM: modelFloorM,
+    hasWindWindow: Boolean(options.launchWindows?.length),
     timeZone: options.timeZone,
     anchors,
     sampling,
@@ -216,9 +220,10 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
       const temp = finiteScalar(h.surface.temperatureC);
       const gust = finiteScalar(h.surface.windGustMps);
       const direction = finiteScalar(h.surface.windDirectionDeg);
+      const speed = finiteScalar(h.surface.windSpeedMps);
       const arcs = options.launchWindows;
       const inWindWindow =
-        direction === null || !arcs?.length
+        speed === null || speed < 0.5 || direction === null || !arcs?.length
           ? null
           : arcs.some((arc) => (arc.fromDeg <= arc.toDeg ? direction >= arc.fromDeg && direction <= arc.toDeg : direction >= arc.fromDeg || direction <= arc.toDeg));
       return {
@@ -379,8 +384,9 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     };
     for (let j = 0; j < sample.windU.length; j++) {
       const a = sample.windU[j], b = sample.windU[j + 1];
-      addBarb(a.altitudeM, false, j === 0);
-      const ay = j === 0 ? bottom - 18 : y(a.altitudeM);
+      const surface = a.altitudeM === modelFloorM + 10;
+      addBarb(a.altitudeM, false, surface);
+      const ay = surface ? bottom - 18 : y(a.altitudeM);
       if (b && b.altitudeM - a.altitudeM <= 1000 && ay - y(b.altitudeM) >= 66) addBarb((a.altitudeM + b.altitudeM) / 2, true, false);
     }
     const freezing = crossings(sample.temperatureC, 0)[0];
@@ -421,7 +427,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   });
 
   for (const [key, label, color, dash] of [
-    ["boundaryLayerTopM", "Boundary layer", "#a56800", "7 5"],
+    ["boundaryLayerTopM", "Thermal top (parcel)", "#a56800", "7 5"],
     ["usableLiftTopM", `Usable lift · ${formatQuantity(1, "lift", undefined, system)} sink`, "#134ac4", null],
     ["cloudBaseM", "Potential cloud base", "#426173", "2 5"],
   ] as const) {

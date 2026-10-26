@@ -42,7 +42,7 @@ export function windExtras(launch: ChartLaunch, directions: (number | null)[]) {
     limit: launchWind(launch.gustMaxMph) ?? undefined,
     arrows: directions.map((deg) => ({ deg, inWindow: deg != null && inArc(deg, launch.window) })),
     legendTail: [
-      ...(launch.windMinMph !== null && launch.windMaxMph !== null ? [{ label: `Launch range ${fmt(launchWind(launch.windMinMph))}–${fmt(launchWind(launch.windMaxMph))} ${unitLabel("wind")}`, kind: "band" as const, color: "var(--good)" }] : []),
+      ...(launch.windMinMph !== null && launch.windMaxMph !== null ? [{ label: `Saved speed range ${fmt(launchWind(launch.windMinMph))}–${fmt(launchWind(launch.windMaxMph))} ${unitLabel("wind")}`, kind: "band" as const, color: "var(--good)" }] : []),
       ...(launch.gustMaxMph !== null ? [{ label: `Gust limit ${fmt(launchWind(launch.gustMaxMph))} ${unitLabel("wind")}`, kind: "limit" as const, color: "var(--critical)" }] : []),
       ...(launch.window ? [{ label: `Wind from ${launch.windowLabel}`, kind: "arrow-in" as const, color: "var(--good)" },
       { label: "Wind from other directions", kind: "arrow-out" as const, color: "var(--muted)" }] : [{ label: "Wind direction", kind: "arrow-out" as const, color: "var(--muted)" }]),
@@ -67,7 +67,7 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
       const transport = hours.map((h) => windValue(h.transportWindSpeedMps));
       const windTop = niceMax(Math.max((launchWind(launch.gustMaxMph) ?? 0) + 5, ...[...wind, ...gust, ...transport].map((v) => v ?? 0)), 5);
       const mixing = hours.map((h) => heightValue(h.mixingHeightM));
-      const extras = windExtras(launch, hours.map((h) => h.windDirectionDeg));
+      const extras = windExtras(launch, hours.map((h) => h.windSpeedMps != null && h.windSpeedMps >= 0.5 ? h.windDirectionDeg : null));
       return [
         {
           title: "Wind",
@@ -84,7 +84,7 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
           limit: extras.limit,
           arrows: extras.arrows,
           legend: [
-            { label: `Wind (${formatQuantity(10, "elevation")} AGL)`, kind: "line", color: "var(--series-1)" },
+            { label: `Wind (${formatQuantity(10, "elevation")} above forecast terrain)`, kind: "line", color: "var(--series-1)" },
             { label: "Gust", kind: "line", color: "var(--series-2)" },
             { label: "Transport wind (mixed layer)", kind: "line", color: "var(--series-3)" },
             ...extras.legendTail,
@@ -117,9 +117,9 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
       ];
     },
     tooltip(h) {
-      const inWindow = h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
+      const inWindow = h.windSpeedMps != null && h.windSpeedMps >= 0.5 && h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
       return [
-        { label: "Wind", value: `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))} ${unitLabel("wind")}`, color: "var(--series-1)", extra: inWindow ? "✓" : undefined },
+        { label: "Wind", value: `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))} ${unitLabel("wind")}`, color: "var(--series-1)", extra: inWindow ? "△" : undefined },
         { label: "Gust", value: `${fmt(windValue(h.windGustMps))} ${unitLabel("wind")}`, color: "var(--series-2)" },
         { label: "Transport", value: `${dir(h.transportWindDirectionDeg)}${fmt(windValue(h.transportWindSpeedMps))} ${unitLabel("wind")}`, color: "var(--series-3)" },
         { label: "Mixing height", value: `${fmt(heightValue(h.mixingHeightM), 0)} ${unitLabel("elevation")}` },
@@ -132,9 +132,9 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
     table: {
       columns: [`Wind (${unitLabel("wind")})`, "Gust", `Transport (${unitLabel("wind")})`, `Mixing ht (${unitLabel("elevation")})`, "Sky", "Precip", "Thunder", "Temp", "Forecast"],
       cells(h) {
-        const inWindow = h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
+        const inWindow = h.windSpeedMps != null && h.windSpeedMps >= 0.5 && h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
         return [
-          `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))}${inWindow ? " ✓" : ""}`,
+          `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))}${inWindow ? " △" : ""}`,
           fmt(windValue(h.windGustMps)),
           `${dir(h.transportWindDirectionDeg)}${fmt(windValue(h.transportWindSpeedMps))}`,
           fmt(heightValue(h.mixingHeightM)),
@@ -146,7 +146,7 @@ export function nwsSpec(launch: ChartLaunch): ChartSpec<NwsHour> {
         ];
       },
       textColumns: [8],
-      footnote: launch.window ? `✓ Launch window (${launch.windowLabel}).` : undefined,
+      footnote: `Surface forecast wind may differ from local launch wind.${launch.window ? ` △ Forecast direction inside saved window (${launch.windowLabel}).` : ''}`,
     },
   };
 }

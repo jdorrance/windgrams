@@ -3,14 +3,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } 
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { SOARING_CONTRACT_VERSION } from '../forecasts/soaring/science.mjs';
+import { acceptsDiagnosticMethod } from '../forecasts/scripts/lib/diagnostic-completeness.mjs';
 import { githubApi } from './github-actions.mjs';
 import { refreshGroups, refreshWorkflow } from './refresh-policy.mjs';
 import { validateFileTree } from '../forecasts/scripts/lib/artifact-products.mjs';
 
 export function trustedRuns(runs, group, repository) {
   return runs.filter(run => ['completed', 'in_progress'].includes(run.status) && run.head_branch === 'main'
-    && run.head_repository?.full_name === repository && ['schedule', 'workflow_dispatch'].includes(run.event)
+    && run.head_repository?.full_name === repository && ['schedule', 'workflow_dispatch', 'push'].includes(run.event)
     && run.path === `.github/workflows/${refreshWorkflow(group)}` && /^[a-f0-9]{40}$/.test(run.head_sha)
     && Number.isSafeInteger(run.id) && run.id > 0 && Number.isFinite(Date.parse(run.created_at)))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);
@@ -38,7 +38,7 @@ export async function collectRefreshArtifacts(output, { repository = process.env
           validateFileTree(temporary);
           const metadata = JSON.parse(readFileSync(join(temporary, '.artifact.json'), 'utf8'));
           if (metadata.schemaVersion !== 1 || metadata.group !== group || metadata.sourceSha !== run.head_sha
-            || metadata.soaringContractVersion !== SOARING_CONTRACT_VERSION || !Number.isFinite(Date.parse(metadata.createdAt))) throw new Error('Incompatible artifact provenance');
+            || !acceptsDiagnosticMethod(metadata.soaringContractVersion, { retained: true }) || !Number.isFinite(Date.parse(metadata.createdAt))) throw new Error('Incompatible artifact provenance');
           const destination = join(output, `data-${group}--${run.id}`);
           if (existsSync(destination)) throw new Error(`Artifact output already exists: ${destination}`);
           renameSync(temporary, destination);

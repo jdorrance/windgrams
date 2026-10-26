@@ -8,6 +8,9 @@ import { gzipSync } from 'node:zlib';
 import { mergeArtifacts } from './merge-artifacts.mjs';
 import { regionalProduct } from './lib/artifact-products.mjs';
 import { preparePublication } from './prepare-publication.mjs';
+import { seedPublishedGroup } from './seed-published.mjs';
+import { packRefresh } from './pack-refresh.mjs';
+import { modelDescriptor } from '@windgrams/providers/registry';
 import { terrainPolicyId } from './lib/terrain-policy.mjs';
 import { postprocessPointForecast } from '@windgrams/soaring/compatibility';
 import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
@@ -22,16 +25,26 @@ const bytes = document => JSON.stringify(document) + '\n';
 const encodedFile = (name, document) => name.endsWith('.gz') ? gzipSync(bytes(document)) : Buffer.from(bytes(document));
 function write(path, document) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, encodedFile(path, document)); }
 function workspace(t) { const root = mkdtempSync(join(tmpdir(), 'merge-products-')); t.after(() => rmSync(root, { recursive: true, force: true })); return root; }
-function point(root, { run = referenceTime, generated = generatedAt } = {}) {
-  const profile = structuredClone(sourceProfile); profile.run.referenceTime = run;
-  profile.hours = profile.hours.map((hour, i) => ({ ...hour, validAt: new Date(Date.parse(run) + (i + 1) * 3600000).toISOString() }));
-  write(join(root, 'rrfs/sites', `${site.slug}.json`), profile);
-  write(join(root, 'rrfs/manifest.json'), { model: 'rrfs', referenceTime: run, generatedAt: generated, forecastHours: 84, firstForecastHour: 1, lastForecastHour: 84, sites: [{ slug: site.slug, name: site.name }] });
+function labelMethod(profile, method) {
+  profile.soaringMeta.contractVersion = method;
+  for (const hour of profile.hours) if (hour.soaring) {
+    hour.soaring.contractVersion = method;
+    if (method === '2.2.0') { delete hour.soaring.diagnosticSupport; delete hour.soaring.verticalResolution.sampling; }
+  }
+}
+function point(root, { run = referenceTime, generated = generatedAt, method = SOARING_CONTRACT_VERSION, model = 'rrfs' } = {}) {
+  const profile = structuredClone(sourceProfile); profile.run.referenceTime = run; profile.model = model;
+  const hours = modelDescriptor(model).forecastHours;
+  profile.hours = hours.map((lead, i) => ({ ...profile.hours[i], validAt: new Date(Date.parse(run) + lead * 3600000).toISOString() }));
+  labelMethod(profile, method);
+  write(join(root, model, 'sites', `${site.slug}.json`), profile);
+  write(join(root, model, 'manifest.json'), { model, referenceTime: run, generatedAt: generated, forecastHours: hours.length, firstForecastHour: hours[0], lastForecastHour: hours.at(-1), diagnosticMethod: { id: 'windgrams-soaring', version: method }, sites: [{ slug: site.slug, name: site.name }] });
   return profile;
 }
-function regional(root, caseId = 'test-rrfs-live', { run = referenceTime, generated = generatedAt, edit = () => {} } = {}) {
+function regional(root, caseId = 'test-rrfs-live', { run = referenceTime, generated = generatedAt, method = SOARING_CONTRACT_VERSION, edit = () => {} } = {}) {
   const profile = structuredClone(sourceProfile); profile.run.referenceTime = run;
   profile.hours = profile.hours.slice(0, 2).map((hour, i) => ({ ...hour, validAt: new Date(Date.parse(run) + (i + 1) * 3600000).toISOString() }));
+  labelMethod(profile, method);
   const cell = { cellIndex: 0, id: 'test:0', gridIndex: 0, latitude: site.latitude, longitude: site.longitude, modelElevationM: profile.site.modelElevationM };
   const node = { nodeIndex: 0, distanceKm: 0, latitude: site.latitude, longitude: site.longitude, cellIndex: 0, gridIndex: 0,
     modelElevationM: profile.site.modelElevationM, waypointLabel: null, launchElevationM: 378.5 };
@@ -44,10 +57,10 @@ function regional(root, caseId = 'test-rrfs-live', { run = referenceTime, genera
       modelElevationM: profile.site.modelElevationM, models: { rrfs: { referenceTime: run, hours: profile.hours.map(hour => ({ validAt: hour.validAt })) } } }] },
     'cross-section.json': { caseId, model: 'rrfs', title: 'Test', totalDistanceKm: 1, nodes: [node, { ...node, nodeIndex: 1, distanceKm: 1 }] },
   };
-  for (const [i, hour] of profile.hours.entries()) files[`f${i + 1}.json`] = { forecastHour: i + 1, validAt: hour.validAt, soaringContractVersion: SOARING_CONTRACT_VERSION,
+  for (const [i, hour] of profile.hours.entries()) files[`f${i + 1}.json`] = { forecastHour: i + 1, validAt: hour.validAt, soaringContractVersion: method,
     thermalVelocityMps: [hour.derived.thermalVelocityMps], usableLiftTopM: [hour.derived.usableLiftTopM], boundaryLayerTopM: [hour.derived.boundaryLayerTopM],
     cloudBaseM: [hour.derived.cloudBaseM], pblHeightM: [hour.surface.pblHeightM], status: ['valid'], levelCount: [hour.levels.length], ceilingReached: [false] };
-  const manifest = { schemaVersion: 1, model: 'rrfs', soaringContractVersion: SOARING_CONTRACT_VERSION, capturedAt: generated, versions: { algorithm: 'synthetic-publication-fixture' },
+  const manifest = { schemaVersion: 1, model: 'rrfs', soaringContractVersion: method, capturedAt: generated, versions: { algorithm: 'synthetic-publication-fixture' },
     case: { id: caseId, model: 'rrfs', referenceTime: run, forecastHours: [1, 2], bbox: [-123, 48, -122, 49], sinkMps: 1, site, launchElevation: { elevationM: 378.5 } },
     cellCount: 1, siteCell: 0, hours: profile.hours.map((hour, i) => ({ forecastHour: i + 1, validAt: hour.validAt, file: `f${i + 1}.json` })) };
   edit({ manifest, files });
@@ -58,8 +71,8 @@ function regional(root, caseId = 'test-rrfs-live', { run = referenceTime, genera
   write(join(root, 'soaring/v1', caseId, 'index.json'), { bundle, manifestSha256: hash(manifestBytes) });
   return { caseId, bundle, directory };
 }
-function catalogue(root, caseIds, generated = generatedAt) {
-  write(join(root, 'soaring/v1/regions-rrfs.json'), { schemaVersion: 1, soaringContractVersion: SOARING_CONTRACT_VERSION, generatedAt: generated, trialRegionId: 'test',
+function catalogue(root, caseIds, generated = generatedAt, method = SOARING_CONTRACT_VERSION) {
+  write(join(root, 'soaring/v1/regions-rrfs.json'), { schemaVersion: 1, soaringContractVersion: method, generatedAt: generated, trialRegionId: 'test',
     regions: caseIds.map((caseId, i) => ({ id: `test-${i}`, name: 'Test', status: 'active-verified-trial', caseId, nativeModels: [{ model: 'rrfs', caseId }],
       timeZone: site.timeZone, morningBriefingLocalHour: 8, bbox: [-123, 48, -122, 49], primarySite: site.slug, launches: [site.slug], deterministicModels: ['rrfs'], ensembleModels: [], sparseAdapters: [] })) });
 }
@@ -242,4 +255,68 @@ test('all-invalid first publication or failed terrain gate leaves the original d
   assert.throws(() => preparePublication(incoming, output, { sites }), /Missing current launch terrain/);
   assert.deepEqual(readFileSync(join(output, 'hrrr-conus/manifest.json')), original);
   assert.equal(existsSync(join(output, 'rrfs')), false);
+});
+
+
+test('cold seeding and staggered 2.3 rollout retain original 2.2 bytes, upgrade equal runs and prevent downgrades', async t => {
+  const root = workspace(t), live = join(root, 'live'), output = join(root, 'data'), incoming = join(root, 'incoming');
+  point(live, { method: '2.2.0' }); point(live, { method: '2.2.0', model: 'hrrr-conus' }); terrain(live);
+  const oldRegion = regional(live, 'test-rrfs-live', { method: '2.2.0' });
+  catalogue(live, [oldRegion.caseId], generatedAt, '2.2.0');
+  const getBytes = async key => existsSync(join(live, key)) ? readFileSync(join(live, key)) : null;
+  for (const group of ['noaa-cloud', 'rrfs', 'soaring', 'terrain']) await seedPublishedGroup(output, group, { getBytes, sites });
+  const pointPath = join('rrfs/sites', `${site.slug}.json`), pointerPath = join('soaring/v1', oldRegion.caseId, 'index.json');
+  const originalPoint = readFileSync(join(live, pointPath)), originalPointer = readFileSync(join(live, pointerPath));
+  const initial = preparePublication(incoming, output, { sites });
+  assert.deepEqual(initial.validated, ['hrrr-conus', 'rrfs']);
+  assert.deepEqual(initial.retainedMethods.map(item => item.methodVersion), ['2.2.0', '2.2.0']);
+  assert.deepEqual(readFileSync(join(output, pointPath)), originalPoint);
+  assert.deepEqual(readFileSync(join(output, pointerPath)), originalPointer);
+  assert.throws(() => regionalProduct(join(output, 'soaring/v1'), oldRegion.caseId, ['rrfs']), /outdated/);
+  const oldBundle = regionalProduct(join(output, 'soaring/v1'), oldRegion.caseId, ['rrfs'], { retained: true });
+  assert.equal(oldBundle.manifest.soaringContractVersion, '2.2.0');
+
+  // Same run and upstream generation time: the method upgrade still takes precedence.
+  point(join(incoming, 'data-noaa-cloud'), { model: 'hrrr-conus' });
+  const partial = preparePublication(incoming, output, { sites });
+  assert.ok(partial.merged.accepted.includes('hrrr-conus'));
+  assert.deepEqual(partial.retainedMethods, [{ product: 'rrfs', methodVersion: '2.2.0' }]);
+  assert.deepEqual(readFileSync(join(output, pointPath)), originalPoint);
+  assert.deepEqual(readFileSync(join(output, pointerPath)), originalPointer);
+
+  point(join(incoming, 'data-rrfs'));
+  const next = regional(join(incoming, 'data-rrfs')); catalogue(join(incoming, 'data-rrfs'), [next.caseId]);
+  const complete = preparePublication(incoming, output, { sites });
+  assert.deepEqual(complete.retainedMethods, []);
+  assert.equal(JSON.parse(readFileSync(join(output, pointPath))).soaringMeta.contractVersion, SOARING_CONTRACT_VERSION);
+  assert.equal(regionalProduct(join(output, 'soaring/v1'), next.caseId, ['rrfs']).manifest.soaringContractVersion, SOARING_CONTRACT_VERSION);
+  assert.deepEqual(readFileSync(join(output, 'soaring/v1', oldRegion.caseId, oldRegion.bundle, 'manifest.json')), readFileSync(join(oldRegion.directory, 'manifest.json')), 'retained immutable evidence is never relabeled');
+
+  const currentPoint = readFileSync(join(output, pointPath)), currentPointer = readFileSync(join(output, pointerPath));
+  for (const group of ['noaa-cloud', 'rrfs', 'soaring']) await seedPublishedGroup(output, group, { getBytes, sites });
+  assert.deepEqual(readFileSync(join(output, pointPath)), currentPoint, 'lagging CDN cannot downgrade a current point');
+  assert.deepEqual(readFileSync(join(output, pointerPath)), currentPointer, 'lagging CDN cannot downgrade a current regional bundle');
+
+  const fallback = join(root, 'fallback/data-rrfs');
+  packRefresh('rrfs', fallback, live, 'a'.repeat(40));
+  const metadata = JSON.parse(readFileSync(join(fallback, '.artifact.json')));
+  assert.equal(metadata.soaringContractVersion, SOARING_CONTRACT_VERSION, 'producer and retained payload methods are distinct');
+  assert.equal(metadata.retainedProducts.rrfs, '2.2.0');
+  assert.equal(metadata.retainedProducts[`soaring/${oldRegion.caseId}`], '2.2.0');
+  mergeArtifacts(join(root, 'fallback'), output, { sites });
+  assert.deepEqual(readFileSync(join(output, pointPath)), currentPoint);
+  assert.deepEqual(readFileSync(join(output, pointerPath)), currentPointer);
+  const recovered = join(root, 'recovered');
+  assert.ok(mergeArtifacts(join(root, 'fallback'), recovered, { sites }).accepted.includes('rrfs'));
+  assert.deepEqual(readFileSync(join(recovered, pointPath)), originalPoint, 'a verified retained artifact can seed an empty cache');
+  assert.deepEqual(readFileSync(join(recovered, pointerPath)), originalPointer);
+  delete metadata.retainedProducts; write(join(fallback, '.artifact.json'), metadata);
+  assert.ok(mergeArtifacts(join(root, 'fallback'), join(root, 'unmarked'), { sites }).rejected.some(item => /outdated/.test(item.reason)), 'an unmarked new candidate must pass current-method validation');
+  writeFileSync(join(oldRegion.directory, 'f1.json'), 'corrupt');
+  const damaged = join(root, 'damaged/data-rrfs');
+  packRefresh('rrfs', damaged, live, 'a'.repeat(40));
+  const damagedMetadata = JSON.parse(readFileSync(join(damaged, '.artifact.json')));
+  assert.equal(damagedMetadata.retainedProducts.rrfs, '2.2.0');
+  assert.equal(damagedMetadata.retainedProducts[`soaring/${oldRegion.caseId}`], undefined, 'invalid retained sibling is not attested');
+  assert.ok(mergeArtifacts(join(root, 'damaged'), join(root, 'partial-recovery'), { sites }).accepted.includes('rrfs'), 'a malformed retained bundle cannot discard a healthy point product');
 });

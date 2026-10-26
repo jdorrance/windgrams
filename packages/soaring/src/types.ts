@@ -1,6 +1,8 @@
 import type { AtmosphericColumn, AtmosphericLevel, Scalar, SiteForecast } from '@windgrams/contracts';
 import type { PressureLevel } from '@windgrams/meteorology';
 import type { SOARING_CONTRACT_VERSION } from './diagnostics.js';
+import type { DiagnosticSupport, VerticalResolution } from '@windgrams/contracts/published-lift';
+export type { DiagnosticSupport, VerticalResolution, VerticalSampling, ThermalDepthSupport } from '@windgrams/contracts/published-lift';
 
 export interface DiagnosticOptions { launchElevationM?: number | null }
 /** Baseline cloud ceiling used to cap lift, in metres MSL. */
@@ -23,10 +25,10 @@ export interface TerrainAdjustment {
   experimental: true; launchElevationM: number; modelElevationM: number; terrainDeltaM: number;
   bracketsLaunchAltitude: boolean; launchWindSpeedMps: number | null; launchWindDirectionDeg: number | null;
   rawMslHeightsPreserved: true; assumptions: string[];
-}
-export interface VerticalResolution {
-  nativeLevelCount: number; aboveGroundLevelCount: number; isSparseProfile: boolean;
-  hasSub925Levels: boolean; hasUpperAirAbove600Levels: boolean; has80mWind: boolean; synthesizedLevels: 0;
+  /** Target is the launch ground elevation MSL, not 10 m above the launch. */
+  targetHeightMslM?: number; targetReference?: 'launch-elevation';
+  bracketMslM?: [number, number] | null;
+  unavailableReason?: 'below-model-ground' | 'outside-wind-support' | 'missing-bracket-wind' | 'duplicate-height' | null;
 }
 export type SoaringMetric =
   | 'resolvedThermalTopM' | 'thermalTopPlus1CM' | 'thermalVelocityV2Mps' | 'usableLiftTopV2M'
@@ -40,6 +42,7 @@ export type SoaringMetric =
   | 'midCloudPercent' | 'highCloudPercent' | 'precipitationMmHr' | 'capeJkg' | 'cinJkg';
 export type SoaringDiagnostics = Record<SoaringMetric, number | null> & {
   contractVersion: typeof SOARING_CONTRACT_VERSION; verticalResolution: VerticalResolution;
+  diagnosticSupport?: DiagnosticSupport;
   experimental?: { terrainAdjustment: TerrainAdjustment | null };
 };
 export interface EnsembleMetric {

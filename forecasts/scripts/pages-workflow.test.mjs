@@ -31,11 +31,12 @@ test('provider completions publish independently while preserving schedules', ()
 
 test('publication seeds, collects, validates, assembles and measures before deploying', () => {
   const publish = workflow.split('  publish:')[1];
-  const commands = ['scripts/seed-published.mjs', 'scripts/collect-refresh-artifacts.mjs',
+  const commands = ['scripts/await-publication-check.mjs', 'scripts/seed-published.mjs', 'scripts/collect-refresh-artifacts.mjs',
     'scripts/prepare-publication.mjs', 'pnpm run build', 'scripts/prepare-pages.mjs', 'actions/upload-pages-artifact@', 'actions/deploy-pages@'];
   let previous = -1;
   for (const command of commands) { const index = publish.indexOf(command); assert.ok(index > previous, command); previous = index; }
   assert.match(publish, /--dry-run/);
+  assert.match(publish, /Require successful checks for this checkout\n        if: \$\{\{ !inputs.dry_run \}\}\n        run: node scripts\/await-publication-check.mjs/);
   assert.match(publish, /if: inputs.dry_run\n        run: node forecasts\/scripts\/prepare-publication.mjs .* --dry-run/);
   assert.match(publish, /!inputs.dry_run/);
   assert.match(publish, /PUBLIC_WINDGRAMS_DATA_BASE:/);
@@ -96,4 +97,15 @@ test('Pages configuration command writes the exact job outputs used by acquisiti
   assert.equal(result.status, 0, result.stderr);
   assert.equal(readFileSync(output, 'utf8'), 'site=https://pilot.github.io/windgrams\nbase=/windgrams\ndata=https://pilot.github.io/forecast\n');
   assert.match(workflow, /run: node scripts\/pages-config\.mjs/);
+});
+
+
+test('science source pushes refresh model producers without publication feedback loops', () => {
+  const source = readFileSync(new URL('../../.github/workflows/refresh-science.yml', import.meta.url), 'utf8');
+  assert.match(source, /push:\n    branches: \[main\]/);
+  for (const path of ['packages/soaring/src/**', 'packages/providers/src/**', 'packages/contracts/src/**', 'forecasts/soaring/**', 'forecasts/scripts/build-*.mjs', 'pnpm-lock.yaml']) assert.ok(source.includes(path), path);
+  assert.match(source, /node scripts\/dispatch-refresh.mjs models/);
+  for (const event of ['workflow_run:', 'workflow_dispatch:', 'schedule:']) assert.equal(source.includes(event), false);
+  assert.equal(source.includes('web/**'), false, 'display-only changes do not redownload model source');
+  assert.equal(source.includes('forecasts/sites.json'), false, 'catalogue pushes remain owned by provider-specific workflows');
 });

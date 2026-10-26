@@ -54,6 +54,40 @@ test('an old run keeps a visible stale notice alongside its chart', async ({ pag
   await expect(notice).toHaveText('Old forecast · reload for update');
 });
 
+test('launch wind basis and native support remain explicit beside the chart', async ({ page }) => {
+  await page.route('**/hrrr-conus/sites/wa-blanchard.json', async route => {
+    const response = await route.fetch(), profile = await response.json();
+    const field = { firstLevelAglM: 550, levelsInLowest1000M: 2, maxGapInLowest1000M: 700 };
+    profile.site.modelElevationM = 1000;
+    for (const hour of profile.hours) {
+      hour.surface.windSpeedMps = 0;
+      hour.surface.windDirectionDeg = 0;
+      hour.soaring = {
+        thermalVelocityV2Mps: hour.derived.thermalVelocityMps, resolvedThermalTopM: hour.derived.boundaryLayerTopM,
+        usableLiftTopV2M: hour.derived.usableLiftTopM, surfaceLclM: hour.derived.cloudBaseM,
+        verticalResolution: { nativeLevelCount: 8, aboveGroundLevelCount: 8, isSparseProfile: true, hasSub925Levels: false, hasUpperAirAbove600Levels: false, has80mWind: false, synthesizedLevels: 0, sampling: { temperature: field, moisture: field, wind: field } },
+        diagnosticSupport: { thermalDepth: { branch: 'profile-top', bracketMslM: null, topLimited: true }, cloudLimit: { source: 'surface-lcl' }, surfacePressure: { source: 'hypsometric', valueHpa: 950 } },
+      };
+    }
+    await route.fulfill({ json: profile });
+  });
+  await page.goto(`${launch}&units=metric`);
+  await expect(page.locator('#forecast-wind-basis')).toContainText('Wind is 10 m above model ground. Model ground: 1,000 m MSL');
+  await expect(page.locator('#forecast-wind-basis')).toContainText('Model − launch:');
+  await expect(page.locator('#forecast-conditions dt').first()).toHaveText('Model surface wind');
+  await expect(page.locator('#forecast-conditions dd').first()).toHaveText('Light / calm');
+  await expect(page.locator('#skewt-chart .skewt-barb-calm')).toHaveCount(1);
+  await expect(page.locator('#forecast-data-limit')).toBeVisible();
+  await expect(page.locator('#forecast-data-limit')).toContainText('upper boundary is unresolved');
+  await page.getByText('Profile data support', { exact: true }).click();
+  await expect(page.locator('#forecast-data-support')).toContainText('First native level: 550 m above model ground');
+  await expect(page.locator('#forecast-data-support')).toContainText('Native model boundary-layer depth');
+  await page.locator('#model-select').selectOption('gfs');
+  await expect(page.locator('#forecast-wind-basis')).toContainText('Model ground: 1,380 m MSL');
+  await expect(page.locator('#forecast-data-limit')).toBeHidden();
+  await expect(page.locator('#forecast-data-support')).toContainText('Not published for this forecast');
+});
+
 test('a current forecast shows a failed refresh without hiding the chart or changing its age', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-10-25T14:00:00Z'));
   await page.route('**/health/noaa-cloud.json', route => route.fulfill({ json: {
@@ -254,7 +288,7 @@ test('a balloon with missing humidity visibly qualifies its dry parcel estimate'
     station: { id: 'KTEST', name: 'Test station', latitude: 48, longitude: -122, distanceKm: 10, elevationM: 100 },
     soundings: [{ validAt: '2026-10-25T12:00:00Z', levels: Array.from({ length: 11 }, (_, i) => ({
       pressureHpa: 1000 - i * 50, heightM: 100 + i * 500, temperatureC: 20 - i * 4,
-      dewPointC: null, windSpeedMps: 3, windDirectionDeg: 250,
+      dewPointC: null, windSpeedMps: 0, windDirectionDeg: null,
     })) }],
   } }));
   await page.goto(launch);
@@ -262,6 +296,7 @@ test('a balloon with missing humidity visibly qualifies its dry parcel estimate'
   await expect(page.locator('#balloon-findings li').filter({ hasText: 'Cloud base' })).toContainText('Unavailable · humidity missing');
   await expect(page.locator('#balloon-chart .skewt-dew')).toHaveCount(0);
   await expect(page.locator('#balloon-chart .skewt-mark-base')).toHaveCount(0);
+  await expect(page.locator('#balloon-chart .skewt-barb-calm')).not.toHaveCount(0);
 });
 
 test('a late sunlight response cannot mount or update a departed view', async ({ page }) => {

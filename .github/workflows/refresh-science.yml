@@ -1,0 +1,43 @@
+# Refresh model products when their implementation changes. Web-only pushes do not download forecasts.
+name: Refresh science changes
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/contracts/src/**"
+      - "packages/meteorology/src/**"
+      - "packages/providers/src/**"
+      - "packages/soaring/src/**"
+      - "packages/pipeline/src/**"
+      - "packages/*/package.json"
+      - "forecasts/package.json"
+      - "pnpm-lock.yaml"
+      - "scripts/dispatch-refresh.mjs"
+      - "scripts/refresh-policy.mjs"
+      - "forecasts/soaring/**"
+      - "forecasts/scripts/build-*.mjs"
+      - "forecasts/scripts/run-provider.mjs"
+      - "forecasts/scripts/lib/**"
+      - "!**/*.test.mjs"
+      - "!**/fixtures/**"
+      - "!**/*.md"
+      - ".github/workflows/refresh-science.yml"
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: refresh-science-dispatch
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - name: Refresh all model producers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/dispatch-refresh.mjs models

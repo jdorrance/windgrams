@@ -29,7 +29,7 @@ export function readWindgram(view: WindgramView, hourIndex: number, heightM: num
     heightAglM: z - view.ground.elevationM,
     temperatureF: t === null ? null : celsiusToFahrenheit(t),
     speedKt: wind === null ? null : legacyMpsToKnots(wind.speedMps),
-    directionDeg: wind?.directionDeg ?? null,
+    directionDeg: wind && wind.speedMps > 0 ? wind.directionDeg : null,
     interpolated: !sample?.temperatureC.some((n) => Math.abs(n.altitudeM - z) < 5),
     gustKt: view.hours[index]?.gustKt ?? null,
     cloud: cloud?.kind ?? null,

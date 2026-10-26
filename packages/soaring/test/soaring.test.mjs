@@ -6,9 +6,15 @@ import { postprocessPointForecast, aggregateEnsembleMetric, summarizeModelWindow
   sourceFromPublishedDeterministicHour, deriveEnsembleSoaringDiagnostics } from '@windgrams/soaring/compatibility';
 
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/diagnostic-parity.json',import.meta.url),'utf8'));
-for (const c of fixture.cases) test(`method 2.2 numerical regression: ${c.id}`, () => {
+for (const c of fixture.cases) test(`method 2.3 scalar parity with frozen 2.2 inputs: ${c.id}`, () => {
   const before=structuredClone(c.source);
-  assert.deepEqual(deriveDiagnosticsV2(c.terrainM,c.source,c.v1Hour,c.options),c.expected);
+  const result = deriveDiagnosticsV2(c.terrainM,c.source,c.v1Hour,c.options);
+  for (const [key, value] of Object.entries(c.expected)) {
+    if (['contractVersion', 'verticalResolution', 'experimental'].includes(key)) continue;
+    assert.deepEqual(result[key], value, key);
+  }
+  const { sampling, ...resolution } = result.verticalResolution;
+  assert.deepEqual(resolution, c.expected.verticalResolution);
   assert.deepEqual(c.source,before);
 });
 

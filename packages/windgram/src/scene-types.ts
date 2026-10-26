@@ -45,7 +45,7 @@ export interface WindgramOptions extends WindgramHourFilterOptions {
   heightRange?: 'soaring' | 'full';
   /** Site elevation, metres MSL, supplies the AGL reference. */
   launch?: { name?: string; elevationM: number } | null;
-  /** Acceptable wind directions, measured clockwise from true north as bearings the wind comes from. */
+  /** Saved direction window, compared with the 10 m model-surface wind. This is not a launch-wind estimate. Bearings clockwise from true north, wind from. */
   launchWindows?: readonly { fromDeg: number; toDeg: number }[];
   capabilities?: ModelCapabilities;
 }

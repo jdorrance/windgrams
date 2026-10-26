@@ -40,18 +40,19 @@ export function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
     .filter((l) => finite(finiteScalar(l.heightM)) && finiteScalar(l.heightM)! > floorM)
     .sort((a, b) => finiteScalar(a.heightM)! - finiteScalar(b.heightM)!);
   const nodes = (key: "temperatureC" | "dewPointC") => [
-    { altitudeM: floorM, value: finiteScalar(hour.surface[key]) ?? NaN },
+    { altitudeM: floorM + 2, value: finiteScalar(hour.surface[key]) ?? NaN },
     ...levels.map((l) => ({ altitudeM: finiteScalar(l.heightM)!, value: finiteScalar(l[key]) ?? NaN })),
-  ];
+  ].sort((a, b) => a.altitudeM - b.altitudeM);
   const temperatureC = nodes("temperatureC"), dewPointC = nodes("dewPointC");
   const wind = (speed: unknown, direction: unknown) => {
     const s = finiteScalar(speed), d = finiteScalar(direction);
-    return s === null || d === null ? { uMps: NaN, vMps: NaN } : windToComponents(s, d);
+    if (s === 0) return { uMps: 0, vMps: 0 };
+    return s === null || s < 0 || d === null ? { uMps: NaN, vMps: NaN } : windToComponents(s, d);
   };
   const winds = [
-    wind(hour.surface.windSpeedMps, hour.surface.windDirectionDeg),
-    ...levels.map((l) => wind(l.windSpeedMps, l.windDirectionDeg)),
-  ];
+    { altitudeM: floorM + 10, ...wind(hour.surface.windSpeedMps, hour.surface.windDirectionDeg) },
+    ...levels.map((l) => ({ altitudeM: finiteScalar(l.heightM)!, ...wind(l.windSpeedMps, l.windDirectionDeg) })),
+  ].sort((a, b) => a.altitudeM - b.altitudeM);
   // Represent temperature gradients as interval quantities, constant within each source interval.
   // Use a tiny step epsilon before interior upper endpoints so interval transitions stay sharp.
   const lastIdx = temperatureC.length - 2;
@@ -76,8 +77,8 @@ export function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
       altitudeM: p.altitudeM,
       value: Number.isFinite(p.value) && Number.isFinite(dewPointC[i].value) ? relativeHumidityPercent(p.value, dewPointC[i].value) : NaN,
     })),
-    windU: temperatureC.map((p, i) => ({ altitudeM: p.altitudeM, value: winds[i].uMps })),
-    windV: temperatureC.map((p, i) => ({ altitudeM: p.altitudeM, value: winds[i].vMps })),
+    windU: winds.map(p => ({ altitudeM: p.altitudeM, value: p.uMps })),
+    windV: winds.map(p => ({ altitudeM: p.altitudeM, value: p.vMps })),
     verticalVelocityPaS: levels.map((l) => ({ altitudeM: finiteScalar(l.heightM)!, value: finiteScalar(l.verticalVelocityPaS) ?? NaN })),
     thermalIndexC: [],
     smoke:

@@ -19,7 +19,9 @@
     "validate:rrfs": "node scripts/validate-rrfs.mjs",
     "soaring:capture": "node scripts/soaring.mjs capture",
     "soaring:replay": "node scripts/soaring.mjs replay",
-    "verify:history": "node verification/score-history.mjs"
+    "verify:history": "node verification/score-history.mjs",
+    "verify:wxtofly": "node verification/review-wxtofly.mjs",
+    "noaa:capture": "node scripts/capture-noaa-columns.mjs"
   },
   "engines": {
     "node": ">=24"
@@ -35,7 +37,8 @@
     "@windgrams/meteorology": "workspace:*",
     "@windgrams/soaring": "workspace:*",
     "@windgrams/providers": "workspace:*",
-    "@windgrams/pipeline": "workspace:*"
+    "@windgrams/pipeline": "workspace:*",
+    "@windgrams/windgram": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

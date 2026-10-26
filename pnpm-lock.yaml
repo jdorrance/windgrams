@@ -47,6 +47,9 @@ importers:
       '@windgrams/soaring':
         specifier: workspace:*
         version: link:../packages/soaring
+      '@windgrams/windgram':
+        specifier: workspace:*
+        version: link:../packages/windgram
     devDependencies:
       '@types/node':
         specifier: 24.10.1
@@ -108,6 +111,9 @@ importers:
       '@azohra/meteo.forecast':
         specifier: 0.6.0
         version: 0.6.0
+      '@azohra/meteo.grib':
+        specifier: 0.1.4
+        version: 0.1.4
       '@windgrams/contracts':
         specifier: workspace:*
         version: link:../contracts

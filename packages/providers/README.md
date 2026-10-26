@@ -37,6 +37,40 @@ For an hourly schedule beginning at hour 1, a limit of 6 selects hours 1–6. Re
 ISO UTC timestamps. Adapters reject missing core data and mismatched runs, sites
 or forecast hours; optional diagnostic values can be `null`.
 
+## NOAA source experiments
+
+`/noaa` supplies first-party HRRR, RRFS and GFS normalized columns for points and
+native areas. `createNoaaAdapter`, `createNoaaAreaAdapter`, and `acquireNoaa` use
+one field selector, decoder and unit conversion owner, also used by the forecast
+application's regional replay. This is opt-in; existing publication continues to
+use the legacy adapter until source and diagnostic impact checks are accepted.
+
+Choose `legacy-pressure` for the pinned nine-level HRRR/RRFS or eight-level GFS inventory, `expanded-pressure`
+for 18 real HRRR/RRFS or 15 real GFS pressure levels plus available surface pressure and 80 m winds, or
+`hrrr-native` for HRRR's contiguous hybrid levels. Native ingest requires a
+complete run's 50 contiguous PRES/HGT/TMP/SPFH/U/V levels from `wrfnat`; absent products,
+missing required levels, incompatible grids and wrong times fail explicitly.
+There is no automatic cross-product, cross-run or legacy fallback. RRFS and GFS native-level acquisition are not implemented by this adapter.
+GFS pressure-level moisture comes from RH; heat fluxes and precipitation retain
+preceding-three-hour support, using companion fields to recover six-hour-window
+products. It samples the regular latitude/longitude grid without Lambert rotation.
+
+Inputs are an exact supported UTC cycle, ascending forecast hours, an explicit cache
+folder, and launch coordinates and/or geographic bounds. Output retains selected
+native cells, each model's terrain, per-field units/time support and source byte
+hashes. Pressure levels at/below model terrain or below the supplied surface
+pressure are excluded. Missing fields remain absent; missing required columns
+are null with explicit reasons and `completeness: partial` in a capture or area,
+and errors for a point adapter. Required missing above-ground nodes invalidate
+the column rather than allowing interpolation across the omitted level. Supplied HGT geopotential heights remain in the model MSL convention; no
+geopotential-to-geometric or geoid correction is applied. HRRR native pressure
+and height come from PRES/HGT fields, without reconstructing hybrid coordinates. The
+source normalizer performs no thermal calculations or launch-altitude correction.
+
+[Operator commands](../../forecasts/soaring/README.md#normalized-noaa-source-experiments)
+write these experiments separately from published and first-issued forecasts.
+The [public types](src/internal/noaa/types.ts) define limits and provenance.
+
 ## Native areas
 
 The ICON area adapter selects native cells inside caller-supplied bounds and
@@ -75,9 +109,10 @@ stop the decoder. ICON extraction supports up to 12,000 native cells per request
 and uses the [same Python setup](../../forecasts/docs/operations.md#icon-eu) as
 point acquisition.
 
-The [area types](src/area-types.ts) also describe the interface for another area
-adapter. ICON is the current implementation; HRRR/RRFS regional acquisition
-lives in the forecast application. The ICON result's `native` member lets that
+The [area types](src/area-types.ts) also describe the interface for area
+adapters. ICON drives current native publication. The opt-in NOAA adapter also
+implements area acquisition; live HRRR/RRFS regional publication remains in the
+forecast application until the migration gate is accepted. The ICON result's `native` member lets that
 application reuse the acquisition for point and regional publication. Optional
 `sites` supplied to the adapter retain their additional support cells there.
 

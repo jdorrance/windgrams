@@ -14,7 +14,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { postprocessPointForecast } from "../soaring/point-postprocess.mjs";
-import { archiveModelRun, DEFAULT_MAX_ROLLING_RUNS } from "../verification/history.mjs";
+import { archiveModelRun } from "../verification/history.mjs";
 import { probeCycleReadiness } from "./check-readiness.mjs";
 import { validateRrfsProfile } from './validate-rrfs.mjs';
 import { validateCurrentDiagnostics } from './lib/diagnostic-completeness.mjs';
@@ -24,13 +24,17 @@ import { buildCovered, launchOutsideGrid, stageModel, validateModelDirectory, ha
 import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
 import { createLegacyAdapter } from '@windgrams/providers';
 import { modelDescriptor } from '@windgrams/providers/registry';
+import { OPERATOR_HISTORY_POLICY } from '../verification/history-policy.mjs';
 import { measure, contextIsFresh, stampTerrainContext } from './terrain.mjs';
 export { buildCovered, launchOutsideGrid };
 
 /**
  * Derive soaring diagnostics for the model's site profiles and archive the issued run.
  */
-export function postprocessAndArchiveModelOutput(outputRoot, modelSlug, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS } = {}) {
+export function postprocessAndArchiveModelOutput(outputRoot, modelSlug, {
+  maxRollingRuns = OPERATOR_HISTORY_POLICY.maxRollingRuns,
+  minimumCalendarDays = OPERATOR_HISTORY_POLICY.minimumCalendarDays,
+} = {}) {
   const postprocessedCount = postprocessProfiles(outputRoot, modelSlug, {
     id: 'windgrams-soaring', version: SOARING_CONTRACT_VERSION,
     derive: (document, context) => postprocessPointForecast(document, context),
@@ -43,10 +47,7 @@ export function postprocessAndArchiveModelOutput(outputRoot, modelSlug, { maxRol
     .update(JSON.stringify(packageBuildHashes(['@windgrams/soaring'], import.meta.resolve))).digest('hex') };
   writeFileSync(manifestPath, JSON.stringify(manifest) + '\n');
 
-  const archived = archiveModelRun(outputRoot, modelSlug, {
-    maxRollingRuns,
-    pinnedRunKeys: ["20261021T000000Z", "20261021T060000Z"],
-  });
+  const archived = archiveModelRun(outputRoot, modelSlug, { ...OPERATOR_HISTORY_POLICY, maxRollingRuns, minimumCalendarDays });
   return { postprocessedCount, archived };
 }
 
@@ -59,7 +60,11 @@ export async function stageModelBuild(outputRoot, model, build, finish = postpro
       options.validateProfile?.(document, run, slug);
     },
     afterPublish: post => {
-      if (post.archived) post.archived = archiveModelRun(outputRoot, model, { pinnedRunKeys: ['20261021T000000Z', '20261021T060000Z'] });
+      if (post.archived) post.archived = archiveModelRun(outputRoot, model, {
+        ...OPERATOR_HISTORY_POLICY,
+        maxRollingRuns: post.archived.maxRollingRuns ?? OPERATOR_HISTORY_POLICY.maxRollingRuns,
+        minimumCalendarDays: post.archived.minimumCalendarDays ?? OPERATOR_HISTORY_POLICY.minimumCalendarDays,
+      });
       return post;
     },
   });
@@ -128,7 +133,7 @@ export async function buildModel(values, { probe = probeCycleReadiness, adapterF
   if (!plan) { validateModelDirectory(output, { ...completeness, referenceTime: undefined, validateProfile }); log(`${model.id}: a complete forecast for this run or a newer run is already published`); return { changed: false, reason: 'current' }; }
   if (plan.reason === 'repair' && retainedSourcesComplete && !diagnosticsCurrent) {
     // Preserve the issued revision before reprocessing its full retained source levels.
-    archiveModelRun(output, model.id, { pinnedRunKeys: ['20261021T000000Z', '20261021T060000Z'] });
+    archiveModelRun(output, model.id, OPERATOR_HISTORY_POLICY);
     const repaired = await stageModelBuild(output, model.id, async staging => cpSync(join(output, model.id), join(staging, model.id), { recursive: true }),
       postprocessAndArchiveModelOutput, completeness);
     log(`${model.id}: repaired diagnostics from retained source profiles`);

@@ -21,10 +21,15 @@ test('typed diagnostic facade retains runtime function identity and exact diagno
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/diagnostic-parity.json', import.meta.url)));
   for (const item of fixture.cases) {
     const result = core.deriveDiagnosticsV2(item.terrainM, item.source, item.v1Hour, item.options);
-    assert.deepEqual(result, item.expected);
-    assert.equal(result.contractVersion, '2.2.0');
-    for (const [key, value] of Object.entries(result)) {
+    // Keep the 2.2 fixture immutable: metadata and experimental wind changed,
+    // while production scalars without measured surface pressure must not.
+    for (const [key, value] of Object.entries(item.expected)) {
       if (['contractVersion', 'verticalResolution', 'experimental'].includes(key)) continue;
+      assert.deepEqual(result[key], value, key);
+    }
+    assert.equal(result.contractVersion, '2.3.0');
+    for (const [key, value] of Object.entries(result)) {
+      if (['contractVersion', 'verticalResolution', 'experimental', 'diagnosticSupport'].includes(key)) continue;
       assert.ok(value === null || Number.isFinite(value), key);
     }
     assert.equal(result.verticalResolution.synthesizedLevels, 0);

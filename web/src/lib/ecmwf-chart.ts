@@ -70,7 +70,7 @@ export function ecmwfSpec(launch: ChartLaunch): ChartSpec<EcmwfHour> {
       const aloft = hours.map((h) => windValue(h.wind850SpeedMps));
       const windTop = niceMax(Math.max((launchWind(launch.gustMaxMph) ?? 0) + 5, ...[...wind, ...gust, ...aloft].map((v) => v ?? 0)), 5);
       const bl = hours.map((h) => heightValue(h.boundaryLayerHeightM));
-      const extras = windExtras(launch, hours.map((h) => h.windDirectionDeg));
+      const extras = windExtras(launch, hours.map((h) => h.windSpeedMps != null && h.windSpeedMps >= 0.5 ? h.windDirectionDeg : null));
       return [
         {
           title: "Wind",
@@ -87,7 +87,7 @@ export function ecmwfSpec(launch: ChartLaunch): ChartSpec<EcmwfHour> {
           limit: extras.limit,
           arrows: extras.arrows,
           legend: [
-            { label: `Wind (${formatQuantity(10, "elevation")} AGL)`, kind: "line", color: "var(--series-1)" },
+            { label: `Wind (${formatQuantity(10, "elevation")} above model terrain)`, kind: "line", color: "var(--series-1)" },
             { label: "Gust", kind: "line", color: "var(--series-2)" },
             { label: label850, kind: "line", color: "var(--series-3)" },
             ...extras.legendTail,
@@ -120,9 +120,9 @@ export function ecmwfSpec(launch: ChartLaunch): ChartSpec<EcmwfHour> {
       ];
     },
     tooltip(h) {
-      const inWindow = h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
+      const inWindow = h.windSpeedMps != null && h.windSpeedMps >= 0.5 && h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
       return [
-        { label: "Wind", value: `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))} ${unitLabel("wind")}`, color: "var(--series-1)", extra: inWindow ? "✓" : undefined },
+        { label: "Wind", value: `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))} ${unitLabel("wind")}`, color: "var(--series-1)", extra: inWindow ? "△" : undefined },
         { label: "Gust", value: `${fmt(windValue(h.windGustMps))} ${unitLabel("wind")}`, color: "var(--series-2)" },
         { label: label850.replace("Wind at ", ""), value: `${dir(h.wind850DirectionDeg)}${fmt(windValue(h.wind850SpeedMps))} ${unitLabel("wind")}`, color: "var(--series-3)" },
         { label: label700.replace("Wind at ", ""), value: `${dir(h.wind700DirectionDeg)}${fmt(windValue(h.wind700SpeedMps))} ${unitLabel("wind")}` },
@@ -136,9 +136,9 @@ export function ecmwfSpec(launch: ChartLaunch): ChartSpec<EcmwfHour> {
     table: {
       columns: [`Wind (${unitLabel("wind")})`, "Gust", `${pressureLabel(850)} (${unitLabel("wind")})`, `${pressureLabel(700)} (${unitLabel("wind")})`, `BL height (${unitLabel("elevation")})`, "Low", "Mid", "High", `Precip (${unitLabel("rainAmount")})`, "CAPE", "Temp"],
       cells(h) {
-        const inWindow = h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
+        const inWindow = h.windSpeedMps != null && h.windSpeedMps >= 0.5 && h.windDirectionDeg != null && inArc(h.windDirectionDeg, launch.window);
         return [
-          `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))}${inWindow ? " ✓" : ""}`,
+          `${dir(h.windDirectionDeg)}${fmt(windValue(h.windSpeedMps))}${inWindow ? " △" : ""}`,
           fmt(windValue(h.windGustMps)),
           `${dir(h.wind850DirectionDeg)}${fmt(windValue(h.wind850SpeedMps))}`,
           `${dir(h.wind700DirectionDeg)}${fmt(windValue(h.wind700SpeedMps))}`,
@@ -151,7 +151,7 @@ export function ecmwfSpec(launch: ChartLaunch): ChartSpec<EcmwfHour> {
           `${fmt(temperatureValue(h.temperatureC))} ${unitLabel("temperature")}`,
         ];
       },
-      footnote: `${launch.window ? `✓ Launch window (${launch.windowLabel}). ` : ""}Precipitation: prior hour.`,
+      footnote: `Surface model wind may differ from local launch wind.${launch.window ? ` △ Model direction inside saved window (${launch.windowLabel}).` : ''} Precipitation: prior hour.`,
     },
   };
 }

@@ -44,8 +44,17 @@ The outputs include separate ceilings for 1 m/s and 1.143 m/s sink rates.
 [`SOARING_CONTRACT_VERSION`](src/index.ts) identifies the diagnostic method;
 the [scientific notes](../../docs/forecast-improvement-plan.md) explain its
 assumptions and limitations. Experimental launch-height wind interpolation
-requires levels bracketing the launch elevation and leaves published MSL cloud
-and lift heights unchanged.
+requires adjacent valid wind levels bracketing the launch ground elevation MSL
+and leaves published MSL cloud and lift heights unchanged. The model's 10 m wind
+is located at model terrain + 10 m. The estimate does not resolve local slope
+wind or gusts; missing/duplicate brackets and extrapolation return null.
+
+Method 2.3 prefers supplied model surface pressure; otherwise it retains the
+hypsometric estimate. `diagnosticSupport` records that choice, the thermal-depth
+branch and the cloud-cap source. `verticalResolution.sampling` describes native
+temperature, moisture and wind geometry without inventing a quality score.
+The [published metadata contract](../contracts/src/diagnostic-support.ts) owns
+these definitions; older documents can omit them.
 
 ## Working with published profiles
 

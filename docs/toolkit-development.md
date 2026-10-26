@@ -77,6 +77,11 @@ forecast while completed updates publish. Their artifacts feed a serialized
 site and measures the upload before deployment. Code pushes also publish; changes
 confined to the root README or `docs/` skip deployment.
 
+Publication requires a successful `Check` run for the exact checked-out commit
+on `main`. The [check gate](../scripts/await-publication-check.mjs) waits up to
+15 minutes and stops on a failed check or timeout. Dry runs can still inspect
+candidate data without authorizing a deployment.
+
 Forecast generation and website compilation are separate. The deployment step
 combines the static site with the prepared dataset. The
 [operations guide](../forecasts/docs/operations.md#pages-delivery) covers refresh

@@ -30,7 +30,7 @@ test('unknown launch limits add no fabricated wind-direction or speed judgement'
   assert.deepEqual(unknown.issues, []);
   assert.ok(unknown.values[0][1].includes('S '));
   const known = launchConditions(hour, { ...DEFAULT_DETAILS, facingDeg: 0, windArcHalfWidthDeg: 30, windMaxMph: 15, gustMaxMph: 20 }, null);
-  assert.deepEqual(known.issues, ['Wind outside launch direction', 'Wind above saved limit', 'Gusts above saved limit']);
+  assert.deepEqual(known.issues, ['Model surface wind outside saved direction window', 'Model surface wind above saved speed limit', 'Model surface gust above saved limit']);
 });
 
 

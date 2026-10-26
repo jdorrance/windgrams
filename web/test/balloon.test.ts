@@ -12,6 +12,18 @@ const TZ = "America/Boise";
 const SRG = parseSrg(readFileSync(new URL("./fixtures/srg-boi.txt", import.meta.url), "utf8"));
 const FT = 3.28084;
 
+test('station wind distinguishes calm with no direction from unavailable moving wind', () => {
+  for (const [speedMps, expected] of [[0, 'calm'], [5, 'unavailable']] as const) {
+    const [choice] = choices(null, SRG, TZ);
+    choice.sounding.points = choice.sounding.points.map(point => ({ ...point, windSpeedMps: speedMps, windDirectionDeg: null }));
+    const launchM = choice.sounding.points[0].heightM;
+    const reading = readChoice(choice, SRG, launchM, TZ);
+    const wind = reading.findings.find(finding => finding.key === 'wind')!;
+    assert.ok(wind.text.includes(`: ${expected}.`), wind.text);
+    assert.doesNotMatch(wind.text, /\bN\b|NaN/);
+  }
+});
+
 test("the morning table lifted from the forecast high tops out near the NWS thermal height", () => {
   const s = srgSounding(SRG.observed!, 874, SRG.forecastMaxTempC)!;
   // Standard-atmosphere estimate at the table's first row (3000 ft); the balloon measured 913 hPa at 2867 ft.

@@ -1,6 +1,7 @@
+export { resolvedParcelDepthM } from './parcel-depth.js';
 export {
   LENSCHOW_F_MAX, LENSCHOW_PEAK_ZETA, WXTOFLY_SINK_MPS, computeLegacyThermalVelocityMps,
-  computeThermalVelocityMps, lenschowNormalizedUpdraft, resolvedParcelDepthM,
+  computeThermalVelocityMps, lenschowNormalizedUpdraft,
 } from './convective-lift.js';
 export { metrics, v2LayerMetrics } from './diagnostics.js';
 export { DETERMINISTIC_COLUMN_MODELS, ENSEMBLE_PERCENTILE_MODELS, SPARSE_ADAPTER_MODELS } from './point-postprocess.js';

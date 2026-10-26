@@ -128,6 +128,7 @@ export function sourceFromPublishedDeterministicHour(hour: CompatibilityHour | n
     sensibleHeatFluxWm2: s.sensibleHeatFluxWm2 ?? null,
     latentHeatFluxWm2: s.latentHeatFluxWm2 ?? null,
     seaLevelPressureHpa: s.seaLevelPressureHpa ?? null,
+    surfacePressureHpa: s.surfacePressureHpa ?? null,
     capeJkg: s.capeJkg ?? null,
     cinJkg: s.cinJkg ?? null,
     pblHeightM: s.pblHeightM ?? null,
@@ -142,6 +143,7 @@ export function sourceFromPublishedDeterministicHour(hour: CompatibilityHour | n
       windDirectionDeg: l.windDirectionDeg,
       verticalVelocityPaS: l.verticalVelocityPaS,
       cloudFractionPercent: l.cloudFractionPercent,
+      ...('modelLevel' in l ? { modelLevel: l.modelLevel } : {}),
     })),
   };
 }

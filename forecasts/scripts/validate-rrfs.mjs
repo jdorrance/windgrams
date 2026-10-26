@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { parseForecastManifest, parseSiteForecast } from '@azohra/meteo.briefing/contract';
+import { catalogueFingerprint } from '@windgrams/pipeline';
 import { acceptsDiagnosticMethod } from './lib/diagnostic-completeness.mjs';
 import { modelCoversSite } from './lib/model-coverage.mjs';
 
@@ -47,7 +48,17 @@ export function validateRrfsDataset(dataRoot, sitesPath) {
   requireValue(parseForecastManifest(manifest) && manifest.model === 'rrfs', 'Invalid RRFS manifest');
   requireValue(manifest.firstForecastHour === 1 && manifest.lastForecastHour === 84 && manifest.forecastHours === 84, 'RRFS manifest does not cover f001–f084');
   const sites = JSON.parse(readFileSync(sitesPath, 'utf8')).sites;
-  const expected = sites.filter(site => modelCoversSite('rrfs', site)).map(s => s.slug).sort();
+  const covered = sites.filter(site => modelCoversSite('rrfs', site));
+  const coverage = manifest.coverage;
+  const excluded = coverage?.excluded ?? [];
+  if (coverage !== undefined) {
+    requireValue(coverage && Array.isArray(coverage.excluded) && coverage.reason === 'outside-native-grid'
+      && coverage.requestedSiteHash === catalogueFingerprint(covered)
+      && new Set(excluded).size === excluded.length
+      && excluded.every(slug => covered.some(site => site.slug === slug)), 'RRFS manifest has invalid or outdated coverage exclusions');
+  }
+  const expected = covered.filter(site => !excluded.includes(site.slug)).map(site => site.slug).sort();
+  requireValue(expected.length > 0, 'RRFS manifest has no covered launches');
   requireValue(JSON.stringify(manifest.sites.map(s => s.slug).sort()) === JSON.stringify(expected), 'RRFS manifest does not contain the complete launch catalogue');
   const profiles = expected.map(slug => validateRrfsProfile(JSON.parse(readFileSync(join(dataRoot, 'rrfs', 'sites', `${slug}.json`), 'utf8')), manifest.referenceTime, slug));
   return { model: 'rrfs', referenceTime: manifest.referenceTime, sites: profiles.length, forecastHoursPerSite: 84,

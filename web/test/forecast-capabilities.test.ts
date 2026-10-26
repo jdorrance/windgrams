@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { forecastCapabilities, launchCountry, shortModelLabel } from '../src/lib/forecast-capabilities.ts';
+import { forecastCapabilities, launchCountries, launchCountry, shortModelLabel } from '../src/lib/forecast-capabilities.ts';
 import { launchConditions } from '../src/lib/launch-forecast.ts';
 import { DEFAULT_DETAILS } from '../src/lib/launches.ts';
 import { readFileSync } from 'node:fs';
@@ -40,4 +40,16 @@ test('coverage works for a new country independently of timezone and saved units
   assert.equal(launchCountry({ countryCode: '' }), 'ZZ');
   assert.equal(forecastCapabilities({ countryCode: 'NZ', latitude: -43.5, longitude: 172.6 }).nws, false);
   assert.deepEqual(forecastCapabilities({ countryCode: 'US', latitude: -43.5, longitude: 172.6 }).models, ['gfs', 'gdps', 'geps']);
+});
+
+test('Mexican launches use covered point models and appear as their own country', () => {
+  const central = forecastCapabilities({ countryCode: 'MX', latitude: 19.061, longitude: -100.09 });
+  assert.deepEqual(central, { models: ['gfs', 'gdps', 'geps'], nws: false, raob: false });
+  const north = forecastCapabilities({ countryCode: 'MX', latitude: 32.092, longitude: -116.88 });
+  assert.deepEqual(north.models, ['hrrr-conus', 'gfs', 'rrfs', 'hrdps-continental', 'rdps', 'gdps', 'geps']);
+  assert.equal(north.nws, false);
+  assert.equal(north.raob, false);
+  assert.deepEqual(launchCountries([{ countryCode: 'NZ' }, { countryCode: 'MX' }, { countryCode: 'US' }, { countryCode: 'MX' }]), [
+    { code: 'US', label: 'United States' }, { code: 'MX', label: 'Mexico' }, { code: 'NZ', label: 'New Zealand' },
+  ]);
 });

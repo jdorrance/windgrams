@@ -1,0 +1,1589 @@
+{
+  "schemaVersion": 1,
+  "countryCode": "MX",
+  "checkedAt": "2026-10-26",
+  "sourceSnapshot": {
+    "file": "mexico-pge-source.json",
+    "sha256": "7986bd5d37a3e40b49215f2e7e383b55493b558918f8c30d0632ae1885f1cd2f",
+    "bytes": 105815,
+    "endpoint": "https://paraglidingearth.com/api/geojson/getCountrySites.php?iso=mx&style=detailled",
+    "archivedAt": "2026-02-22",
+    "retrievedAt": null,
+    "archiveCommit": "cb100dcdb7fffbcdb5431ca103b21956627cafb2"
+  },
+  "geographyReview": {
+    "url": "https://github.com/wmgeolab/geoBoundaries/blob/90a1d52/releaseData/gbOpen/MEX/ADM1/geoBoundaries-MEX-ADM1_simplified.geojson",
+    "sha256": "c535c8f8ffeacd1905178c27577f25c83cb4a155b5d7e6dbe910a76e7d2d9896",
+    "source": "INEGI via geoBoundaries gbOpen MEX ADM1, boundary year 2020",
+    "license": "CC BY 3.0 IGO",
+    "checkedAt": "2026-10-26"
+  },
+  "launches": [
+    {
+      "slug": "mx-el-wejo",
+      "name": "El Wejo",
+      "latitude": 21.7525,
+      "longitude": -102.721,
+      "region": "Aguascalientes",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=21972",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "21972",
+      "sourceElevationM": 2357.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-picacho",
+      "name": "Picacho",
+      "latitude": 21.8774,
+      "longitude": -102.422,
+      "region": "Aguascalientes",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23672",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23672",
+      "sourceElevationM": 2348.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-cuervitos",
+      "name": "Cuervitos",
+      "latitude": 32.138,
+      "longitude": -116.875,
+      "region": "Baja California",
+      "timeZone": "America/Tijuana",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23577",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23577",
+      "sourceElevationM": 229.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-cuervos",
+      "name": "Cuervos",
+      "latitude": 32.1414,
+      "longitude": -116.873,
+      "region": "Baja California",
+      "timeZone": "America/Tijuana",
+      "facingDeg": 293,
+      "windArcHalfWidthDeg": 23,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23578",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23578",
+      "sourceElevationM": 291.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-salina",
+      "name": "La Salina",
+      "latitude": 32.0628,
+      "longitude": -116.863,
+      "region": "Baja California",
+      "timeZone": "America/Tijuana",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 90,
+      "notes": "Local site guidance: https://flylasalina.wordpress.com/ Confirm the exact takeoff and current access with local pilots.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6948",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6948",
+      "sourceElevationM": 173.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-las-antenas",
+      "name": "Las Antenas",
+      "latitude": 31.6755,
+      "longitude": -116.625,
+      "region": "Baja California",
+      "timeZone": "America/Tijuana",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15732",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "15732",
+      "sourceElevationM": 472.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-teta-azul-de-la-mision",
+      "name": "Teta Azul de la Misión",
+      "latitude": 26.8488,
+      "longitude": -111.903,
+      "region": "Baja California Sur",
+      "timeZone": "America/Mazatlan",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16050",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "16050",
+      "sourceElevationM": 126.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-rusty-pelican",
+      "name": "Rusty Pelican",
+      "latitude": 19.784,
+      "longitude": -90.6317,
+      "region": "Campeche",
+      "timeZone": "America/Merida",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 20,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10904",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "10904",
+      "sourceElevationM": 60.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-fly-in-chiapas",
+      "name": "Fly In Chiapas",
+      "latitude": 16.7082,
+      "longitude": -92.9037,
+      "region": "Chiapas",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22146",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22146",
+      "sourceElevationM": 1037.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-pueblitos",
+      "name": "Pueblitos",
+      "latitude": 27.7214,
+      "longitude": -105.239,
+      "region": "Chihuahua",
+      "timeZone": "America/Chihuahua",
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=21780",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "21780",
+      "sourceElevationM": 1970.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-antenas-de-vizcaya",
+      "name": "Antenas de Vizcaya",
+      "latitude": 25.6052,
+      "longitude": -103.191,
+      "region": "Coahuila",
+      "timeZone": "America/Monterrey",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=21322",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "21322",
+      "sourceElevationM": 1348.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-helipuerto",
+      "name": "Helipuerto",
+      "latitude": 25.5009,
+      "longitude": -103.458,
+      "region": "Coahuila",
+      "timeZone": "America/Monterrey",
+      "facingDeg": 23,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22049",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22049",
+      "sourceElevationM": 1615.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-cumbre-colima",
+      "name": "La Cumbre — Colima",
+      "latitude": 19.1813,
+      "longitude": -103.692,
+      "region": "Colima",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Local site guidance: https://parapentecolima.com/despegues.php Confirm the exact takeoff and current access with local pilots. Direction remains unknown because the source flags conflict with the local operator guide.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6815",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6815",
+      "sourceElevationM": 772.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-chupaderos",
+      "name": "Chupaderos",
+      "latitude": 24.1357,
+      "longitude": -104.702,
+      "region": "Durango",
+      "timeZone": "America/Monterrey",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22244",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22244",
+      "sourceElevationM": 2123.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-ferreria",
+      "name": "La Ferrería",
+      "latitude": 23.9316,
+      "longitude": -104.675,
+      "region": "Durango",
+      "timeZone": "America/Monterrey",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22243",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22243",
+      "sourceElevationM": 2136.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-despegue-bistro",
+      "name": "Despegue Bistro",
+      "latitude": 18.9814,
+      "longitude": -99.5032,
+      "region": "Estado de México",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 158,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14566",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "14566",
+      "sourceElevationM": 2412.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-el-picacho-malinalco",
+      "name": "El Picacho — Malinalco",
+      "latitude": 19.0078,
+      "longitude": -99.4709,
+      "region": "Estado de México",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 158,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9853",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "9853",
+      "sourceElevationM": 2451.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-ixtapan-de-la-sal",
+      "name": "Ixtapan de la Sal",
+      "latitude": 18.894,
+      "longitude": -99.7213,
+      "region": "Estado de México",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15332",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "15332",
+      "sourceElevationM": 2431.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-malinche",
+      "name": "La Malinche",
+      "latitude": 18.9226,
+      "longitude": -99.5972,
+      "region": "Estado de México",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9851",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "9851",
+      "sourceElevationM": 2249.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-nevado-de-toluca",
+      "name": "Nevado de Toluca",
+      "latitude": 19.111,
+      "longitude": -99.7462,
+      "region": "Estado de México",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22777",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22777",
+      "sourceElevationM": 4420.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-valle-de-bravo-el-penon",
+      "name": "Valle de Bravo — El Peñón",
+      "latitude": 19.0616,
+      "longitude": -100.091,
+      "region": "Estado de México",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Local site guidance: https://clubpenon.org/pages/club-rules Confirm the exact takeoff and current access with local pilots.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9867",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "9867",
+      "sourceElevationM": 2336.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-valle-de-bravo-la-torre",
+      "name": "Valle de Bravo — La Torre",
+      "latitude": 19.1846,
+      "longitude": -100.114,
+      "region": "Estado de México",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Local site guidance: https://www.parapentevalledebravo.com/experiencias/faq Confirm the exact takeoff and current access with local pilots.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6749",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6749",
+      "sourceElevationM": 2166.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-canada-de-moreno",
+      "name": "Cañada de Moreno",
+      "latitude": 21.2789,
+      "longitude": -100.357,
+      "region": "Guanajuato",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23847",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23847",
+      "sourceElevationM": 2144.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-dona-juana",
+      "name": "Doña Juana",
+      "latitude": 20.8242,
+      "longitude": -100.668,
+      "region": "Guanajuato",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 90,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22041",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22041",
+      "sourceElevationM": 2357.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-el-cubilete",
+      "name": "El Cubilete",
+      "latitude": 21.0046,
+      "longitude": -101.371,
+      "region": "Guanajuato",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23144",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23144",
+      "sourceElevationM": 2341.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-el-salto",
+      "name": "El Salto",
+      "latitude": 21.0646,
+      "longitude": -100.249,
+      "region": "Guanajuato",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 23,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10048",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "10048",
+      "sourceElevationM": 2043.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-memo-fly",
+      "name": "Memo Fly",
+      "latitude": 21.1861,
+      "longitude": -99.904,
+      "region": "Guanajuato",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22044",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22044",
+      "sourceElevationM": 2156.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-picachos",
+      "name": "Picachos",
+      "latitude": 20.8753,
+      "longitude": -100.733,
+      "region": "Guanajuato",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22042",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22042",
+      "sourceElevationM": 2090.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-tuxpan-iguala",
+      "name": "Tuxpan — Iguala",
+      "latitude": 18.3882,
+      "longitude": -99.4739,
+      "region": "Guerrero",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10599",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "10599",
+      "sourceElevationM": 1671.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-tulancingo",
+      "name": "Tulancingo",
+      "latitude": 20.1456,
+      "longitude": -98.3036,
+      "region": "Hidalgo",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 23,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17976",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "17976",
+      "sourceElevationM": 2409.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-atotonilco",
+      "name": "Atotonilco",
+      "latitude": 20.5593,
+      "longitude": -102.554,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23160",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23160",
+      "sourceElevationM": 2091.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-cantil-de-las-aguilas",
+      "name": "Cantil de las Águilas (Vergel de la Sierra)",
+      "latitude": 21.3698,
+      "longitude": -101.655,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation. Nearby PGE records describe the same grass launch but disagree on size and direction.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11634",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "11634",
+      "sourceElevationM": 2610.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-conchas-chinas",
+      "name": "Conchas Chinas",
+      "latitude": 20.581,
+      "longitude": -105.238,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 90,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17238",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "17238",
+      "sourceElevationM": 131.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-el-chante",
+      "name": "El Chante",
+      "latitude": 20.3067,
+      "longitude": -103.393,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16149",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "16149",
+      "sourceElevationM": 2043.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-el-toro-bull-hill",
+      "name": "El Toro (Bull Hill)",
+      "latitude": 19.5,
+      "longitude": -104.19,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19616",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "19616",
+      "sourceElevationM": 800.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-gravedad-cero-tapalpa",
+      "name": "Gravedad Cero — Tapalpa",
+      "latitude": 19.9422,
+      "longitude": -103.654,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 67,
+      "notes": "Local site guidance: https://vuelolibrejalisco.com/despegues Confirm the exact takeoff and current access with local pilots.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6754",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6754",
+      "sourceElevationM": 2212.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-ceja-tapalpa",
+      "name": "La Ceja — Tapalpa",
+      "latitude": 19.9354,
+      "longitude": -103.654,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 90,
+      "notes": "Local site guidance: https://vuelolibrejalisco.com/despegues Confirm the exact takeoff and current access with local pilots.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10133",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "10133",
+      "sourceElevationM": 2150.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-hondonada",
+      "name": "La Hondonada",
+      "latitude": 20.0015,
+      "longitude": -103.661,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13693",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "13693",
+      "sourceElevationM": 2105.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-nevado-de-colima",
+      "name": "Nevado de Colima",
+      "latitude": 19.5611,
+      "longitude": -103.611,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14199",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "14199",
+      "sourceElevationM": 4025.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-trepa-trepa",
+      "name": "Trepa Trepa",
+      "latitude": 20.7615,
+      "longitude": -102.61,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 20,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23159",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23159",
+      "sourceElevationM": 2369.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-yelapa-tapa",
+      "name": "Yelapa Tapa",
+      "latitude": 20.474,
+      "longitude": -105.461,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9857",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "9857",
+      "sourceElevationM": 660.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-yelapa-tapita",
+      "name": "Yelapa Tapita",
+      "latitude": 20.4842,
+      "longitude": -105.445,
+      "region": "Jalisco",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 20,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9856",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "9856",
+      "sourceElevationM": 191.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-escalera",
+      "name": "Escalera",
+      "latitude": 19.6401,
+      "longitude": -101.001,
+      "region": "Michoacán",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6733",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6733",
+      "sourceElevationM": 2245.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-lombardia",
+      "name": "Lombardía",
+      "latitude": 19.1743,
+      "longitude": -102.067,
+      "region": "Michoacán",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22260",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22260",
+      "sourceElevationM": 872.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-patzcuaro",
+      "name": "Pátzcuaro",
+      "latitude": 19.5171,
+      "longitude": -101.641,
+      "region": "Michoacán",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6697",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6697",
+      "sourceElevationM": 2324.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-tuxpan",
+      "name": "Tuxpan",
+      "latitude": 19.5693,
+      "longitude": -100.492,
+      "region": "Michoacán",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6790",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6790",
+      "sourceElevationM": 2295.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-zitacuaro",
+      "name": "Zitácuaro",
+      "latitude": 19.3989,
+      "longitude": -100.368,
+      "region": "Michoacán",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 20,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9250",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "9250",
+      "sourceElevationM": 2198.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-tepoztlan",
+      "name": "Tepoztlán",
+      "latitude": 19.0131,
+      "longitude": -99.0904,
+      "region": "Morelos",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 158,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19808",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "19808",
+      "sourceElevationM": 2330.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-tecuitata",
+      "name": "Tecuitata",
+      "latitude": 21.4686,
+      "longitude": -105.161,
+      "region": "Nayarit",
+      "timeZone": "America/Mazatlan",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23417",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23417",
+      "sourceElevationM": 456.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-volcan-ceboruco",
+      "name": "Volcán Ceboruco",
+      "latitude": 21.106,
+      "longitude": -104.503,
+      "region": "Nayarit",
+      "timeZone": "America/Mazatlan",
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23416",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23416",
+      "sourceElevationM": 1818.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-popa",
+      "name": "La Popa",
+      "latitude": 26.1563,
+      "longitude": -100.779,
+      "region": "Nuevo León",
+      "timeZone": "America/Monterrey",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 23,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23149",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23149",
+      "sourceElevationM": 1723.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-tinaja",
+      "name": "La Tinaja",
+      "latitude": 25.3933,
+      "longitude": -100.207,
+      "region": "Nuevo León",
+      "timeZone": "America/Monterrey",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Local site guidance: https://www.papanlac.com.mx/ Confirm the exact takeoff and current access with local pilots.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6711",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6711",
+      "sourceElevationM": 1681.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-nogalera",
+      "name": "Nogalera",
+      "latitude": 25.3597,
+      "longitude": -100.154,
+      "region": "Nuevo León",
+      "timeZone": "America/Monterrey",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Local site guidance: https://www.papanlac.com.mx/ Confirm the exact takeoff and current access with local pilots.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13495",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "13495",
+      "sourceElevationM": 1063.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-san-antonio-de-las-alazanas",
+      "name": "San Antonio de las Alazanas",
+      "latitude": 25.2478,
+      "longitude": -100.569,
+      "region": "Nuevo León",
+      "timeZone": "America/Monterrey",
+      "facingDeg": 203,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23042",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23042",
+      "sourceElevationM": 2267.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-teleferico",
+      "name": "Teleférico",
+      "latitude": 25.6431,
+      "longitude": -100.245,
+      "region": "Nuevo León",
+      "timeZone": "America/Monterrey",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22992",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22992",
+      "sourceElevationM": 1123.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-zaachila",
+      "name": "Zaachila",
+      "latitude": 16.9328,
+      "longitude": -96.8532,
+      "region": "Oaxaca",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 90,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11173",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "11173",
+      "sourceElevationM": 2314.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-chalchihuapan-puebla",
+      "name": "Chalchihuapan — Puebla",
+      "latitude": 18.9632,
+      "longitude": -98.3421,
+      "region": "Puebla",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 203,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6800",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6800",
+      "sourceElevationM": 2336.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-iztaccihuatl",
+      "name": "Iztaccíhuatl",
+      "latitude": 19.1726,
+      "longitude": -98.6389,
+      "region": "Puebla",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20627",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "20627",
+      "sourceElevationM": 5082.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-san-bernardino-chalchihuapan",
+      "name": "San Bernardino Chalchihuapan",
+      "latitude": 18.963,
+      "longitude": -98.3601,
+      "region": "Puebla",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23020",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23020",
+      "sourceElevationM": 2212.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-el-tangano",
+      "name": "El Tángano",
+      "latitude": 20.5704,
+      "longitude": -100.352,
+      "region": "Querétaro",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23018",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23018",
+      "sourceElevationM": 2023.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-huimilpan",
+      "name": "Huimilpan",
+      "latitude": 20.3583,
+      "longitude": -100.259,
+      "region": "Querétaro",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23019",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23019",
+      "sourceElevationM": 2650.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-barreta",
+      "name": "La Barreta",
+      "latitude": 20.8155,
+      "longitude": -100.537,
+      "region": "Querétaro",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23846",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23846",
+      "sourceElevationM": 2524.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-jolla",
+      "name": "La Jolla",
+      "latitude": 20.8173,
+      "longitude": -100.543,
+      "region": "Querétaro",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 203,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22043",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22043",
+      "sourceElevationM": 2625.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-boca-paila-dune",
+      "name": "Boca Paila Dune",
+      "latitude": 20.0893,
+      "longitude": -87.4753,
+      "region": "Quintana Roo",
+      "timeZone": "America/Cancun",
+      "facingDeg": 113,
+      "windArcHalfWidthDeg": 23,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation. Coastal source coordinate is approximate; confirm the beach launch and permission locally.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=18117",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "18117",
+      "sourceElevationM": 1.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-el-piedrero-san-luis-potosi",
+      "name": "El Piedrero — San Luis Potosí",
+      "latitude": 22.0456,
+      "longitude": -100.923,
+      "region": "San Luis Potosí",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 67,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22140",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22140",
+      "sourceElevationM": 2081.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-chincheta",
+      "name": "La Chincheta",
+      "latitude": 21.9969,
+      "longitude": -100.931,
+      "region": "San Luis Potosí",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=22141",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "22141",
+      "sourceElevationM": 2188.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-la-cementera",
+      "name": "La Cementera",
+      "latitude": 29.0612,
+      "longitude": -110.943,
+      "region": "Sonora",
+      "timeZone": "America/Hermosillo",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=21971",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "21971",
+      "sourceElevationM": 401.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-alto-lucero",
+      "name": "Alto Lucero",
+      "latitude": 19.6135,
+      "longitude": -96.7147,
+      "region": "Veracruz",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation. Direction remains unknown because the source flags conflict with its NE/E-only weather description.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17074",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "17074",
+      "sourceElevationM": 1060.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-coetzala",
+      "name": "Coetzala",
+      "latitude": 18.7715,
+      "longitude": -96.934,
+      "region": "Veracruz",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23546",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23546",
+      "sourceElevationM": 1300.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-fortin-de-las-flores",
+      "name": "Fortín de las Flores",
+      "latitude": 18.8697,
+      "longitude": -97.0038,
+      "region": "Veracruz",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 113,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6827",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "6827",
+      "sourceElevationM": 1294.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-loma-maria",
+      "name": "Loma María",
+      "latitude": 18.9286,
+      "longitude": -97.1122,
+      "region": "Veracruz",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11225",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "11225",
+      "sourceElevationM": 1833.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-naranjal",
+      "name": "Naranjal",
+      "latitude": 18.7952,
+      "longitude": -96.9739,
+      "region": "Veracruz",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=23764",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "23764",
+      "sourceElevationM": 1471.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-playa-la-mancha",
+      "name": "Playa La Mancha",
+      "latitude": 19.5832,
+      "longitude": -96.3781,
+      "region": "Veracruz",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20074",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "20074",
+      "sourceElevationM": 48.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-frailes",
+      "name": "Frailes",
+      "latitude": 22.7254,
+      "longitude": -102.54,
+      "region": "Zacatecas",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 45,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10217",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "10217",
+      "sourceElevationM": 2574.0,
+      "elevationDatum": "unknown"
+    },
+    {
+      "slug": "mx-zopilotes",
+      "name": "Zopilotes",
+      "latitude": 22.8242,
+      "longitude": -102.556,
+      "region": "Zacatecas",
+      "timeZone": "America/Mexico_City",
+      "facingDeg": 293,
+      "windArcHalfWidthDeg": 68,
+      "notes": "Published source location; exact takeoff position and current access await local confirmation.",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10220",
+        "checkedAt": "2026-10-26",
+        "license": "CC-BY-SA-3.0"
+      },
+      "sourceId": "10220",
+      "sourceElevationM": 2500.0,
+      "elevationDatum": "unknown"
+    }
+  ],
+  "excluded": [
+    {
+      "sourceId": "6797",
+      "name": "El Mirador",
+      "reason": "Unresolved identity and closure: PAPANLAC labels Mirador inactive but supplies coordinates near source Rinconada (14249), not this point. Withheld pending local confirmation.",
+      "sourceUrl": "https://www.papanlac.com.mx/",
+      "checkedAt": "2026-10-26"
+    },
+    {
+      "sourceId": "10722",
+      "name": "Cantamar",
+      "reason": "Unverified takeoff point: the archived comment explicitly says the contributor does not yet have the GPS location. No independent exact-coordinate confirmation was found.",
+      "sourceUrl": "https://paraglidingearth.com/?site=10722",
+      "checkedAt": "2026-10-26"
+    },
+    {
+      "sourceId": "14249",
+      "name": "Rinconada",
+      "reason": "Unresolved identity and closure: this point is near PAPANLAC's inactive Mirador; the club's Rinconada section repeats Tinaja coordinates. Withheld pending local confirmation.",
+      "sourceUrl": "https://www.papanlac.com.mx/",
+      "checkedAt": "2026-10-26"
+    },
+    {
+      "sourceId": "15193",
+      "name": "cantil de las aguilas",
+      "reason": "Duplicate of 11634: points are 22 m apart and both describe the Hotel Vergel de la Sierra grass launch. Retained as mx-cantil-de-las-aguilas; source direction/size descriptions differ.",
+      "sourceUrl": "https://paraglidingearth.com/?site=11634",
+      "checkedAt": "2026-10-26",
+      "retainedSlug": "mx-cantil-de-las-aguilas"
+    },
+    {
+      "sourceId": "18116",
+      "name": "Tulum",
+      "reason": "Unresolved permission and location: the archive questions whether flying is allowed, and the point does not reconcile with the described launch 500 m south of the ruins. Not classified as known closed.",
+      "sourceUrl": "https://paraglidingearth.com/?site=18116",
+      "checkedAt": "2026-10-26"
+    },
+    {
+      "sourceId": "21435",
+      "name": "Cerro Pelon Alternate el Peñon",
+      "reason": "Apparent landing-area record: within 100 m of the Cerro Pelón LZ in the BHGC club guide, with no takeoff description in the archive.",
+      "sourceUrl": "https://www.bhgc.org/sites/mexico/index.html",
+      "checkedAt": "2026-10-26"
+    },
+    {
+      "sourceId": "21436",
+      "name": "Lampazos alternate El Peñon",
+      "reason": "Unresolved launch-versus-landing identity: alternate El Peñón record has no takeoff description or direction evidence; no independent launch corroboration was found.",
+      "sourceUrl": "https://paraglidingearth.com/?site=21436",
+      "checkedAt": "2026-10-26"
+    },
+    {
+      "sourceId": "21437",
+      "name": "San Pedro alternate El Peñon",
+      "reason": "Unresolved launch-versus-landing identity: alternate El Peñón record has no takeoff description or direction evidence; no independent launch corroboration was found.",
+      "sourceUrl": "https://paraglidingearth.com/?site=21437",
+      "checkedAt": "2026-10-26"
+    },
+    {
+      "sourceId": "22993",
+      "name": "Rayones",
+      "reason": "Unresolved takeoff coordinates: PAPANLAC's Rayones launch is about 2.25 km west of this source point. Hang-gliding foot launches remain in scope.",
+      "sourceUrl": "https://www.papanlac.com.mx/",
+      "checkedAt": "2026-10-26"
+    }
+  ]
+}

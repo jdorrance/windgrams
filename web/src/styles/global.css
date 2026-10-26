@@ -509,6 +509,7 @@ details[open] > summary {
 }
 
 .forecast-heading-actions {
+  flex: none;
   gap: 4px;
 }
 

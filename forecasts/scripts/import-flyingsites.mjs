@@ -9,8 +9,9 @@
 //   node scripts/import-flyingsites.mjs --country=am
 //   node scripts/import-flyingsites.mjs --country=us
 //   node scripts/import-flyingsites.mjs --country=nz
+//   node scripts/import-flyingsites.mjs --country=mx
 // FLYINGSITES_US overrides the path to us.geojson.json.
-// FLYINGSITES_AM / FLYINGSITES_NZ override reviewed catalogues, not raw API dumps.
+// FLYINGSITES_AM / FLYINGSITES_NZ / FLYINGSITES_MX override reviewed catalogues, not raw API dumps.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -18,6 +19,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const STATE_ORDER = ["VA", "WA", "MD", "NC", "OR"];
+const COUNTRY_CATALOGUES = { am: "armenia-launches.json", nz: "new-zealand-launches.json", mx: "mexico-launches.json" };
 const DIRS = [
   ["N", 0],
   ["NE", 45],
@@ -225,10 +227,11 @@ function writeJson(path, value) {
 }
 
 function main() {
+  const supported = ["us", ...Object.keys(COUNTRY_CATALOGUES)];
   const countries = process.argv.slice(2).length ? process.argv.slice(2).map((arg) => {
-    if (!/^--country=(am|nz|us)$/.test(arg)) throw new Error(`Unknown option: ${arg}. Use --country=am, --country=nz or --country=us.`);
+    if (!arg.startsWith("--country=") || !supported.includes(arg.slice("--country=".length))) throw new Error(`Unknown option: ${arg}. Use ${supported.map(country => `--country=${country}`).join(", ")}.`);
     return arg.slice("--country=".length);
-  }) : ["us", "am", "nz"];
+  }) : supported;
   const sitesPath = resolve(HERE, "../sites.json");
   const launchesPath = resolve(HERE, "../../web/src/data/launches.json");
   let catalog = {
@@ -242,7 +245,7 @@ function main() {
       const features = JSON.parse(readFileSync(usPath, "utf-8")).features ?? [];
       catalog = mergeCatalogs(catalog, buildCatalog(features, states));
     } else {
-      const file = country === "am" ? "armenia-launches.json" : "new-zealand-launches.json";
+      const file = COUNTRY_CATALOGUES[country];
       const path = process.env[`FLYINGSITES_${country.toUpperCase()}`] ?? resolve(HERE, "data", file);
       catalog = mergeCatalogs(catalog, buildCountryCatalog(JSON.parse(readFileSync(path, "utf-8"))));
     }
@@ -250,7 +253,7 @@ function main() {
   const { sitesFile, launchesFile } = catalog;
   writeJson(sitesPath, sitesFile);
   writeJson(launchesPath, launchesFile);
-  const counts = Object.fromEntries([...STATE_ORDER, "AM", "NZ"].map((code) => [code, 0]));
+  const counts = Object.fromEntries([...STATE_ORDER, ...Object.keys(COUNTRY_CATALOGUES).map(country => country.toUpperCase())].map((code) => [code, 0]));
   for (const site of sitesFile.sites) {
     const code = site.slug.slice(0, 2).toUpperCase();
     if (code in counts) counts[code] += 1;

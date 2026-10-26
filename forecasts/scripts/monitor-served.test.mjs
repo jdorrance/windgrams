@@ -81,28 +81,33 @@ test('a fresh pre-expansion global inventory fails before probing profiles', asy
   assert.equal(data.requests.some(path => path.startsWith('gfs/sites/')), false);
 });
 
-test('regional inventories honor current native-grid exclusions', async () => {
+test('regional inventories probe covered Mexican launches and honor native-grid exclusions', async () => {
   const data = dataset({ modelId: 'hrrr-conus' });
-  const excluded = { ...data.options.sites[0], slug: 'wa-grid-edge', longitude: -125.9 };
-  const outside = { ...excluded, slug: 'nz-outside', latitude: -45, longitude: 170, countryCode: 'NZ' };
+  const included = addSite(data, { slug: 'mx-north', latitude: 32, longitude: -116, timeZone: 'America/Tijuana', countryCode: 'MX' });
+  const excluded = { ...included, slug: 'mx-grid-edge', latitude: 25, longitude: -100, timeZone: 'America/Monterrey' };
+  const outside = { ...excluded, slug: 'mx-south', latitude: 19, timeZone: 'America/Mexico_City' };
   data.options.sites.push(excluded, outside);
   const path = 'hrrr-conus/manifest.json', manifest = JSON.parse(data.documents.get(path));
-  const coverage = { requestedSiteHash: catalogueFingerprint(data.options.sites.slice(0, 2)), excluded: [excluded.slug], reason: 'outside-native-grid' };
+  const coverage = { requestedSiteHash: catalogueFingerprint(data.options.sites.filter(site => site !== outside)), excluded: [excluded.slug], reason: 'outside-native-grid' };
   for (const invalid of [null, { requestedSiteHash: 'old' }, { excluded: [outside.slug] }, { excluded: [excluded.slug, excluded.slug] }, { excluded: 'invalid' }, { reason: 'fetch-failed' }]) {
+    data.requests.length = 0;
     manifest.coverage = { ...coverage, ...invalid };
     data.documents.set(path, encode(manifest));
     const report = await monitorServed(data.options), point = report.checks.find(check => check.kind === 'point');
     assert.equal(point.ok, invalid === null, JSON.stringify(point));
     if (invalid) assert.match(point.reason, /coverage exclusions/);
+    else assert.deepEqual(data.requests.filter(path => path.startsWith('hrrr-conus/sites/')), [data.profile.site.id, included.slug].map(slug => `hrrr-conus/sites/${slug}.json`));
   }
 });
 
 test('point probes cover each country once and continue after a country fails', async () => {
-  for (const failed of [null, 'US', 'NZ', 'AM']) {
+  for (const failed of [null, 'US', 'NZ', 'AM', 'MX']) {
     const data = dataset();
     const nz = addSite(data, { slug: 'nz-first', latitude: -37, longitude: 175, timeZone: 'Pacific/Auckland', countryCode: 'NZ' });
     addSite(data, { ...nz, slug: 'nz-second' });
     const am = addSite(data, { slug: 'am-first', latitude: 40, longitude: 44, timeZone: 'Asia/Yerevan', countryCode: 'AM' });
+    const mx = addSite(data, { slug: 'mx-first', latitude: 19, longitude: -100, timeZone: 'America/Mexico_City', countryCode: 'MX' });
+    addSite(data, { ...mx, slug: 'mx-second' });
     const failedSlug = data.options.sites.find(site => site.countryCode === failed)?.slug;
     if (failed === 'NZ') data.documents.set(`gfs/sites/${failedSlug}.json`, '{');
     else if (failed) data.documents.delete(`gfs/sites/${failedSlug}.json`);
@@ -110,7 +115,7 @@ test('point probes cover each country once and continue after a country fails', 
     const point = report.checks.find(check => check.kind === 'point');
     assert.equal(point.ok, !failed);
     if (failed) assert.match(point.reason, new RegExp(`^${failedSlug}:`));
-    assert.deepEqual(data.requests.filter(path => path.startsWith('gfs/sites/')), [data.profile.site.id, nz.slug, am.slug].map(slug => `gfs/sites/${slug}.json`));
+    assert.deepEqual(data.requests.filter(path => path.startsWith('gfs/sites/')), [data.profile.site.id, nz.slug, am.slug, mx.slug].map(slug => `gfs/sites/${slug}.json`));
   }
 });
 

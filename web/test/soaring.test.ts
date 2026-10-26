@@ -296,5 +296,7 @@ test('Armenia regional links select ICON-EU and retain its full forecast horizon
   assert.throws(() => defaultReplayQuery('?region=unknown', catalogue), /unavailable/);
   assert.throws(() => defaultReplayQuery('?country=NZ', catalogue), /unavailable/, 'country navigation must not select an unrelated map');
   assert.throws(() => defaultReplayQuery('?country=NZ', null), /unavailable/);
+  assert.throws(() => defaultReplayQuery('?country=MX', catalogue), /unavailable/, 'Mexico launch navigation must not select an unrelated map');
+  assert.throws(() => defaultReplayQuery('?country=MX', null), /unavailable/);
   assert.equal(defaultReplayQuery('?country=NZ&case=nz-archive', catalogue).get('case'), 'nz-archive', 'explicit map links remain addressable');
 });

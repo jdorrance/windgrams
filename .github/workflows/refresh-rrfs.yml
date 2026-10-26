@@ -1,6 +1,9 @@
 # Each completion can publish independently of slower providers.
 name: Refresh rrfs
 on:
+  push:
+    branches: [main]
+    paths: [forecasts/sites.json]
   schedule:
     - cron: "55 3,9,15,21 * * *"
   workflow_dispatch:

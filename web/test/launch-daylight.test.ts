@@ -5,6 +5,41 @@ import { forecastCoversWindow, initialForecastDay, launchDayWindow } from '../sr
 import { TIME_ZONES, isValidTimeZone } from '../src/lib/launches.ts';
 
 const christchurch = { latitude: -43.53, longitude: 172.63, timeZone: 'Pacific/Auckland' };
+const valleDeBravo = { latitude: 19.061, longitude: -100.09, timeZone: 'America/Mexico_City' };
+const laSalina = { latitude: 32.092, longitude: -116.88, timeZone: 'America/Tijuana' };
+
+test('Mexican forecast days follow launch sunset across the UTC date boundary', () => {
+  const date = '2026-06-21';
+  const daylight = launchDayWindow(valleDeBravo, date);
+  assert.equal(initialForecastDay(valleDeBravo, Date.parse('2026-06-22T00:00:00Z')), date, 'UTC midnight is still the previous launch day');
+  assert.equal(initialForecastDay(valleDeBravo, daylight.endMs - 1), date);
+  assert.equal(initialForecastDay(valleDeBravo, daylight.endMs + 1), '2026-06-22');
+  for (const site of [valleDeBravo, laSalina]) {
+    assert.ok(TIME_ZONES.includes(site.timeZone));
+    assert.ok(isValidTimeZone(site.timeZone));
+    for (const day of ['2026-06-21', '2026-12-21']) {
+      const window = launchDayWindow(site, day);
+      assert.ok(window.endMs > window.startMs);
+      for (const time of [window.startMs, window.endMs]) {
+        assert.equal(localDateKey(new Date(time).toISOString(), site.timeZone), day);
+      }
+    }
+  }
+});
+
+test('Mexican launch dates preserve the difference between central and border time zones', () => {
+  for (const [date, borderHours] of [['2026-03-08', 23], ['2026-11-01', 25]] as const) {
+    for (const [site, hours] of [[valleDeBravo, 24], [laSalina, borderHours]] as const) {
+      const start = localInstantMs(date, 0, site.timeZone), end = localInstantMs(date, 24, site.timeZone);
+      assert.equal((end - start) / 3_600_000, hours);
+      const daylight = launchDayWindow(site, date);
+      for (const time of [daylight.startMs, daylight.endMs]) {
+        assert.ok(time > start && time < end);
+        assert.equal(localDateKey(new Date(time).toISOString(), site.timeZone), date);
+      }
+    }
+  }
+});
 
 test('NZ summer and winter opening days follow sunset and the launch calendar', () => {
   assert.equal(initialForecastDay(christchurch, Date.parse('2026-12-20T20:00:00Z')), '2026-12-21', 'local morning is tomorrow in UTC');

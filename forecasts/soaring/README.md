@@ -81,3 +81,25 @@ changes. Accept a production migration only after that measured impact is review
 The shared [provider contract](../../packages/providers/README.md#noaa-source-experiments)
 contains the acquisition limits. Existing regional replay uses the same pressure
 field identities and scalar conversions; its legacy inventory remains unchanged.
+
+### Source impact and full-horizon trials
+
+Compare retained captures:
+
+```sh
+pnpm run verify:noaa-sources --captures experiments/hrrr-legacy.json,experiments/hrrr-expanded.json \
+  --output experiments/hrrr-impact.json --profiles experiments/hrrr-profiles
+```
+
+The report matches run, valid time, native grid/cell, coordinates and terrain,
+isolates pressure, level and 80 m wind effects, and lists missing columns and forecast hours.
+It includes capture hashes, available acquisition timings, source bytes and a
+linear estimate of full-horizon bytes. Source bytes include cached objects.
+`--profiles` writes experimental profiles to a new directory, retaining native
+cloud and convective heights and the CAPE/CIN parcel basis.
+
+Use `--hours all` with `noaa:capture` to select the model's complete registered
+schedule. `--offline` reads verified cached objects; omit it to acquire from
+upstream. Save each source mode to a new output file, then compare the captures.
+Horizon coverage and acquisition timing come from each capture; byte estimates
+scale the captured sample to the full schedule.

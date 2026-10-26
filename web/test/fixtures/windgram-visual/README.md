@@ -112,3 +112,33 @@ the previous hashes, so the SVGs, keys, physical readings and every other scene
 field are unchanged. The frozen fixtures all publish V2 diagnostics and declare
 their gust class (`instant` or `hourMax`); no fixture exercises the undeclared or
 V1-only readout wording here, which the unit tests cover instead.
+
+## Cloud semantics and expanded readings, October 26, 2026
+
+The review reproduced all 40 prior hashes before updating the baseline. Across
+432 displayed hours and 7,216 readings, native sampling, published lift, valid
+times, chart positions, ground, vertical extents, temperature, wind and gust
+values and source documents are unchanged. The 846 corrected
+`interpolated` flags identify native wind nodes; the old flag used proximity to
+temperature nodes. These counts describe the frozen fixtures.
+
+The baseline adds labels for each cloud diagnostic, V2 effective cloud limits,
+rain rate labels, and nullable moisture, omega, native height, layer wind
+and shear readings. Missing V2 caps stay null. Focused tests extend the fixture
+coverage to native 80 m reversals, duplicate or missing wind nodes, V1 effective
+cloud limits, V2 cap nulls and CAPE/CIN parcel basis.
+
+Paired Dog RRFS mobile and Aparan ICON-EU desktop screenshots were checked for
+clipping, contours, labels, missing coverage and lift marks. The local report and
+SVG/PNG pairs are in `/tmp/windgram-final-parity/`.
+
+The subsequent wording review compared all 40 compiled scenes and 432 midpoint
+readings before refreshing the hashes. Source data, numeric values, geometry,
+SVG attributes and styles are identical; only labels and explanatory text
+changed. Numbers within that text are unchanged. The local comparison report is
+in `/tmp/windgram-copy-parity/`.
+
+The following refactor preserves all 40 compiled scenes and 432 midpoint readings
+exactly, including source data, geometry, SVGs, keys and text. All hashes still
+match the existing baseline; none were updated. The comparison report and
+before/after payloads are in `/tmp/windgram-refactor-parity/`.

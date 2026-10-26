@@ -69,7 +69,9 @@ export interface CompatibilityHour {
   cloudCoverPercent?: number | null; skyCoverPct?: number | null;
   boundaryLayerHeightM?: number | null; mixingHeightM?: number | null;
   transportWindSpeedMps?: number | null; transportWindDirectionDeg?: number | null;
-  surface?: Partial<Record<Exclude<keyof AtmosphericColumn, 'validAt' | 'levels' | 'smoke' | 'precipitationMm'> | 'precipitationMmHr', Scalar | null>>;
+  surface?: Partial<Record<Exclude<keyof AtmosphericColumn, 'validAt' | 'levels' | 'smoke' | 'precipitationMm' | 'convectiveParcel'> | 'precipitationMmHr', Scalar | null>> & {
+    convectiveParcel?: AtmosphericColumn['convectiveParcel'];
+  };
   levels?: readonly SiteForecast['hours'][number]['levels'][number][] | readonly AtmosphericLevel[];
   derived?: Partial<Record<'thermalVelocityMps' | 'usableLiftTopM' | 'boundaryLayerTopM' | 'cloudBaseM', Scalar | null>>;
   soaring?: Partial<Record<SoaringMetric | 'modelBlTopM', Scalar | null>> & {

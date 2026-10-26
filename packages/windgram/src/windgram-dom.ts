@@ -1,27 +1,28 @@
 import { renderWindgramSvg } from './windgram-chart.ts';
-import { fahrenheitToCelsius, formatQuantity, gustNoun, knotsToMps, type UnitSystem } from './windgram-format.ts';
-import { heightToY } from './windgram-scale.ts';
+import { formatQuantity } from './windgram-format.ts';
+import { formatWindgramReading } from './windgram-readout.ts';
+import { heightToY, yToHeight } from './windgram-scale.ts';
 import { readWindgram } from './windgram-inspector.ts';
 import { visibleWindgramHourIndices } from './windgram-time-axis.ts';
 import type { WindgramView } from './windgram-view.ts';
-import type { WindgramMountOptions, WindgramMount } from './dom.ts';
+import type { WindgramMountOptions, WindgramMount, WindgramInspector } from './dom.ts';
 const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(high, n));
 const fmt = (value: number) => Number(value.toFixed(2));
-const barbSpeed = (knots: number, system: UnitSystem) => formatQuantity(knotsToMps(knots), 'barbWind', undefined, system);
-const degrees = (direction: number) => `${["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"][Math.round(direction / 22.5) % 16]} ${Math.round(direction) % 360}°`;
 
-/** Inspect each forecast hour at its published blue usable-lift line. */
+/** Inspect the published lift ceiling, or opt into physical height inspection. */
 export function mountWindgramInspector(
   host: HTMLElement,
   readout: HTMLElement | null,
   view: WindgramView,
   onSelectHour?: (validAt: string) => void,
   selectedHourIndex?: () => number,
-): () => void {
+  options: { mode?: 'lift' | 'height' } = {},
+): WindgramInspector {
   const system = view.unitSystem;
   const svg = host.querySelector<SVGSVGElement>("svg.windgram");
   const visibleHours = visibleWindgramHourIndices(view, 0);
-  if (!svg || !visibleHours.length) return () => {};
+  if (!svg || !visibleHours.length) return Object.assign(() => {}, { select: (_index: number | null) => {} });
+  const heightMode = options.mode === 'height';
   const ownerDocument = host.ownerDocument;
   const cursor = svg.querySelector<SVGGElement>("[data-windgram-cursor]");
   const vertical = svg.querySelector<SVGLineElement>("[data-cursor-vertical]");
@@ -34,7 +35,8 @@ export function mountWindgramInspector(
   const originalAttributes = new Map(["tabindex", "role", "aria-label", "aria-describedby"].map((key) => [key, host.getAttribute(key)]));
   const readoutAttributes = new Map(["role", "aria-live", "aria-atomic"].map((key) => [key, readout?.getAttribute(key) ?? null]));
   const interactionLabel =
-    "Interactive windgram. Hover or tap an hour for lift top AGL. Left and right arrows change hour. Escape clears the selection.";
+    heightMode ? "Interactive windgram. Hover or tap to inspect height. Left and right arrows change hour; up and down change height. Escape clears the selection."
+      : "Interactive windgram. Hover or tap an hour for lift top AGL. Left and right arrows change hour. Escape clears the selection.";
   host.tabIndex = 0;
   host.setAttribute("role", "group");
   host.setAttribute("aria-label", interactionLabel);
@@ -42,12 +44,17 @@ export function mountWindgramInspector(
   readout?.setAttribute("role", "status");
   readout?.setAttribute("aria-live", "polite");
   readout?.setAttribute("aria-atomic", "true");
-  const instructions = "Hover for lift top · click or tap to pin · left/right arrows change hour · Escape clears";
+  const instructions = `${heightMode ? 'Hover to inspect height' : 'Hover for lift top'} · click or tap to pin · left/right arrows change hour${heightMode ? ' · up/down changes height' : ''} · Escape clears`;
+  const timeFormat = new Intl.DateTimeFormat('en-US', {
+    timeZone: view.timeZone, weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+  });
   if (readout) readout.textContent = instructions;
   let activeHour: number | null = null;
+  let activeHeightM: number | null = null;
   let pinned = false;
   let pointerStart: { x: number; y: number; id: number; moved: boolean } | null = null;
   let lastText = "";
+  let disposed = false;
   const clear = () => {
     pinned = false;
     activeHour = null;
@@ -57,12 +64,13 @@ export function mountWindgramInspector(
     else host.setAttribute("aria-label", interactionLabel);
   };
 
-  const update = (hourIndex: number, keyboard = false) => {
+  const update = (hourIndex: number, keyboard = false, inspectedHeightM?: number) => {
     const hour = view.hours[hourIndex];
     activeHour = hourIndex;
     const x = hour.x;
     if (keyboard) {
       onSelectHour?.(hour.validAt);
+      if (disposed) return;
       // Reveal the selected hour even when its lift ceiling is unavailable.
       const matrix = svg.getScreenCTM();
       if (matrix) {
@@ -73,17 +81,13 @@ export function mountWindgramInspector(
         else if (screen.x > rect.right - 32) host.scrollLeft += screen.x - rect.right + 32;
       }
     }
-    const when = new Intl.DateTimeFormat("en-US", {
-      timeZone: view.timeZone,
-      weekday: "short",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZoneName: "short",
-    }).format(new Date(hour.validAt));
-    const heightM = hour.usableLiftTopM;
+    const when = timeFormat.format(new Date(hour.validAt));
+    const heightM = heightMode ? clamp(inspectedHeightM ?? activeHeightM ?? hour.usableLiftTopM ?? view.floorM + 100, view.floorM, view.topM) : hour.usableLiftTopM;
+    if (heightMode) activeHeightM = heightM;
     if (heightM === null || heightM < view.floorM || heightM > view.topM) {
       cursor?.setAttribute("visibility", "hidden");
-      lastText = `${when} · ${heightM === null ? "Lift top unavailable" : "Lift top outside this view"}`;
+      const reading = readWindgram(view, hourIndex, view.floorM);
+      lastText = `${when} · ${heightM === null ? "Lift top unavailable" : "Lift top outside this view"} · ${formatWindgramReading(view, reading, 'surface').join(' · ')}`;
       if (readout) readout.textContent = lastText;
       else host.setAttribute("aria-label", `${interactionLabel} ${lastText}`);
       return;
@@ -138,26 +142,8 @@ export function mountWindgramInspector(
     );
     callout?.setAttribute("transform", `translate(${fmt(calloutX)} ${fmt(calloutY)})`);
     attr(calloutBack, { width: calloutWidth });
-    const title = `${when} · Lift top · ${aglText} · ${mslText}`;
-    const values = [
-      reading.temperatureF == null ? "Temperature unavailable" : `${formatQuantity(fahrenheitToCelsius(reading.temperatureF), "temperature", 1, system)}`,
-      reading.speedKt == null
-        ? "Wind unavailable"
-        : reading.speedKt < 0.1
-          ? "Calm"
-          : `${barbSpeed(reading.speedKt, system)}${reading.directionDeg == null ? "" : ` from ${degrees(reading.directionDeg)}`}`,
-      reading.speedKt == null ? null : reading.interpolated ? "Interpolated" : "Model level",
-      reading.gustKt == null ? null : `Surface ${gustNoun(view.gustSemantics)} ${barbSpeed(reading.gustKt, system)}`,
-      reading.cloud === "model"
-        ? "Model cloud layer"
-        : reading.cloud === "humidity"
-          ? "Likely cloud layer from humidity >94%"
-          : reading.cloud === "potential"
-            ? "Potential cloud base"
-            : null,
-      view.ensemble ? "Ensemble median" : null,
-      hour.liftFamily === "v1-legacy" ? "Earlier lift method (v1)" : null,
-    ].filter((value): value is string => value !== null);
+    const title = `${when} · ${heightMode ? 'Inspected height' : 'Lift top'} · ${aglText} · ${mslText}`;
+    const values = formatWindgramReading(view, reading, 'height');
     const nextText = `${title} · ${values.join(" · ")}`;
     if (nextText !== lastText) {
       if (readout) {
@@ -178,13 +164,13 @@ export function mountWindgramInspector(
     if (position.x < dataLeft || position.x > dataRight) return null;
     const hourIndex = visibleHours.reduce((best, index) =>
       Math.abs(view.hours[index].x - position.x) < Math.abs(view.hours[best].x - position.x) ? index : best);
-    return { hourIndex };
+    return { hourIndex, heightM: yToHeight(view, position.y) };
   };
   const onMove = (event: PointerEvent) => {
     if (pointerStart?.id === event.pointerId && Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 10) pointerStart.moved = true;
     if (event.pointerType !== "mouse" || pinned) return;
     const p = location(event);
-    if (p) update(p.hourIndex);
+    if (p) update(p.hourIndex, false, p.heightM);
     else cursor?.setAttribute("visibility", "hidden");
   };
   const onDown = (event: PointerEvent) => {
@@ -197,7 +183,7 @@ export function mountWindgramInspector(
     const p = location(event);
     if (!p) return;
     pinned = true;
-    update(p.hourIndex);
+    update(p.hourIndex, false, p.heightM);
     onSelectHour?.(view.hours[p.hourIndex].validAt);
   };
   const onCancel = () => {
@@ -214,7 +200,7 @@ export function mountWindgramInspector(
       clear();
       return;
     }
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    if (!["ArrowLeft", "ArrowRight", "Home", "End", ...(heightMode ? ['ArrowUp', 'ArrowDown'] : [])].includes(event.key)) return;
     event.preventDefault();
     pinned = true;
     let hourIndex = selectedHourIndex?.() ?? activeHour ?? view.selectedHourIndex;
@@ -222,6 +208,10 @@ export function mountWindgramInspector(
     if (event.key === "ArrowRight") hourIndex = visibleHours.find(index => index > hourIndex) ?? visibleHours.at(-1)!;
     if (event.key === "Home") hourIndex = visibleHours[0];
     if (event.key === "End") hourIndex = visibleHours.at(-1)!;
+    if (heightMode && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      hourIndex = visibleHours.find(index => index >= hourIndex) ?? visibleHours.at(-1)!;
+      activeHeightM = clamp((activeHeightM ?? view.hours[hourIndex].usableLiftTopM ?? view.floorM + 100) + (event.key === 'ArrowUp' ? 100 : -100), view.floorM, view.topM);
+    }
     update(hourIndex, true);
   };
   host.addEventListener("pointermove", onMove);
@@ -231,7 +221,9 @@ export function mountWindgramInspector(
   host.addEventListener("pointerleave", onLeave);
   host.addEventListener("keydown", onKey);
   ownerDocument?.addEventListener("pointerdown", onOutsideDown);
-  return () => {
+  return Object.assign(() => {
+    if (disposed) return;
+    disposed = true;
     host.removeEventListener("pointermove", onMove);
     host.removeEventListener("pointerdown", onDown);
     host.removeEventListener("pointerup", onUp);
@@ -242,14 +234,18 @@ export function mountWindgramInspector(
     for (const [name, value] of originalAttributes) value === null ? host.removeAttribute(name) : host.setAttribute(name, value);
     for (const [name, value] of readoutAttributes) value === null ? readout?.removeAttribute(name) : readout?.setAttribute(name, value);
     cursor?.setAttribute("visibility", "hidden");
-  };
+  }, { select: (index: number | null) => {
+    if (disposed) return;
+    if (index === null || !visibleHours.includes(index)) clear();
+    else update(index);
+  } });
 }
 
 
 type InternalMountOptions = Omit<WindgramMountOptions, 'view'> & { view: WindgramView };
 /** Owns one SVG host; callers own profiles, layout, routing and persisted state. */
 export function mountWindgram(host: HTMLElement, options: InternalMountOptions): Omit<WindgramMount, 'update'> & { update(view: WindgramView): void } {
-  let clearInspector: (() => void) | null = null;
+  let clearInspector: WindgramInspector | null = null;
   let disposed = false;
   let view = options.view;
   let selectedValidAt = options.selectedValidAt === undefined ? view.hours[view.selectedHourIndex]?.validAt ?? null : options.selectedValidAt;
@@ -257,6 +253,7 @@ export function mountWindgram(host: HTMLElement, options: InternalMountOptions):
     if (disposed) return;
     selectedValidAt = validAt;
     const index = validAt ? view.hours.findIndex(hour => hour.validAt === validAt && hour.x >= view.left && hour.x <= view.left + view.plotWidth) : -1;
+    clearInspector?.select(index >= 0 ? index : null);
     const cursor = host.querySelector<SVGRectElement>('[data-selected-hour]');
     if (cursor) {
       cursor.setAttribute('visibility', index >= 0 ? 'visible' : 'hidden');
@@ -271,6 +268,7 @@ export function mountWindgram(host: HTMLElement, options: InternalMountOptions):
   const update = (next: WindgramView) => {
     if (disposed) return;
     clearInspector?.();
+    clearInspector = null;
     view = next;
     host.innerHTML = renderWindgramSvg(view, { idPrefix: options.idPrefix });
     const svg = host.querySelector<SVGSVGElement>('svg.windgram');
@@ -283,11 +281,11 @@ export function mountWindgram(host: HTMLElement, options: InternalMountOptions):
       })) selected.setAttribute(key, String(value));
       svg.insertBefore(selected, svg.querySelector('[data-windgram-cursor]'));
     }
-    select(selectedValidAt);
     clearInspector = mountWindgramInspector(host, options.readout ?? null, view, validAt => {
       select(validAt);
       options.onSelectHour?.(validAt);
-    }, () => Math.max(0, view.hours.findIndex(hour => hour.validAt === selectedValidAt)));
+    }, () => Math.max(0, view.hours.findIndex(hour => hour.validAt === selectedValidAt)), { mode: options.inspectionMode });
+    select(selectedValidAt);
   };
   update(view);
   return {

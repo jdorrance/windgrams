@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { acquireNoaa } from '@windgrams/providers/noaa';
+import { modelDescriptor } from '@windgrams/providers/registry';
 
 export async function captureNoaaColumns(values, { acquire = acquireNoaa } = {}) {
   if (!values.model || !values['reference-time'] || !values.hours || !values.output || (!values.sites && !values.bounds)) {
@@ -12,7 +13,8 @@ export async function captureNoaaColumns(values, { acquire = acquireNoaa } = {})
   const catalogue = values.sites ? JSON.parse(await readFile(values.sites, 'utf8')) : null;
   const sites = catalogue ? (Array.isArray(catalogue) ? catalogue : catalogue.sites) : undefined;
   if (catalogue && !Array.isArray(sites)) throw new Error('--sites requires an array or a catalogue with sites');
-  const hours = values.hours.split(',').map(Number);
+  const schedule = modelDescriptor(values.model).forecastHours;
+  const hours = values.hours === 'all' ? [...schedule] : values.hours.split(',').map(Number);
   const bounds = values.bounds?.split(',').map(Number);
   if (bounds && bounds.length !== 4) throw new Error('--bounds requires west,south,east,north');
   const output = resolve(values.output), lock = `${output}.capture.lock`;
@@ -29,10 +31,13 @@ export async function captureNoaaColumns(values, { acquire = acquireNoaa } = {})
     const acquisition = await acquire({
       model: values.model, referenceTime: values['reference-time'], forecastHours: hours,
       sites, bounds, cacheDir: resolve(values.cache ?? '.soaring-cache/normalized-noaa'), verticalMode: values.mode ?? 'legacy-pressure',
+      ...(values.offline ? { fetchImpl: () => { throw new Error('Offline cache miss for the requested run/hour'); } } : {}),
     });
     const metrics = {
       startedAt, finishedAt: new Date().toISOString(), elapsedMs: Math.round(performance.now() - start),
       sourceBytes: acquisition.assets.reduce((sum, asset) => sum + asset.size, 0), sourceAssets: acquisition.assets.length,
+      offline: values.offline === true,
+      fullHorizon: acquisition.hours.length === schedule.length && acquisition.hours.every((hour, index) => hour.forecastHour === schedule[index]),
       note: 'Source bytes include reused cache objects; elapsed time describes this invocation only.',
     };
     await writeFile(output, `${JSON.stringify(acquisition)}\n`, { flag: 'wx' });
@@ -49,6 +54,6 @@ export async function captureNoaaColumns(values, { acquire = acquireNoaa } = {})
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const { values } = parseArgs({ options: Object.fromEntries(['model', 'reference-time', 'hours', 'sites', 'bounds', 'cache', 'mode', 'output'].map(name => [name, { type: 'string' }])) });
+  const { values } = parseArgs({ options: { ...Object.fromEntries(['model', 'reference-time', 'hours', 'sites', 'bounds', 'cache', 'mode', 'output'].map(name => [name, { type: 'string' }])), offline: { type: 'boolean' } } });
   console.log(JSON.stringify(await captureNoaaColumns(values), null, 2));
 }

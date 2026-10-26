@@ -14,6 +14,13 @@ const fixture = (name = "convective-cycle") => {
   assert.ok(profile, `${name} is a valid forecast fixture`);
   return profile;
 };
+function publishV2(profile: SiteForecast) {
+  for (const hour of profile.hours) Object.assign(hour, { soaring: {
+    thermalVelocityV2Mps: hour.derived.thermalVelocityMps, resolvedThermalTopM: hour.derived.boundaryLayerTopM,
+    usableLiftTopV2M: hour.derived.usableLiftTopM, surfaceLclM: hour.derived.cloudBaseM,
+  } });
+  return profile;
+}
 const viewOf = (profile: SiteForecast) => buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 1000 });
 const close = (actual: number, expected: number, tolerance = 1e-6) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≈ ${expected}`);
 
@@ -197,7 +204,7 @@ test("cloud evidence distinguishes dry LCL, saturated layers and model cloud", (
     hour.surface.cloudCoverPercent = 0;
     for (const level of hour.levels) level.dewPointC = Number(level.temperatureC) - 20;
   }
-  const potential = viewOf(dry);
+  const potential = viewOf(publishV2(dry));
   assert.ok(potential.clouds.some((cloud) => cloud.kind === "potential"));
   assert.ok(potential.clouds.every((cloud) => cloud.kind === "potential"), "a dry LCL must not masquerade as forecast cloud");
   assert.equal(potential.cloudBands.length, 0);
@@ -215,6 +222,7 @@ test("cloud evidence distinguishes dry LCL, saturated layers and model cloud", (
 
   const inaccessible = structuredClone(dry);
   for (const hour of inaccessible.hours) hour.derived.cloudBaseM = 10000;
+  publishV2(inaccessible);
   assert.equal(viewOf(inaccessible).clouds.length, 0, "LCL above the available profile is absent");
 });
 
@@ -271,7 +279,7 @@ test("potential cloud base remains visible when thermals cannot reach it or have
       level.cloudFractionPercent = 0;
     }
   }
-  const view = viewOf(profile);
+  const view = viewOf(publishV2(profile));
   assert.ok(base < view.topM);
   assert.equal(view.cloudBands.length, 0, "a dry LCL does not imply existing cloud");
   assert.equal(view.clouds.length, profile.hours.length);
@@ -295,11 +303,12 @@ test("paraglider symbols use the published 225 ft/min ceiling and never substitu
     } });
   }
   const view = viewOf(profile);
-  assert.equal(view.wings.length, 1);
-  assert.equal(view.wings[0].hourIndex, 1);
-  assert.equal(view.wings[0].heightM, gliderTop);
-  close(view.wings[0].y, heightToY(view, gliderTop) + 8);
-  assert.notEqual(view.wings[0].heightM, oneMetreTop);
+  assert.ok(view.wings.length > 0);
+  for (const wing of view.wings) {
+    assert.equal(wing.heightM, gliderTop);
+    close(wing.y, heightToY(view, gliderTop) + 8);
+    assert.notEqual(wing.heightM, oneMetreTop);
+  }
   assert.match(renderWindgramSvg(view), /Paraglider ceiling · 225 ft\/min sink/);
   for (const mode of ["null", "missing", "legacy"]) {
     const incomplete = structuredClone(profile);
@@ -310,6 +319,82 @@ test("paraglider symbols use the published 225 ft/min ceiling and never substitu
       else extended.soaring!.hcritWxtoflyM = null;
     }
     assert.equal(viewOf(incomplete).wings.length, 0, `${mode} 225 ft/min diagnostic must stay absent`);
+  }
+});
+
+test('paraglider marks retain the visible peak of sparse and interrupted lift periods', () => {
+  const profile = steadyProfile(6);
+  profile.site.latitude = 19.044;
+  profile.site.longitude = -100.097;
+  const ceilings = [null, null, 1900, 1500, null, null];
+  profile.hours.forEach((hour, i) => {
+    hour.validAt = new Date(Date.UTC(2026, 9, 27, 12 + i * 3)).toISOString();
+    Object.assign(hour, { soaring: { thermalVelocityV2Mps: ceilings[i] === null ? 0 : 2, hcritWxtoflyM: ceilings[i] } });
+  });
+  for (const compact of [false, true]) {
+    const view = buildWindgramView(profile, { timeZone: 'America/Mexico_City', unitSystem: 'metric', compact, widthPx: compact ? 320 : 1000 });
+    assert.ok(view.wings.some(wing => wing.heightM === 1900));
+    assert.ok(view.wings.every(wing => wing.x >= view.left && wing.x <= view.left + view.plotWidth));
+  }
+
+  const interrupted = steadyProfile(3);
+  interrupted.hours.forEach((hour, i) => Object.assign(hour, { soaring: { thermalVelocityV2Mps: 2, hcritWxtoflyM: i === 1 ? null : 1700 } }));
+  assert.deepEqual(viewOf(interrupted).wings.map(wing => wing.hourIndex), [0, 2]);
+});
+
+test('dense paraglider marks use pixel spacing while preserving the highest ceiling', () => {
+  const profile = steadyProfile(12), peakIndex = 5;
+  profile.site.latitude = 0;
+  profile.site.longitude = 0;
+  profile.hours.forEach((hour, i) => Object.assign(hour, { soaring: {
+    thermalVelocityV2Mps: 2, hcritWxtoflyM: i === peakIndex ? 1900 : 1700,
+  } }));
+  const view = buildWindgramView(profile, { timeZone: 'Etc/UTC', unitSystem: 'metric', compact: true, widthPx: 320 });
+  assert.ok(view.wings.some(wing => wing.heightM === 1900));
+  assert.ok(view.wings.length < view.hours.length);
+  for (let i = 1; i < view.wings.length; i++) {
+    assert.ok(view.wings[i].x - view.wings[i - 1].x >= view.presentation.glyphs.minimumHorizontalSpacing);
+  }
+});
+
+test('zero-strength V2 thermals anchor the lift line without changing published ceilings', () => {
+  const profile = steadyProfile(3), ground = profile.site.modelElevationM;
+  profile.hours.forEach((hour, i) => Object.assign(hour, { soaring: {
+    thermalVelocityV2Mps: i === 1 ? 2 : 0,
+    usableLiftTopV2M: i === 1 ? ground + 1000 : null,
+  } }));
+  for (const compact of [false, true]) {
+    const view = buildWindgramView(profile, {
+      timeZone: 'Etc/UTC', compact, launch: { elevationM: ground + 100 },
+    });
+    const path = view.series.find(series => series.key === 'usableLiftTopM')!.path;
+    const points = [...path.matchAll(/([ML])([\d.]+),([\d.]+)/g)];
+    assert.deepEqual(points.map(point => point[1]), ['M', 'L', 'L']);
+    close(Number(points[0][3]), heightToY(view, ground), 0.01);
+    close(Number(points[1][3]), heightToY(view, ground + 1000), 0.01);
+    close(Number(points[2][3]), heightToY(view, ground), 0.01);
+    assert.deepEqual(view.hours.map(hour => hour.usableLiftTopM), [null, ground + 1000, null]);
+    assert.equal(view.wings.length, 0);
+  }
+});
+
+test('missing, weak, legacy and ensemble lift stay separate from known zero strength', () => {
+  for (const mode of ['missing', 'weak', 'legacy', 'percentile', 'one-member', 'ensemble']) {
+    const profile = steadyProfile(3), ceiling = profile.site.modelElevationM + 1000;
+    profile.hours.forEach((hour, i) => {
+      hour.derived.usableLiftTopM = i === 1 ? null : ceiling;
+      hour.derived.thermalVelocityMps = i === 1 ? 0 : 2;
+      if (mode !== 'legacy') Object.assign(hour, { soaring: {
+        thermalVelocityV2Mps: i !== 1 ? 2 : mode === 'missing' ? null : mode === 'weak' ? 0.27
+          : mode === 'percentile' ? { p25: 0, p50: 0, p75: 1, members: 10 } : 0,
+        usableLiftTopV2M: i === 1 ? null : ceiling,
+      } });
+    });
+    if (mode === 'ensemble') profile.run.members = 10;
+    if (mode === 'one-member') profile.run.members = 1;
+    const path = viewOf(profile).series.find(series => series.key === 'usableLiftTopM')!.path;
+    assert.equal((path.match(/M/g) ?? []).length, 2, mode);
+    assert.ok(!path.includes('L'), mode);
   }
 });
 
@@ -657,6 +742,7 @@ test("compact charts retain isolated model cloud bands and every potential cloud
     }
   }
   profile.hours[2].levels[2].cloudFractionPercent = 100;
+  publishV2(profile);
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 320, heightPx: 667 });
   assert.ok(!visibleWindgramHourIndices(view).includes(2));
   const modelCloud = view.clouds.filter((cloud) => cloud.kind === "model");

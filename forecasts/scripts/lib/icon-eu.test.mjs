@@ -9,6 +9,7 @@ import { SOARING_CONTRACT_VERSION } from '../../soaring/science.mjs';
 import { discoverIconRun, normalizeIconExtract, deriveIconProfile, buildIconPointProfiles, writeIconAcquisition, readIconAcquisition, ICON_MODEL_LEVELS } from './icon-eu.mjs';
 import { iconBounds, iconReferenceTime, iconFieldUrl, iconHourlyFlux, iconHourlyPrecipitation, iconSource } from '../../../packages/providers/src/internal/icon-native.ts';
 import { specificHumidityDewpointC } from '../../../packages/providers/src/internal/thermodynamics.ts';
+import { iconColumnRecord } from '../../../packages/providers/src/icon.ts';
 
 const fixture = JSON.parse(readFileSync(new URL('./icon-native-fixture.json', import.meta.url), 'utf8'));
 const copy = () => structuredClone(fixture);
@@ -94,6 +95,29 @@ test('missing required source stays unavailable; bad units and reversed half lev
   assert.throws(() => iconSource(wrong, 7, 0), /unexpected units/);
   const reversed = copy(); reversed.records['HHL:0:60'].values[0] = 0;
   assert.throws(() => iconSource(reversed, 7, 0), /inverted/);
+});
+
+test('native surface pressure survives normalization and publication with field provenance', () => {
+  const acquired = normalizeIconExtract(fixture);
+  for (const [slug, i] of Object.entries(acquired.siteCells)) {
+    const expected = fixture.records['PS:7:None'].values[i] / 100;
+    const record = iconColumnRecord(acquired, 0, i);
+    assert.equal(record.column.surfacePressureHpa, expected);
+    assert.equal(record.provenance.fieldSemantics.surfacePressureHpa.sourceField, 'PS');
+    assert.equal(record.provenance.fieldSemantics.surfacePressureHpa.unit, 'hPa');
+    const cell = acquired.cells[i];
+    const profile = deriveIconProfile(acquired, i, { slug, name: slug, latitude: cell.latitude, longitude: cell.longitude });
+    const hour = profile.hours[0];
+    assert.equal(hour.surface.surfacePressureHpa, expected);
+    assert.deepEqual(hour.soaring.diagnosticSupport.surfacePressure, { source: 'model', valueHpa: expected });
+    assert.equal(hour.surface.convectiveParcel, 'mixed-layer');
+  }
+  const missing = copy(); delete missing.records['PS:7:None'];
+  assert.equal(iconSource(missing, 7, 0).surfacePressureHpa, undefined);
+  const wrong = copy(); wrong.records['PS:7:None'].metadata.units = 'hPa';
+  assert.throws(() => iconSource(wrong, 7, 0), /unexpected units/);
+  const invalid = copy(); invalid.records['PS:7:None'].values[0] = 0;
+  assert.throws(() => iconSource(invalid, 7, 0), /must be positive/);
 });
 
 test('all three real samples pass public profile contract and existing V2 physics idempotently', () => {

@@ -113,6 +113,30 @@ The default uses 14 frozen HRRR source columns, one RRFS column, and three DWD I
 
 ## Scientific comparison definitions
 
+`pnpm run verify:noaa-sources --captures FILE,FILE --output NEW_REPORT.json`
+compares captured NOAA source modes offline. The [source-trial workflow](../soaring/README.md#source-impact-and-full-horizon-trials)
+covers full horizons, byte estimates, acquisition timings and experimental profiles.
+
+`pnpm run verify:wind-anchor --output NEW_REPORT.json` compares the current
+boundary-layer ground anchor with a 10 m lower integration boundary using frozen
+HRRR/ICON columns and analytic shallow and calm cases. Results group wind, shear
+and buoyancy/shear changes by model and layer depth, with a check against the
+current method. The RRFS thermal fixture has unrotated winds and is excluded.
+`--input FILE` accepts frozen `{id, model, terrainM, column, evidence}` records
+with verified wind coordinates. An optional `layerTopM` override is metres MSL
+and places the record in a synthetic group.
+
+The October 26 source audit replayed seven partial NOAA captures: 36 columns and
+20 exact source-mode comparisons, covering every candidate column. Estimated
+full-horizon source bytes, including cached objects, are 5.8 GB for HRRR expanded
+pressure, 25.2 GB for HRRR native, 16.3 GB for RRFS expanded pressure and 12.0 GB
+for GFS expanded pressure. The wind-anchor experiment reproduced the current
+method on 17 frozen weather columns and included four synthetic cases.
+Reports and candidate profiles are retained under
+`forecasts/.scientific-review/2026-10-26-briefing-source-work/`.
+
+### Quantity definitions
+
 [`definitions.mjs`](definitions.mjs) owns the provider inventory and distinctions among vertical velocity/horizontal convergence, native PBL/parcel thermal top, LCL/CCL/ambient cloud base, and sink thresholds. The legacy inventory re-exports those definitions. [`comparability.mjs`](comparability.mjs) gates normalized quantities, height references, exact UTC times, accumulation/mean intervals and verified initialization/native-cell identity. WxToFly and XC rows retain qualified forecast disagreement while exposing `strictSameRunIssue`; the strict cohort excludes unknown runs and incompatible definitions. Runtime routing metadata alone cannot establish a PointCast column's initialization.
 
 ## Review tooling ownership

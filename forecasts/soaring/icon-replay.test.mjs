@@ -29,6 +29,8 @@ test('all native ICON cells match their point diagnostics and published atmosphe
     assert.equal(result.files['grid.geojson'].features[i].properties.modelElevationM, doc.site.modelElevationM);
     for (let hi = 0; hi < doc.hours.length; hi++) {
       const hour = doc.hours[hi], field = result.hourly[hi];
+      assert.equal(hour.soaring.diagnosticSupport.surfacePressure.source, 'model');
+      assert.equal(hour.soaring.diagnosticSupport.surfacePressure.valueHpa, raw.records['PS:7:None'].values[i] / 100);
       const native = Object.values(field.levelsByModel).map(values => ({
         pressureHpa: values.p[i], heightM: values.h[i], temperatureC: values.t[i], dewPointC: values.td[i],
         windSpeedMps: values.ws[i], windDirectionDeg: values.wd[i],

@@ -8,7 +8,13 @@ export interface WindgramMountOptions {
   readout?: HTMLElement | null;
   onSelectHour?: (validAt: string) => void;
   selectedValidAt?: string | null;
+  /** Defaults to the published lift ceiling; height mode follows pointer altitude. */
+  inspectionMode?: 'lift' | 'height';
 }
+export type WindgramInspector = (() => void) & {
+  /** Show an hour, or clear inspection with null. */
+  select(hourIndex: number | null): void;
+};
 export interface WindgramMount {
   /** Replace the view after the container width, forecast or display units change. */
   update(view: WindgramView): void;
@@ -16,11 +22,11 @@ export interface WindgramMount {
   /** Release event listeners when removing the chart. */
   dispose(): void;
 }
-/** Mount an interactive chart. Load @windgrams/windgram/styles.css first; inspection snaps to the published lift ceiling. */
+/** Mount an interactive chart. Load @windgrams/windgram/styles.css first. */
 export function mountWindgram(host: HTMLElement, options: WindgramMountOptions): WindgramMount {
   const chart = mount(host, { ...options, view: sceneData(options.view) });
   return { update: view => chart.update(sceneData(view)), select: chart.select, dispose: chart.dispose };
 }
-export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement | null, view: WindgramView, onSelectHour?: (validAt: string) => void): () => void {
-  return inspect(host, readout, sceneData(view), onSelectHour);
+export function mountWindgramInspector(host: HTMLElement, readout: HTMLElement | null, view: WindgramView, onSelectHour?: (validAt: string) => void, options: { mode?: 'lift' | 'height' } = {}): WindgramInspector {
+  return inspect(host, readout, sceneData(view), onSelectHour, undefined, options);
 }

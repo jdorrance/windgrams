@@ -7,7 +7,7 @@ import { componentsToWind } from "@azohra/meteo.briefing/derive";
 import { buildMeteogramScene, type HourSampling, type MetricStrip } from "@azohra/meteo.briefing/meteogram";
 import type { WindgramLayout, WindgramHour as PublicHour, WindgramOptions } from './scene-types.ts';
 export type { WindgramOptions } from './scene-types.ts';
-import { publishedLift, publishedLiftFamily, publishedWxtoflyLiftTop, type PublishedLiftFamily } from "@windgrams/contracts/published-lift";
+import { publishedCloudBaseKind, publishedEffectiveCloudLimit, publishedLift, publishedLiftFamily, publishedWxtoflyLiftTop, type PublishedForecastHour as ProfileHour, type PublishedLiftFamily } from "@windgrams/contracts/published-lift";
 import {
   celsiusToFahrenheit,
   convertQuantity,
@@ -90,7 +90,7 @@ export interface WindgramBarb {
   interpolated: boolean;
   surface: boolean;
 }
-export type CloudEvidence = "model" | "humidity" | "potential";
+export type CloudEvidence = "model" | "humidity" | "potential" | "effective";
 export interface WindgramCloud {
   hourIndex: number;
   x: number;
@@ -120,6 +120,9 @@ export interface WindgramView extends WindgramLayout {
   hasWindWindow: boolean;
   /** The document's declared gust class; null when the document predates the tag. */
   gustSemantics: GustSemantics | null;
+  precipitationSemantics: 'instantRate' | 'windowMeanRate' | null;
+  sourceHours: readonly ProfileHour[];
+  omegaUnavailableReasons: readonly (string | null)[];
   presentation: WindgramPresentation;
   anchors: HeightAnchor[];
   hours: WindgramHour[];
@@ -142,11 +145,30 @@ export interface WindgramView extends WindgramLayout {
   sourceNote: string | null;
   displayInterpolationNote: string;
 }
-type ProfileHour = SiteForecast["hours"][number];
+
+/** Space valid marks within each lift period, retaining its highest visible ceiling. */
+function selectWingMarks(candidates: WindgramView['wings'], spacing: number, gaps: ReadonlySet<number>): WindgramView['wings'] {
+  const runs: WindgramView['wings'][] = [];
+  for (const candidate of candidates) {
+    const run = runs.at(-1), previous = run?.at(-1);
+    if (!previous || candidate.hourIndex !== previous.hourIndex + 1 || gaps.has(candidate.hourIndex)) runs.push([candidate]);
+    else run!.push(candidate);
+  }
+  return runs.flatMap(run => {
+    const peak = run.reduce((highest, candidate) => candidate.heightM > highest.heightM ? candidate : highest);
+    const selected = [peak];
+    for (const candidate of run) {
+      if (selected.every(mark => Math.abs(mark.x - candidate.x) >= spacing)) selected.push(candidate);
+    }
+    return selected.sort((a, b) => a.hourIndex - b.hourIndex);
+  });
+}
 
 export function buildWindgramView(profile: SiteForecast, options: WindgramOptions): WindgramView {
   const system = options.unitSystem;
   const hours = windgramHours(profile, options);
+  const lifts = hours.map(publishedLift);
+  const cloudBaseKinds = hours.map(publishedCloudBaseKind);
   const compact = options.compact ?? false;
   // Use all supplied native heights so focused/full switching retains the same margins.
   const altitudeLabels = [profile.site.modelElevationM, options.launch?.elevationM,
@@ -174,7 +196,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     plotHeight,
   });
 
-  const sampling = hours.map((h) => hourSampling(h, modelFloorM));
+  const sampling = hours.map(h => hourSampling(h, modelFloorM, options.capabilities?.verticalVelocityLevels));
   // The library remains the authority for diagnostic semantics and units.
   const diagnosticStep = Math.min(columnWidth, plotWidth / Math.max(1, hours.length));
   const diagnosticColumnWidth = compact ? Math.max(44, diagnosticStep) : diagnosticStep;
@@ -215,6 +237,19 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     modelElevationM: modelFloorM,
     hasWindWindow: Boolean(options.launchWindows?.length),
     gustSemantics: profile.semantics?.gust ?? null,
+    precipitationSemantics: profile.semantics?.precipitation ?? null,
+    sourceHours: hours,
+    omegaUnavailableReasons: hours.map(hour => {
+      if (options.capabilities?.verticalVelocity === false) return 'Vertical motion unavailable for this model.';
+      const declared = options.capabilities?.verticalVelocityLevels;
+      if (!declared) return null;
+      const inWindow = new Set(hour.levels.flatMap(level => {
+        const pressure = finiteScalar(level.pressureHpa), height = finiteScalar(level.heightM);
+        return pressure !== null && declared.includes(pressure) && height !== null && height > modelFloorM
+          && height >= floorM && height <= topM && finiteScalar(level.verticalVelocityPaS) !== null ? [pressure] : [];
+      }));
+      return inWindow.size < 3 ? `Vertical motion unavailable: ${inWindow.size} levels in view (minimum 3).` : null;
+    }),
     timeZone: options.timeZone,
     anchors,
     sampling,
@@ -233,7 +268,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
         speed === null || speed < 0.5 || direction === null || !arcs?.length
           ? null
           : arcs.some((arc) => (arc.fromDeg <= arc.toDeg ? direction >= arc.fromDeg && direction <= arc.toDeg : direction >= arc.fromDeg || direction <= arc.toDeg));
-      const lift = publishedLift(h);
+      const lift = lifts[i];
       return {
         validAt: h.validAt,
         label: formatWindgramHourLabel(h.validAt, labelTime),
@@ -256,7 +291,11 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     series: [],
     launch: null,
     diagnostics: alignedDiagnostics(
-      scene.strips.filter((s) => s.key !== "thermalStrength"),
+      scene.strips.filter((s) => s.key !== "thermalStrength").map(strip => strip.key !== 'precipitation' ? strip : {
+        ...strip,
+        label: profile.semantics?.precipitation === 'instantRate' ? 'Rain sample'
+          : profile.semantics?.precipitation === 'windowMeanRate' ? 'Rain mean' : 'Rain rate',
+      }),
       scene.hourValidAts,
       hours,
       scene.scales.plotLeft,
@@ -420,34 +459,38 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
         });
       }
     }
-    const base = finiteScalar(publishedLift(h).cloudBaseM);
-    // WxToFly's cloud symbol is the potential LCL, independent of thermal reach.
+    const base = finiteScalar(lifts[i].cloudBaseM);
+    // cloudBaseM holds the legacy effective cloud limit or the V2 surface LCL.
     if (base !== null && base >= floorM && base <= topM) {
-      view.clouds.push({ hourIndex: i, x, y: y(base), baseM: base, topM: base, kind: "potential", coverPercent: null });
+      view.clouds.push({ hourIndex: i, x, y: y(base), baseM: base, topM: base, kind: cloudBaseKinds[i], coverPercent: null });
     }
     const gliderTop = finiteScalar(publishedWxtoflyLiftTop(h));
-    if (i % 3 === 1 && gliderTop !== null && gliderTop > floorM + 10 && gliderTop <= topM) {
+    if (gliderTop !== null && gliderTop > floorM + 10 && gliderTop <= topM && x >= left && x <= left + plotWidth) {
       view.wings.push({ x, y: y(gliderTop) + 8, heightM: gliderTop, hourIndex: i });
     }
   });
+  view.wings = selectWingMarks(view.wings, presentation.glyphs.minimumHorizontalSpacing, gaps);
 
   for (const [key, label, color, dash] of [
     ["boundaryLayerTopM", "Thermal top (parcel)", "#a56800", "7 5"],
     ["usableLiftTopM", `Usable lift · ${formatQuantity(1, "lift", undefined, system)} sink`, "#134ac4", null],
-    ["cloudBaseM", "Potential cloud base", "#426173", "2 5"],
+    ["cloudBaseM", cloudBaseKinds.every(kind => kind === 'potential') ? "Potential cloud base (surface LCL)"
+      : cloudBaseKinds.every(kind => kind === 'effective') ? "Effective cloud limit (v1)" : "Cloud base: surface LCL (v2), effective limit (v1)", "#426173", "2 5"],
   ] as const) {
-    const value = (h: ProfileHour, i: number) =>
-      key === "usableLiftTopM" ? view.hours[i].usableLiftTopM : finiteScalar(publishedLift(h)[key]);
-    const points = hours.flatMap((h, i): (Point | null)[] => {
-      const z = value(h, i);
-      const point = z === null || z < floorM || z > topM ? null : { x: view.hours[i].x, y: y(z) };
+    const points = lifts.flatMap((lift, i): (Point | null)[] => {
+      const z = key === "usableLiftTopM" ? view.hours[i].usableLiftTopM : finiteScalar(lift[key]);
+      // Zero W* anchors the line at ground; the published ceiling stays null.
+      const zeroLift = key === "usableLiftTopM" && z === null && profile.run.members === undefined && !ensemble
+        && view.hours[i].liftFamily === 'v2' && lift.thermalVelocityMps === 0;
+      const point = zeroLift ? { x: view.hours[i].x, y: y(modelFloorM) }
+        : z === null || z < floorM || z > topM ? null : { x: view.hours[i].x, y: y(z) };
       return gaps.has(i) ? [null, point] : [point];
     });
     const bandRuns: { lower: Point[]; upper: Point[] }[] = [];
     let run: (typeof bandRuns)[number] | null = null;
     for (let i = 0; i < hours.length; i++) {
       if (gaps.has(i)) run = null;
-      const val = publishedLift(hours[i])[key];
+      const val = lifts[i][key];
       const lo = val && typeof val === "object" ? finiteScalar(val.p25) : null;
       const hi = val && typeof val === "object" ? finiteScalar(val.p75) : null;
       if (lo === null || hi === null) {
@@ -468,5 +511,14 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
         .join("") || null;
     view.series.push({ key, label, color, dash, path: linearPath(points), bandPath });
   }
+  const cloudLimitPoints = hours.flatMap((hour, i): (Point | null)[] => {
+    const limit = finiteScalar(publishedEffectiveCloudLimit(hour));
+    const base = finiteScalar(lifts[i].cloudBaseM);
+    const point = view.hours[i].liftFamily === 'v2' && limit !== null && (base === null || Math.abs(limit - base) >= 1)
+      && limit >= floorM && limit <= topM ? { x: view.hours[i].x, y: y(limit) } : null;
+    return gaps.has(i) ? [null, point] : [point];
+  });
+  view.series.push({ key: 'effectiveCloudLimitM', label: 'Effective cloud limit', color: '#247e73', dash: '5 2',
+    path: linearPath(cloudLimitPoints), bandPath: null });
   return view;
 }

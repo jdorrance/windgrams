@@ -9,7 +9,7 @@ import { ICON_BASE, iconBounds, iconReferenceTime } from './icon-native.ts';
 export const iconAreaFields: readonly (keyof AtmosphericColumn)[] = Object.freeze([
   'validAt', 'temperatureC', 'dewPointDepressionC', 'windSpeedMps', 'windDirectionDeg',
   'windGustMps', 'cloudCoverPercent', 'lowCloudPercent', 'midCloudPercent', 'highCloudPercent',
-  'precipitationMm', 'sensibleHeatFluxWm2', 'latentHeatFluxWm2', 'seaLevelPressureHpa',
+  'precipitationMm', 'sensibleHeatFluxWm2', 'latentHeatFluxWm2', 'seaLevelPressureHpa', 'surfacePressureHpa',
   'capeJkg', 'cinJkg', 'pblHeightM', 'levels',
 ]);
 

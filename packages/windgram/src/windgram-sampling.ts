@@ -1,14 +1,12 @@
 // Physical column sampling, interval lapse-rate reconstruction, moist-layer
 // detection, and diagnostic strip alignment for Windgram charts.
 
-import type { SiteForecast } from "@azohra/meteo.briefing/contract";
 import { lapseRateCPer1000Ft, relativeHumidityPercent, windToComponents } from "@azohra/meteo.briefing/derive";
 import type { FieldNode, HourSampling, MetricStrip } from "@azohra/meteo.briefing/meteogram";
-import { publishedEffectiveCloudLimit, publishedLift } from "@windgrams/contracts/published-lift";
+import { publishedEffectiveCloudLimit, publishedLift, type PublishedForecastHour as ProfileHour } from "@windgrams/contracts/published-lift";
 import { finiteScalar } from "./windgram-format.ts";
 import { timeGaps } from "./windgram-time-axis.ts";
 
-type ProfileHour = SiteForecast["hours"][number];
 export type Point = { x: number; y: number };
 
 const finite = (n: number | null): n is number => n !== null && Number.isFinite(n);
@@ -35,7 +33,7 @@ export function sampleHeight(nodes: readonly FieldNode[], heightM: number): numb
   return null;
 }
 
-export function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
+export function hourSampling(hour: ProfileHour, floorM: number, omegaPressureLevels?: readonly number[]): HourSampling {
   const levels = hour.levels
     .filter((l) => finite(finiteScalar(l.heightM)) && finiteScalar(l.heightM)! > floorM)
     .sort((a, b) => finiteScalar(a.heightM)! - finiteScalar(b.heightM)!);
@@ -49,10 +47,21 @@ export function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
     if (s === 0) return { uMps: 0, vMps: 0 };
     return s === null || s < 0 || d === null ? { uMps: NaN, vMps: NaN } : windToComponents(s, d);
   };
+  const surface = hour.surface;
   const winds = [
-    { altitudeM: floorM + 10, ...wind(hour.surface.windSpeedMps, hour.surface.windDirectionDeg) },
+    { altitudeM: floorM + 10, ...wind(surface.windSpeedMps, surface.windDirectionDeg) },
+    // Incomplete 80 m measurements mark a gap; absent fields add no node.
+    ...(surface.wind80mSpeedMps != null || surface.wind80mDirectionDeg != null
+      ? [{ altitudeM: floorM + 80, ...wind(surface.wind80mSpeedMps, surface.wind80mDirectionDeg) }] : []),
     ...levels.map((l) => ({ altitudeM: finiteScalar(l.heightM)!, ...wind(l.windSpeedMps, l.windDirectionDeg) })),
   ].sort((a, b) => a.altitudeM - b.altitudeM);
+  // Duplicate source heights leave the surrounding interpolation unavailable.
+  for (let i = 0; i < winds.length; i++) {
+    if ((i > 0 && winds[i - 1].altitudeM === winds[i].altitudeM) || winds[i + 1]?.altitudeM === winds[i].altitudeM) {
+      winds[i].uMps = NaN;
+      winds[i].vMps = NaN;
+    }
+  }
   // Represent temperature gradients as interval quantities, constant within each source interval.
   // Use a tiny step epsilon before interior upper endpoints so interval transitions stay sharp.
   const lastIdx = temperatureC.length - 2;
@@ -79,7 +88,11 @@ export function hourSampling(hour: ProfileHour, floorM: number): HourSampling {
     })),
     windU: winds.map(p => ({ altitudeM: p.altitudeM, value: p.uMps })),
     windV: winds.map(p => ({ altitudeM: p.altitudeM, value: p.vMps })),
-    verticalVelocityPaS: levels.map((l) => ({ altitudeM: finiteScalar(l.heightM)!, value: finiteScalar(l.verticalVelocityPaS) ?? NaN })),
+    verticalVelocityPaS: levels.map((l) => ({
+      altitudeM: finiteScalar(l.heightM)!,
+      value: !omegaPressureLevels || omegaPressureLevels.includes(finiteScalar(l.pressureHpa)!)
+        ? finiteScalar(l.verticalVelocityPaS) ?? NaN : NaN,
+    })),
     thermalIndexC: [],
     smoke:
       hour.smoke && finite(finiteScalar(hour.smoke.surfaceUgm3))

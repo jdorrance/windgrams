@@ -36,7 +36,7 @@ import "../styles/about.css";
         <li><strong>Direction marks:</strong> triangle inside the saved window, circle outside, ? unknown or light/calm. They compare wind 10 m above model ground with your saved directions. Local launch wind and suitability remain unknown.</li>
         <li><strong>Dashed amber line:</strong> parcel thermal top, distinct from the model's boundary-layer depth.</li>
         <li><strong>Paraglider:</strong> estimated lift top for a <Unit kind="lift" value={1.143} /> sink rate. The blue line uses <Unit kind="lift" value={1} />.</li>
-        <li><strong>Outlined cloud:</strong> the height where a rising surface parcel could form cloud. White crosshatching shows humidity above 94%; diagonal hatching shows model cloud cover of at least 30%.</li>
+        <li><strong>Cloud outlines:</strong> dashed for potential cloud base (surface LCL); solid for the effective cloud limit in v1 forecasts. White crosshatching shows humidity above 94%; diagonal hatching shows model cloud cover of at least 30%.</li>
         <li><strong>Temperature lines:</strong> connect equal temperatures across the day. Snowflakes mark the lowest freezing level.</li>
       </ul>
       <p>Peak lift and highest cloud base can occur at different hours. Compare lift, usable height and wind together.</p>
@@ -67,7 +67,8 @@ import "../styles/about.css";
         <li><strong>Ensemble spread (GEPS):</strong> runs 21 slightly different forecasts on a <Unit kind="resolution" value={50} /> grid out to 16 days. A tight 10th–90th percentile band means the members agree; a wide band means front timing, cloud cover or wind is still uncertain.</li>
         <li><strong>Supplemental feeds (ECMWF IFS and NWS):</strong> ECMWF IFS (<Unit kind="resolution" value={9} /> surface grid plus <Unit kind="pressure" value={850} /> and <Unit kind="pressure" value={700} /> winds) and NWS point grids provide surface wind, mixing depth and surface cloud base, but do not include the full vertical column and heat fluxes needed to calculate w* or usable-lift ceilings.</li>
         <li><strong>Hour-max gusts vs gust samples:</strong> Canadian (HRDPS, RDPS, GDPS) and German (ICON-EU) models report an <strong>hour-max gust</strong>—the strongest gust over the preceding hour. NOAA models (HRRR, RRFS, GFS) report an instantaneous <strong>gust sample</strong> at the valid time. Readouts name which kind the model publishes.</li>
-        <li><strong>Wildfire smoke:</strong> HRRR and RRFS include smoke in their sunlight calculation, so thick smoke naturally cools the ground and weakens forecast thermals. Canadian models pair with the RAQDPS smoke forecast to dim solar heating and scale down thermal strength when smoke is present.</li>
+        <li><strong>Wildfire smoke:</strong> readings show each model's smoke forecast. Thermal estimates use its published heating; HRRR and RRFS include smoke effects.</li>
+        <li><strong>CAPE and CIN:</strong> CAPE measures energy for deep convection; CIN measures the inhibition holding it back. NOAA uses surface parcels; ICON-EU uses mixed-layer parcels.</li>
       </ul>
     </section>
     <section class="card" id="formulas">

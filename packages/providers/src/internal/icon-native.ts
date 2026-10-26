@@ -115,12 +115,17 @@ export function iconSource(extract: IconExtract & { records: Record<string, Icon
   const latent = iconHourlyFlux(record('ALHFL_S'), record('ALHFL_S', forecastHour - 1), cellIndex);
   const precipitation = iconHourlyPrecipitation(record('TOT_PREC'), record('TOT_PREC', forecastHour - 1), cellIndex);
   const cloudCover = value('CLCT', '%'), pmsl = value('PMSL', 'Pa');
+  // Older captures may omit PS; present records require Pa units.
+  const ps = record('PS') ? value('PS', 'Pa') : null;
+  if (finite(ps) && ps <= 0) throw new Error('ICON surface pressure must be positive');
   if (!surfaceWind || !finite(temperatureK) || !finite(dewpointK) || !finite(sensible) || !finite(latent) || !finite(precipitation) || !finite(cloudCover) || !finite(pmsl)) return null;
   const source: AtmosphericColumn & { levels: AtmosphericLevel[] } = {
     validAt: new Date(Date.parse(extract.referenceTime) + forecastHour * 3600000).toISOString().replace('.000Z', 'Z'),
     temperatureC: temperatureK - 273.15, dewPointDepressionC: Math.max(0, temperatureK - dewpointK), ...surfaceWind,
     cloudCoverPercent: cloudCover, sensibleHeatFluxWm2: sensible, latentHeatFluxWm2: latent,
     precipitationMm: precipitation, seaLevelPressureHpa: pmsl / 100, levels: [],
+    ...(finite(ps) ? { surfacePressureHpa: ps / 100 } : {}),
+    convectiveParcel: 'mixed-layer',
   };
   const gust = record('VMAX_10M').metadata;
   if (gust.stepType !== 'max' || gust.startHour !== forecastHour - 1 || gust.endHour !== forecastHour) {

@@ -29,7 +29,7 @@ function sceneParityHash(payload) {
   return createHash('sha256').update(serialized).digest('hex');
 }
 
-// Baseline reviewed with frozen source records after physical 2 m/10 m anchors;
+// Baseline reviewed with physical 2 m/10 m anchors and solar-crossing daylight;
 // see web/test/fixtures/windgram-visual/README.md for the intentional differences.
 test('reviewed renderer preserves 40 scenes, exact SVGs and keys, and physical readouts', () => {
   for (const entry of manifest.fixtures.filter(f => f.file)) for (const unitSystem of ['imperial', 'metric']) for (const compact of [false, true]) for (const heightRange of ['soaring', 'full']) {

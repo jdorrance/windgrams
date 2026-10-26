@@ -4,6 +4,8 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { archiveModelRun, archivedModelRuns, mergeHistoryArchives } from './history.mjs';
+import { compressHistoryArchives, copyIssuedHistoryTree, readIssuedHistoryFile } from './issued-history.mjs';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { scoreHistory } from './score-history.mjs';
 import { calendarHistoryCoverage } from './history-coverage.mjs';
 
@@ -20,21 +22,21 @@ function issue(root, { referenceTime = '2026-10-21T00:00:00Z', temperatureC = 10
 
 test('issued revisions are idempotent, preserve source identity and add changed method/build/content', t => {
   const root = workspace(t); issue(root);
-  const a = archiveModelRun(root, 'hrrr-conus'), run = join(root, 'history/hrrr-conus', a.runKey), path = join(run, 'revisions', a.revisionId, 'sites/or-woodrat-mountain.json');
-  const bytes = readFileSync(path), modified = statSync(path).mtimeMs;
+  const a = archiveModelRun(root, 'hrrr-conus'), run = join(root, 'history/hrrr-conus', a.runKey), path = join(run, 'revisions', a.revisionId, 'sites/or-woodrat-mountain.json.gz');
+  const bytes = gunzipSync(readFileSync(path)), modified = statSync(path).mtimeMs;
   assert.equal(archiveModelRun(root, 'hrrr-conus').created, false);
   assert.equal(statSync(path).mtimeMs, modified);
   issue(root, { version: '2.0.0' }); const b = archiveModelRun(root, 'hrrr-conus');
   issue(root, { build: 'b' }); const c = archiveModelRun(root, 'hrrr-conus');
   assert.equal(new Set([a.revisionId, b.revisionId, c.revisionId]).size, 3);
-  assert.deepEqual(readFileSync(path), bytes);
+  assert.deepEqual(gunzipSync(readFileSync(path)), bytes);
   issue(root); archiveModelRun(root, 'hrrr-conus');
   assert.equal(JSON.parse(readFileSync(join(run, 'index.json'))).latest, c.revisionId);
   assert.equal(archivedModelRuns(root, 'hrrr-conus')[0].revisionId, a.revisionId);
   const compact = JSON.parse(bytes); assert.deepEqual(compact.hours[0].levels.map(l => l.pressureHpa), [925, 850]);
   assert.throws(() => archiveModelRun(root, 'hrrr-conus', { retainFullColumns: true }), /explicitly pinned/);
   const full = archiveModelRun(root, 'hrrr-conus', { retainFullColumns: true, pinnedRunKeys: [a.runKey] });
-  assert.deepEqual(readFileSync(join(run, 'revisions', full.revisionId, 'full-columns/sites/or-woodrat-mountain.json')), readFileSync(join(root, 'hrrr-conus/sites/or-woodrat-mountain.json')));
+  assert.deepEqual(readIssuedHistoryFile(join(run, 'revisions', full.revisionId), 'full-columns/sites/or-woodrat-mountain.json'), readFileSync(join(root, 'hrrr-conus/sites/or-woodrat-mountain.json')));
 });
 
 test('selected full-column sites are saved with the first issue without broad archive duplication', t => {
@@ -49,15 +51,15 @@ test('selected full-column sites are saved with the first issue without broad ar
   assert.deepEqual(first.fullColumnSites, ['or-woodrat-mountain']);
   const selected = archivedModelRuns(root, 'hrrr-conus')[0];
   assert.equal(selected.revisionId, first.revisionId);
-  assert.deepEqual(readFileSync(join(selected.directory, 'full-columns/sites/or-woodrat-mountain.json')), original);
-  assert.deepEqual(readdirSync(join(selected.directory, 'full-columns/sites')), ['or-woodrat-mountain.json']);
-  assert.equal(JSON.parse(readFileSync(join(selected.directory, 'sites/or-woodrat-mountain.json'))).hours[0].levels.length, 2);
+  assert.deepEqual(readIssuedHistoryFile(selected.directory, 'full-columns/sites/or-woodrat-mountain.json'), original);
+  assert.deepEqual(readdirSync(join(selected.directory, 'full-columns/sites')), ['or-woodrat-mountain.json.gz']);
+  assert.equal(JSON.parse(readIssuedHistoryFile(selected.directory, 'sites/or-woodrat-mountain.json')).hours[0].levels.length, 2);
   const repeat = archiveModelRun(root, 'hrrr-conus', options);
   assert.equal(repeat.created, false); assert.equal(repeat.revisionId, first.revisionId);
   const changed = JSON.parse(original); changed.hours[0].surface.temperatureC = 50;
   writeFileSync(originalPath, JSON.stringify(changed)); archiveModelRun(root, 'hrrr-conus', options);
   assert.equal(archivedModelRuns(root, 'hrrr-conus')[0].revisionId, first.revisionId);
-  assert.deepEqual(readFileSync(join(selected.directory, 'full-columns/sites/or-woodrat-mountain.json')), original);
+  assert.deepEqual(readIssuedHistoryFile(selected.directory, 'full-columns/sites/or-woodrat-mountain.json'), original);
   assert.throws(() => archiveModelRun(root, 'hrrr-conus', { retainFullColumnSites: ['../outside'] }), /distinct site slugs/);
 });
 
@@ -71,7 +73,7 @@ test('history merges validated immutable revisions, retains all issues and refus
   assert.deepEqual(JSON.parse(readFileSync(join(run, 'index.json'))), { schemaVersion: 1, revisions: [a.revisionId, b.revisionId], latest: b.revisionId });
   const stale = workspace(t); issue(stale); archiveModelRun(stale, 'hrrr-conus'); mergeHistoryArchives(stale, output, 'hrrr-conus');
   assert.equal(JSON.parse(readFileSync(join(run, 'index.json'))).latest, b.revisionId);
-  const damaged = join(incoming, 'history/hrrr-conus', a.runKey, 'revisions', a.revisionId, 'sites/or-woodrat-mountain.json'); writeFileSync(damaged, '{}');
+  const damaged = join(incoming, 'history/hrrr-conus', a.runKey, 'revisions', a.revisionId, 'sites/or-woodrat-mountain.json.gz'); writeFileSync(damaged, gzipSync('{}'));
   assert.throws(() => mergeHistoryArchives(incoming, output, 'hrrr-conus'), /Corrupt issued-history/);
   assert.equal(readdirSync(join(run, 'revisions')).length, 2);
 });
@@ -153,4 +155,56 @@ test('bounded offline scorer selects original issued values and reports independ
   assert.throws(() => scoreHistory({ ...opts, from: '2026-10-21T00:00:00' }), /UTC observation window/);
   assert.throws(() => scoreHistory({ ...opts, to: '2027-10-22T00:00:00Z' }), /120 days/);
   assert.equal(scoreHistory({ ...opts, from: '2026-10-23T00:00:00Z', to: '2026-10-24T00:00:00Z' }).status, 'no-matched-observations');
+});
+
+
+test('revision compression preserves exact bytes, IDs and first-issued scoring', t => {
+  const root = workspace(t); issue(root);
+  const first = archiveModelRun(root, 'hrrr-conus', { retainFullColumnSites: ['or-woodrat-mountain'] });
+  issue(root, { temperatureC: 50 }); archiveModelRun(root, 'hrrr-conus');
+  const run = join(root, 'history/hrrr-conus', first.runKey), revision = join(run, 'revisions', first.revisionId);
+  const index = readFileSync(join(run, 'index.json')), receipt = readFileSync(join(revision, 'revision.json'));
+  const original = readIssuedHistoryFile(revision, 'sites/or-woodrat-mountain.json');
+  for (const file of ['sites/or-woodrat-mountain.json', 'full-columns/sites/or-woodrat-mountain.json']) {
+    const path = join(revision, file); writeFileSync(path, readIssuedHistoryFile(revision, file)); rmSync(`${path}.gz`);
+  }
+  assert.deepEqual(compressHistoryArchives(root), { compressedFiles: 2, revisions: 2 });
+  assert.deepEqual(compressHistoryArchives(root), { compressedFiles: 0, revisions: 0 });
+  assert.deepEqual(readFileSync(join(run, 'index.json')), index);
+  assert.deepEqual(readFileSync(join(revision, 'revision.json')), receipt);
+  assert.deepEqual(readIssuedHistoryFile(revision, 'sites/or-woodrat-mountain.json'), original);
+  assert.equal(archivedModelRuns(root, 'hrrr-conus')[0].revisionId, first.revisionId);
+  // An old producer may upload plain history after cache migration has already run.
+  const plain = join(revision, 'sites/or-woodrat-mountain.json');
+  writeFileSync(plain, original); rmSync(`${plain}.gz`);
+  const output = workspace(t); mergeHistoryArchives(root, output, 'hrrr-conus');
+  const imported = archivedModelRuns(output, 'hrrr-conus')[0];
+  assert.equal(imported.revisionId, first.revisionId);
+  assert.deepEqual(readIssuedHistoryFile(imported.directory, 'sites/or-woodrat-mountain.json'), original);
+  assert.deepEqual(readdirSync(join(imported.directory, 'sites')), ['or-woodrat-mountain.json.gz']);
+  assert.deepEqual(readFileSync(plain), original);
+  assert.deepEqual(readdirSync(join(revision, 'sites')), ['or-woodrat-mountain.json']);
+  compressHistoryArchives(root);
+  writeFileSync(join(revision, 'sites/or-woodrat-mountain.json'), original);
+  assert.throws(() => readIssuedHistoryFile(revision, 'sites/or-woodrat-mountain.json'), /Ambiguous/);
+  assert.throws(() => compressHistoryArchives(root), /Unexpected issued-history/);
+  rmSync(join(revision, 'sites/or-woodrat-mountain.json'));
+  writeFileSync(join(revision, 'sites/or-woodrat-mountain.json.gz'), gzipSync(Buffer.alloc(64 * 1024 * 1024 + 1)));
+  assert.throws(() => readIssuedHistoryFile(revision, 'sites/or-woodrat-mountain.json'), /larger than/);
+});
+
+
+test('publication copies share immutable revisions while indexes and legacy evidence stay isolated', t => {
+  const source = workspace(t), output = workspace(t); issue(source);
+  const first = archiveModelRun(source, 'hrrr-conus');
+  const from = join(source, 'history'), to = join(output, 'history');
+  copyIssuedHistoryTree(from, to);
+  const file = `hrrr-conus/${first.runKey}/revisions/${first.revisionId}/sites/or-woodrat-mountain.json.gz`;
+  const index = `hrrr-conus/${first.runKey}/index.json`;
+  assert.equal(statSync(join(from, file)).ino, statSync(join(to, file)).ino);
+  assert.notEqual(statSync(join(from, index)).ino, statSync(join(to, index)).ino);
+  const original = readFileSync(join(from, index)); writeFileSync(join(to, index), '{}');
+  assert.deepEqual(readFileSync(join(from, index)), original);
+  rmSync(to, { recursive: true });
+  assert.equal(archivedModelRuns(source, 'hrrr-conus')[0].revisionId, first.revisionId);
 });

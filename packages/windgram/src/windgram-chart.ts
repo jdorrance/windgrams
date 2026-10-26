@@ -90,7 +90,10 @@ export function renderWindgramSvg(
   const system = view.unitSystem;
   const id = identifier(options.idPrefix ?? "windgram");
   const right = view.left + view.plotWidth;
-  const visibleHours = new Set(visibleWindgramHourIndices({ hours: view.timeAxis, compact: view.compact }));
+  const labelX = (x: number) => Math.max(view.left + 12, Math.min(right - 12, x));
+  const visibleHours = new Set(visibleWindgramHourIndices({
+    hours: view.timeAxis.map(tick => ({ x: labelX(tick.x) })), compact: view.compact,
+  }));
   // Cloud icons mean potential LCL; actual cloud evidence stays in full-width bands.
   const clouds = view.clouds.filter((cloud) => cloud.kind === "potential");
   const cloudScale = windgramCloudScale(view);
@@ -207,19 +210,20 @@ export function renderWindgramSvg(
       );
     }
     if (!visibleHours.has(axisIndex)) continue;
-    parts.push(text(tick.x, 16, tick.label, 'text-anchor="middle" class="wg-hour wg-hour-top"'));
+    const x = labelX(tick.x);
+    parts.push(text(x, 16, tick.label, 'text-anchor="middle" class="wg-hour wg-hour-top"'));
     parts.push(
       text(
-        tick.x,
+        x,
         36,
         hour?.thermalVelocityMps == null ? "—" : `${Number(convertQuantity(hour.thermalVelocityMps, "lift", system)!.toFixed(system === "metric" ? 1 : 0))}`,
         'text-anchor="middle" class="wg-lift"',
       ),
     );
-    parts.push(text(tick.x, view.bottom + 24, tick.label, 'text-anchor="middle" class="wg-hour"'));
+    parts.push(text(x, view.bottom + 24, tick.label, 'text-anchor="middle" class="wg-hour"'));
     parts.push(
       text(
-        tick.x,
+        x,
         view.bottom + 38,
         hour?.temperatureF == null ? "—" : `${Math.round(temperature(hour.temperatureF, system))}°`,
         'text-anchor="middle" class="wg-surface-temp"',

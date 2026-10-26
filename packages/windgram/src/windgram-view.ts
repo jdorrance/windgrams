@@ -149,7 +149,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   ].filter((height): height is number => typeof height === "number" && Number.isFinite(height))
     .map(height => `${Math.round(convertQuantity(height, "elevation", system)!).toLocaleString("en-US")}${compact ? "" : system === "metric" ? " m" : " ft"}`);
   const presentation = resolveWindgramPresentation({ compact, widthPx: options.widthPx, altitudeLabels });
-  const { left, right, top, columnWidth, plotWidth, dataLeft, before, after, cadence, firstTime, lastTime, emptyTimes } =
+  const { left, right, top, columnWidth, plotWidth, dataLeft, axisLeft, before, after, cadence, firstTime, lastTime, emptyTimes } =
     buildWindgramTimeLayout(profile, hours, {
       timeZone: options.timeZone,
       hours: options.hours,
@@ -171,7 +171,8 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
 
   const sampling = hours.map((h) => hourSampling(h, modelFloorM));
   // The library remains the authority for diagnostic semantics and units.
-  const diagnosticColumnWidth = compact ? Math.max(44, columnWidth) : columnWidth;
+  const diagnosticStep = Math.min(columnWidth, plotWidth / Math.max(1, hours.length));
+  const diagnosticColumnWidth = compact ? Math.max(44, diagnosticStep) : diagnosticStep;
   const diagnosticPlotWidth = diagnosticColumnWidth * Math.max(1, hours.length);
   const scene = buildMeteogramScene(profile, {
     ...options,
@@ -255,20 +256,13 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     ),
     diagnosticLeft: scene.scales.plotLeft,
     diagnosticColumnWidth,
-    selectedHourIndex: hours.reduce(
-      (best, h, i) =>
-        (finiteScalar(publishedLift(h).thermalVelocityMps) ?? -1) >
-        (finiteScalar(hours[best] ? publishedLift(hours[best]).thermalVelocityMps : null) ?? -1)
-          ? i
-          : best,
-      0,
-    ),
+    selectedHourIndex: 0,
   };
 
   const emptyTick = (time: number, column: number): WindgramTimeTick => ({
     validAt: new Date(time).toISOString(),
     label: formatWindgramHourLabel(time, labelTime),
-    x: left + columnWidth * (column + 0.5),
+    x: axisLeft + columnWidth * (column + 0.5),
     hourIndex: null,
   });
   view.timeAxis = [
@@ -276,7 +270,10 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     ...Array.from({ length: before }, (_, i) => emptyTick(firstTime - (before - i) * cadence, i)),
     ...view.hours.map(({ validAt, label, x }, hourIndex) => ({ validAt, label, x, hourIndex })),
     ...Array.from({ length: after }, (_, i) => emptyTick(lastTime + (i + 1) * cadence, before + hours.length + i)),
-  ];
+  ].filter(tick => tick.x >= left && tick.x <= left + plotWidth);
+  const visibleHours = visibleWindgramHourIndices(view, 0);
+  view.selectedHourIndex = visibleHours.reduce((best, index) =>
+    (view.hours[index].thermalVelocityMps ?? -1) > (view.hours[best].thermalVelocityMps ?? -1) ? index : best, visibleHours[0] ?? 0);
   if (!hours.length) return view;
 
   const y = (z: number) => heightToY(view, z);

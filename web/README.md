@@ -47,7 +47,7 @@ pnpm build
 The [fixture guide](dev-data-src/README.md) describes the generated examples. Use [visual QA](test/fixtures/windgram-visual/README.md) to compare windgram screenshots against frozen profiles.
 
 Run `pnpm exec playwright install chromium` once to install the browser. Then
-`pnpm test:browser` generates a repeatable one-launch dataset, builds a fixture
+`pnpm test:browser` generates a small repeatable dataset, builds a fixture
 preview on port 4397 and checks model switching, chart lifecycle, stale notices
 and archived replay. The tests use local forecast files and replace external map
 tiles, so they run without live weather services. Failed runs retain Playwright traces in

@@ -77,6 +77,7 @@ export const TIME_ZONES = [
   "America/Chicago",
   "America/Anchorage",
   "Pacific/Honolulu",
+  "Pacific/Auckland",
   "Asia/Yerevan",
 ];
 

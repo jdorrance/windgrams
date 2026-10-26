@@ -20,7 +20,13 @@ export function mountLaunchCountries(mount: typeof mountLaunchMap) {
     url.searchParams.set('country', country);
     history.replaceState(null, '', url);
     const soaring = document.getElementById('soaring-nav-link') as HTMLAnchorElement | null;
-    if (soaring) { const target = new URL(soaring.href); const region = defaultSoaringRegion(country); region ? target.searchParams.set('region', region) : target.searchParams.delete('region'); soaring.href = target.toString(); }
+    if (soaring) {
+      const target = new URL(soaring.href);
+      target.searchParams.set('country', country);
+      const region = defaultSoaringRegion(country);
+      region ? target.searchParams.set('region', region) : target.searchParams.delete('region');
+      soaring.href = target.toString();
+    }
     try { sessionStorage.setItem('windgrams-country', country); } catch { /* Storage is optional. */ }
   };
   selector.addEventListener('change', show);

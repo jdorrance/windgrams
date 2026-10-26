@@ -60,7 +60,9 @@ export function mosaic(tiles) {
     }
     return { tile, col: Math.round(col), row: Math.round(row) };
   });
-  const nodata = tiles[0].nodata;
+  // A tile without a source sentinel can still leave holes in a mosaic.
+  // NaN keeps those holes distinct from real zero elevations and class codes.
+  const nodata = tiles[0].nodata ?? NaN;
 
   return {
     width: Math.max(...placed.map((p) => p.col + p.tile.width)),
@@ -79,8 +81,8 @@ export function mosaic(tiles) {
         const width = c1 - c0;
         const part = await tile.readWindow(c0 - col, r0 - row, width, r1 - r0);
         if (out === null) {
-          out = new part.constructor(cols * rows);
-          if (nodata !== null) out.fill(nodata);
+          out = Number.isNaN(nodata) ? new Float64Array(cols * rows) : new part.constructor(cols * rows);
+          out.fill(nodata);
         }
         for (let r = 0; r < r1 - r0; r += 1) {
           out.set(part.subarray(r * width, (r + 1) * width), (r0 - row0 + r) * cols + (c0 - col0));

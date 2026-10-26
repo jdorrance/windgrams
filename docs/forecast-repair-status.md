@@ -176,20 +176,9 @@ changes dispatch model producers, and Pages requires a successful Check run for
 its exact checkout. The [operations guide](../forecasts/docs/operations.md#publication-and-retention)
 owns the rollout and recovery details.
 
-Two integration and release concerns remain explicit:
-
-- Remote `main` at `9c2f046a73ef25a910f8794b130c88c10cc68166` was four commits ahead
-  of this checkout. An isolated trial merge found six conflicts in ignore rules,
-  chart fixtures/tests, launch presentation and browser tests. Preserve upstream
-  New Zealand/daylight work during integration, then review the combined charts
-  and regenerate their baselines; all 40 combined scenes differ from both
-  branches. This trial did not merge or modify the working branch.
-- Archive capacity needs a representative 30-day storage and timing rehearsal
-  before promotion. The recorded estimate is roughly 20 GB uncompressed across
-  the sampled seven-model inventory at the 120-run floor, including four full
-  columns per run, before additional revisions and staging copies. This is an
-  extrapolation, not a measured live archive or a quota failure. Pages excludes
-  history, but caches, provider artifacts and staging still carry it.
+The integration and capacity concerns recorded in the first review are resolved
+in the subsequent [integration validation](#integration-validation). The earlier
+receipt remains immutable and describes the checkout as it existed at that time.
 
 ### Follow-up validation
 
@@ -211,3 +200,43 @@ records logs, source hashes, replay summaries, visual evidence, the integration
 assessment and the capacity estimate. Original snapshot, report and experiment
 hashes remain unchanged. No commit, deployment, main-branch merge or source-mode
 promotion was performed.
+
+## Integration validation
+
+Remote `main` at `9c2f046a73ef25a910f8794b130c88c10cc68166` is integrated into
+`feature/scientific-review`. All nine merge conflicts were resolved with the
+upstream New Zealand catalogue, daylight selection and monitor probes preserved.
+The scientific changes retain their units, terrain references and missing-data
+behavior.
+
+The combined chart review covers Blanchard, Tiger, Rampart and Coronet Peak at
+mobile and desktop sizes in both unit systems. It passes 128 paired scenes,
+180 shared forecast hours and 2,428 unchanged physical readings. All 40 scene
+baselines were regenerated after the combined rendering review. The Coronet
+summer case is explicitly synthetic; it exercises the longer daylight window.
+Actual app views, ordered local-time labels and next-hour selection were also
+checked. No chart overflow or page errors were found. The
+[visual QA notes](../web/test/fixtures/windgram-visual/README.md) own the detailed
+cases and evidence paths.
+
+Archive storage now compresses profile bytes without changing logical hashes,
+revision identities or first-issued scoring. Mutable indexes are copied;
+immutable revision files can share filesystem links during publication staging.
+New jobs use a separate cache namespace and can migrate old caches. Older jobs
+cannot restore a new compressed cache. The workflow reserves measured disk
+headroom before restore and requests publication only after a successful
+provider-artifact upload. The [operations guide](../forecasts/docs/operations.md#publication-and-retention)
+owns the capacity measurements, bounds and rollout details.
+
+The final local validation passes all root commands: 829 tests, 34 packed
+consumer entry points, 14 Chromium tests and a 273-page production build.
+CI kernel coverage passes at 99.41% lines, 91.46% branches and 97.06% functions.
+The current 268-site catalogue also passes the engine dry run and complete
+synthetic-data generation. These are local checks; remote CI will validate the
+committed branch when it is pushed.
+
+The [integration receipt](../forecasts/.scientific-review/2026-10-26-integration-validation/receipt.json)
+records source hashes, logs, combined chart evidence, capacity results and the
+nine unchanged original snapshot/report/experiment hashes. No forecast source
+mode was promoted and no deployment was performed. The observation and native
+acquisition questions above remain separate scientific release decisions.

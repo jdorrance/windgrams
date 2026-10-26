@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast, type SiteForecast } from "@azohra/meteo.briefing/contract";
-import {  buildWindgramView, windgramDayHours, windgramHours, type WindgramOptions  } from "./helpers/windgram.ts";
+import {  buildWindgramView, readWindgram, windgramDayHours, windgramHours, type WindgramOptions  } from "./helpers/windgram.ts";
 import {  renderWindgramSvg  } from "./helpers/windgram.ts";
+import { daylightSpan } from "../../packages/windgram/src/windgram-time-axis.ts";
 
 type Hour = SiteForecast["hours"][number];
 const options: WindgramOptions = { timeZone: "America/Boise", compact: true, launch: { elevationM: 1200 } };
@@ -58,6 +59,40 @@ test("three-hour forecasts keep the samples outside sunrise and sunset", () => {
   assert.deepEqual(times(windgramHours(profile, options)), expected("2026-09-30", 12, 27, 3));
 });
 
+test("NZ three-hour charts frame daylight exactly while retaining their bracketing forecasts", () => {
+  const profile = profileAt("2026-12-20", range(15, 33, 3));
+  profile.model = "gfs";
+  Object.assign(profile.site, { latitude: -45.03, longitude: 168.66, timeZone: "Pacific/Auckland" });
+  for (const hour of profile.hours) publish(hour, 2600, 1.75);
+  const original = structuredClone(profile);
+  const selected = { ...options, timeZone: "Pacific/Auckland", hours: { dateKey: "2026-12-21", timeZone: "Pacific/Auckland" } };
+  const sourceHours = windgramHours(profile, selected);
+  const daylight = daylightSpan(profile, sourceHours, selected.timeZone);
+  assert.ok(daylight);
+  assert.deepEqual(sourceHours, profile.hours, "4am and 10pm samples bracket Queenstown's summer daylight");
+  for (const compact of [true, false]) for (const heightRange of ["soaring", "full"] as const) for (const unitSystem of ["metric", "imperial"] as const) {
+    const view = buildWindgramView(profile, { ...selected, compact, heightRange, unitSystem, widthPx: compact ? 390 : 1200 });
+    assert.deepEqual(times(view.hours), times(sourceHours));
+    assert.deepEqual(times(view.timeAxis), expected("2026-12-20", 18, 30, 3), "hour labels cover 7am through 7pm only");
+    assert.ok(view.hours[0].x < view.left && view.hours.at(-1)!.x > view.left + view.plotWidth);
+    const elapsed = Date.parse(view.hours.at(-1)!.validAt) - Date.parse(view.hours[0].validAt);
+    const pixelsPerMs = (view.hours.at(-1)!.x - view.hours[0].x) / elapsed;
+    const xAt = (time: number) => view.hours[0].x + (time - Date.parse(view.hours[0].validAt)) * pixelsPerMs;
+    assert.ok(Math.abs(xAt(daylight.sunrise) - view.left) < 1e-7, "left plot edge is sunrise");
+    assert.ok(Math.abs(xAt(daylight.sunset) - view.left - view.plotWidth) < 1e-7, "right plot edge is sunset");
+    assert.ok(view.timeAxis.every(tick => tick.x >= view.left && tick.x <= view.left + view.plotWidth));
+    for (const [index, hour] of view.hours.entries()) {
+      assert.equal(hour.usableLiftTopM, 2600);
+      assert.equal(hour.thermalVelocityMps, 1.75);
+      assert.equal(readWindgram(view, index, 2600).heightAglM, 1400);
+    }
+    const svg = renderWindgramSvg(view);
+    assert.doesNotMatch(svg, />4a<|>10p</, "nighttime bracketing labels stay outside the chart");
+    assert.doesNotMatch(svg, /NaN|Infinity|undefined/);
+  }
+  assert.deepEqual(profile, original);
+});
+
 test("daylight window stays fixed across weak, strong, unknown and ensemble lift", () => {
   const profile = profileAt();
   const visible = expected("2026-09-30", 13, 26);
@@ -99,7 +134,7 @@ test("an explicit day with only nighttime coverage keeps a fully unavailable day
     assert.deepEqual(windgramHours(profile, selected), []);
     for (const compact of [true, false]) for (const heightRange of ["soaring", "full"] as const) {
       const view = buildWindgramView(profile, { ...selected, compact, heightRange, widthPx: compact ? 356 : 1200 });
-      assert.deepEqual(times(view.timeAxis), expected("2026-09-30", 13, 26));
+      assert.deepEqual(times(view.timeAxis), expected("2026-09-30", 14, 25));
       assert.ok(view.timeAxis.every(tick => tick.hourIndex === null));
       assert.deepEqual(view.hours, []);
       assert.deepEqual(view.sampling, []);
@@ -241,17 +276,16 @@ test("a 06Z ICON run keeps the first day's sunrise axis while its forecast start
   const selected = { ...options, timeZone: "Asia/Yerevan", hours: { dateKey: "2026-10-24", timeZone: "Asia/Yerevan" }, widthPx: 390 };
   const focused = buildWindgramView(profile, { ...selected, heightRange: "soaring" });
   const full = buildWindgramView(profile, { ...selected, heightRange: "full" });
-  assert.deepEqual(times(focused.timeAxis), expected("2026-10-24", 3, 15), "7am–7pm brackets Aparan's 7:23am sunrise and 6:09pm sunset");
-  assert.deepEqual(focused.timeAxis.map(tick => tick.hourIndex), [null, null, null, null, ...range(0, 8)]);
+  assert.deepEqual(times(focused.timeAxis), expected("2026-10-24", 4, 14), "8am–6pm ticks lie inside Aparan's 7:23am sunrise and 6:09pm sunset");
+  assert.deepEqual(focused.timeAxis.map(tick => tick.hourIndex), [null, null, null, ...range(0, 7)]);
   assert.deepEqual(times(focused.hours), expected("2026-10-24", 7, 15), "unavailable morning hours have no forecast values");
   assert.deepEqual(focused.timeAxis, full.timeAxis, "full height retains the daylight axis");
   assert.deepEqual(focused.hours.map(hour => hour.x), full.hours.map(hour => hour.x));
   assert.equal(focused.sampling.length, focused.hours.length);
-  for (const [index, hour] of focused.hours.entries()) {
-    const tick = focused.timeAxis[index + 4];
+  for (const tick of focused.timeAxis.filter(tick => tick.hourIndex !== null)) {
+    const hour = focused.hours[tick.hourIndex!];
     assert.equal(tick.validAt, hour.validAt);
     assert.equal(tick.x, hour.x);
-    assert.ok(Math.abs(hour.x - focused.left - focused.columnWidth * (index + 4.5)) < 1e-8);
   }
   const dataLeft = focused.hours[0].x - focused.columnWidth / 2;
   const dataRight = focused.hours.at(-1)!.x + focused.columnWidth / 2;
@@ -259,7 +293,7 @@ test("a 06Z ICON run keeps the first day's sunrise axis while its forecast start
   const forecastX = forecastPaths.flatMap(({ path }) => [...path.matchAll(/[ML](-?[\d.]+)[ ,]/g)].map(match => Number(match[1])));
   assert.ok(forecastX.length > 0);
   assert.ok(forecastX.every(x => x >= dataLeft - .1 && x <= dataRight + .1), "colour fields, contours and lift lines stay inside actual forecast coverage");
-  assert.deepEqual(profile, original, "axis padding leaves the source run unchanged");
+  assert.deepEqual(profile, original, "daylight framing leaves the source run unchanged");
   const regional = windgramDayHours(profile, "2026-10-24T09:00:00Z", "Asia/Yerevan");
   assert.equal(regional[0], profile.hours[0]);
   const regionalView = buildWindgramView(profile, { ...selected, hours: regional });
@@ -270,43 +304,43 @@ test("the same 06Z ICON run has a complete middle day and an unavailable final a
   const profile = aparanProfile();
   const selected = { ...options, timeZone: "Asia/Yerevan", widthPx: 390 };
   const middle = buildWindgramView(profile, { ...selected, hours: { dateKey: "2026-10-25", timeZone: "Asia/Yerevan" } });
-  assert.deepEqual(times(middle.timeAxis), expected("2026-10-25", 3, 15));
-  assert.deepEqual(middle.timeAxis.map(tick => tick.hourIndex), range(0, 12));
-  assert.deepEqual(times(middle.hours), times(middle.timeAxis));
+  assert.deepEqual(times(middle.timeAxis), expected("2026-10-25", 4, 14));
+  assert.deepEqual(middle.timeAxis.map(tick => tick.hourIndex), range(1, 11));
+  assert.deepEqual(times(middle.hours), expected("2026-10-25", 3, 15));
   const last = buildWindgramView(profile, { ...selected, hours: { dateKey: "2026-10-27", timeZone: "Asia/Yerevan" } });
-  assert.deepEqual(times(last.timeAxis), expected("2026-10-27", 3, 15));
+  assert.deepEqual(times(last.timeAxis), expected("2026-10-27", 4, 14));
   assert.deepEqual(times(last.hours), expected("2026-10-27", 3, 12));
-  assert.deepEqual(last.timeAxis.map(tick => tick.hourIndex), [...range(0, 9), null, null, null]);
+  assert.deepEqual(last.timeAxis.map(tick => tick.hourIndex), [...range(1, 9), null, null]);
   assert.equal(last.sampling.length, 10);
 });
 
 test("a single daylight profile keeps a full axis without manufacturing other source hours", () => {
   const profile = aparanProfile([9]);
   const view = buildWindgramView(profile, { ...options, timeZone: "Asia/Yerevan" });
-  assert.deepEqual(times(view.timeAxis), expected("2026-10-24", 3, 15));
+  assert.deepEqual(times(view.timeAxis), expected("2026-10-24", 4, 14));
   assert.deepEqual(times(view.hours), expected("2026-10-24", 9, 9));
   assert.equal(view.sampling.length, 1);
   assert.deepEqual(view.timeAxis.filter(tick => tick.hourIndex !== null).map(tick => tick.hourIndex), [0]);
-  assert.equal(view.timeAxis[6].x, view.hours[0].x);
+  assert.equal(view.timeAxis[5].x, view.hours[0].x);
 });
 
-test("daylight edge padding follows three-hour source cadence", () => {
+test("unavailable daylight ticks follow three-hour source cadence", () => {
   const profile = aparanProfile(range(9, 84, 3));
   const view = buildWindgramView(profile, { ...options, timeZone: "Asia/Yerevan", hours: { dateKey: "2026-10-24", timeZone: "Asia/Yerevan" } });
-  assert.deepEqual(times(view.timeAxis), expected("2026-10-24", 3, 15, 3));
-  assert.deepEqual(view.timeAxis.map(tick => tick.hourIndex), [null, null, 0, 1, 2]);
+  assert.deepEqual(times(view.timeAxis), expected("2026-10-24", 6, 12, 3));
+  assert.deepEqual(view.timeAxis.map(tick => tick.hourIndex), [null, 0, 1]);
   assert.deepEqual(times(view.hours), expected("2026-10-24", 9, 15, 3));
 });
 
-test("padding daylight edges preserves a missing interior profile", () => {
+test("daylight framing preserves a missing interior profile", () => {
   const profile = aparanProfile(range(7, 84).filter(hour => hour !== 10));
   const before = structuredClone(profile);
   const selected = { ...options, timeZone: "Asia/Yerevan", hours: { dateKey: "2026-10-24", timeZone: "Asia/Yerevan" } };
   const sourceHours = windgramHours(profile, selected);
   const view = buildWindgramView(profile, selected);
   assert.deepEqual(times(view.hours), expected("2026-10-24", 7, 15).filter(time => time !== timestamp("2026-10-24", 10)));
-  assert.equal(view.timeAxis[0].validAt, timestamp("2026-10-24", 3));
-  assert.equal(view.timeAxis.at(-1)!.validAt, timestamp("2026-10-24", 15));
+  assert.equal(view.timeAxis[0].validAt, timestamp("2026-10-24", 4));
+  assert.equal(view.timeAxis.at(-1)!.validAt, timestamp("2026-10-24", 14));
   assert.equal(view.sampling.length, sourceHours.length);
   for (const tick of view.timeAxis) if (tick.hourIndex !== null) {
     assert.equal(tick.validAt, sourceHours[tick.hourIndex].validAt);

@@ -69,6 +69,23 @@ const fmtFt = (m: number | null | undefined) => formatQuantity(m, 'elevation');
 const fmtM = (m: number | null | undefined, datum = 'MSL') => m == null ? 'Unavailable' : `${formatQuantity(m, 'elevation')} ${datum}`;
 
 async function main() {
+  const requestQuery = new URLSearchParams(window.location.search);
+  if (!requestQuery.has('country') && !requestQuery.has('case') && !requestQuery.has('region')) {
+    try {
+      const saved = sessionStorage.getItem('windgrams-country');
+      if (saved && /^[A-Z]{2}$/.test(saved)) requestQuery.set('country', saved);
+    } catch { /* Storage is optional. */ }
+  }
+  const country = requestQuery.get('country');
+  if (country && /^[A-Z]{2}$/.test(country)) {
+    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(country) ?? country;
+    set('replay-title', `Soaring · ${name}`);
+    const link = el('replay-launches').querySelector('a')!;
+    const url = new URL(link.href);
+    url.searchParams.set('country', country);
+    link.href = url.toString();
+    link.textContent = `${name} launches`;
+  }
   let playTimer: number | null = null;
   let resizeTimer = 0;
   let initialized = false;
@@ -88,7 +105,7 @@ async function main() {
   set('map-barb-units', getUnitSystem() === 'metric' ? '· 2.5 / 5 / 25 m/s' : '· 5 / 10 / 50 kt');
   const regionsCatalogue = await readOptional<RegionCatalogue>(`${DATA_BASE.replace(/\/$/, '')}/soaring/v1/regions.json`, validateRegionCatalogue, lifetime.signal);
   if (lifetime.disposed) return;
-  const query = defaultReplayQuery(window.location.search, regionsCatalogue);
+  const query = defaultReplayQuery(requestQuery.toString(), regionsCatalogue);
   const location = replayLocation(query.toString(), DATA_BASE);
   const dataset = await openRegionalDataset({ baseUrl: DATA_BASE, caseId: location.caseId, model: legacyReplayModel(location.caseId), signal: lifetime.signal });
   if (lifetime.disposed) return;
@@ -190,6 +207,8 @@ async function main() {
       const selected = nativeModels(region).find(entry => entry.model === activeModel) ?? nativeModels(region)[0];
       nextUrl.searchParams.set('case', selected.caseId);
       nextUrl.searchParams.set('model', selected.model);
+      nextUrl.searchParams.delete('country');
+      nextUrl.searchParams.delete('region');
       nextUrl.searchParams.delete('hour');
       window.location.href = nextUrl.toString();
     }, eventOptions);
@@ -676,7 +695,9 @@ async function main() {
 main().catch(error => {
   if (error instanceof Error && error.name === 'AbortError') return;
   console.error(error);
-  set('replay-status', 'Forecast unavailable.');
+  set('replay-status', 'Regional map unavailable.');
+  el('replay-run').hidden = true;
+  el('replay-launches').hidden = false;
   el('replay-status').hidden = false;
   el('replay-status').setAttribute('role', 'alert');
 });

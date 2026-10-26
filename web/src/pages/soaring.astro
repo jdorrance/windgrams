@@ -2,13 +2,15 @@
 import Unit from '../components/Unit.astro';
 import Base from '../layouts/Base.astro';
 import { LAYER_SPECS, PRIMARY_LAYERS } from '../lib/soaring';
+import { href } from '../lib/site';
 ---
 <Base title="Soaring forecast">
   <div class="soaring-page">
-    <h1>Soaring forecast</h1>
+    <h1 id="replay-title">Soaring forecast</h1>
     <p id="replay-run" class="run-label">Loading forecast run…</p>
     <p id="replay-freshness" class="notice forecast-freshness" role="status" hidden></p>
     <p id="replay-status" role="status">Loading forecast…</p>
+    <p id="replay-launches" hidden><a href={href()}>View launch forecasts</a></p>
     <div id="replay-content" hidden>
       <div class="replay-controls">
         <div class="control-row">

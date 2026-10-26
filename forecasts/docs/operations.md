@@ -125,9 +125,64 @@ Preparation works in a temporary copy of the forecast products. If no point mode
 
 Seeding checks immutable files against SHA-256 hashes. Pages keeps each active regional case's current and previous bundle, plus historical cases. Packaging compacts ordinary JSON, preserves bundle bytes and reports size by product. It warns at 800 MB and stops at 1 GB. Forecast history stays in provider artifacts and caches rather than Pages; see [history retention](../verification/README.md#source-columns-and-retention). Refresh artifacts expire after two days, with the published dataset and saved cache providing the fallback.
 
-Archive capacity is a separate release gate from Pages size. The forecast provider workflows schedule four refreshes per UTC day: at four distinct initializations per day, the existing 120-run floor already covers 30 days. The added 30-day minimum increases retention only at a higher run cadence; retaining four full source columns adds bytes on every run. Sampling the four regression profiles in the October 26 baseline projects about 19.3 GB of uncompressed compact records across seven models at 120 runs each, before ICON, full columns, additional revisions, pins and temporary copies. This is a size extrapolation from one publication, not a measured archive or an assumed hosting quota.
+Archive storage uses gzip for profile payloads while revision identities continue
+hashing the original JSON bytes. CI restores `issued-data-v2-*` caches first and
+falls back to the older `forecast-data-*` namespace only for migration. Old jobs
+cannot accidentally restore the new storage format. A validated, staged migration
+preserves first-issued order, pins and every retained revision. Publication shares
+immutable revision files through hard links on the configured workspace filesystem;
+mutable indexes and legacy files receive independent copies.
 
-Before promoting this retention policy, rehearse a representative 30-day archive with the actual model cadence, revisions, pins and selected full columns. Record on-disk bytes, compressed cache/artifact bytes, peak space during publication staging, and restore/merge/archive durations; verify they fit the configured runners, storage budgets and job timeouts with measured headroom. If they do not, move or compress archive storage with hash-verified round trips before promotion. Do not silently shorten retention or replace first-issued evidence to make a job pass.
+The October 26 capacity rehearsal materialized 976 retained runs and 1,080
+revisions across all eight models and 1,183 site/model profiles in the 268-launch
+catalogue. It included 120 rolling runs per model, two older pins, a repair every
+ten runs, and the four selected full-column sites. Twice-daily models covered 60
+days; the others covered the 30-day floor. The 38.69 GB expanded history occupied
+4.41 GB as gzip files, or 4.77 GB including filesystem allocation. This was a
+synthetic storage workload made from frozen published weather with shifted times;
+it supplies no additional historical forecast-skill evidence. The complete current
+2.3 postprocessing sample measured up to 24% growth per compressed profile.
+
+The release budget uses each model's largest measured old-to-current profile-size
+ratio, adds 4 KiB per file, and assumes no cross-run compression gain. It allows
+5.75 GB for history and 1.25 GB for live products: current raw live products
+measured 0.908 GB, and replacement with the current-method point sample measured
+0.914 GB. The 1.25 GB allowance is a capacity assumption, not the separate Pages
+upload limit. The resulting cache allowance is 7.00 GB against the configured
+10 GB cache limit. GitHub may evict older complete cache generations; every
+retained generation and provider artifact still preserves its full issued history.
+
+Pages and every provider group, including observations and terrain, verify at
+least **28 GiB free** before dependencies or cache extraction: they all restore
+the complete forecast cache. On a disposable GitHub-hosted Linux runner, the reservation
+helper removes only the previously identified unused SDK directories when needed
+and checks again; insufficient space stops the job before acquisition. The
+conservative Pages peak is 27.81 GB, leaving 2.26 GB against that reservation. It
+includes retained data, two extracted provider artifact sets, the largest
+provider's simultaneous download, live publication staging, dependency allowance
+and filesystem overhead. Immutable history staging avoids another full history
+copy. ICON's 16 GB acquisition limit yields the largest producer estimate,
+26.81 GB, leaving 3.26 GB. ECCC GRIB transfers are decoded in memory rather than
+retained as a disk cache.
+
+The final local round trip packed the cache in 73.7 seconds, restored it in 69.2,
+imported 1,080 revisions in 319.0, repeated the import without changes in 286.3,
+and staged publication in 42.1. First-issued scoring selection verified 960 runs
+in another 123.3 seconds; full-tree hashes also confirmed every retained pin and
+revision. Including those verification inventories, the measurement took 17m26s.
+Early phases shared the local host with baseline work, so these are measured local
+operation times, not a GitHub runner service guarantee. The 60-minute Pages timeout
+also allows its 15-minute Check wait, remote transfers and the website build;
+those network/build durations were not part of the offline round trip.
+
+Four provider refreshes a day and two-day artifact retention could retain roughly
+46 GB of history artifacts under this conservative budget, plus live products
+and retries. This is separate from the 10 GB cache quota. The measured transfer
+sizes, timings, source hashes and account-specific storage evidence are recorded
+with the [integration validation](../../docs/forecast-repair-status.md).
+Reproduce the [offline storage rehearsal](../verification/README.md#storage-maintenance-and-rehearsal)
+when coverage, horizon, revision frequency or retention grows. Do not shorten
+retention or replace first-issued evidence to satisfy a storage or runtime limit.
 
 ### Site and data locations
 
@@ -141,9 +196,11 @@ Scripts with `--publish` or `--sync` select a store through `WINDGRAMS_STORE`. T
 node scripts/import-flyingsites.mjs
 ```
 
-The importer merges US and Armenian records into `sites.json` and `web/src/data/launches.json`. `--country=am` uses the bundled Armenian source; `--country=us` reads the adjacent `flyingsites/data/us.geojson.json`. `FLYINGSITES_US` and `FLYINGSITES_AM` override those inputs.
+The importer merges launch records into `sites.json` and `web/src/data/launches.json`. Choose `--country=nz` or `--country=am` for the reviewed country catalogues. `--country=us` reads the adjacent `flyingsites/data/us.geojson.json`. With no arguments, it imports all three. `FLYINGSITES_US`, `FLYINGSITES_AM` and `FLYINGSITES_NZ` override the inputs.
 
-Imports add missing records and metadata while preserving existing coordinates, notes, wind settings and other countries. Apply deliberate corrections and removals directly to the retained records. The [Armenian source notes](../scripts/data/ARMENIA.md) explain the coordinate choices, exclusions and licences.
+Imports add missing records and metadata while preserving existing coordinates, notes, wind settings and other countries. Apply deliberate corrections and removals directly to the retained records. Source notes for [Armenia](../scripts/data/ARMENIA.md) and [New Zealand](../scripts/data/NEW_ZEALAND.md) record coordinate choices, exclusions and licences.
+
+Changes to `forecasts/sites.json` on `main` start NOAA and ECCC refreshes, including missing launch terrain. Their completed artifacts publish automatically. Pages can show new launches as unavailable until the first covering forecast finishes. New Zealand uses GFS, GDPS and GEPS with GLO-30 terrain; its regional map fields remain a separate product.
 
 ## Refresh health
 
@@ -161,6 +218,8 @@ Check the public dataset with:
 node scripts/monitor-served.mjs --from https://jdorrance.github.io/windgrams/data
 ```
 
-The monitor exits unsuccessfully for delayed, stale, expired or inconsistent products; failed refreshes; missing health records; and missing or invalid served documents. It reads a representative profile for each configured model, every active regional pointer and profile, and the first and last map hours of each regional horizon. It also checks NWS, ECMWF and balloon attempt manifests and representative payloads. Supplemental forecasts use their actual forecast horizon; balloon queries and observations use the acquisition's 48-hour search window. These probes check what the website can actually fetch; full build validation checks the complete dataset before upload.
+The monitor checks each model's site inventory against the current catalogue and coverage, accepting native-grid exclusions recorded against the same catalogue. It reads one point profile per covered country, every active regional pointer and profile, and the first and last map hours. Older inventories fail this check until forecasts cover the new launches.
+
+Delayed, stale, expired or inconsistent forecasts, failed refreshes, missing health records and unavailable documents fail the monitor. NWS, ECMWF and balloon checks read attempt manifests and representative payloads. Supplemental forecasts use their actual horizon; balloon queries and observations use the 48-hour acquisition window. Full build validation checks every profile before upload.
 
 Freshness limits come from model cadence, as they do in the UI. An unfinished attempt is allowed one run interval; a completed refresh must be within three intervals plus lag. Reads are limited to 32 MiB with a 10-second timeout and HTTP retries. Use `--now ISO_UTC` to repeat an investigation with a fixed clock.

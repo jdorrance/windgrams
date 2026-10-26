@@ -73,3 +73,29 @@ availability changes. Additional sampling at terrain + 0, 1, 2, 5, 10 and 20 m
 checks the new lower bounds. Reported maxima describe those frozen samples, not
 universal tolerances. No source data is regenerated or modified. Omit the flag
 when reviewing a change that must preserve all physical interpolation.
+
+## Integrated daylight review, October 26, 2026
+
+The 40-scene baseline also includes the solar-crossing layout from main
+`9c2f046a73ef25a910f8794b130c88c10cc68166`. It retains the physical anchors above,
+keeps the forecast samples bracketing sunrise and sunset for interpolation, and
+clips the visible time axis to daylight. The existing 128-pair numerical review
+passes with only the explicitly named surface-anchor change.
+
+An additional checkpoint-to-integrated comparison used frozen October 25 RRFS
+profiles for Blanchard, Tiger Mountain and Rampart Ridge, plus an explicitly
+synthetic Coronet Peak summer scene. At 390 px and 1280 px in both unit systems,
+180 shared hourly samples and 2,428 physical readings are unchanged. All four
+source profiles remain unchanged. Thirty-two SVGs and 36 screenshots document
+the comparison; mobile pairs and desktop integrated scenes were inspected for
+clipping, units, contours, lift marks and daylight labels. The New Zealand case
+tests appearance and calendar handling, not forecast accuracy. Screenshots wait
+for fonts and two animation frames before capture.
+
+Local review artifacts are in
+`forecasts/.scientific-review/2026-10-26-integrated-charts/`; `review.json` records
+source hashes, the exact checkpoint, comparison counts and review limitations.
+All 14 merged browser tests pass, including launch terrain/support labels,
+calm winds, New Zealand local-date selection and model changes. Additional
+Coronet Peak application screenshots cover the 390 px and 1280 px layouts,
+conditions, hour selection and sounding; these use labelled synthetic fixtures.

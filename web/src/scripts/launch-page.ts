@@ -1,5 +1,5 @@
 import { forecastCapabilities, launchCountry, defaultSoaringRegion, shortModelLabel } from "../lib/forecast-capabilities.ts";
-import { launchConditions, matchingHourIndex, peakLiftIndex, validDateKey } from "../lib/launch-forecast.ts";
+import { forecastCoversWindow, initialForecastDay, launchDayWindow, launchConditions, matchingHourIndex, peakLiftIndex, validDateKey } from "../lib/launch-forecast.ts";
 import { forecastDataSupport } from "../lib/forecast-data-support.ts";
 // Launch page: day tabs and a model switch scope the meteogram and the NWS
 // charts below them. All forecast data is read from /data at view time, so the
@@ -7,7 +7,7 @@ import { forecastDataSupport } from "../lib/forecast-data-support.ts";
 
 import { parseForecastManifestJson, parseModelCatalogueJson, parseSiteContextJson } from "@azohra/meteo.briefing/contract";
 import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/meteo.briefing/contract";
-import { localDateKey, localHourOfDay, localInstantMs } from "@azohra/meteo.briefing/derive";
+import { localDateKey, localInstantMs } from "@azohra/meteo.briefing/derive";
 import { createForecastClient } from "@windgrams/data-client";
 import { windgramHours } from "../lib/windgram-view.ts";
 import { windgramViewport } from "../lib/windgram-viewport.ts";
@@ -35,9 +35,6 @@ import type { ProviderRefresh } from '@windgrams/contracts/provider-health';
 
 // Short-range high-resolution models first, then regional, global, and the ensemble.
 
-const HOUR_MS = 3_600_000;
-const DAY_START = 7;
-const DAY_END = 21;
 const DAYS = 7;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -45,10 +42,14 @@ const launch = JSON.parse($("launch-config").textContent ?? "{}") as Launch;
 const tz = launch.timeZone;
 const capabilities = forecastCapabilities(launch);
 try { sessionStorage.setItem("windgrams-country", launchCountry(launch)); } catch { /* Storage is optional. */ }
-const soaringRegion = defaultSoaringRegion(launchCountry(launch));
-if (soaringRegion) {
-  const nav = $<HTMLAnchorElement>("soaring-nav-link");
-  if (nav) { const target = new URL(nav.href); target.searchParams.set("region", soaringRegion); nav.href = target.toString(); }
+const nav = $<HTMLAnchorElement>("soaring-nav-link");
+if (nav) {
+  const target = new URL(nav.href);
+  const country = launchCountry(launch);
+  target.searchParams.set('country', country);
+  const region = defaultSoaringRegion(country);
+  if (region) target.searchParams.set('region', region);
+  nav.href = target.toString();
 }
 const MODEL_ORDER = capabilities.models;
 const arc = windWindow(launch);
@@ -94,10 +95,15 @@ function nextDateKeys(count: number) {
   return keys;
 }
 
+const dayWindows = new Map<string, ReturnType<typeof launchDayWindow>>();
+function dayWindow(dateKey: string) {
+  if (!dayWindows.has(dateKey)) dayWindows.set(dateKey, launchDayWindow(launch, dateKey));
+  return dayWindows.get(dateKey)!;
+}
 const inDay = (validAt: string, dateKey: string) => {
   if (localDateKey(validAt, tz) !== dateKey) return false;
-  const hour = localHourOfDay(validAt, tz);
-  return hour >= DAY_START && hour <= DAY_END;
+  const time = Date.parse(validAt), window = dayWindow(dateKey);
+  return time >= window.startMs && time <= window.endMs;
 };
 
 function button(label: string, sub: string | null, pressed: boolean, disabled: boolean, onClick: () => void) {
@@ -125,8 +131,8 @@ let selectedValidAt: string | null = query.get('time');
 const requestedModel = query.get('model');
 let manualModel = MODEL_ORDER.includes(requestedModel ?? '');
 let modelsLoading = true;
-// After the day's flying hours, open on tomorrow.
-let day = validDateKey(requestedDay) ? requestedDay : localHourOfDay(new Date().toISOString(), tz) > DAY_END ? currentDays[1] : currentDays[0];
+let manualDay = validDateKey(requestedDay);
+let day = validDateKey(requestedDay) ? requestedDay : initialForecastDay(launch);
 let model: string | null = manualModel ? requestedModel : null;
 let catalogue: ModelCatalogue | null = null;
 let launchElevationM: number | null = null;
@@ -223,17 +229,10 @@ async function loadManifest(slug: string) {
   if (manifest && manifest.sites.some((s) => s.slug === launch.slug)) manifests.set(slug, manifest);
 }
 
-/** Published coverage of the selected day; mobile includes early dawn. */
+/** Published daylight coverage is the same on every screen. */
 function covers(slug: string, dateKey: string) {
   const m = manifests.get(slug);
-  if (!m) return false;
-  const reference = Date.parse(m.referenceTime);
-  const first = reference + m.firstForecastHour * HOUR_MS;
-  const last = reference + m.lastForecastHour * HOUR_MS;
-  if (windgramViewport().compact) {
-    return first < localInstantMs(dateKey, 24, tz) && last >= localInstantMs(dateKey, 0, tz);
-  }
-  return first <= localInstantMs(dateKey, DAY_END, tz) && last >= localInstantMs(dateKey, DAY_START, tz);
+  return m ? forecastCoversWindow(m, dayWindow(dateKey)) : false;
 }
 
 function modelLabel(slug: string) {
@@ -266,6 +265,7 @@ function renderDayTabs() {
       const hasNws = nws?.hours.some((h) => inDay(h.validAt, key)) ?? false;
       const hasEcmwf = ecmwf?.hours.some((h) => inDay(h.validAt, key)) ?? false;
       return button(dayLabel(key), daySub(key), key === day, !hasModel && !hasNws && !hasEcmwf, () => {
+        manualDay = true;
         day = key;
         selectedValidAt = null;
         if (model && !covers(model, day)) { manualModel = false; void chooseDefaultModel(); }
@@ -453,7 +453,7 @@ function renderSkewT() {
   const body = $("skewt-body");
   const loaded = model ? profiles.get(model) : null;
   const entry = model ? modelEntry(model) : null;
-  const hours = loaded ? selectedWindgramHours(loaded.profile) : [];
+  const hours = loaded ? selectedWindgramHours(loaded.profile).filter(hour => inDay(hour.validAt, day)) : [];
   if (!loaded || hours.length === 0) {
     body.hidden = true;
     status.hidden = false;
@@ -562,6 +562,10 @@ export async function start() {
   }));
   if (lifetime.disposed) return;
   modelsLoading = false;
+  if (!manualDay && !MODEL_ORDER.some(slug => covers(slug, day))) {
+    day = currentDays.find(key => key >= day && MODEL_ORDER.some(slug => covers(slug, key))) ?? day;
+    selectedValidAt = null;
+  }
   if (model && !manifests.has(model)) { manualModel = false; model = null; }
   await chooseDefaultModel();
   render();

@@ -6,6 +6,7 @@ import { parseArgs } from 'node:util';
 import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
 import { MODELS } from '@windgrams/providers/registry';
 import { validateRegionCatalogue } from '@windgrams/contracts/regional';
+import { copyIssuedHistoryTree } from '../verification/issued-history.mjs';
 import { mergeArtifacts } from './merge-artifacts.mjs';
 import { pointProduct, publicationOwnedName, regionalProduct, readJson, writeJson } from './lib/artifact-products.mjs';
 import { REGION_INDEXES } from './lib/model-coverage.mjs';
@@ -22,7 +23,8 @@ export function preparePublication(incoming, output, catalogue = readJson(new UR
   const staging = mkdtempSync(join(dirname(output), '.publication-')), candidate = join(staging, 'dataset'), previous = join(staging, 'previous');
   try {
     if (existsSync(output)) cpSync(output, candidate, { recursive: true, mode: constants.COPYFILE_FICLONE,
-      filter: path => { const first = relative(output, path).split(sep)[0]; return !first || publicationOwnedName(first); } });
+      filter: path => { const first = relative(output, path).split(sep)[0]; return !first || first !== 'history' && publicationOwnedName(first); } });
+    if (existsSync(join(output, 'history'))) copyIssuedHistoryTree(join(output, 'history'), join(candidate, 'history'));
     const report = prepareCandidate(incoming, candidate, catalogue);
     if (dryRun) return { ...report, validationMs: Date.now() - start };
     if (existsSync(output)) renameSync(output, previous);

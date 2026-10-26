@@ -1,12 +1,12 @@
 // Capture public products and optional local issued archives. Never rebuild or publish forecasts.
-import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { claimCapture, createStore, textOf, jsonOf, readJsonResource, pool } from '../evidence-store.mjs';
 import { references, parseBlipspot, parseMapMenu } from './html.mjs';
 import { matchSites } from './matching.mjs';
 import { captureRegionalBundles } from './regional-capture.mjs';
-import { archivedModelRuns } from '../issued-history.mjs';
+import { archivedModelRuns, readIssuedHistoryFile } from '../issued-history.mjs';
 import { parsePublishedProfileJson } from '@windgrams/contracts/published-lift';
 import { PROVIDER_GROUPS } from '@windgrams/providers/registry';
 
@@ -350,14 +350,15 @@ export async function captureReview({
           retrievedAt: startedAt,
           kind: 'issued-manifest',
         });
-        for (const file of await readdir(join(run.directory, 'sites'))) {
-          if (!file.endsWith('.json')) continue;
-          const slug = file.slice(0, -5);
+        for (const { slug } of manifest.sites) {
+          const file = `${slug}.json`;
           if (!matchedIds.has(slug)) continue;
           const path = join(run.directory, 'sites', file);
+          const bytes = readIssuedHistoryFile(run.directory, `sites/${file}`);
+          if (!bytes) continue;
           record.profiles.push({
             site: slug,
-            entry: await store.save(await readFile(path), {
+            entry: await store.save(bytes, {
               url: `archive:${relative(archiveRoot, path)}`,
               status: 200,
               retrievedAt: startedAt,

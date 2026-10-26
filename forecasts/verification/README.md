@@ -38,6 +38,15 @@ A run can have several issued revisions—for example, when missing diagnostics 
 history/<model>/<run>/revisions/<sha256>/
 ```
 
+Profile payloads are stored as `sites/<slug>.json.gz` and, when selected,
+`full-columns/sites/<slug>.json.gz`. The revision receipt continues to name and
+hash the original uncompressed JSON bytes; compression does not create a new
+issue or change scoring. Use `readIssuedHistoryFile(directory, logicalFile)` from
+[`issued-history.mjs`](issued-history.mjs) for either old plain JSON or gzip.
+It returns `null` for missing evidence and rejects ambiguous duplicate forms,
+corrupt compressed data, and payloads larger than 64 MiB after decompression.
+Manifests, revision receipts and indexes remain plain JSON.
+
 The revision records hashes of the full issued source bytes, the diagnostic method and the recorded build identity. Repeating an identical archive operation leaves it unchanged; different content adds a revision. The run's `index.json` records issue order and the latest known revision. Scoring selects the first issue, preserving the evidence of what was originally forecast even after later repairs.
 
 Older run directories retain their original files and are labeled `legacy` in the report. Some intentionally contain only selected sites. Import checks the identities of the profiles that exist and preserves their bytes; scoring reports the missing profiles. New revisions require the complete site inventory.
@@ -51,6 +60,44 @@ Operator builds now also pass `retainFullColumnSites` for Blanchard, Tiger, Ramp
 Operator builds and artifact merges share [`history-policy.mjs`](history-policy.mjs): at least 30 UTC initialization dates, plus the most recent 120 rolling runs and pins, preserving every revision within each retained run. The calendar floor is anchored to the newest retained initialization, so importing an old study does not erase it because of today's date. `archiveModelRun` and `mergeHistoryArchives` expose `minimumCalendarDays` (0–120); their library default remains zero for callers that explicitly want run-count-only retention. This retains available days prospectively; it cannot restore deleted archives.
 
 `verify:history` now reports `archiveCalendarCoverage`: retained runs and selected first-issued runs per UTC day, absent initialization dates, and retained runs omitted by the scoring limit. A day with one run is not a complete daily inventory. Its separate independent station-day counts retain the existing observation matching rules. Increase `--max-runs` up to 120 to inspect more retained runs; the report makes the remaining selection gap explicit.
+
+## Storage maintenance and rehearsal
+
+CI migrates restored plain archives before use:
+
+```sh
+node forecasts/verification/compact-history.mjs --data forecasts/data
+```
+
+Run this command from the repository root. It verifies each affected run,
+compresses a staged copy, checks exact byte round trips, then replaces the run.
+Already compressed runs need only a filename scan. Imports also compress older
+producer artifacts before accepting them, so a late artifact cannot undo the
+storage transition. Publication shares immutable revision files through hard
+links when supported; mutable indexes and legacy files are copied independently.
+Removing a candidate or pruning a run cannot remove another link's evidence.
+
+To reproduce the storage rehearsal from a complete local model dataset:
+
+```sh
+node forecasts/verification/history-capacity.mjs --source forecasts/data --output /tmp/new-history-rehearsal
+```
+
+The output must be new and its parent needs 40 GiB free. Node 24, `tar` and zstd
+are required. The workload uses every source-manifest site and horizon, configured
+model cycles, 120 rolling runs, two older pins, and one additional revision per
+ten runs. It retains the four selected full columns. Twice-daily models span 60
+days because the run-count floor still applies. Published weather is reused with
+shifted times: these files measure storage and operations, **never historical
+forecast skill**. Do not place the scratch workload inside a scored archive.
+
+The report measures real file sizes, compressed transfer bytes, restore, merge,
+staging and first-issued verification. Byte hashes must agree through every
+round trip. Repeated synthetic weather can compress across runs unusually well;
+cache budgets therefore use the sum of individual file sizes plus tar overhead.
+`--measure EXISTING_REHEARSAL --output NEW_DIRECTORY` repeats the storage checks
+with current code without regenerating weather. The [operations guide](../docs/operations.md#publication-and-retention)
+records runner reservations, cache limits and the completed rehearsal's limits.
 
 ## Independent diagnostic experiment
 

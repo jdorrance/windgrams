@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { archivedModelRuns } from './history.mjs';
+import { readIssuedHistoryFile } from './issued-history.mjs';
 import { calendarHistoryCoverage } from './history-coverage.mjs';
 import { EVALUATOR_VERSION, MATCHED_RAOB_SITE_PAIRS, compareRaobProfile, summarizeVerifications } from './verify-observations.mjs';
 
@@ -27,9 +28,9 @@ export function scoreHistory({ dataRoot, observationsRoot = dataRoot, models = [
   for (const run of runs) for (const pair of pairs) {
     const observationsDoc = observations.get(pair.siteSlug);
     if (!observationsDoc) continue;
-    const path = join(run.directory, 'sites', `${pair.siteSlug}.json`);
-    if (!existsSync(path)) { missing.issuedProfiles++; continue; }
-    const profile = JSON.parse(readFileSync(path, 'utf8'));
+    const bytes = readIssuedHistoryFile(run.directory, `sites/${pair.siteSlug}.json`);
+    if (!bytes) { missing.issuedProfiles++; continue; }
+    const profile = JSON.parse(bytes);
     for (const time of new Set(observationsDoc.soundings.map(sounding => sounding.validAt))) {
       const compared = compareRaobProfile(observationsDoc, profile, pair, time);
       if (compared?.matched) comparisons.push({ ...compared, issuedRunKey: run.runKey, issuedRevisionId: run.revisionId });

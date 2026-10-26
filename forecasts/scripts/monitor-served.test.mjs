@@ -6,13 +6,15 @@ import { createHash } from 'node:crypto';
 import { modelDescriptor } from '@windgrams/providers/registry';
 import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
 import { postprocessPointForecast } from '@windgrams/soaring/compatibility';
+import { catalogueFingerprint } from '@windgrams/pipeline';
 import { monitorServed } from './monitor-served.mjs';
 
 const fixture = postprocessPointForecast(JSON.parse(gunzipSync(readFileSync(new URL('../../web/test/fixtures/windgram-visual/dog-gfs.json.gz', import.meta.url)))));
 const encode = value => JSON.stringify(value);
 const hash = text => createHash('sha256').update(text).digest('hex');
-function dataset(method = SOARING_CONTRACT_VERSION, unavailableDiagnostics = false) {
+function dataset({ modelId = 'gfs', method = SOARING_CONTRACT_VERSION, unavailableDiagnostics = false } = {}) {
   const profile = structuredClone(fixture);
+  profile.model = modelId;
   profile.soaringMeta.contractVersion = method;
   for (const hour of profile.hours) if (hour.soaring) hour.soaring.contractVersion = method;
   if (unavailableDiagnostics) {
@@ -21,12 +23,13 @@ function dataset(method = SOARING_CONTRACT_VERSION, unavailableDiagnostics = fal
   }
   const reference = Date.parse(profile.run.referenceTime);
   const now = new Date(reference + 7 * 3_600_000).toISOString();
-  const model = { ...modelDescriptor('gfs'), forecastHours: profile.hours.map(hour => (Date.parse(hour.validAt) - reference) / 3_600_000) };
-  const pointManifest = { schemaVersion: 1, model: 'gfs', ...profile.run, forecastHours: profile.hours.length, firstForecastHour: model.forecastHours[0], lastForecastHour: model.forecastHours.at(-1), sites: [{ slug: profile.site.id, name: profile.site.name }], stats: { downloadBytes: 0, downloads: 0, durationMs: 0, retries: 0 } };
+  const model = { ...modelDescriptor(modelId), forecastHours: profile.hours.map(hour => (Date.parse(hour.validAt) - reference) / 3_600_000) };
+  const sites = [{ slug: profile.site.id, name: profile.site.name, latitude: profile.site.latitude, longitude: profile.site.longitude, timeZone: profile.site.timeZone, countryCode: 'US' }];
+  const pointManifest = { schemaVersion: 1, model: modelId, ...profile.run, forecastHours: profile.hours.length, firstForecastHour: model.forecastHours[0], lastForecastHour: model.forecastHours.at(-1), sites: [{ slug: profile.site.id, name: profile.site.name }], stats: { downloadBytes: 0, downloads: 0, durationMs: 0, retries: 0 } };
   const documents = new Map([
-    ['gfs/manifest.json', encode(pointManifest)],
-    [`gfs/sites/${profile.site.id}.json`, encode(profile)],
-    ['health/noaa-cloud.json', encode({ schemaVersion: 1, group: 'noaa-cloud', models: { gfs: { attemptedAt: now, completedAt: now, lastSuccessfulRefreshAt: now, outcome: 'updated', reason: null } } })],
+    [`${modelId}/manifest.json`, encode(pointManifest)],
+    [`${modelId}/sites/${profile.site.id}.json`, encode(profile)],
+    [`health/${model.jobGroup}.json`, encode({ schemaVersion: 1, group: model.jobGroup, models: { [modelId]: { attemptedAt: now, completedAt: now, lastSuccessfulRefreshAt: now, outcome: 'updated', reason: null } } })],
   ]);
   for (const product of ['nws', 'ecmwf', 'raob']) {
     documents.set(`${product}/manifest.json`, encode({ schemaVersion: 1, generatedAt: now,
@@ -47,9 +50,84 @@ function dataset(method = SOARING_CONTRACT_VERSION, unavailableDiagnostics = fal
   documents.set(`${path}/${bundle}/manifest.json`, manifestBytes);
   for (const [file, text] of bundleFiles) documents.set(`${path}/${bundle}/${file}`, text);
   documents.set('soaring/v1/regions.json', encode({ schemaVersion: 1, soaringContractVersion: method, generatedAt: now, trialRegionId: 'test', regions: [{ id: 'test', name: 'Test', status: 'active-verified-trial', caseId, nativeModels: [{ model: 'gfs', caseId }], timeZone: 'America/Los_Angeles', morningBriefingLocalHour: 8, bbox: [-123, 46, -121, 48], primarySite: profile.site.id, launches: [profile.site.id], deterministicModels: ['gfs'], ensembleModels: [], sparseAdapters: [] }] }));
-  const fetchImpl = async url => { const key = String(url).replace('https://forecast.example/data/', ''); return documents.has(key) ? new Response(documents.get(key), { headers: { 'content-type': 'application/json' } }) : new Response('', { status: 404 }); };
-  return { documents, model, now, profile, bundlePath: `${path}/${bundle}`, options: { from: 'https://forecast.example/data', models: [model], now, fetchImpl } };
+  const requests = [];
+  const fetchImpl = async url => { const key = String(url).replace('https://forecast.example/data/', ''); requests.push(key); return documents.has(key) ? new Response(documents.get(key), { headers: { 'content-type': 'application/json' } }) : new Response('', { status: 404 }); };
+  return { documents, model, now, profile, requests, bundlePath: `${path}/${bundle}`, options: { from: 'https://forecast.example/data', models: [model], sites, now, fetchImpl } };
 }
+
+function addSite(data, site) {
+  const location = { ...data.options.sites[0], ...site };
+  data.options.sites.push(location);
+  const path = `${data.model.id}/manifest.json`, manifest = JSON.parse(data.documents.get(path));
+  manifest.sites.push({ slug: location.slug, name: location.name });
+  data.documents.set(path, encode(manifest));
+  const profile = structuredClone(data.profile);
+  Object.assign(profile.site, { id: location.slug, name: location.name, latitude: location.latitude, longitude: location.longitude, timeZone: location.timeZone });
+  data.documents.set(`${data.model.id}/sites/${location.slug}.json`, encode(profile));
+  return location;
+}
+
+test('a fresh pre-expansion global inventory fails before probing profiles', async () => {
+  const data = dataset();
+  const catalogue = JSON.parse(readFileSync(new URL('../sites.json', import.meta.url))).sites;
+  const launches = JSON.parse(readFileSync(new URL('../../web/src/data/launches.json', import.meta.url))).launches;
+  data.options.sites = catalogue.map(site => ({ ...site, countryCode: launches[site.slug].countryCode }));
+  const manifest = JSON.parse(data.documents.get('gfs/manifest.json'));
+  manifest.sites = data.options.sites.filter(site => site.countryCode === 'US').map(({ slug, name }) => ({ slug, name }));
+  data.documents.set('gfs/manifest.json', encode(manifest));
+  const report = await monitorServed(data.options);
+  assert.equal(report.ok, false);
+  assert.match(report.checks.find(check => check.kind === 'point').reason, new RegExp(`${catalogue.length - manifest.sites.length} missing, 0 unexpected`));
+  assert.equal(data.requests.some(path => path.startsWith('gfs/sites/')), false);
+});
+
+test('regional inventories honor current native-grid exclusions', async () => {
+  const data = dataset({ modelId: 'hrrr-conus' });
+  const excluded = { ...data.options.sites[0], slug: 'wa-grid-edge', longitude: -125.9 };
+  const outside = { ...excluded, slug: 'nz-outside', latitude: -45, longitude: 170, countryCode: 'NZ' };
+  data.options.sites.push(excluded, outside);
+  const path = 'hrrr-conus/manifest.json', manifest = JSON.parse(data.documents.get(path));
+  const coverage = { requestedSiteHash: catalogueFingerprint(data.options.sites.slice(0, 2)), excluded: [excluded.slug], reason: 'outside-native-grid' };
+  for (const invalid of [null, { requestedSiteHash: 'old' }, { excluded: [outside.slug] }, { excluded: [excluded.slug, excluded.slug] }, { excluded: 'invalid' }, { reason: 'fetch-failed' }]) {
+    manifest.coverage = { ...coverage, ...invalid };
+    data.documents.set(path, encode(manifest));
+    const report = await monitorServed(data.options), point = report.checks.find(check => check.kind === 'point');
+    assert.equal(point.ok, invalid === null, JSON.stringify(point));
+    if (invalid) assert.match(point.reason, /coverage exclusions/);
+  }
+});
+
+test('point probes cover each country once and continue after a country fails', async () => {
+  for (const failed of [null, 'US', 'NZ', 'AM']) {
+    const data = dataset();
+    const nz = addSite(data, { slug: 'nz-first', latitude: -37, longitude: 175, timeZone: 'Pacific/Auckland', countryCode: 'NZ' });
+    addSite(data, { ...nz, slug: 'nz-second' });
+    const am = addSite(data, { slug: 'am-first', latitude: 40, longitude: 44, timeZone: 'Asia/Yerevan', countryCode: 'AM' });
+    const failedSlug = data.options.sites.find(site => site.countryCode === failed)?.slug;
+    if (failed === 'NZ') data.documents.set(`gfs/sites/${failedSlug}.json`, '{');
+    else if (failed) data.documents.delete(`gfs/sites/${failedSlug}.json`);
+    const report = await monitorServed(data.options);
+    const point = report.checks.find(check => check.kind === 'point');
+    assert.equal(point.ok, !failed);
+    if (failed) assert.match(point.reason, new RegExp(`^${failedSlug}:`));
+    assert.deepEqual(data.requests.filter(path => path.startsWith('gfs/sites/')), [data.profile.site.id, nz.slug, am.slug].map(slug => `gfs/sites/${slug}.json`));
+  }
+});
+
+test('point monitoring rejects trials, invalid inventories and moved launch metadata', async () => {
+  for (const issue of ['trial', 'duplicate', 'unexpected', 'location', 'country']) {
+    const data = dataset(), path = 'gfs/manifest.json', manifest = JSON.parse(data.documents.get(path));
+    if (issue === 'trial') manifest.trial = true;
+    if (issue === 'duplicate') manifest.sites.push(manifest.sites[0]);
+    if (issue === 'unexpected') manifest.sites.push({ slug: 'unexpected', name: 'Unexpected' });
+    if (issue === 'location') data.options.sites[0].longitude += 0.01;
+    if (issue === 'country') delete data.options.sites[0].countryCode;
+    data.documents.set(path, encode(manifest));
+    const report = await monitorServed(data.options), point = report.checks.find(check => check.kind === 'point');
+    assert.equal(point.ok, false);
+    assert.equal(point.status, issue === 'location' ? 'inconsistent' : 'unavailable');
+  }
+});
 
 test('served monitor verifies representative point, refresh health and immutable regional boundary hours', async () => {
   const data = dataset();
@@ -163,10 +241,12 @@ test('balloon monitoring accepts confirmed absence but rejects old queries and o
 
 test('served monitoring reports compatible retained methods without hiding stale or inconsistent products', async () => {
   for (const method of [SOARING_CONTRACT_VERSION, '2.2.0']) {
-    const unavailable = await monitorServed(dataset(method, true).options);
+    const datasetWithAbsence = dataset({ method, unavailableDiagnostics: true });
+    addSite(datasetWithAbsence, { slug: 'nz-absence', latitude: -37, longitude: 175, timeZone: 'Pacific/Auckland', countryCode: 'NZ' });
+    const unavailable = await monitorServed(datasetWithAbsence.options);
     assert.equal(unavailable.ok, true, JSON.stringify(unavailable.checks));
   }
-  const data = dataset('2.2.0');
+  const data = dataset({ method: '2.2.0' });
   const healthy = await monitorServed(data.options);
   assert.equal(healthy.ok, true, JSON.stringify(healthy.checks));
   for (const check of healthy.checks.filter(check => ['point', 'regional'].includes(check.kind))) {

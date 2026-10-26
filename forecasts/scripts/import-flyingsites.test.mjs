@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { buildCatalog, buildCountryCatalog, mergeCatalogs, pointInGeometry, slugify, timeZoneFor, windFromFlags } from "./import-flyingsites.mjs";
 
 const square = {
@@ -28,6 +29,7 @@ test("time zones follow the state, with far southeast Oregon on Mountain time", 
   assert.equal(timeZoneFor("OR", -123), "America/Los_Angeles");
   assert.equal(timeZoneFor("OR", -117), "America/Boise");
   assert.equal(timeZoneFor("AM", 44.5), "Asia/Yerevan");
+  assert.equal(timeZoneFor("NZ", 168.7), "Pacific/Auckland");
 });
 
 test("preferred compass flags set the facing; empty flags stay unknown", () => {
@@ -137,4 +139,80 @@ test("reviewed country imports reject duplicate identities, bad coordinates and 
   const anonymous = structuredClone(reviewed);
   anonymous.launches[0].source = undefined;
   assert.throws(() => buildCountryCatalog(anonymous), /attribution required/);
+});
+
+const newZealand = JSON.parse(readFileSync(new URL("data/new-zealand-launches.json", import.meta.url), "utf8"));
+
+test("NZ source review accounts for every archived candidate and retains distinct takeoffs", () => {
+  const bytes = readFileSync(new URL("data/new-zealand-pge-source.json", import.meta.url));
+  assert.equal(bytes.length, newZealand.sourceSnapshot.bytes);
+  assert.equal(createHash("sha256").update(bytes).digest("hex"), newZealand.sourceSnapshot.sha256);
+  const candidates = JSON.parse(bytes).features;
+  const included = new Set(newZealand.launches.map(site => site.sourceId));
+  const excluded = new Set(newZealand.excluded.map(site => site.sourceId));
+  assert.equal(candidates.length, 149);
+  assert.equal(included.size, newZealand.launches.length);
+  for (const record of candidates) assert.notEqual(included.has(record.id), excluded.has(record.id), record.id);
+  for (const record of newZealand.excluded) assert.ok(record.reason && record.sourceUrl && record.checkedAt);
+  for (const id of ["15168", "14782", "15928", "20022", "11726", "14239"]) assert.ok(excluded.has(id));
+
+  const { sitesFile, launchesFile } = buildCountryCatalog(newZealand);
+  assert.equal(sitesFile.sites.length, 143);
+  assert.equal(new Set(sitesFile.sites.map(site => `${site.latitude},${site.longitude}`)).size, sitesFile.sites.length);
+  assert.equal(new Set(Object.values(launchesFile.launches).map(launch => launch.region)).size, 6);
+  for (const site of sitesFile.sites) {
+    assert.equal(site.timeZone, "Pacific/Auckland");
+    assert.ok(site.latitude > -47 && site.latitude < -34 && site.longitude > 167 && site.longitude < 178, site.slug);
+    assert.equal("elevationM" in site, false);
+    const launch = launchesFile.launches[site.slug];
+    assert.equal(launch.countryCode, "NZ");
+    assert.equal(launch.windMinMph, null);
+    assert.equal(launch.windMaxMph, null);
+    assert.equal(launch.gustMaxMph, null);
+  }
+  for (const slug of ["nz-muriwai", "nz-muriwai-nw", "nz-muriwai-janies", "nz-karioitahi-a", "nz-karioitahi-e"]) {
+    assert.ok(launchesFile.launches[slug], slug);
+  }
+  assert.equal(sitesFile.sites.find(site => site.slug === "nz-barnicoat").latitude, -41.34322010035545);
+  assert.equal(sitesFile.sites.find(site => site.slug === "nz-ohope").name, "Ōhope");
+  for (const slug of ["nz-puheke", "nz-shipwreck-bay"]) {
+    assert.equal(launchesFile.launches[slug].region, "Northland / Auckland", slug);
+  }
+  assert.equal(slugify("Paekākāriki Hill"), "paekakariki-hill");
+});
+
+test("NZ directions represent one contiguous source exposure", () => {
+  const candidates = JSON.parse(readFileSync(new URL("data/new-zealand-pge-source.json", import.meta.url), "utf8")).features;
+  for (const launch of newZealand.launches) {
+    if (launch.facingDeg === null || launch.sourceId === "13459") continue; // Barnicoat uses the club's explicit sector.
+    const source = candidates.find(record => record.id === launch.sourceId).properties;
+    const flags = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"].map(key => Number(source[key]) > 0);
+    assert.ok(flags.filter(Boolean).length <= 5, launch.slug);
+    assert.equal(flags.filter((active, index) => active && !flags[(index + 7) % 8]).length, 1, launch.slug);
+    assert.ok(launch.windArcHalfWidthDeg <= 90, launch.slug);
+    for (let index = 0; index < flags.length; index += 1) {
+      if (flags[index]) assert.ok(Math.abs((index * 45 - launch.facingDeg + 540) % 360 - 180) <= launch.windArcHalfWidthDeg, launch.slug);
+    }
+  }
+});
+
+test("reviewed countries accept per-launch regions and time zones, and retain manual edits", () => {
+  const records = {
+    countryCode: "NZ", region: "North Island", timeZone: "Pacific/Auckland",
+    launches: [newZealand.launches[0], { ...newZealand.launches[1], region: "Chatham Islands", timeZone: "Pacific/Chatham" }],
+  };
+  const imported = buildCountryCatalog(records);
+  const [mainland, chatham] = imported.sitesFile.sites;
+  assert.equal(mainland.timeZone, "Pacific/Auckland");
+  assert.equal(chatham.timeZone, "Pacific/Chatham");
+  assert.equal(imported.launchesFile.launches[chatham.slug].region, "Chatham Islands");
+  const edited = structuredClone(imported);
+  edited.sitesFile.sites[0].latitude = -36.8;
+  edited.launchesFile.launches[mainland.slug].notes = "Manual club correction.";
+  assert.deepEqual(mergeCatalogs(edited, imported), edited);
+
+  const missingRegion = { ...records, region: undefined, launches: [{ ...records.launches[0], region: undefined }] };
+  assert.throws(() => buildCountryCatalog(missingRegion), /Region and time zone/);
+  const invalidZone = { ...records, launches: [{ ...records.launches[0], timeZone: "Pacific/Invalid" }] };
+  assert.throws(() => buildCountryCatalog(invalidZone), /time zone/i);
 });

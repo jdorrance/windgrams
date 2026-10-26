@@ -25,9 +25,10 @@ jobs:
       NWS_USER_AGENT: ${{ vars.NWS_USER_AGENT || format('Windgrams/0.1 ({0}/{1})', github.server_url, github.repository) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Reserve space for Canadian GRIBs
-        if: inputs.group == 'eccc'
-        run: node scripts/prepare-refresh-runner.mjs eccc
+      - name: Reserve forecast workspace
+        env:
+          REFRESH_GROUP: ${{ inputs.group }}
+        run: node scripts/prepare-refresh-runner.mjs "$REFRESH_GROUP"
       - uses: ./.github/actions/setup-pnpm
       - id: urls
         env:
@@ -44,8 +45,12 @@ jobs:
       - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
-          restore-keys: forecast-data-
+          key: issued-data-v2-${{ github.run_id }}
+          restore-keys: |
+            issued-data-v2-
+            forecast-data-
+      - name: Compact retained issued history
+        run: node forecasts/verification/compact-history.mjs --data forecasts/data
       - name: Refresh owned products
         working-directory: forecasts
         env:
@@ -59,6 +64,7 @@ jobs:
           REFRESH_GROUP: ${{ inputs.group }}
         run: node scripts/pack-refresh.mjs "$REFRESH_GROUP"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        id: artifact
         if: always()
         with:
           name: data-${{ inputs.group }}
@@ -68,7 +74,7 @@ jobs:
           retention-days: 2
       # Token-dispatched refreshes do not generate downstream workflow_run events.
       - name: Request publication after token dispatch
-        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]' }}
+        if: ${{ !cancelled() && steps.artifact.outcome == 'success' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main -f refresh=none

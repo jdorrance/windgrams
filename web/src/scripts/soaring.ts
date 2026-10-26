@@ -1,4 +1,4 @@
-import { formatQuantity, getUnitSystem } from '../lib/units.ts';
+import { formatQuantity, getUnitSystem, gustNoun } from '../lib/units.ts';
 import { readRegionalJson } from '../lib/regional-data.ts';
 import { openRegionalDataset } from '@windgrams/data-client/dataset';
 import { parseModelCatalogue, type SiteForecast } from '@azohra/meteo.briefing/contract';
@@ -493,6 +493,8 @@ async function main() {
     const expTerr = modelLaunchHour?.experimentalTerrain;
     const surfaceWind = formatRegionalWind(w10s, w10d);
     const surfaceWindBearing = formatRegionalWind(w10s, w10d, { bearing: true });
+    // The regional document's own gust class; an undeclared (older) manifest keeps the plain word.
+    const gustWord = gustNoun(manifest.semantics?.gust);
     const meanWind = formatRegionalWind(blws, blwd, { bearing: true });
     const launchWind = expTerr?.bracketsLaunchAltitude
       ? formatRegionalWind(expTerr.launchWindSpeedMps, expTerr.launchWindDirectionDeg, { bearing: true }) : null;
@@ -508,7 +510,7 @@ async function main() {
       ['Effective cloud limit (model near-saturation proxy)', fmtM((hour.effectiveCloudLimitM ?? hour.cloudBaseM)[selectedCell], 'MSL')],
       ['Mixed-layer cloud base', fmtM(hour.mixedLayerLclM?.[selectedCell], 'MSL')],
       ['Cu / OD potential', `${hour.cuPotentialM?.[selectedCell] != null ? `${hour.cuPotentialM[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.cuPotentialM[selectedCell], 'elevation')}` : '–'} / ${hour.odPotentialM?.[selectedCell] != null ? `${hour.odPotentialM[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.odPotentialM[selectedCell], 'elevation')}` : '–'}`],
-      [`Wind at ${formatQuantity(10, 'elevation')} above model ground (gust)`, surfaceWindBearing ? `${surfaceWindBearing}${w10g != null ? ` (gust ${formatQuantity(w10g, 'wind')})` : ''}` : 'Unavailable'],
+      [`Wind at ${formatQuantity(10, 'elevation')} above model ground (${gustWord})`, surfaceWindBearing ? `${surfaceWindBearing}${w10g != null ? ` (${gustWord} ${formatQuantity(w10g, 'wind')})` : ''}` : 'Unavailable'],
       ['Estimated wind at launch elevation · experimental', expTerr ? `${launchWind ?? 'Wind unavailable'} at launch (${formatQuantity(expTerr.launchElevationM, 'elevation')} MSL)${launchWind ? ' · local terrain flow unresolved' : ''}` : 'Select a launch'],
       ['BL mean wind & shear', meanWind ? `${meanWind} · shear ${formatQuantity(blsh, 'wind')} (B/S ${bsr?.toFixed(2) ?? '–'})` : 'Unavailable'],
       [`Vertical motion at ${formatQuantity(925, 'pressure')} / convergence`, `${hour.w925Mps?.[selectedCell] != null ? `${hour.w925Mps[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.w925Mps[selectedCell], 'lift')}` : '–'} · ${hour.convergence10mX1e5?.[selectedCell] != null ? `${hour.convergence10mX1e5[selectedCell]! >= 0 ? '+' : ''}${hour.convergence10mX1e5[selectedCell]!.toFixed(1)} ×10⁻⁵ s⁻¹` : '–'}`],
@@ -519,7 +521,7 @@ async function main() {
       ['Thermal strength', displayMetric((hour.thermalVelocityV2Mps ?? hour.thermalVelocityMps)[selectedCell], 'thermalVelocityV2Mps', hour.status[selectedCell])],
       ['Usable lift top', displayMetric((hour.usableLiftTopV2M ?? hour.usableLiftTopM)[selectedCell], 'usableLiftTopV2M', hour.status[selectedCell])],
       ['Potential cloud base', fmtFt((hour.surfaceLclM ?? hour.cloudBaseM)[selectedCell])],
-      ['Model surface wind · 10 m', surfaceWind ? `${surfaceWind}${w10g != null ? ` · gusts ${formatQuantity(w10g, 'wind')}` : ''}` : 'Unavailable'],
+      ['Model surface wind · 10 m', surfaceWind ? `${surfaceWind}${w10g != null ? ` · ${gustWord} ${formatQuantity(w10g, 'wind')}` : ''}` : 'Unavailable'],
       ['Cloud cover', displayMetric(hour.cloudCoverPercent?.[selectedCell], 'cloudCoverPercent')],
     ];
     if (!['thermalVelocityV2Mps', 'usableLiftTopV2M', 'surfaceLclM', 'wind10mSpeedMps', 'cloudCoverPercent'].includes(layer)) {

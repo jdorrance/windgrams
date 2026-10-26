@@ -7,6 +7,8 @@
 //
 //   raob/sites/<slug>.json   the nearest station's latest soundings, one per launch
 
+import { GRAVITY_MPS2, RD_J_PER_KG_K } from "@windgrams/meteorology/thermodynamics";
+
 export const SCHEMA_VERSION = 1;
 export const API = "https://mesonet.agron.iastate.edu/json/raob.py";
 export const SOURCE = "NWS radiosonde observations via the Iowa Environmental Mesonet";
@@ -77,7 +79,7 @@ export const soundingUrl = (stationId, t) => `${API}?ts=${stamp(t)}&station=${st
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-const RD_OVER_G = 287.04 / 9.80665;
+const RD_OVER_G = RD_J_PER_KG_K / GRAVITY_MPS2;
 
 /**
  * Normalises one IEM profile into levels, bottom up: pressure (hPa), height

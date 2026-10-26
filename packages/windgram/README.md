@@ -47,5 +47,7 @@ uses model terrain.
 
 [`/svg/external`](src/svg-external.ts) renders SVG using the shared stylesheet.
 The SVG modules also render height axes, diagnostics, keys and wind barbs.
-[`/format`](src/format.ts) provides unit conversions and labels, while
+[`/format`](src/format.ts) provides unit conversions and labels, including
+`gustNoun`, which names a gust reading by the document's declared
+`semantics.gust` class and keeps the plain word when none is declared, while
 [`/scene`](src/scene.ts) includes daylight filtering and height projection.

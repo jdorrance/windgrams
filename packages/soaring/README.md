@@ -63,3 +63,10 @@ point profiles and supports sparse NWS/ECMWF documents, ensemble members and
 cross-model summaries. Ensemble diagnostics are calculated per member before
 percentiles are aggregated. The [public types](src/types.ts) describe all
 diagnostic fields.
+
+A published GEPS percentile document is returned without per-hour `soaring`
+diagnostics (`postprocessAction: 'retained-upstream-member-percentiles'`), so
+readers fall back to the upstream V1 `hour.derived` values for it;
+[`publishedLiftFamily`](../contracts/README.md#reading-published-data) in
+`@windgrams/contracts` names that fallback and the contracts README lists where
+the V1 method version is pinned.

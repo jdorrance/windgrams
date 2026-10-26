@@ -3,6 +3,7 @@ import type { AtmosphericColumn, AtmosphericLevel } from '@windgrams/contracts';
 import type { LambertGrid } from '@azohra/meteo.grib';
 import type { NoaaSelection } from './types.ts';
 import { wind } from './grid.ts';
+import { specificHumidityDewpointC } from '../thermodynamics.ts';
 
 // Verified operational HRRR wrfnat inventory: 50 model levels, numbered 1..50.
 export const HRRR_NATIVE_LEVEL_COUNT = 50;
@@ -18,15 +19,6 @@ export function selectNativeRecords(records: readonly IdxRecord[], hour: number)
     if (record && (!Number.isInteger(record.length) || record.length! <= 0)) throw new Error('Native field requires a closed byte range');
     return { key: `native.${level}.${variable}`, variable, level: `${level} hybrid level`, required: variable !== 'VVEL', conversion: variable === 'SPFH' ? 'specific humidity kg/kg and pressure Pa → vapor pressure → dewpoint °C' : 'native units normalized after decoding', product: 'wrfnat', record };
   }));
-}
-
-/** Specific humidity is mass water / total moist air, not mixing ratio. */
-export function specificHumidityDewpointC(q: number, pressurePa: number): number | null {
-  if (!Number.isFinite(q) || !Number.isFinite(pressurePa) || q <= 0 || q >= 1 || pressurePa <= 0) return null;
-  const eHpa = q * pressurePa / (0.622 + 0.378 * q) / 100;
-  const log = Math.log(eHpa / 6.112);
-  const dewpoint = 243.5 * log / (17.67 - log);
-  return Number.isFinite(dewpoint) ? dewpoint : null;
 }
 
 /** Uses supplied PRES and HGT: no guessed hybrid coefficients or synthesized vertical levels. */

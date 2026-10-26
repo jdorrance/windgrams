@@ -1,5 +1,5 @@
 import { renderWindgramSvg } from './windgram-chart.ts';
-import { fahrenheitToCelsius, formatQuantity, knotsToMps, type UnitSystem } from './windgram-format.ts';
+import { fahrenheitToCelsius, formatQuantity, gustNoun, knotsToMps, type UnitSystem } from './windgram-format.ts';
 import { heightToY } from './windgram-scale.ts';
 import { readWindgram } from './windgram-inspector.ts';
 import { visibleWindgramHourIndices } from './windgram-time-axis.ts';
@@ -147,7 +147,7 @@ export function mountWindgramInspector(
           ? "Calm"
           : `${barbSpeed(reading.speedKt, system)}${reading.directionDeg == null ? "" : ` from ${degrees(reading.directionDeg)}`}`,
       reading.speedKt == null ? null : reading.interpolated ? "Interpolated" : "Model level",
-      reading.gustKt == null ? null : `Surface gust ${barbSpeed(reading.gustKt, system)}`,
+      reading.gustKt == null ? null : `Surface ${gustNoun(view.gustSemantics)} ${barbSpeed(reading.gustKt, system)}`,
       reading.cloud === "model"
         ? "Model cloud layer"
         : reading.cloud === "humidity"
@@ -156,6 +156,7 @@ export function mountWindgramInspector(
             ? "Potential cloud base"
             : null,
       view.ensemble ? "Ensemble median" : null,
+      hour.liftFamily === "v1-legacy" ? "Earlier lift method (v1)" : null,
     ].filter((value): value is string => value !== null);
     const nextText = `${title} · ${values.join(" · ")}`;
     if (nextText !== lastText) {

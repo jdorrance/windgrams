@@ -1,6 +1,6 @@
 import { afterEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { convertQuantity, formatQuantity, fromDisplayQuantity, getUnitSystem, setUnitSystem, UNIT_STORAGE_KEY, unitLabel, type QuantityKind } from "../src/lib/units.ts";
+import { convertQuantity, formatQuantity, fromDisplayQuantity, getUnitSystem, gustNoun, setUnitSystem, UNIT_STORAGE_KEY, unitLabel, type QuantityKind } from "../src/lib/units.ts";
 import { validateLaunchInput, windLimitDisplayInput, windLimitFromDisplayInput } from "../src/lib/launches.ts";
 
 afterEach(() => setUnitSystem("imperial"));
@@ -42,6 +42,13 @@ test("formatting uses quantity precision and preserves missing data", () => {
     assert.equal(formatQuantity(missing, "wind"), "—");
   }
   assert.equal(formatQuantity(0, "temperature", undefined, "metric"), "0 °C");
+});
+
+test("gust wording names the declared class and leaves an undeclared document with the plain word", () => {
+  assert.equal(gustNoun("hourMax"), "hour-max gust");
+  assert.equal(gustNoun("instant"), "gust sample");
+  assert.equal(gustNoun(null), "gust");
+  assert.equal(gustNoun(undefined), "gust");
 });
 
 test("a chosen unit system also drives callers without explicit options", () => {

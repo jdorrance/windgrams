@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import Unit from "../components/Unit.astro";
 import "../styles/about.css";
 ---
 
@@ -33,7 +34,7 @@ import "../styles/about.css";
         <li><strong>Wind barbs:</strong> wind direction and speed at each height. The staff points toward the wind's source; feathers show speed.</li>
         <li><strong>Direction marks:</strong> triangle inside the saved window, circle outside, ? unknown or light/calm. They compare wind 10 m above model ground with your saved directions. Local launch wind and suitability remain unknown.</li>
         <li><strong>Dashed amber line:</strong> parcel thermal top, distinct from the model's boundary-layer depth.</li>
-        <li><strong>Paraglider:</strong> estimated lift top for a <span data-unit="lift" data-value="1.143">225 ft/min</span> sink rate. The blue line uses <span data-unit="lift" data-value="1">197 ft/min</span>.</li>
+        <li><strong>Paraglider:</strong> estimated lift top for a <Unit kind="lift" value={1.143} /> sink rate. The blue line uses <Unit kind="lift" value={1} />.</li>
         <li><strong>Outlined cloud:</strong> the height where a rising surface parcel could form cloud. White crosshatching shows humidity above 94%; diagonal hatching shows model cloud cover of at least 30%.</li>
         <li><strong>Temperature lines:</strong> connect equal temperatures across the day. Snowflakes mark the lowest freezing level.</li>
       </ul>
@@ -53,6 +54,43 @@ import "../styles/about.css";
         time appear beside the chart. Morning balloon thermal estimates start at the NWS forecast high
         when it is available, so they describe possible afternoon heating.
       </p>
+    </section>
+    <section class="card" id="models">
+      <h2>How the models differ</h2>
+      <p>
+        Every weather model divides the atmosphere into grid boxes and vertical slices. Finer grids follow ridges and valleys more closely; coarser grids look further ahead but average out steep terrain, so model ground can sit well below a mountain launch.
+      </p>
+      <ul>
+        <li><strong>Regional hourly models:</strong> <strong>HRDPS West</strong> (<Unit kind="resolution" value={1} /> grid) and <strong>HRDPS continental</strong> (<Unit kind="resolution" value={2.5} />, 48 h), <strong>HRRR</strong> (<Unit kind="resolution" value={3} />, 48 h) and <strong>RRFS</strong> (<Unit kind="resolution" value={3} />, 84 h), <strong>ICON-EU</strong> (<Unit kind="resolution" value={6.5} />, 78 h on 30 terrain-following levels), and <strong>RDPS</strong> (<Unit kind="resolution" value={10} />, 84 h). Best for day-of timing, valley wind shifts and local convergence.</li>
+        <li><strong>Global 3-hour models:</strong> <strong>GDPS</strong> (<Unit kind="resolution" value={15} />, 10 days) and <strong>GFS</strong> (<Unit kind="resolution" value={25} />, 16 days). Useful for multi-day trends and synoptic wind, with smoother terrain and fewer low-level slices.</li>
+        <li><strong>Ensemble spread (GEPS):</strong> runs 21 slightly different forecasts on a <Unit kind="resolution" value={50} /> grid out to 16 days. A tight 10th–90th percentile band means the members agree; a wide band means front timing, cloud cover or wind is still uncertain.</li>
+        <li><strong>Supplemental feeds (ECMWF IFS and NWS):</strong> ECMWF IFS (<Unit kind="resolution" value={9} /> surface grid plus <Unit kind="pressure" value={850} /> and <Unit kind="pressure" value={700} /> winds) and NWS point grids provide surface wind, mixing depth and surface cloud base, but do not include the full vertical column and heat fluxes needed to calculate w* or usable-lift ceilings.</li>
+        <li><strong>Hour-max gusts vs gust samples:</strong> Canadian (HRDPS, RDPS, GDPS) and German (ICON-EU) models report an <strong>hour-max gust</strong>—the strongest gust over the preceding hour. NOAA models (HRRR, RRFS, GFS) report an instantaneous <strong>gust sample</strong> at the valid time. Readouts name which kind the model publishes.</li>
+        <li><strong>Wildfire smoke:</strong> HRRR and RRFS include smoke in their sunlight calculation, so thick smoke naturally cools the ground and weakens forecast thermals. Canadian models pair with the RAQDPS smoke forecast to dim solar heating and scale down thermal strength when smoke is present.</li>
+      </ul>
+    </section>
+    <section class="card" id="formulas">
+      <h2>How the soaring math works</h2>
+      <p>
+        Weather models output raw temperature, moisture, wind and surface sun heating. From each hourly air column above model ground, Windgrams calculates the soaring numbers shown on the charts and tables:
+      </p>
+      <ul>
+        <li><strong>Parcel thermal top (dashed amber line):</strong> starts with a bubble of air at model ground and cools it at the dry-adiabatic rate (<Unit kind="lapseRate" value={0.0098 * 304.8} />) as it rises. While that parcel stays warmer than the surrounding model air, it is buoyant and keeps climbing. The height where the two temperatures meet is the parcel thermal top—which tracks buoyancy rather than the mechanical wind mixing included in a model's own boundary-layer depth.</li>
+        <li><strong>Thermal strength, w* (Deardorff scale):</strong> combines the sun's upward surface heating (sensible and latent heat flux) with the depth of the thermal layer, using local air density from surface pressure and humidity. Because w* follows a cube-root law, doubling the heating or doubling the layer depth raises w* by about 26%—strong climbs need both good ground heating and working depth.</li>
+        <li><strong>Usable lift top (Lenschow–Stephens profile):</strong> thermals accelerate off the ground, peak in the middle of the layer and taper off near the inversion. Following that vertical curve, usable lift top is the height near the top of the layer where the updraft slows to your sink rate—<Unit kind="lift" value={1} /> for the blue line, or <Unit kind="lift" value={1.143} /> for the paraglider mark—and is capped by any lower cloud limit.</li>
+        <li><strong>Three cloud-base heights:</strong> <strong>Potential cloud base (surface LCL)</strong> lifts a surface parcel (Bolton's condensation formula) until its moisture condenses; on a dry day that height sits above the thermal top, so thermals stay blue and never reach it. <strong>Mixed-layer cloud base</strong> averages temperature and moisture across the stirred layer before lifting. <strong>Effective cloud limit</strong> caps usable lift early if the surrounding model air is already nearly saturated (within <Unit kind="temperatureDelta" value={0.5} /> of dew point) below the surface LCL.</li>
+        <li><strong>Layer wind and buoyancy/shear (B/S):</strong> regional tables average the wind vector from the ground to the thermal top and measure the vector wind change (shear) across that depth. Dividing w* by that shear gives B/S: higher values mean thermals stand up better; low values mean wind shear tilts or breaks up weak cores.</li>
+      </ul>
+      <details>
+        <summary>Why some forecasts show v1 lift or support cautions</summary>
+        <p>
+          Full deterministic columns use the current (<code>v2</code>) parcel and lift equations above.
+          Ensemble percentile profiles (<strong>GEPS</strong>) publish statistical bands (10th, 50th and 90th percentiles) at each height rather than individual member columns. Because combining a median temperature with a median dew point scrambles the physics of individual runs, GEPS retains the upstream per-member lift estimates and labels them <code>v1:</code>.
+        </p>
+        <p>
+          <em>Profile data support</em> on each launch page shows how many native model levels sit in the lowest <Unit kind="elevation" value={1000} /> above ground and whether the thermal top came from a direct parcel crossing or a model boundary-layer / heat-flux fallback when low-level slices are sparse.
+        </p>
+      </details>
     </section>
     <details class="card">
       <summary>Forecast updates</summary>

@@ -1,4 +1,4 @@
-import type { PublishedForecastHour } from '@windgrams/contracts/published-lift';
+import { publishedLiftFamily, type PublishedForecastHour } from '@windgrams/contracts/published-lift';
 import { finiteScalar, formatQuantity } from './units.ts';
 
 /** Explain published support metadata; never infer missing provenance or a quality score. */
@@ -25,6 +25,8 @@ export function forecastDataSupport(hour: PublishedForecastHour) {
     rows.push(['Thermal depth support', `${branch}${bracket ? ` · bracket: ${height(bracket[0], 'MSL')} to ${height(bracket[1], 'MSL')}` : ' · no crossing bracket'}`]);
     rows.push(['Cloud limit source', { 'baseline-cloud-base': 'Published baseline cloud-base diagnostic', 'surface-lcl': 'Surface-parcel LCL', unavailable: 'Unavailable' }[support.cloudLimit.source]]);
     rows.push(['Surface pressure', `${support.surfacePressure.valueHpa == null ? 'Unavailable' : formatQuantity(support.surfacePressure.valueHpa, 'pressure')} · ${support.surfacePressure.source === 'model' ? 'model pressure' : 'hypsometric estimate'}`]);
+  } else if (publishedLiftFamily(hour) === 'v1-legacy') {
+    rows.push(['Diagnostic support', 'Not published for this forecast; the earlier method (v1) lift diagnostics are shown instead.']);
   } else rows.push(['Diagnostic support', 'Not published for this forecast.']);
   // Consequential limitations stay visible outside the collapsed support details:
   // a fallback thermal top or sparse native sampling can move the headline heights.

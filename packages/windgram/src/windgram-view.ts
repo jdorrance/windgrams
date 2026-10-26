@@ -7,13 +7,14 @@ import { componentsToWind } from "@azohra/meteo.briefing/derive";
 import { buildMeteogramScene, type HourSampling, type MetricStrip } from "@azohra/meteo.briefing/meteogram";
 import type { WindgramLayout, WindgramHour as PublicHour, WindgramOptions } from './scene-types.ts';
 export type { WindgramOptions } from './scene-types.ts';
-import { publishedLift, publishedWxtoflyLiftTop } from "@windgrams/contracts/published-lift";
+import { publishedLift, publishedLiftFamily, publishedWxtoflyLiftTop, type PublishedLiftFamily } from "@windgrams/contracts/published-lift";
 import {
   celsiusToFahrenheit,
   convertQuantity,
   finiteScalar,
   formatQuantity,
   legacyMpsToKnots,
+  type GustSemantics,
   type UnitSystem,
 } from "./windgram-format.ts";
 import {
@@ -111,10 +112,14 @@ export interface WindgramHour extends PublicHour {
   temperatureF: number | null;
   gustKt: number | null;
   inWindWindow: boolean | null;
+  /** Which published lift family the hour's lift values come from. */
+  liftFamily: PublishedLiftFamily;
 }
 export interface WindgramView extends WindgramLayout {
   modelElevationM: number;
   hasWindWindow: boolean;
+  /** The document's declared gust class; null when the document predates the tag. */
+  gustSemantics: GustSemantics | null;
   presentation: WindgramPresentation;
   anchors: HeightAnchor[];
   hours: WindgramHour[];
@@ -209,6 +214,7 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
     ground: { elevationM: launchElevationM ?? modelFloorM, source: launchElevationM === null ? "model" : "launch" },
     modelElevationM: modelFloorM,
     hasWindWindow: Boolean(options.launchWindows?.length),
+    gustSemantics: profile.semantics?.gust ?? null,
     timeZone: options.timeZone,
     anchors,
     sampling,
@@ -227,15 +233,17 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
         speed === null || speed < 0.5 || direction === null || !arcs?.length
           ? null
           : arcs.some((arc) => (arc.fromDeg <= arc.toDeg ? direction >= arc.fromDeg && direction <= arc.toDeg : direction >= arc.fromDeg || direction <= arc.toDeg));
+      const lift = publishedLift(h);
       return {
         validAt: h.validAt,
         label: formatWindgramHourLabel(h.validAt, labelTime),
         x: dataLeft + columnWidth * (i + 0.5),
         temperatureF: temp === null ? null : celsiusToFahrenheit(temp),
-        usableLiftTopM: finiteScalar(publishedLift(h).usableLiftTopM),
-        thermalVelocityMps: finiteScalar(publishedLift(h).thermalVelocityMps),
+        usableLiftTopM: finiteScalar(lift.usableLiftTopM),
+        thermalVelocityMps: finiteScalar(lift.thermalVelocityMps),
         gustKt: gust === null ? null : legacyMpsToKnots(gust),
         inWindWindow,
+        liftFamily: publishedLiftFamily(h),
       };
     }),
     fields: [],

@@ -1,6 +1,7 @@
 import type { ClientOptions, ForecastSite, JsonClient, RequestOptions } from '../supplemental.ts';
 import type { EcmwfSurfaceField, EcmwfAloftField, EcmwfField, EcmwfFieldSpec, OpenMeteoResponse, EcmwfRuns, EcmwfHour, EcmwfDocument, EcmwfBuildOptions, EcmwfSiteStatus, EcmwfManifest } from './ecmwf-types.ts';
 import { errorMessage, object, mapRecord } from './json.ts';
+import { surfaceLclM } from './thermodynamics.ts';
 // Open-Meteo surface and pressure-level feeds are acquired separately.
 // This adapter derives only supported sparse-profile diagnostics. Forecast source
 // identity, field units and missing values remain explicit in the output.
@@ -99,18 +100,6 @@ export function createClient({ fetchImpl = globalThis.fetch, retryDelayMs = 2000
 
 const round = (value: number | null | undefined, digits: number) => (value === null || value === undefined || !Number.isFinite(value) ? null : Number(value.toFixed(digits)));
 
-const DRY_ADIABATIC_LAPSE_C_PER_M = 0.0098;
-function computeSurfaceLclM(temperatureC: number | null, dewPointC: number | null, elevationM: number) {
-  if (typeof temperatureC !== "number" || typeof dewPointC !== "number" || typeof elevationM !== "number") return null;
-  if (!Number.isFinite(temperatureC) || !Number.isFinite(dewPointC) || !Number.isFinite(elevationM)) return null;
-  if (dewPointC >= temperatureC) return round(elevationM, 1);
-  const tk = temperatureC + 273.15;
-  const tdk = dewPointC + 273.15;
-  const tlcl = 1 / (1 / (tdk - 56) + Math.log(tk / tdk) / 800) + 56;
-  const aglM = Math.max(0, (tk - tlcl) / DRY_ADIABATIC_LAPSE_C_PER_M);
-  return round(elevationM + aglM, 1);
-}
-
 /** Reads one Open-Meteo response into { times (ms), columns: field -> values }, checking units. */
 export function readResponse<K extends string>(response: OpenMeteoResponse, fields: Readonly<Record<K, EcmwfFieldSpec>>, { label, warn = () => {} }: { label: string; warn?: (message: string) => void }): { times: number[]; columns: Record<K, (number | null)[]> } {
   if (!response?.hourly || !Array.isArray(response.hourly.time)) throw new Error(`${label}: the response has no hourly data`);
@@ -183,7 +172,7 @@ export function buildSiteDocument({ site, surface, aloft, runs = {}, now = Date.
     hours.push({ ...row, soaring: {
       contractVersion: "2.0.0",
       modelKind: "surface-or-sparse-adapter",
-      surfaceLclM: gridElevationM === null ? null : computeSurfaceLclM(row.temperatureC, row.dewPointC, gridElevationM),
+      surfaceLclM: gridElevationM === null ? null : round(surfaceLclM(row.temperatureC, row.dewPointC, gridElevationM), 1),
       modelBlTopM: gridElevationM !== null && typeof row.boundaryLayerHeightM === "number" ? round(gridElevationM + row.boundaryLayerHeightM, 1) : null,
       blMeanWindSpeedMps: null,
       blMeanWindDirDeg: null,

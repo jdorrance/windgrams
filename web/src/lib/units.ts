@@ -1,7 +1,7 @@
 // The application owns preferences; reusable formatting requires explicit units.
 import * as format from '@windgrams/windgram/format';
 import { isUnitSystem, type UnitSystem, type QuantityKind } from '@windgrams/windgram/format';
-export { isUnitSystem, isQuantityKind, fmt, feetToMetres, metresToFeet, mpsToKnots, knotsToMps, mphToMps, mpsToMph, feetPerMinuteToMps, celsiusToFahrenheit, fahrenheitToCelsius, legacyFeetToMetres, legacyMetresToFeet, legacyKnotsToMps, finiteScalar, type UnitSystem, type QuantityKind } from '@windgrams/windgram/format';
+export { isUnitSystem, isQuantityKind, fmt, gustNoun, feetToMetres, metresToFeet, mpsToKnots, knotsToMps, mphToMps, mpsToMph, feetPerMinuteToMps, celsiusToFahrenheit, fahrenheitToCelsius, legacyFeetToMetres, legacyMetresToFeet, legacyKnotsToMps, finiteScalar, type UnitSystem, type QuantityKind, type GustSemantics } from '@windgrams/windgram/format';
 export const UNIT_STORAGE_KEY = "windgrams:units";
 let memoryPreference: UnitSystem | null = null;
 

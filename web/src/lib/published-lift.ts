@@ -1,1 +1,1 @@
-export { publishedLift, publishedSurfaceLcl, publishedEffectiveCloudLimit, publishedMixedLayerLcl, publishedWxtoflyLiftTop, parsePublishedProfileJson } from '@windgrams/contracts/published-lift';
+export { publishedLift, publishedLiftFamily, publishedSurfaceLcl, publishedEffectiveCloudLimit, publishedMixedLayerLcl, publishedWxtoflyLiftTop, parsePublishedProfileJson, type PublishedLiftFamily } from '@windgrams/contracts/published-lift';

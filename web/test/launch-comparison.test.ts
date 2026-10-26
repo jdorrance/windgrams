@@ -132,6 +132,29 @@ test('launch sidecars validate nested comparison data before readers dereference
   assert.equal(validateLaunchesDoc({ ...doc, nwsOffice: { products: { afd: { text: {} } } } }), null);
 });
 
+test('series echo the source document\'s gust class and the comparison names it without changing the number', () => {
+  const validAt = '2026-10-21T20:00:00Z';
+  const hour = { validAt, windSpeedMps: 4, windDirectionDeg: 270, windGustMps: 9 };
+  const series = (semantics?: unknown) => ({ referenceTime: null, modelElevationM: 400, hours: [hour], ...(semantics === undefined ? {} : { semantics }) });
+  const launch = (models: Record<string, unknown>) => ({
+    launches: [{ slug: 'test', name: 'Test', latitude: 48, longitude: -122, timeZone: 'America/Los_Angeles',
+      cellIndex: 0, gridIndex: 100, distanceKm: 1, launchElevationM: null, modelElevationM: 400, models }],
+  });
+  const declared = validateLaunchesDoc(launch({
+    'icon-eu': series({ gust: 'hourMax', precipitation: 'windowMeanRate' }),
+    'hrrr-conus': series({ gust: 'instant', precipitation: 'instantRate' }),
+    gfs: series({ precipitation: 'windowMeanRate' }),
+    rrfs: series(),
+  }));
+  assert.ok(declared, 'series semantics are optional and follow the upstream forecast semantics schema');
+  assert.equal(validateLaunchesDoc(launch({ rrfs: series({ gust: 'hourly-ish' }) })), null, 'an unknown gust class is rejected, not defaulted');
+  const rows = Object.fromEntries(buildLaunchComparisonRows(declared!.launches[0], validAt, 'metric').map(row => [row.modelSlug, row.windText]));
+  assert.equal(rows['icon-eu'], 'W 14 km/h (hour-max gust 32 km/h)');
+  assert.equal(rows['hrrr-conus'], 'W 14 km/h (gust sample 32 km/h)');
+  assert.equal(rows.gfs, 'W 14 km/h (gust 32 km/h)', 'a document that declares other semantics but no gust class keeps the plain word');
+  assert.equal(rows.rrfs, 'W 14 km/h (gust 32 km/h)', 'an undeclared series keeps the plain word');
+});
+
 test('cross-section sidecars require usable map coordinates and indexed profile samples', () => {
   const node = { nodeIndex: 0, gridIndex: 100, distanceKm: 0, cellIndex: 0, latitude: 48, longitude: -122, modelElevationM: null, launchElevationM: null, waypointLabel: null };
   const doc = { title: 'Test transect', totalDistanceKm: 5, nodes: [node, { ...node, distanceKm: 5, cellIndex: 1, waypointLabel: 'End' }], futureMetadata: true };

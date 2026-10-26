@@ -1,8 +1,8 @@
-import { finiteScalar as scalar, formatQuantity } from './units.ts';
+import { finiteScalar as scalar, formatQuantity, gustNoun, type GustSemantics } from './units.ts';
 import type { ForecastManifest, SiteForecast } from '@azohra/meteo.briefing/contract';
 import { localDateKey, localHourOfDay, localInstantMs } from '@azohra/meteo.briefing/derive';
 import { sunriseSunset } from '@windgrams/meteorology/sun';
-import { publishedLift } from './published-lift.ts';
+import { publishedLift, publishedLiftFamily } from './published-lift.ts';
 import { compassPoint, inArc, windLimitsLabel, windWindow, type LaunchDetails, type SiteEntry } from './launches.ts';
 
 type Hour = SiteForecast['hours'][number];
@@ -53,11 +53,17 @@ export function matchingHourIndex(hours: Hour[], wanted: string | null, timeZone
   return hours.reduce((best, h, i) => Math.abs(Date.parse(h.validAt) - time) < Math.abs(Date.parse(hours[best].validAt) - time) ? i : best, 0);
 }
 
-/** Model surface weather and published lift; elevations are metres MSL. */
-export function launchConditions(hour: Hour, settings: LaunchDetails, launchElevationM: number | null, modelElevationM: number | null = null) {
+/**
+ * Model surface weather and published lift; elevations are metres MSL.
+ * `gustSemantics` is the document's declared gust class (`profile.semantics.gust`); it only names the
+ * reading, and both classes are compared against the same `gustMaxMph` limit.
+ */
+export function launchConditions(hour: Hour, settings: LaunchDetails, launchElevationM: number | null, modelElevationM: number | null = null, gustSemantics: GustSemantics | null = null) {
   const speed = scalar(hour.surface.windSpeedMps), direction = scalar(hour.surface.windDirectionDeg);
-  const gust = scalar(hour.surface.windGustMps), lift = publishedLift(hour);
+  const gust = scalar(hour.surface.windGustMps), lift = publishedLift(hour), gustWord = gustNoun(gustSemantics);
   const strength = scalar(lift.thermalVelocityMps), top = scalar(lift.usableLiftTopM), base = scalar(lift.cloudBaseM);
+  // Earlier-method (v1) values are labelled like the comparison table; the numbers are not interchangeable with v2.
+  const family = publishedLiftFamily(hour) === 'v1-legacy' ? 'v1: ' : '';
   const feet = (v: number) => `${formatQuantity(v, 'elevation')} MSL`;
   // Display rounding only: published diagnostic values keep their stored precision.
   // Soaring heights are shown to the nearest 50 m and thermal strength to 0.1 m/s,
@@ -71,8 +77,8 @@ export function launchConditions(hour: Hour, settings: LaunchDetails, launchElev
   if (speed !== null && speed >= 0.5 && direction !== null && window !== null && !inArc(direction, window)) issues.push(`Model surface wind outside ${limitWord} direction window`);
   if (settings.windMaxMph !== null && speed === null) issues.push('Model surface speed comparison unavailable');
   if (settings.windMaxMph !== null && speed !== null && speed * 2.23693629 > settings.windMaxMph) issues.push(`Model surface wind above ${limitWord} speed limit`);
-  if (settings.gustMaxMph !== null && gust === null) issues.push('Model surface gust comparison unavailable');
-  if (settings.gustMaxMph !== null && gust !== null && gust * 2.23693629 > settings.gustMaxMph) issues.push(`Model surface gust above ${limitWord} limit`);
+  if (settings.gustMaxMph !== null && gust === null) issues.push(`Model surface ${gustWord} comparison unavailable`);
+  if (settings.gustMaxMph !== null && gust !== null && gust * 2.23693629 > settings.gustMaxMph) issues.push(`Model surface ${gustWord} above ${limitWord} limit`);
   if (top !== null && launchElevationM !== null && top <= launchElevationM) issues.push('Usable lift below launch');
   const terrain = scalar(modelElevationM), launch = scalar(launchElevationM);
   const delta = terrain === null || launch === null ? null : terrain - launch;
@@ -81,10 +87,10 @@ export function launchConditions(hour: Hour, settings: LaunchDetails, launchElev
     windBasis: `Wind is 10 m above model ground. Model ground: ${terrain === null ? 'unknown' : feet(terrain)} · Launch: ${launch === null ? 'unknown' : feet(launch)} · Model − launch: ${signedDelta}. ${limitWord === 'default' ? 'Wind limits are unsourced defaults, not launch-specific. ' : ''}Limit comparisons use this model surface forecast; local launch wind may differ.`,
     values: [
       ['Model surface wind', speed === null ? 'Unavailable' : speed < 0.5 ? 'Light / calm' : `${direction === null ? 'Direction unavailable · ' : compassPoint(direction) + ' '}${formatQuantity(speed, 'wind')}`],
-      ['Model surface gusts', gust === null ? 'Unavailable' : `${formatQuantity(gust, 'wind')}`],
-      ['Usable lift top', strength === null ? 'Unavailable' : top === null ? 'Below sink threshold' : displayHeight(top)],
-      ['Potential cloud base', base === null ? 'Unavailable' : displayHeight(base)],
-      ['Thermal strength', strength === null ? 'Unavailable' : displayLift(strength)],
+      [`Model surface ${gustWord}`, gust === null ? 'Unavailable' : `${formatQuantity(gust, 'wind')}`],
+      ['Usable lift top', strength === null ? 'Unavailable' : top === null ? `${family}Below sink threshold` : family + displayHeight(top)],
+      ['Potential cloud base', base === null ? 'Unavailable' : family + displayHeight(base)],
+      ['Thermal strength', strength === null ? 'Unavailable' : family + displayLift(strength)],
     ] satisfies [string, string][],
     issues,
   };

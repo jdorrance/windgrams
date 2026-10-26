@@ -99,3 +99,16 @@ All 14 merged browser tests pass, including launch terrain/support labels,
 calm winds, New Zealand local-date selection and model changes. Additional
 Coronet Peak application screenshots cover the 390 px and 1280 px layouts,
 conditions, hour selection and sounding; these use labelled synthetic fixtures.
+
+## Readout provenance fields, October 26, 2026
+
+The 40-scene baseline was regenerated after two fields were added to the internal
+scene for the inspector readout: `gustSemantics` (the document's declared gust
+class, `profile.semantics.gust`, or null) and per-hour `liftFamily`
+(`publishedLiftFamily`, `'v2'` or `'v1-legacy'`). The parity hash serializes the
+whole internal scene, so every key changed. Before writing the new baseline, the
+same 40 payloads were hashed with only those two keys removed; all 40 reproduced
+the previous hashes, so the SVGs, keys, physical readings and every other scene
+field are unchanged. The frozen fixtures all publish V2 diagnostics and declare
+their gust class (`instant` or `hourMax`); no fixture exercises the undeclared or
+V1-only readout wording here, which the unit tests cover instead.

@@ -100,3 +100,16 @@ export function relativeTime(iso: string, now: number): string {
   if (hours < 48) return `${hours} h ago`;
   return `${Math.round(hours / 24)} days ago`;
 }
+
+/** The gust class a forecast document declares (`semantics.gust`); absence means the document predates the tag. */
+export type GustSemantics = "hourMax" | "instant";
+
+/**
+ * Noun for a surface gust reading, named by the document's own declaration.
+ * Undeclared stays the plain word: the wording must not borrow a catalogue default.
+ */
+export function gustNoun(semantics: GustSemantics | null | undefined): string {
+  if (semantics === "hourMax") return "hour-max gust";
+  if (semantics === "instant") return "gust sample";
+  return "gust";
+}

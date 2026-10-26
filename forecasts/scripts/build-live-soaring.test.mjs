@@ -66,7 +66,9 @@ test('RRFS sidecars remap changed model terrain, preserve GEPS scalar windDirect
     gfs: [{ validAt: '2026-10-22T14:00:00Z', surface: { temperatureC: 20 } }],
   })) {
     mkdirSync(join(root, model, 'sites'), { recursive: true });
-    writeFileSync(join(root, model, 'sites', 'launch.json'), JSON.stringify({ hours }));
+    // Only the RRFS document declares semantics; the others predate the tag and must stay undeclared.
+    const semantics = model === 'rrfs' ? { semantics: { gust: 'instant', precipitation: 'instantRate' } } : {};
+    writeFileSync(join(root, model, 'sites', 'launch.json'), JSON.stringify({ ...semantics, hours }));
   }
   const result = enrichBundleWithSidecars(root, output, id, staging, {
     model: 'hrrr-conus', referenceTime: '2026-10-23T06:00:00Z', gridSha256: 'different-terrain', verification: { hrrrOnly: true },
@@ -84,6 +86,9 @@ test('RRFS sidecars remap changed model terrain, preserve GEPS scalar windDirect
   assert.equal(launch.models.nws.hours[0].validAt, validAt);
   assert.equal(launch.models.nws.hours[0].tempC, 18);
   assert.equal(launch.models.rrfs.hours[0].tempC, 19);
+  assert.deepEqual(launch.models.rrfs.semantics, { gust: 'instant', precipitation: 'instantRate' }, 'series echo the source document semantics');
+  assert.equal(Object.hasOwn(launch.models.nws, 'semantics'), false, 'undeclared semantics are never defaulted');
+  assert.equal(Object.hasOwn(launch.models.geps, 'semantics'), false);
   assert.equal(launch.models.geps.hours[0].windDirectionDeg, 209);
   assert.equal(launch.models.geps.hours[0].wstarMps, 0.6);
   assert.equal(launch.models.geps.hours[0].wstarV2Mps, null);

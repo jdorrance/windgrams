@@ -50,6 +50,21 @@ function gh(args, input) {
   return execFileSync('gh', args, { encoding: 'utf8', input, env: process.env }).trim();
 }
 
+function hasAlertLabel() {
+  const names = gh(['api', '--paginate', 'repos/{owner}/{repo}/labels', '--jq', '.[].name']);
+  return names.split('\n').some(name => name.toLowerCase() === ALERT_LABEL);
+}
+
+function ensureAlertLabel() {
+  if (hasAlertLabel()) return;
+  try {
+    gh(['label', 'create', ALERT_LABEL, '--color', 'D93F0B', '--description', 'Public forecast data health alerts']);
+  } catch (error) {
+    // Another monitor may have created it; never overwrite existing metadata.
+    if (!hasAlertLabel()) throw error;
+  }
+}
+
 function currentOpenIssue() {
   const raw = gh(['issue', 'list', '--label', ALERT_LABEL, '--state', 'open', '--json', 'number,body,comments', '--limit', '5']);
   const issues = JSON.parse(raw || '[]');
@@ -67,6 +82,7 @@ async function main() {
   const openIssue = currentOpenIssue();
   const plan = planAlertAction({ report, openIssue });
   if (plan.action === 'create') {
+    ensureAlertLabel();
     gh(['issue', 'create', '--label', ALERT_LABEL, '--title', 'Served data check failing', '--body', alertBody(report, plan.fingerprint)]);
     console.log('Opened served-data alert issue.');
   } else if (plan.action === 'comment') {

@@ -9,7 +9,9 @@ import { validateRegionCatalogue } from '@windgrams/contracts/regional';
 import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
 import { REGION_INDEXES, legacyCaseModel } from './lib/model-coverage.mjs';
 import { copyImmutable, newerProduct, pointProduct, publicationOwnedName, readJson, regionalProduct, replaceTree, timestamp, validateFileTree, writeJson } from './lib/artifact-products.mjs';
+import { acceptsDiagnosticMethod } from './lib/diagnostic-completeness.mjs';
 import { mergeHistoryArchives } from '../verification/history.mjs';
+import { OPERATOR_HISTORY_POLICY } from '../verification/history-policy.mjs';
 import { mergeProviderHealth } from './lib/provider-health.mjs';
 import { mergeObservationProduct } from './lib/observation-artifacts.mjs';
 
@@ -48,6 +50,12 @@ export function mergeArtifacts(incoming, output, { sites = readJson(new URL('../
     const source = existsSync(join(directory, 'slice')) ? join(directory, 'slice') : directory;
     if (readdirSync(source).every(name => name === 'EMPTY')) continue;
     const group = artifactGroup(entry.name);
+    const metadata = tryRead(join(source, '.artifact.json'));
+    // Old envelopes and explicitly declared retained products can fill holes only.
+    const priorMethod = key => {
+      const method = metadata?.retainedProducts?.[key] ?? metadata?.soaringContractVersion;
+      return method !== SOARING_CONTRACT_VERSION && acceptsDiagnosticMethod(method, { retained: true }) ? method : null;
+    };
     const models = PROVIDER_GROUPS[group] ?? [];
     if (!Object.hasOwn(PROVIDER_GROUPS, group) && !['observations', 'terrain'].includes(group)) {
       report.rejected.push({ product: entry.name, reason: 'Unknown provider artifact' }); continue;
@@ -58,11 +66,15 @@ export function mergeArtifacts(incoming, output, { sites = readJson(new URL('../
       report.rejected.push({ product: model.id, reason: 'Incorrect provider ownership' });
     }
     for (const model of models) if (existsSync(join(source, model))) attempt(model, () => {
-      const next = pointProduct(source, model, sites);
+      const method = priorMethod(model), retained = method !== null;
+      const next = pointProduct(source, model, sites, { retained });
+      if (retained && next.methodVersion !== method) throw new Error('Retained point method differs from artifact declaration');
       const previous = version(tryRead(join(output, model, 'manifest.json')));
-      let valid = false;
-      try { pointProduct(output, model, sites); valid = true; } catch { /* A complete same-run candidate can repair it. */ }
-      if (!newerProduct(next, previous, valid)) return false;
+      let previousProduct;
+      try { previousProduct = pointProduct(output, model, sites, { retained: true }); } catch { /* A complete same-run candidate can repair it. */ }
+      if (retained && previousProduct) return false;
+      const current = previousProduct?.methodVersion === SOARING_CONTRACT_VERSION;
+      if (!newerProduct(next, previous, current)) return false;
       if (!dryRun) replaceTree(join(source, model), join(output, model));
       return true;
     });
@@ -70,17 +82,21 @@ export function mergeArtifacts(incoming, output, { sites = readJson(new URL('../
     const regions = join(source, 'soaring/v1'), published = join(output, 'soaring/v1');
     if (existsSync(regions)) {
       for (const item of readdirSync(regions, { withFileTypes: true }).filter(item => item.isDirectory())) attempt(`soaring/${item.name}`, () => {
-        const next = regionalProduct(regions, item.name, models);
+        const method = priorMethod(`soaring/${item.name}`), retained = method !== null;
+        const next = regionalProduct(regions, item.name, models, { retained });
+        if (retained && next.manifest.soaringContractVersion !== method) throw new Error('Retained regional method differs from artifact declaration');
         const pointer = tryRead(join(published, item.name, 'index.json'));
         const previous = pointer && /^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)
           ? version(tryRead(join(published, item.name, pointer.bundle, 'manifest.json'))) ?? version(pointer) : version(pointer);
-        let valid = false;
-        try { regionalProduct(published, item.name, models); valid = true; } catch { /* Repair only after validation. */ }
-        if (!newerProduct(next, previous, valid)) return false;
+        let previousProduct;
+        try { previousProduct = regionalProduct(published, item.name, models, { retained: true }); } catch { /* Repair only after validation. */ }
+        if (retained && previousProduct) return false;
+        const current = previousProduct?.manifest.soaringContractVersion === SOARING_CONTRACT_VERSION;
+        if (!newerProduct(next, previous, current)) return false;
         if (!dryRun) {
           const bundle = join(item.name, next.pointer.bundle);
           for (const name of ['manifest.json', ...Object.keys(next.manifest.files)]) copyImmutable(join(regions, bundle, name), join(published, bundle, name), {
-            expectedSha256: name === 'manifest.json' ? next.pointer.manifestSha256 : next.manifest.files[name], repairCorrupt: !valid,
+            expectedSha256: name === 'manifest.json' ? next.pointer.manifestSha256 : next.manifest.files[name], repairCorrupt: !previousProduct,
           });
           writeJson(join(published, item.name, 'index.json'), next.pointer);
         }
@@ -90,8 +106,11 @@ export function mergeArtifacts(incoming, output, { sites = readJson(new URL('../
         const key = `soaring/v1/${index.file}`, path = join(source, key);
         if (!existsSync(path)) continue;
         attempt(key, () => {
+          const method = priorMethod(key), retained = method !== null;
           const next = validateRegionCatalogue(readJson(path)), previous = tryRead(join(output, key));
-          if (!next || next.soaringContractVersion !== SOARING_CONTRACT_VERSION) throw new Error('Invalid regional catalogue');
+          if (!next || !acceptsDiagnosticMethod(next.soaringContractVersion, { retained })) throw new Error('Invalid regional catalogue');
+          if (retained && next.soaringContractVersion !== method) throw new Error('Retained catalogue method differs from artifact declaration');
+          if (retained && previous) return false;
           const cases = next.regions.filter(region => region.status === 'active-verified-trial').flatMap(region => {
             if (region.nativeModels?.length) return region.nativeModels.filter(item => item.model === index.model).flatMap(item => [item.caseId, item.expandedCaseId].filter(Boolean));
             const pointer = tryRead(join(published, region.caseId, 'index.json'));
@@ -100,19 +119,19 @@ export function mergeArtifacts(incoming, output, { sites = readJson(new URL('../
             if (!owner) throw new Error(`Cannot identify active regional case: ${region.caseId}`);
             return owner === index.model ? [region.caseId, region.expandedCaseId].filter(Boolean) : [];
           });
-          const products = new Map([...new Set(cases)].map(caseId => [caseId, regionalProduct(published, caseId, [index.model])]));
+          const products = new Map([...new Set(cases)].map(caseId => [caseId, regionalProduct(published, caseId, [index.model], { retained: true })]));
           for (const region of next.regions) {
             const own = (region.nativeModels ?? []).find(item => item.model === index.model)?.caseId ?? region.caseId;
             if (products.has(own) && region.launches.some(slug => !products.get(own).launchSlugs.includes(slug))) throw new Error('Regional catalogue launch inventory differs from bundle');
           }
-          if (previous && timestamp(previous.generatedAt) >= timestamp(next.generatedAt)) return false;
+          if (previous?.soaringContractVersion === next.soaringContractVersion && timestamp(previous.generatedAt) >= timestamp(next.generatedAt)) return false;
           if (!dryRun) writeJson(join(output, key), next);
           return true;
         });
       }
     }
     for (const model of models) if (existsSync(join(source, 'history', model))) attempt(`history/${model}`, () => {
-      if (!dryRun) mergeHistoryArchives(source, output, model);
+      if (!dryRun) mergeHistoryArchives(source, output, model, OPERATOR_HISTORY_POLICY);
       return true;
     });
     if (models.length && existsSync(join(source, 'health', `${group}.json`))) attempt(`health/${group}`, () => {

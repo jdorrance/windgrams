@@ -91,7 +91,8 @@ test("launch altitude is compared in MSL and is not substituted with model surfa
   assert.doesNotMatch(belowTerrain.text, /Launch \(.*\): NW 7 mph/);
 
   const inColumn = readSounding(s, 1520).findings.find((finding) => finding.key === "wind")!;
-  assert.match(inColumn.text, /Launch \(4,987 ft MSL\): WNW 11 mph/);
+  assert.match(inColumn.text, /Estimated wind at launch elevation \(4,987 ft MSL\): WNW 11 mph/);
+  assert.match(inColumn.text, /Local terrain flow is unresolved/);
   const aboveColumn = readSounding(s, 5000).findings.find((finding) => finding.key === "wind")!;
   assert.match(aboveColumn.text, /Wind unavailable at launch elevation \(16,404 ft MSL\)/);
 
@@ -106,11 +107,55 @@ test("launch altitude is compared in MSL and is not substituted with model surfa
 
 test("model near-surface wind is referenced to 10 m AGL without shifting the MSL profile", () => {
   const s = buildSounding(site, hour({ t: 25, td: 8, ws: 3, wd: 315 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 }))!;
-  assert.equal(s.points[0].heightM, Z0);
+  assert.equal(s.points[0].heightM, Z0 + 2);
   assert.equal(s.points[0].windHeightM, Z0 + 10);
   assert.equal(s.points[1].heightM, CUMULUS_LEVELS[0].z);
+  assert.equal(s.parcel[0].heightM, Z0, 'parcel initialization retains its model-ground convention');
   assert.equal(windAtHeight(s.points, Z0), null);
   assert.deepEqual(windAtHeight(s.points, Z0 + 10), { speedMps: 3, directionDeg: 315 });
+});
+
+test('soundings retain supplied surface pressure and explicit physical temperature height', () => {
+  const source = hour({ t: 25, td: 8 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 });
+  const baseline = buildSounding(site, source)!;
+  Object.assign(source.surface, { surfacePressureHpa: 875 });
+  const actual = buildSounding(site, source)!;
+  assert.equal(actual.parcel[0].pressureHpa, 875);
+  assert.equal(actual.points[0].heightM, Z0 + 2);
+  assert.ok(actual.points[0].pressureHpa < 875);
+  assert.deepEqual(actual.parcel.map(p => [p.heightM, p.parcelC, p.environmentC, p.buoyancyC]), baseline.parcel.map(p => [p.heightM, p.parcelC, p.environmentC, p.buoyancyC]), 'pressure source and display anchor do not retune parcel temperatures');
+  assert.deepEqual(actual.points.slice(1), baseline.points.slice(1));
+  Object.assign(source.surface, { surfacePressureHpa: 0 });
+  assert.equal(buildSounding(site, source)!.parcel[0].pressureHpa, baseline.parcel[0].pressureHpa, 'nonpositive pressure keeps the explicit hypsometric fallback');
+});
+
+test('sounding wind interpolation never bridges a missing or duplicate wind node', () => {
+  const sounding = buildSounding(site, hour({ t: 25, td: 8 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 }))!;
+  const points = structuredClone(sounding.points), missing = points[1];
+  missing.windSpeedMps = null;
+  assert.equal(windAtHeight(points, (points[0].windHeightM! + missing.heightM) / 2), null);
+  assert.equal(windAtHeight(points, (missing.heightM + points[2].heightM) / 2), null);
+  assert.ok(windAtHeight(points, (points[2].heightM + points[3].heightM) / 2));
+  points[1] = { ...sounding.points[1] };
+  points.push({ ...points[1], windSpeedMps: 20 });
+  assert.equal(windAtHeight(points, points[1].heightM), null);
+  assert.equal(windAtHeight(points, (points[1].heightM + points[2].heightM) / 2), null);
+});
+
+test('sounding wind support survives a missing thermodynamic level without bridging missing wind', () => {
+  const source = hour({ t: 25, td: 8 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 });
+  const middle = source.levels[1], z = middle.heightM;
+  Object.assign(middle, { temperatureC: null, dewPointC: null, windSpeedMps: null });
+  const missing = buildSounding(site, source)!;
+  assert.ok(!missing.points.some(point => point.heightM === z));
+  assert.ok(missing.windPoints!.some(point => point.heightM === z));
+  assert.equal(windAtHeight(missing.windPoints!, (source.levels[0].heightM + z) / 2), null);
+  assert.equal(windAtHeight(missing.windPoints!, (z + source.levels[2].heightM) / 2), null);
+  assert.match(readSounding(missing, z).findings.find(f => f.key === 'wind')!.text, /Wind unavailable at launch elevation/);
+  Object.assign(middle, { windSpeedMps: 8, windDirectionDeg: 270 });
+  const windOnly = buildSounding(site, source)!;
+  assert.deepEqual(windAtHeight(windOnly.windPoints!, z), { speedMps: 8, directionDeg: 270 });
+  assert.match(readSounding(windOnly, z).findings.find(f => f.key === 'wind')!.text, /Estimated wind at launch elevation/);
 });
 
 test("a cold morning has a ground inversion and no thermals", () => {

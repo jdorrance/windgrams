@@ -12,14 +12,12 @@ import { convertQuantity, formatQuantity, fromDisplayQuantity, getUnitSystem, mp
 // nothing between them is invented.
 
 import { solveVerticalLabels } from "@azohra/meteo.briefing/sounding";
-import { compassPoint } from "./launches.ts";
 import { barbPaths } from "./wind-barb.ts";
-import { environmentAtHeight, heightAtPressure, pressureAtHeight, windAtHeight, type Sounding } from "./skewt.ts";
+import { environmentAtHeight, heightAtPressure, pressureAtHeight, windAtHeight, windText, type Sounding } from "./skewt.ts";
 export { barbPaths } from "./wind-barb.ts";
 
 const SVG = "http://www.w3.org/2000/svg";
 const FT = 3.28084;
-const MPH = 2.23694;
 
 function el<K extends keyof SVGElementTagNameMap>(name: K, attrs: Record<string, string | number> = {}, parent?: Element) {
   const node = document.createElementNS(SVG, name);
@@ -303,13 +301,17 @@ export class SkewTChart {
     text(svg, box.right + (narrow ? 26 : 34), box.top - 8, unitLabel("wind"), { class: "tick", "text-anchor": "middle" });
     // A balloon reports many levels: draw a barb only where it has room.
     let lastBarbY = Infinity;
-    for (const p of s.points) {
-      if (p.windSpeedMps === null || p.windDirectionDeg === null) continue;
-      const yy = y(p.windHeightM === undefined ? p.pressureHpa : pAt(p.windHeightM));
-      if (yy < box.top + 12 || lastBarbY - yy < 15) continue;
+    const windPoints = s.windPoints ?? s.points;
+    for (const p of windPoints) {
+      const heightM = p.windHeightM ?? p.heightM;
+      if (heightM < s.points[0].heightM || heightM > s.topM) continue;
+      const wind = windAtHeight(windPoints, heightM);
+      if (!wind) continue;
+      const yy = y(p.windHeightM === undefined && p.pressureHpa !== undefined ? p.pressureHpa : pAt(heightM));
+      if (!Number.isFinite(yy) || yy < box.top + 12 || yy > box.bottom || lastBarbY - yy < 15) continue;
       lastBarbY = yy;
-      drawBarb(svg, windX, yy, metric ? p.windSpeedMps * 2 : mpsToKnots(p.windSpeedMps), p.windDirectionDeg);
-      text(svg, windX + (narrow ? 20 : 28), yy + 4, String(Math.round(convertQuantity(p.windSpeedMps, "wind")!)), { class: "tick", "text-anchor": "end" });
+      drawBarb(svg, windX, yy, metric ? wind.speedMps * 2 : mpsToKnots(wind.speedMps), wind.directionDeg ?? 0);
+      text(svg, windX + (narrow ? 20 : 28), yy + 4, String(Math.round(convertQuantity(wind.speedMps, "wind")!)), { class: "tick", "text-anchor": "end" });
     }
 
     // Temperature scale along the bottom.
@@ -339,17 +341,17 @@ export class SkewTChart {
     const yy = (event.clientY - box.top) * scale;
     const p = pOf(g, yy);
     const z = heightAtPressure(s.points, p);
-    if (z < s.modelElevationM) return;
+    if (z < s.points[0].heightM || z > s.topM) return;
     cross.setAttribute("y1", String(yy));
     cross.setAttribute("y2", String(yy));
     cross.setAttribute("visibility", "visible");
     const env = environmentAtHeight(s.points, z);
-    const wind = windAtHeight(s.points, z);
+    const wind = windAtHeight(s.windPoints ?? s.points, z);
     const parcel = [...s.parcel].sort((a, b) => Math.abs(a.heightM - z) - Math.abs(b.heightM - z))[0];
     const spread = env.temperatureC - env.dewPointC;
     const rows: [string, string][] = [["Temperature", formatQuantity(env.temperatureC, "temperature", 1)]];
     if (Number.isFinite(env.dewPointC)) rows.push(["Dew point", `${formatQuantity(env.dewPointC, "temperature", 1)} · ${spread <= 1 ? "saturated: cloud" : spread <= 3 ? "moist" : "dry"}`]);
-    if (wind) rows.push(["Wind", wind.speedMps * MPH < 2 ? "calm" : `${compassPoint(wind.directionDeg)} ${formatQuantity(wind.speedMps, "wind")}`]);
+    if (wind) rows.push(["Wind", windText(wind)]);
     let note = "";
     if (s.marks.zoneTopM !== null && parcel) {
       note = parcel.buoyancyC > 0.2

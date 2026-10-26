@@ -3,10 +3,30 @@ import { parseAtmosphericColumn } from '@windgrams/contracts';
 import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
 import { isEnsembleDocument, sourceFromPublishedDeterministicHour } from '@windgrams/soaring/compatibility';
 
+/** 2.3 adds optional support metadata; retained 2.2 values remain readable and keep their original labels.
+ * Do not extend this list without reviewing the next method's numerical and schema compatibility.
+ */
+export function acceptsDiagnosticMethod(method, { retained = false } = {}) {
+  return method === SOARING_CONTRACT_VERSION
+    || retained && SOARING_CONTRACT_VERSION === '2.3.0' && method === '2.2.0';
+}
+
+/** A lagging origin must not roll a current-method publication back during rollout. */
+export const diagnosticMethodDowngrade = (next, previous) => previous === SOARING_CONTRACT_VERSION && next !== previous;
+
+/** New production candidates must use the current method. */
+export function validateCurrentDiagnostics(profile, referenceTime, slug) {
+  validateDiagnostics(profile, referenceTime, slug, false);
+}
+/** Already issued products may survive a staggered, explicitly compatible method rollout. */
+export function validateRetainedDiagnostics(profile, referenceTime, slug) {
+  validateDiagnostics(profile, referenceTime, slug, true);
+}
+
 /** Completeness callback for published point profiles under the current diagnostic method. */
-export function validateCurrentDiagnostics(profile, _referenceTime, slug = profile.site?.id ?? 'profile') {
+function validateDiagnostics(profile, _referenceTime, slug = profile.site?.id ?? 'profile', retained) {
   const meta = profile.soaringMeta;
-  if (meta?.contractVersion !== SOARING_CONTRACT_VERSION) throw new Error(`${slug}: missing or outdated soaring method`);
+  if (!acceptsDiagnosticMethod(meta?.contractVersion, { retained })) throw new Error(`${slug}: missing or outdated soaring method`);
   if (isEnsembleDocument(profile)) {
     if (meta.modelKind !== 'ensemble-percentiles' || meta.nonlinearMedianPostprocessRefused !== true
       || meta.postprocessAction !== 'retained-upstream-member-percentiles') throw new Error(`${slug}: missing ensemble diagnostic policy`);
@@ -27,7 +47,7 @@ export function validateCurrentDiagnostics(profile, _referenceTime, slug = profi
       continue;
     }
     const diagnostics = hour.soaring;
-    if (diagnostics?.contractVersion !== SOARING_CONTRACT_VERSION) throw new Error(`${at}: missing or outdated soaring method`);
+    if (diagnostics?.contractVersion !== meta.contractVersion) throw new Error(`${at}: missing or outdated soaring method`);
     const velocity = diagnostics.thermalVelocityV2Mps;
     if ((velocity !== null && (!Number.isFinite(velocity) || velocity < 0))
       || !diagnostics.verticalResolution || diagnostics.verticalResolution.synthesizedLevels !== 0) throw new Error(`${at}: invalid soaring diagnostic structure`);

@@ -16,8 +16,15 @@ The country selector remembers the choice for the session and accepts
 `?country=AM`. Armenian pages use `Asia/Yerevan`, select ICON-EU first and offer
 available global models. US pages also show NWS forecasts and balloon soundings.
 Launch directions and wind limits can be `null`; the chart then omits their bands
-and suitability marks. Admin fields accept blanks and retain stored values when
+and direction-comparison marks. Admin fields accept blanks and retain stored values when
 units change.
+
+Launch readings name the model surface wind (10 m above model ground), model
+terrain and launch elevation, and their signed difference. Saved direction and
+speed comparisons use this model wind; they do not establish launch suitability.
+A triangle means inside the saved direction window, a circle means outside, and
+`?` means missing or light/calm wind. Missing speed, direction or gust remains
+unknown. Nearby station observations retain their own location and time.
 
 `/soaring/?region=armenia` selects `armenia-icon-eu-live`. Regional maps load
 compressed hourly fields from [published bundles](../../forecasts/docs/operations.md#regional-bundles)
@@ -73,6 +80,10 @@ upper limit follows the lift ceilings, including ensemble p75, with at least
 level. Missing lift estimates show the upper profile; zero w* selects the lower
 layer. **Full height** expands the altitude range. Surface rows continue to show
 model-surface values.
+Physical interpolation starts at the published measurement height: 2 m above
+model ground for temperature and moisture, and 10 m for wind. It does not extend
+below the lowest measurement. Surface row positions remain a display layout;
+they do not move these measurements to ground or launch elevation.
 
 Hovering or tapping an hour shows AGL and MSL at the blue lift line. Arrow keys
 change the hour; Escape or a tap outside clears inspection. The marker is hidden
@@ -93,6 +104,8 @@ label where space permits. Paraglider symbols use `hcritWxtoflyM`, the ceiling f
 225 ft/min sink; the blue line uses `usableLiftTopV2M`, the ceiling for 1 m/s sink.
 Missing estimates leave the corresponding marks empty. **Strongest thermals**
 selects the day's highest published w*.
+The amber dashed line is **Thermal top (parcel)**. It must not be labelled as the
+native model boundary-layer depth, which remains a separate regional reading.
 
 Wind-barb staffs point toward the wind's source, following
 [NWS conventions](https://www.weather.gov/hfo/windbarbinfo). Half feathers, full
@@ -111,6 +124,12 @@ for moisture when available. Incomplete balloon or SRG humidity gives a dry
 estimate with no cloud-base marker. Legacy SRG height
 and wind decoding precision is retained; displayed wind barbs use the shared unit
 conversion.
+The model sounding plots surface temperature/moisture at 2 m and wind at 10 m
+above model ground. Parcel initialization retains its ground-based calculation
+convention. Supplied model surface pressure takes precedence over the labelled
+hypsometric fallback. Estimated wind at launch elevation uses adjacent valid
+wind nodes; missing or duplicate nodes break interpolation. It does not resolve
+local terrain flow or gusts.
 
 Page owners release chart observers, station polling and sunlight graphics on final
 departure. Back/forward-cache suspension pauses playback and polling without destroying

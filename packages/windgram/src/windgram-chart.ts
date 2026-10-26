@@ -159,7 +159,11 @@ export function renderWindgramSvg(
   for (const barb of barbs) {
     const geometry = windBarbGlyph(barb, view.presentation, system);
     const color = barb.speedKt < 9 ? "#78ff78" : "#ffffff";
-    const title = `${barbSpeed(barb.speedKt, system)} from ${degrees(barb.directionDeg)} · ${formatQuantity(barb.heightM, "elevation", undefined, system)} MSL · ${barb.interpolated ? "Interpolated" : "Model level"}`;
+    const reference = barb.surface
+      ? `Model surface · 10 m above model ground (${formatQuantity(view.modelElevationM, "elevation", undefined, system)} MSL)`
+      : `${formatQuantity(barb.heightM, "elevation", undefined, system)} MSL · ${barb.interpolated ? "Interpolated" : "Model level"}`;
+    const windLabel = barb.speedKt === 0 ? 'Calm' : `${barbSpeed(barb.speedKt, system)} from ${degrees(barb.directionDeg)}`;
+    const title = `${windLabel} · ${reference}`;
     const shape = geometry.calm
       ? `<circle r="${CALM_RADIUS}" class="wg-barb-rim"/><circle r="${CALM_RADIUS}" class="wg-barb"/>`
       : ["wg-barb-rim", "wg-barb"].map(className =>
@@ -196,11 +200,13 @@ export function renderWindgramSvg(
   for (const [axisIndex, tick] of view.timeAxis.entries()) {
     const hour = tick.hourIndex === null ? null : view.hours[tick.hourIndex];
     parts.push(`<line x1="${fmt(tick.x)}" x2="${fmt(tick.x)}" y1="${fmt(view.bottom)}" y2="${fmt(view.bottom + 5)}" stroke="#fff"/>`);
-    if (hour && hour.inWindWindow !== null) {
+    if (hour && view.hasWindWindow) {
       parts.push(
-        hour.inWindWindow
-          ? `<path d="M${fmt(hour.x)} ${fmt(view.bottom + 9)}l4 7h-8Z" fill="#afffb1"><title>Surface wind direction is in the launch window</title></path>`
-          : `<circle cx="${fmt(hour.x)}" cy="${fmt(view.bottom + 13)}" r="3" fill="none" stroke="#ffe1cf" stroke-width="1.3"><title>Surface wind direction is outside the launch window</title></circle>`,
+        hour.inWindWindow === null
+          ? `<g data-model-wind-window="unknown"><title>Model surface wind direction comparison unavailable or light/calm; launch wind is unknown</title>${text(hour.x, view.bottom + 16, '?', 'text-anchor="middle" fill="#eee" font-size="10"')}</g>`
+          : hour.inWindWindow
+            ? `<path data-model-wind-window="inside" d="M${fmt(hour.x)} ${fmt(view.bottom + 9)}l4 7h-8Z" fill="none" stroke="#d9e8ff" stroke-width="1.3"><title>Model surface wind direction is inside the saved direction window; launch wind may differ</title></path>`
+            : `<circle data-model-wind-window="outside" cx="${fmt(hour.x)}" cy="${fmt(view.bottom + 13)}" r="3" fill="none" stroke="#ffe1cf" stroke-width="1.3"><title>Model surface wind direction is outside the saved direction window; launch wind may differ</title></circle>`,
       );
     }
     if (!visibleHours.has(axisIndex)) continue;
@@ -342,5 +348,5 @@ export function renderWindgramKey(system: UnitSystem): string {
   const lift = icon(`<path d="${WING_PATH}" transform="translate(17 12) scale(.7)" fill="none" stroke="#134ac4" stroke-width="1.8"/>`);
   const feathers = system === "metric" ? "half 2.5 / full 5 / flag 25 m/s" : "half 5 / full 10 / flag 50 kt";
   const greenLimit = formatQuantity(knotsToMps(9), "barbWind", system === "metric" ? 2 : 0, system);
-  return `<div class="windgram-legend"><div class="windgram-legend-ramp"><strong>Lapse rate · ${unitLabel("lapseRate", system)}</strong>${WINDGRAM_STABILITY.map(({ color }, i) => `<span class="windgram-legend-chip" style="--chip:${color}">${stabilityRange(i, system)}</span>`).join("")}</div><div class="windgram-legend-symbols"><span>${wind}Wind · ${feathers}</span><span>${humidity}RH &gt;94%</span><span>${modelCloud}Model cloud ≥30%</span><span>${potential}Potential cloud base</span><span>${freezing}${formatQuantity(0, "temperature", undefined, system)} freezing level</span><span>${lift}${formatQuantity(1.143, "lift", undefined, system)} sink</span></div><details class="windgram-legend-note"><summary>Chart key</summary><p>Lapse scale: <a href="http://wxtofly.net/windgramexplain.html">WxToFly</a> · ${unitLabel("lapseRate", system)}. Red/orange: rapid cooling. Gray: inversion. Dark hatching: unavailable profile. White crosshatching: RH &gt;94%. Sparse white diagonal hatching: model cloud ≥30%. Outlined clouds: potential LCL. Snowflakes: lowest freezing level. Green wind: &lt;${greenLimit}; white: ≥${greenLimit}. Faint barbs: interpolated. Paragliders: ${formatQuantity(1.143, "lift", undefined, system)} sink ceiling. Blue line: ${formatQuantity(1, "lift", undefined, system)} sink ceiling. Lift w*: ${unitLabel("lift", system)}. Temperature: ${unitLabel("temperature", system)}. Height: ${unitLabel("elevation", system)} MSL.</p></details></div>`;
+  return `<div class="windgram-legend"><div class="windgram-legend-ramp"><strong>Lapse rate · ${unitLabel("lapseRate", system)}</strong>${WINDGRAM_STABILITY.map(({ color }, i) => `<span class="windgram-legend-chip" style="--chip:${color}">${stabilityRange(i, system)}</span>`).join("")}</div><div class="windgram-legend-symbols"><span>${wind}Wind · ${feathers}</span><span>${humidity}RH &gt;94%</span><span>${modelCloud}Model cloud ≥30%</span><span>${potential}Potential cloud base</span><span>${freezing}${formatQuantity(0, "temperature", undefined, system)} freezing level</span><span>${lift}${formatQuantity(1.143, "lift", undefined, system)} sink</span></div><details class="windgram-legend-note"><summary>Chart key</summary><p>Lapse scale: <a href="http://wxtofly.net/windgramexplain.html">WxToFly</a> · ${unitLabel("lapseRate", system)}. Red/orange: rapid cooling. Gray: inversion. Dark hatching: unavailable profile. White crosshatching: RH &gt;94%. Sparse white diagonal hatching: model cloud ≥30%. Outlined clouds: potential LCL. Snowflakes: lowest freezing level. Green wind: &lt;${greenLimit}; white: ≥${greenLimit}. Faint barbs: interpolated. Paragliders: ${formatQuantity(1.143, "lift", undefined, system)} sink ceiling. Blue line: ${formatQuantity(1, "lift", undefined, system)} sink ceiling. Dashed amber line: thermal top (parcel), distinct from native model boundary-layer depth. Lift w*: ${unitLabel("lift", system)}. Temperature: ${unitLabel("temperature", system)}. Height: ${unitLabel("elevation", system)} MSL.</p><p>Direction marks compare the 10 m model-surface wind with a saved direction window: triangle inside, circle outside, ? unavailable or light/calm. These do not determine launch suitability. Surface temperature is at 2 m above model ground. Surface rows and symbols are placed along the chart edge for readability.</p></details></div>`;
 }

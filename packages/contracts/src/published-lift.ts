@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { scalarSchema, siteForecastSchema, type SiteForecast } from '@azohra/meteo.briefing/contract';
 import { checked } from './schema.js';
+import { diagnosticSupportSchema, verticalResolutionSchema } from './diagnostic-support.js';
+export type { DiagnosticSupport, VerticalResolution, VerticalSampling, ThermalDepthSupport } from './diagnostic-support.js';
 
 type Hour = SiteForecast['hours'][number];
 const fields = {
@@ -11,11 +13,13 @@ const fields = {
 } as const;
 type Lift = { [K in keyof typeof fields]: Hour['derived'][K] | null };
 const diagnosticValue = scalarSchema.nullish();
-const diagnosticsSchema = z.object({
+const valueFields = {
   thermalVelocityV2Mps: diagnosticValue, resolvedThermalTopM: diagnosticValue,
   usableLiftTopV2M: diagnosticValue, surfaceLclM: diagnosticValue,
   hcritWxtoflyM: diagnosticValue, effectiveCloudLimitM: diagnosticValue, mixedLayerLclM: diagnosticValue,
-});
+};
+const metadataFields = { verticalResolution: verticalResolutionSchema.optional(), diagnosticSupport: diagnosticSupportSchema.optional() };
+const diagnosticsSchema = z.object({ ...valueFields, ...metadataFields });
 export type PublishedSoaringDiagnostics = z.infer<typeof diagnosticsSchema>;
 export type PublishedForecastHour = Hour & { soaring?: PublishedSoaringDiagnostics };
 export type PublishedSiteForecast = Omit<SiteForecast, 'hours'> & { hours: PublishedForecastHour[] };
@@ -65,9 +69,12 @@ export function parsePublishedProfileJson(text: string): PublishedSiteForecast |
       if (!soaring || typeof soaring !== 'object' || Array.isArray(soaring)
         || !Object.hasOwn(soaring, 'thermalVelocityV2Mps')) { delete target.soaring; continue; }
       const values = soaring as Record<string, unknown>;
-      for (const key of Object.keys(diagnosticsSchema.shape)) {
+      for (const key of Object.keys(valueFields)) {
         const value = values[key];
         values[key] = diagnosticValue.safeParse(value).success ? value ?? null : null;
+      }
+      for (const [key, schema] of Object.entries(metadataFields)) {
+        if (!schema.safeParse(values[key]).success) delete values[key];
       }
       target.soaring = checked(diagnosticsSchema, values)!;
     }

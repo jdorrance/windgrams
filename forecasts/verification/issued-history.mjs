@@ -1,9 +1,12 @@
 // Immutable issued revisions; compact scoring records are not source-column archives.
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { compressIssuedHistoryFile, copyIssuedHistoryTree, logicalHistoryFile, readIssuedHistoryFile, writeIssuedHistoryFile } from './issued-history-files.mjs';
+export { copyIssuedHistoryTree, readIssuedHistoryFile } from './issued-history-files.mjs';
 
 export const DEFAULT_MAX_ROLLING_RUNS = 120;
+export const DEFAULT_PINNED_RUN_KEYS = Object.freeze(['20261021T000000Z', '20261021T060000Z']);
 const runPattern = /^\d{8}T\d{6}Z$/;
 const hashPattern = /^[a-f0-9]{64}$/;
 const slugPattern = /^[a-zA-Z0-9_-]+$/;
@@ -35,13 +38,14 @@ function legacyFiles(directory, model, runKey) {
   if (!existsSync(join(directory, 'manifest.json'))) return [];
   const manifest = read(join(directory, 'manifest.json')); checkedManifest(manifest, model, runKey);
   const files = ['manifest.json'];
-  if (existsSync(join(directory, 'sites'))) for (const name of regularFiles(join(directory, 'sites'))) {
+  if (existsSync(join(directory, 'sites'))) for (const stored of regularFiles(join(directory, 'sites'))) {
+    const name = logicalHistoryFile(`sites/${stored}`).slice(6);
     if (!/^[a-zA-Z0-9_-]+\.json$/.test(name) || !manifest.sites.some(site => `${site.slug}.json` === name)) throw new Error('Invalid legacy history site inventory');
-    const profile = read(join(directory, 'sites', name));
+    const profile = JSON.parse(readIssuedHistoryFile(directory, `sites/${name}`));
     if (profile.model !== model || profile.site?.id !== name.slice(0, -5) || profile.run?.referenceTime !== manifest.referenceTime || !Array.isArray(profile.hours)) throw new Error(`Invalid legacy history profile identity: ${name}`);
     files.push(`sites/${name}`);
   }
-  for (const file of files) if (!lstatSync(join(directory, file)).isFile() || lstatSync(join(directory, file)).isSymbolicLink()) throw new Error('Invalid legacy history entry');
+  for (const file of files) readIssuedHistoryFile(directory, file);
   return files;
 }
 
@@ -60,15 +64,17 @@ function verifyRevision(directory, model, runKey, revisionId) {
   const { revisionId: recorded, ...descriptor } = record;
   if (recorded !== revisionId || sha(json(descriptor)) !== revisionId || descriptor.schemaVersion !== 1
     || descriptor.representation !== 'compact-scoring' || !descriptor.files || !descriptor.sourceFiles) throw new Error('Invalid issued-history revision digest');
-  if (JSON.stringify(regularFiles(directory).sort()) !== JSON.stringify(['revision.json', ...Object.keys(descriptor.files)].sort())) throw new Error('Unexpected issued-history revision contents');
-  for (const [file, digest] of Object.entries(descriptor.files)) {
-    if (!filePattern.test(file) || !hashPattern.test(digest) || sha(readFileSync(join(directory, file))) !== digest) throw new Error(`Corrupt issued-history file: ${file}`);
-  }
+  if (JSON.stringify(regularFiles(directory).map(logicalHistoryFile).sort()) !== JSON.stringify(['revision.json', ...Object.keys(descriptor.files)].sort())) throw new Error('Unexpected issued-history revision contents');
   const manifest = read(join(directory, 'manifest.json'));
   checkedManifest(manifest, model, runKey);
-  for (const { slug } of manifest.sites) {
-    const profile = read(join(directory, 'sites', `${slug}.json`));
-    if (profile.model !== model || profile.site?.id !== slug || profile.run?.referenceTime !== manifest.referenceTime || !Array.isArray(profile.hours)) throw new Error(`Invalid issued-history profile identity: ${slug}`);
+  for (const [file, digest] of Object.entries(descriptor.files)) {
+    if (!filePattern.test(file) || !hashPattern.test(digest)) throw new Error(`Corrupt issued-history file: ${file}`);
+    const bytes = readIssuedHistoryFile(directory, file);
+    if (sha(bytes) !== digest) throw new Error(`Corrupt issued-history file: ${file}`);
+    if (file.startsWith('sites/')) {
+      const slug = file.slice(6, -5), profile = JSON.parse(bytes);
+      if (profile.model !== model || profile.site?.id !== slug || profile.run?.referenceTime !== manifest.referenceTime || !Array.isArray(profile.hours)) throw new Error(`Invalid issued-history profile identity: ${slug}`);
+    }
   }
   const expected = ['manifest.json', ...manifest.sites.map(site => `sites/${site.slug}.json`)];
   if (JSON.stringify(Object.keys(descriptor.sourceFiles).sort()) !== JSON.stringify(expected.sort())
@@ -102,17 +108,31 @@ function writeIndex(runRoot, revisions, latest = revisions.at(-1)) {
   finally { rmSync(staging, { recursive: true, force: true }); }
 }
 
-function prune(modelRoot, maxRollingRuns, pinnedRunKeys) {
+function validateRetention({ maxRollingRuns, pinnedRunKeys, minimumCalendarDays }) {
   if (!Number.isSafeInteger(maxRollingRuns) || maxRollingRuns < 1) throw new Error('History retention must be a positive run count');
+  if (!Array.isArray(pinnedRunKeys) || pinnedRunKeys.some(key => !runPattern.test(key))) throw new Error('Pinned history runs require UTC run keys');
+  if (!Number.isSafeInteger(minimumCalendarDays) || minimumCalendarDays < 0 || minimumCalendarDays > 120) throw new Error('Calendar retention must be 0–120 UTC days');
+}
+
+function prune(modelRoot, maxRollingRuns, pinnedRunKeys, minimumCalendarDays) {
   if (!existsSync(modelRoot)) return;
-  const rolling = readdirSync(modelRoot).filter(key => runPattern.test(key) && !pinnedRunKeys.includes(key)).sort();
-  for (const key of rolling.slice(0, Math.max(0, rolling.length - maxRollingRuns))) rmSync(join(modelRoot, key), { recursive: true });
+  const all = readdirSync(modelRoot).filter(key => runPattern.test(key)).sort();
+  const rolling = all.filter(key => !pinnedRunKeys.includes(key));
+  // Anchor to the newest retained initialization, never the wall clock: importing an
+  // old study cannot erase it merely because the present date is later.
+  const latest = all.at(-1), utcDay = key => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(4, 6)) - 1, Number(key.slice(6, 8)));
+  const cutoff = latest && minimumCalendarDays > 0 ? utcDay(latest) - (minimumCalendarDays - 1) * 86400000 : Infinity;
+  for (const key of rolling.slice(0, Math.max(0, rolling.length - maxRollingRuns))) {
+    if (utcDay(key) < cutoff) rmSync(join(modelRoot, key), { recursive: true });
+  }
 }
 
 /** Identical issued content is idempotent. A changed method/build/content adds a revision. */
-export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = [], retainFullColumns = false } = {}) {
+export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = [], retainFullColumns = false, retainFullColumnSites = [], minimumCalendarDays = 0 } = {}) {
   if (!slugPattern.test(modelSlug)) throw new Error('Invalid history model');
-  if (!Number.isSafeInteger(maxRollingRuns) || maxRollingRuns < 1) throw new Error('History retention must be a positive run count');
+  validateRetention({ maxRollingRuns, pinnedRunKeys, minimumCalendarDays });
+  if (!Array.isArray(retainFullColumnSites) || retainFullColumnSites.some(site => typeof site !== 'string' || !slugPattern.test(site))
+    || new Set(retainFullColumnSites).size !== retainFullColumnSites.length) throw new Error('Full-column sites require distinct site slugs');
   const modelRoot = join(dataRoot, modelSlug), manifestPath = join(modelRoot, 'manifest.json');
   if (!existsSync(manifestPath)) return null;
   const manifest = read(manifestPath), runKey = keyFor(manifest.referenceTime);
@@ -126,7 +146,7 @@ export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_
     sourceFiles[file] = sha(bytes);
     payloads[file] = Buffer.from(json(compactSiteDocForHistory(document)));
     methods.add(document.soaringMeta?.contractVersion ?? 'unrecorded');
-    if (retainFullColumns) payloads[`full-columns/${file}`] = bytes;
+    if (retainFullColumns || retainFullColumnSites.includes(slug)) payloads[`full-columns/${file}`] = bytes;
   }
   const descriptor = { schemaVersion: 1, representation: 'compact-scoring', sourceFiles,
     files: Object.fromEntries(Object.entries(payloads).map(([file, bytes]) => [file, sha(bytes)])), methods: [...methods].sort(), build: manifest.diagnosticBuild ?? null };
@@ -137,7 +157,7 @@ export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_
   if (created) {
     const staging = mkdtempSync(join(revisionsRoot, '.pending-'));
     try {
-      for (const [file, bytes] of Object.entries(payloads)) { mkdirSync(dirname(join(staging, file)), { recursive: true }); writeFileSync(join(staging, file), bytes); }
+      for (const [file, bytes] of Object.entries(payloads)) writeIssuedHistoryFile(staging, file, bytes);
       writeFileSync(join(staging, 'revision.json'), json({ ...descriptor, revisionId }));
       verifyRevision(staging, modelSlug, runKey, revisionId);
       renameSync(staging, destination);
@@ -147,14 +167,15 @@ export function archiveModelRun(dataRoot, modelSlug, { maxRollingRuns = DEFAULT_
   const previousLatest = existsSync(join(runRoot, 'index.json')) ? read(join(runRoot, 'index.json')).latest : revisions.at(-1);
   if (!revisions.includes(revisionId)) revisions.push(revisionId);
   writeIndex(runRoot, revisions, created ? revisionId : previousLatest ?? revisionId);
-  prune(join(dataRoot, 'history', modelSlug), maxRollingRuns, pinnedRunKeys);
-  return { model: modelSlug, referenceTime: manifest.referenceTime, runKey, revisionId, created, siteCount: manifest.sites.length, maxRollingRuns };
+  prune(join(dataRoot, 'history', modelSlug), maxRollingRuns, pinnedRunKeys, minimumCalendarDays);
+  return { model: modelSlug, referenceTime: manifest.referenceTime, runKey, revisionId, created, siteCount: manifest.sites.length,
+    fullColumnSites: manifest.sites.filter(site => retainFullColumns || retainFullColumnSites.includes(site.slug)).map(site => site.slug), maxRollingRuns, minimumCalendarDays };
 }
 
 /** Validate all incoming revisions before copying; never replace an issued revision or legacy root. */
-export function mergeHistoryArchives(incomingRoot, outputRoot, model, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = ['20261021T000000Z', '20261021T060000Z'] } = {}) {
+export function mergeHistoryArchives(incomingRoot, outputRoot, model, { maxRollingRuns = DEFAULT_MAX_ROLLING_RUNS, pinnedRunKeys = DEFAULT_PINNED_RUN_KEYS, minimumCalendarDays = 0 } = {}) {
   if (!slugPattern.test(model)) throw new Error('Invalid history model');
-  if (!Number.isSafeInteger(maxRollingRuns) || maxRollingRuns < 1) throw new Error('History retention must be a positive run count');
+  validateRetention({ maxRollingRuns, pinnedRunKeys, minimumCalendarDays });
   const incoming = join(incomingRoot, 'history', model), output = join(outputRoot, 'history', model);
   if (!existsSync(incoming)) return { copiedRevisions: 0 };
   if (lstatSync(incoming).isSymbolicLink() || existsSync(output) && lstatSync(output).isSymbolicLink()) throw new Error('History model directories must not be symlinks');
@@ -164,21 +185,24 @@ export function mergeHistoryArchives(incomingRoot, outputRoot, model, { maxRolli
     const ids = revisionOrder(source, model, runKey), existing = existsSync(target) ? revisionOrder(target, model, runKey) : [];
     const legacy = legacyFiles(source, model, runKey);
     legacyFiles(target, model, runKey);
-    for (const file of legacy) if (existsSync(join(target, file)) && sha(readFileSync(join(source, file))) !== sha(readFileSync(join(target, file)))) throw new Error(`Conflicting legacy history: ${model}/${runKey}/${file}`);
+    for (const file of legacy) if (readIssuedHistoryFile(target, file) && sha(readIssuedHistoryFile(source, file)) !== sha(readIssuedHistoryFile(target, file))) throw new Error(`Conflicting legacy history: ${model}/${runKey}/${file}`);
     return { runKey, source, target, ids, existing, legacy };
   });
   let copiedRevisions = 0;
   for (const { runKey, source, target, ids, existing, legacy } of plans) {
     mkdirSync(join(target, 'revisions'), { recursive: true });
     // Legacy archives have no digest receipt. Preserve an existing legacy issue unchanged.
-    for (const file of legacy) if (!existsSync(join(target, file))) {
-      mkdirSync(dirname(join(target, file)), { recursive: true });
-      cpSync(join(source, file), join(target, file), { errorOnExist: true, force: false });
-    }
+    for (const file of legacy) if (!readIssuedHistoryFile(target, file)) writeIssuedHistoryFile(target, file, readIssuedHistoryFile(source, file));
     for (const id of ids) {
       if (existing.includes(id)) continue;
       const staging = mkdtempSync(join(target, 'revisions', '.merge-'));
-      try { cpSync(join(source, 'revisions', id), staging, { recursive: true }); verifyRevision(staging, model, runKey, id); renameSync(staging, join(target, 'revisions', id)); }
+      try {
+        copyIssuedHistoryTree(join(source, 'revisions', id), staging, `/revisions/${id}`);
+        const record = read(join(staging, 'revision.json'));
+        for (const file of Object.keys(record.files)) compressIssuedHistoryFile(staging, file);
+        verifyRevision(staging, model, runKey, id);
+        renameSync(staging, join(target, 'revisions', id));
+      }
       finally { rmSync(staging, { recursive: true, force: true }); }
       copiedRevisions++;
     }
@@ -190,7 +214,7 @@ export function mergeHistoryArchives(incomingRoot, outputRoot, model, { maxRolli
     const latest = !oldLatest || ids.includes(oldLatest) && ids.indexOf(sourceLatest) > ids.indexOf(oldLatest) ? sourceLatest : oldLatest;
     if (order.length) writeIndex(target, order, latest);
   }
-  prune(output, maxRollingRuns, pinnedRunKeys);
+  prune(output, maxRollingRuns, pinnedRunKeys, minimumCalendarDays);
   return { copiedRevisions };
 }
 
@@ -205,4 +229,42 @@ export function archivedModelRuns(dataRoot, model, { maxRuns = 30 } = {}) {
     if (!ids.length) throw new Error(`No issued revision for ${model}/${runKey}`);
     return { model, runKey, revisionId: ids[0], directory: join(runRoot, 'revisions', ids[0]) };
   });
+}
+
+/** Migrate one validated run atomically; issue IDs, order and logical bytes are unchanged. */
+export function compressHistoryArchives(dataRoot) {
+  const root = join(dataRoot, 'history');
+  if (!existsSync(root)) return { compressedFiles: 0, revisions: 0 };
+  let compressedFiles = 0, revisions = 0;
+  for (const model of readdirSync(root)) {
+    const modelRoot = join(root, model);
+    if (!slugPattern.test(model) || !lstatSync(modelRoot).isDirectory() || lstatSync(modelRoot).isSymbolicLink()) throw new Error('Invalid history model directory');
+    for (const runKey of readdirSync(modelRoot).filter(key => runPattern.test(key))) {
+      const run = join(modelRoot, runKey);
+      // Migration is a one-time transition; do not inflate and hash the entire archive on every refresh.
+      if (!regularFiles(run).some(file => /(?:^|\/)sites\/[a-zA-Z0-9_-]+\.json$/.test(file))) continue;
+      const ids = revisionOrder(run, model, runKey);
+      const files = legacyFiles(run, model, runKey).map(file => ({ directory: '', file }));
+      for (const id of ids) {
+        const directory = `revisions/${id}`, record = verifyRevision(join(run, directory), model, runKey, id);
+        files.push(...Object.keys(record.files).map(file => ({ directory, file })));
+      }
+      revisions += ids.length;
+      const plain = files.filter(({ directory, file }) => file !== 'manifest.json' && existsSync(join(run, directory, file)));
+      if (!plain.length) continue;
+      const staging = mkdtempSync(join(modelRoot, '.compress-')), candidate = join(staging, 'candidate'), previous = join(staging, 'previous');
+      try {
+        cpSync(run, candidate, { recursive: true });
+        for (const { directory, file } of plain) compressIssuedHistoryFile(join(candidate, directory), file);
+        revisionOrder(candidate, model, runKey); legacyFiles(candidate, model, runKey);
+        renameSync(run, previous);
+        try { renameSync(candidate, run); }
+        catch (error) { renameSync(previous, run); throw error; }
+        compressedFiles += plain.length;
+      } finally {
+        if (!existsSync(previous) || existsSync(run)) rmSync(staging, { recursive: true, force: true });
+      }
+    }
+  }
+  return { compressedFiles, revisions };
 }

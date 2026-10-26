@@ -13,7 +13,18 @@ import type {
   MatchedRaobPair,
   PercentileSpread,
 } from './soaring-contracts.ts';
-import { formatQuantity, getUnitSystem, type QuantityKind, type UnitSystem } from './units.ts';
+import { finiteScalar, formatQuantity, getUnitSystem, type QuantityKind, type UnitSystem } from './units.ts';
+
+/** Regional readouts keep known speed even when direction is unavailable. */
+export function formatRegionalWind(speed: number | null | undefined, direction: number | null | undefined,
+  { bearing = false, system = getUnitSystem() }: { bearing?: boolean; system?: UnitSystem } = {}): string | null {
+  const speedMps = finiteScalar(speed), directionDeg = finiteScalar(direction);
+  if (speedMps === null || speedMps < 0) return null;
+  if (speedMps === 0) return 'Calm';
+  const label = directionDeg === null ? 'Direction unavailable ·'
+    : `${compassPoint(directionDeg)}${bearing ? ` (${directionDeg.toFixed(0)}°) @` : ''}`;
+  return `${label} ${formatQuantity(speedMps, 'wind', undefined, system)}`;
+}
 
 export const MULTIMODEL_DISPLAY_ORDER: readonly (readonly [string, string])[] = [
   ['icon-eu', 'ICON-EU'],
@@ -277,8 +288,7 @@ export function buildMultimodelComparisonRow(
     (mh.tempC != null && Number.isFinite(mh.tempC) ? formatQuantity(mh.tempC, 'temperature', 1, system) : '–') +
     (mh.dewPointC != null && Number.isFinite(mh.dewPointC) ? ` / ${formatQuantity(mh.dewPointC, 'temperature', 1, system)}` : '');
   const windText =
-    (mh.windDirectionDeg != null && Number.isFinite(mh.windDirectionDeg) ? `${compassPoint(mh.windDirectionDeg)} ` : '') +
-    (mh.windSpeedMps != null && Number.isFinite(mh.windSpeedMps) ? formatQuantity(mh.windSpeedMps, 'wind', undefined, system) : '–') +
+    (formatRegionalWind(mh.windSpeedMps, mh.windDirectionDeg, { system }) ?? '–') +
     (mh.windGustMps != null && Number.isFinite(mh.windGustMps) ? ` (g ${formatQuantity(mh.windGustMps, 'wind', undefined, system)})` : '');
 
   return {
@@ -343,7 +353,7 @@ export function buildRegionalLaunchTableRows(
 
     const launchElevText = l.launchElevationM != null ? formatElev(l.launchElevationM, system) : '–';
     const modelElevText = l.modelElevationM != null ? formatElev(l.modelElevationM, system) : '–';
-    const surfaceWind = ws != null && wd != null ? `${compassPoint(wd)} ${formatQuantity(ws, 'wind', undefined, system)}` : '–';
+    const surfaceWind = formatRegionalWind(ws, wd, { system });
 
     return {
       slug: l.slug,
@@ -355,7 +365,7 @@ export function buildRegionalLaunchTableRows(
         displayMetric((hour.thermalVelocityV2Mps ?? hour.thermalVelocityMps)[ci], 'thermalVelocityV2Mps', hour.status[ci], system),
         displayMetric((hour.usableLiftTopV2M ?? hour.usableLiftTopM)[ci], 'usableLiftTopV2M', hour.status[ci], system),
         formatElev(lcl, system),
-        ws != null && wd != null ? `${compassPoint(wd)} ${formatQuantity(ws, 'wind', undefined, system)}` : 'Unavailable',
+        surfaceWind ?? 'Unavailable',
       ],
       detailCells: {
         wstarText: wstar != null ? formatQuantity(wstar, 'lift', undefined, system) : '–',
@@ -367,7 +377,7 @@ export function buildRegionalLaunchTableRows(
         pblDepthText: hpbl != null ? formatElev(hpbl, system) : '–',
         lclText: formatElev(lcl, system),
         cuOdText: `${cu != null ? `${cu >= 0 ? '+' : ''}${formatElev(cu, system)}` : '–'} / ${od != null ? `${od >= 0 ? '+' : ''}${formatElev(od, system)}` : '–'}`,
-        surfaceWindText: surfaceWind,
+        surfaceWindText: surfaceWind ?? '–',
         blWindShearText: `${blw != null ? formatQuantity(blw, 'wind', undefined, system) : '–'} / ${bls != null ? formatQuantity(bls, 'wind', undefined, system) : '–'}`,
         convergenceText: conv != null ? `${conv >= 0 ? '+' : ''}${conv.toFixed(0)}` : '–',
       },

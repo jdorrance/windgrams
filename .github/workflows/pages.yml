@@ -58,7 +58,7 @@ jobs:
       (github.event_name != 'workflow_dispatch' || inputs.refresh == 'none' || inputs.dry_run) &&
       (github.event_name != 'workflow_run' || github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     concurrency:
       group: pages
       cancel-in-progress: false
@@ -76,7 +76,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: main
+      - name: Reserve forecast workspace
+        run: node scripts/prepare-refresh-runner.mjs pages
       - uses: ./.github/actions/setup-pnpm
+      - name: Require successful checks for this checkout
+        if: ${{ !inputs.dry_run }}
+        run: node scripts/await-publication-check.mjs
       - id: urls
         env:
           WINDGRAMS_SITE: ${{ vars.WINDGRAMS_SITE }}
@@ -86,8 +91,12 @@ jobs:
       - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
-          restore-keys: forecast-data-
+          key: issued-data-v2-${{ github.run_id }}
+          restore-keys: |
+            issued-data-v2-
+            forecast-data-
+      - name: Compact retained issued history
+        run: node forecasts/verification/compact-history.mjs --data forecasts/data
       - name: Seed the last complete publication
         working-directory: forecasts
         env:
@@ -125,4 +134,4 @@ jobs:
         if: ${{ success() && !inputs.dry_run }}
         with:
           path: forecasts/data
-          key: forecast-data-${{ github.run_id }}
+          key: issued-data-v2-${{ github.run_id }}

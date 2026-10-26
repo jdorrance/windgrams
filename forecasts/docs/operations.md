@@ -91,13 +91,25 @@ GitHub documents that [scheduled events can be delayed or dropped](https://docs.
 
 ### Publication and retention
 
-When upgrading the soaring diagnostic method, merge the code and request a full
-refresh with `gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=all`.
+Pages waits for the checked-out `main` commit's successful `Check` run before
+preparing a deployment. A failed check or a 15-minute timeout stops publication;
+repair or rerun Check before retrying Pages with `refresh=none`. The dry-run path
+can inspect candidate data while checks are unresolved.
+
+Science source or dependency changes on `main` automatically dispatch all four
+model producer groups through [Refresh science changes](../../.github/workflows/refresh-science.yml).
+For recovery, request a full refresh with
+`gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=all`.
 Point builders can reprocess complete retained source profiles for the same run;
-regional maps need a replay using the new method. Old artifacts are rejected by
-method identity, and an unsuccessful preparation leaves the served dataset in
-place. Verify the new method on point manifests and regional bundles after the
-refreshes publish; a website build alone does not upgrade forecast calculations.
+regional maps need a replay using the new method. During the 2.2 → 2.3 rollout,
+validated 2.2 products may remain available with their original method labels
+until each producer supplies its replacement. Compatible older artifacts can
+recover a missing product but cannot replace a valid product; new candidates
+must use the current method. The [publication policy](../scripts/lib/diagnostic-completeness.mjs)
+owns this explicit compatibility exception. Verify the new method on point
+manifests and regional bundles after the refreshes publish; a website build alone
+does not upgrade forecast calculations. The served monitor reports retained
+method versions while continuing to enforce freshness and product identity.
 
 For a local rehearsal with downloaded artifacts in `../incoming`:
 
@@ -112,6 +124,65 @@ Complete newer products replace their retained counterparts. Older runs, partial
 Preparation works in a temporary copy of the forecast products. If no point model is complete, or terrain validation fails, the original dataset is unchanged. Sunlight and scratch caches are transferred without copying their bytes. A dry run performs the same preparation and checks, then discards the temporary result.
 
 Seeding checks immutable files against SHA-256 hashes. Pages keeps each active regional case's current and previous bundle, plus historical cases. Packaging compacts ordinary JSON, preserves bundle bytes and reports size by product. It warns at 800 MB and stops at 1 GB. Forecast history stays in provider artifacts and caches rather than Pages; see [history retention](../verification/README.md#source-columns-and-retention). Refresh artifacts expire after two days, with the published dataset and saved cache providing the fallback.
+
+Archive storage uses gzip for profile payloads while revision identities continue
+hashing the original JSON bytes. CI restores `issued-data-v2-*` caches first and
+falls back to the older `forecast-data-*` namespace only for migration. Old jobs
+cannot accidentally restore the new storage format. A validated, staged migration
+preserves first-issued order, pins and every retained revision. Publication shares
+immutable revision files through hard links on the configured workspace filesystem;
+mutable indexes and legacy files receive independent copies.
+
+The October 26 capacity rehearsal materialized 976 retained runs and 1,080
+revisions across all eight models and 1,183 site/model profiles in the 268-launch
+catalogue. It included 120 rolling runs per model, two older pins, a repair every
+ten runs, and the four selected full-column sites. Twice-daily models covered 60
+days; the others covered the 30-day floor. The 38.69 GB expanded history occupied
+4.41 GB as gzip files, or 4.77 GB including filesystem allocation. This was a
+synthetic storage workload made from frozen published weather with shifted times;
+it supplies no additional historical forecast-skill evidence. The complete current
+2.3 postprocessing sample measured up to 24% growth per compressed profile.
+
+The release budget uses each model's largest measured old-to-current profile-size
+ratio, adds 4 KiB per file, and assumes no cross-run compression gain. It allows
+5.75 GB for history and 1.25 GB for live products: current raw live products
+measured 0.908 GB, and replacement with the current-method point sample measured
+0.914 GB. The 1.25 GB allowance is a capacity assumption, not the separate Pages
+upload limit. The resulting cache allowance is 7.00 GB against the configured
+10 GB cache limit. GitHub may evict older complete cache generations; every
+retained generation and provider artifact still preserves its full issued history.
+
+Pages and every provider group, including observations and terrain, verify at
+least **28 GiB free** before dependencies or cache extraction: they all restore
+the complete forecast cache. On a disposable GitHub-hosted Linux runner, the reservation
+helper removes only the previously identified unused SDK directories when needed
+and checks again; insufficient space stops the job before acquisition. The
+conservative Pages peak is 27.81 GB, leaving 2.26 GB against that reservation. It
+includes retained data, two extracted provider artifact sets, the largest
+provider's simultaneous download, live publication staging, dependency allowance
+and filesystem overhead. Immutable history staging avoids another full history
+copy. ICON's 16 GB acquisition limit yields the largest producer estimate,
+26.81 GB, leaving 3.26 GB. ECCC GRIB transfers are decoded in memory rather than
+retained as a disk cache.
+
+The final local round trip packed the cache in 73.7 seconds, restored it in 69.2,
+imported 1,080 revisions in 319.0, repeated the import without changes in 286.3,
+and staged publication in 42.1. First-issued scoring selection verified 960 runs
+in another 123.3 seconds; full-tree hashes also confirmed every retained pin and
+revision. Including those verification inventories, the measurement took 17m26s.
+Early phases shared the local host with baseline work, so these are measured local
+operation times, not a GitHub runner service guarantee. The 60-minute Pages timeout
+also allows its 15-minute Check wait, remote transfers and the website build;
+those network/build durations were not part of the offline round trip.
+
+Four provider refreshes a day and two-day artifact retention could retain roughly
+46 GB of history artifacts under this conservative budget, plus live products
+and retries. This is separate from the 10 GB cache quota. The measured transfer
+sizes, timings, source hashes and account-specific storage evidence are recorded
+with the [integration validation](../../docs/forecast-repair-status.md).
+Reproduce the [offline storage rehearsal](../verification/README.md#storage-maintenance-and-rehearsal)
+when coverage, horizon, revision frequency or retention grows. Do not shorten
+retention or replace first-issued evidence to satisfy a storage or runtime limit.
 
 ### Site and data locations
 

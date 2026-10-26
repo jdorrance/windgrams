@@ -333,7 +333,7 @@ test("snowflakes mark the lowest freezing crossing when an inversion creates sev
     hour.surface.temperatureC = 8;
     hour.levels.forEach((level, i) => { level.temperatureC = i % 2 === 0 ? -8 : 8; });
   }
-  const lowest = (profile.site.modelElevationM + profile.hours[0].levels[0].heightM) / 2;
+  const lowest = (profile.site.modelElevationM + 2 + profile.hours[0].levels[0].heightM) / 2;
   const view = viewOf(profile);
   assert.equal(view.freezing.length, profile.hours.length);
   for (const mark of view.freezing) close(mark.y, heightToY(view, lowest));
@@ -351,7 +351,7 @@ test("ensemble profiles retain median readings and uncertainty bands", () => {
   assert.equal(view.ensemble, true);
   const temperature = profile.hours[0].surface.temperatureC;
   assert.ok(temperature && typeof temperature === "object" && "p50" in temperature);
-  close(readWindgram(view, 0, profile.site.modelElevationM).temperatureF!, temperature.p50 * 1.8 + 32);
+  close(readWindgram(view, 0, profile.site.modelElevationM + 2).temperatureF!, temperature.p50 * 1.8 + 32);
   assert.ok(view.series.some((series) => series.bandPath), "published ensemble spread remains visible");
 });
 

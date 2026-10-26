@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { trustedRuns, collectRefreshArtifacts } from './collect-refresh-artifacts.mjs';
 import { dispatchRefresh } from './dispatch-refresh.mjs';
-import { refreshGroups, refreshSelection } from './refresh-policy.mjs';
+import { modelRefreshGroups, refreshGroups, refreshSelection } from './refresh-policy.mjs';
 import { refreshCommands, refreshProvider } from '../forecasts/scripts/refresh-provider.mjs';
 import { packRefresh } from '../forecasts/scripts/pack-refresh.mjs';
 import { mergeArtifacts } from '../forecasts/scripts/merge-artifacts.mjs';
@@ -105,7 +105,7 @@ test('uploaded unfinished or unsuccessful refreshes retain a validated fallback 
   }
 });
 
-test('collection rejects a previous calculation method even when commit provenance is valid', async t => {
+test('collection accepts the explicitly compatible prior method and rejects unsupported methods', async t => {
   const root = mkdtempSync(join(tmpdir(), 'refresh-method-upgrade-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const report = await collectRefreshArtifacts(root, { repository,
@@ -114,7 +114,7 @@ test('collection rejects a previous calculation method even when commit provenan
       : { artifacts: [{ name: 'data-rrfs', expired: false, workflow_run: { head_sha: sha } }] },
     download: (id, _name, directory) => {
       writeFileSync(join(directory, '.artifact.json'), JSON.stringify({ schemaVersion: 1, group: 'rrfs', sourceSha: sha,
-        soaringContractVersion: id === 2 ? '2.1.0' : SOARING_CONTRACT_VERSION, createdAt: '2026-10-25T04:00:00Z' }));
+        soaringContractVersion: id === 2 ? '2.1.0' : '2.2.0', createdAt: '2026-10-25T04:00:00Z' }));
       writeFileSync(join(directory, 'EMPTY'), 'empty');
     },
   });
@@ -167,6 +167,10 @@ test('observation fallback run 9 seeds retained payloads before failed run 10', 
 test('all refresh dispatches are attempted independently and targeted aliases preserve behavior', async () => {
   assert.deepEqual(refreshSelection('icon-eu'), ['dwd']);
   assert.deepEqual(refreshSelection('rrfs'), ['rrfs']);
+  assert.deepEqual(refreshSelection('models'), modelRefreshGroups);
+  const models = [];
+  await dispatchRefresh('models', async path => models.push(path));
+  assert.deepEqual(models, modelRefreshGroups.map(group => `/actions/workflows/refresh-${group}.yml/dispatches`));
   assert.throws(() => refreshSelection('unknown'), /Unknown/);
   const calls = [];
   await assert.rejects(dispatchRefresh('all', async (path, body) => {

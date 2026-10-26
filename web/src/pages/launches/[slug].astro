@@ -93,7 +93,14 @@ const station = stationEntry && (() => {
     </div>
     <div id="forecast-conditions-panel" class="forecast-hour-panel" hidden>
       <dl id="forecast-conditions" class="forecast-conditions"></dl>
+      <p id="forecast-wind-basis" class="forecast-wind-basis"></p>
       <p id="forecast-wind-note" class="forecast-wind-note" hidden></p>
+      <p id="forecast-data-limit" class="forecast-wind-note" hidden></p>
+      <details class="windgram-details">
+        <summary>Profile data support</summary>
+        <dl id="forecast-data-support" class="forecast-data-support"></dl>
+        <p>Counts use native upper-air levels. Gaps describe measured intervals intersecting the lowest kilometre, including the bounding level above it. Display interpolation does not recover missing thin layers.</p>
+      </details>
     </div>
     <div class="windgram-key" id="meteogram-key"></div>
     <details class="windgram-details" id="meteogram-details" hidden>

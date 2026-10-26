@@ -7,10 +7,9 @@ import { catalogueFingerprint, validateModelDirectory } from '@windgrams/pipelin
 import { MODELS, modelCoversSite, modelDescriptor } from '@windgrams/providers/registry';
 import { validateReplayManifest, validateReplayGrid, validateReplayHour, validateReplayAudit, validateLaunchesDoc, validateCrossSectionDoc } from '@windgrams/contracts/regional';
 import { parsePublishedProfileJson } from '@windgrams/contracts/published-lift';
-import { validateCurrentDiagnostics } from './diagnostic-completeness.mjs';
+import { acceptsDiagnosticMethod, validateCurrentDiagnostics, validateRetainedDiagnostics } from './diagnostic-completeness.mjs';
 import { validateRrfsProfile } from '../validate-rrfs.mjs';
 import { legacyCaseModel } from './model-coverage.mjs';
-import { SOARING_CONTRACT_VERSION } from '../../soaring/science.mjs';
 
 export const readJson = path => JSON.parse(readFileSync(path, 'utf8'));
 const digest = path => createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -31,23 +30,27 @@ export function validateFileTree(root) {
   else if (!stat.isFile()) throw new Error(`Artifact contains a symbolic link or special file: ${root}`);
 }
 
-export function pointProduct(root, model, sites) {
+export function pointProduct(root, model, sites, { retained = false } = {}) {
   const descriptor = modelDescriptor(model);
   const manifest = readJson(join(root, model, 'manifest.json'));
   if (manifest.trial) throw new Error(`${model}: trial forecasts cannot replace production`);
   const covered = sites.filter(site => modelCoversSite(model, site));
   const exclusions = manifest.coverage?.excluded ?? [];
-  if (exclusions.length && (manifest.coverage.requestedSiteHash !== catalogueFingerprint(covered)
+  if (!retained && exclusions.length && (manifest.coverage.requestedSiteHash !== catalogueFingerprint(covered)
     || exclusions.some(slug => !covered.some(site => site.slug === slug)))) throw new Error(`${model}: outdated coverage inventory`);
-  validateModelDirectory(root, { model, expectedSites: covered.filter(site => !exclusions.includes(site.slug)).map(site => site.slug),
+  const methods = new Set();
+  validateModelDirectory(root, { model, expectedSites: retained ? undefined : covered.filter(site => !exclusions.includes(site.slug)).map(site => site.slug),
     siteLocations: covered, expectedForecastHours: descriptor.forecastHours, validateProfile: (profile, run, slug) => {
-      validateCurrentDiagnostics(profile, run, slug);
-      if (model === 'rrfs') validateRrfsProfile(profile, run, slug);
+      (retained ? validateRetainedDiagnostics : validateCurrentDiagnostics)(profile, run, slug);
+      methods.add(profile.soaringMeta.contractVersion);
+      if (model === 'rrfs') validateRrfsProfile(profile, run, slug, { retained });
     } });
-  return { referenceTime: timestamp(manifest.referenceTime), generatedAt: timestamp(manifest.generatedAt), manifest };
+  const [methodVersion] = methods;
+  if (methods.size !== 1 || manifest.diagnosticMethod && manifest.diagnosticMethod.version !== methodVersion) throw new Error(`${model}: inconsistent diagnostic method`);
+  return { referenceTime: timestamp(manifest.referenceTime), generatedAt: timestamp(manifest.generatedAt), manifest, methodVersion };
 }
 
-export function regionalProduct(root, caseId, models) {
+export function regionalProduct(root, caseId, models, { retained = false } = {}) {
   if (!/^[a-zA-Z0-9_-]+$/.test(caseId)) throw new Error('Invalid regional case identity');
   const pointer = readJson(join(root, caseId, 'index.json'));
   if (!/^bundles\/[a-f0-9]{64}$/.test(pointer.bundle)) throw new Error(`${caseId}: invalid regional pointer`);
@@ -57,7 +60,7 @@ export function regionalProduct(root, caseId, models) {
   if (!manifest || manifest.case.id !== caseId || !manifest.files) throw new Error(`${caseId}: invalid regional manifest`);
   const model = manifest.model ?? manifest.case?.model ?? legacyCaseModel(caseId);
   if (!models.includes(model)) throw new Error(`${caseId}: incorrect provider ownership`);
-  if (manifest.soaringContractVersion !== SOARING_CONTRACT_VERSION) throw new Error(`${caseId}: outdated diagnostic method`);
+  if (!acceptsDiagnosticMethod(manifest.soaringContractVersion, { retained })) throw new Error(`${caseId}: outdated diagnostic method`);
   const hours = manifest.case?.forecastHours;
   if (!Array.isArray(hours) || !hours.length || hours.some((hour, i) => !Number.isInteger(hour) || hour < 0 || i && hour <= hours[i - 1])
     || manifest.hours.length !== hours.length || manifest.hours.some((hour, i) => hour.forecastHour !== hours[i]
@@ -78,15 +81,16 @@ export function regionalProduct(root, caseId, models) {
   for (const item of manifest.hours) {
     const hour = validateReplayHour(readBundleJson(join(bundle, item.file)), manifest.cellCount);
     if (!hour || hour.forecastHour !== item.forecastHour || timestamp(hour.validAt) !== timestamp(item.validAt)
-      || hour.soaringContractVersion !== SOARING_CONTRACT_VERSION) throw new Error(`${caseId}: invalid regional hour ${item.file}`);
+      || hour.soaringContractVersion !== manifest.soaringContractVersion) throw new Error(`${caseId}: invalid regional hour ${item.file}`);
   }
   const checkProfile = (name, gridIndex) => {
     const raw = readBundleJson(join(bundle, name)), profile = parsePublishedProfileJson(JSON.stringify(raw));
     if (!profile || profile.model !== model || timestamp(profile.run.referenceTime) !== timestamp(manifest.case.referenceTime)
       || profile.hours.length !== hours.length || profile.hours.some((hour, i) => timestamp(hour.validAt) !== timestamp(manifest.hours[i].validAt))
       || gridIndex !== undefined && raw.source?.gridIndex !== gridIndex) throw new Error(`${caseId}: regional profile differs from manifest: ${name}`);
+    if (raw.soaringMeta && raw.soaringMeta.contractVersion !== manifest.soaringContractVersion) throw new Error(`${caseId}: regional profile method differs from manifest: ${name}`);
     // Regional manifests own method identity; legacy regional profiles have no point metadata.
-    validateCurrentDiagnostics({ ...raw, soaringMeta: { contractVersion: manifest.soaringContractVersion, modelKind: 'deterministic-column' } });
+    (retained ? validateRetainedDiagnostics : validateCurrentDiagnostics)({ ...raw, soaringMeta: { contractVersion: manifest.soaringContractVersion, modelKind: 'deterministic-column' } });
   };
   checkProfile('profile.json');
   if (manifest.cellProfiles) for (const feature of grid.features) {

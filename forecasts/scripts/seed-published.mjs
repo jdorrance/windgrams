@@ -1,3 +1,6 @@
+import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
+import { diagnosticMethodDowngrade } from './lib/diagnostic-completeness.mjs';
+import { pointProduct } from './lib/artifact-products.mjs';
 import { REGION_INDEXES } from './lib/model-coverage.mjs';
 // Copies an already published dataset onto disk so a builder that finds
 // nothing new to write does not deploy an empty directory.
@@ -216,10 +219,13 @@ function monotonicSoaringSeed(output, files) {
       const next = readFetched(key), previous = readCached(key), root = `soaring/v1/${match[1]}`;
       if (!/^bundles\/[a-f0-9]{64}$/.test(next?.bundle) || !/^bundles\/[a-f0-9]{64}$/.test(previous?.bundle)) continue;
       const nextManifest = readFetched(`${root}/${next.bundle}/manifest.json`), priorManifest = readCached(`${root}/${previous.bundle}/manifest.json`);
-      if (older({ referenceTime: nextManifest?.case?.referenceTime, capturedAt: nextManifest?.capturedAt },
+      if ((diagnosticMethodDowngrade(nextManifest?.soaringContractVersion, priorManifest?.soaringContractVersion)
+        && isPublishedCase(join(output, 'soaring/v1'), match[1]))
+        || older({ referenceTime: nextManifest?.case?.referenceTime, capturedAt: nextManifest?.capturedAt },
         { referenceTime: priorManifest?.case?.referenceTime, capturedAt: priorManifest?.capturedAt }, 'referenceTime', 'capturedAt')) selected.delete(key);
     } else if (REGION_INDEXES.some(entry => key === `soaring/v1/${entry.file}`)
-      && older(readFetched(key), readCached(key), 'generatedAt')) selected.delete(key);
+      && (diagnosticMethodDowngrade(readFetched(key)?.soaringContractVersion, readCached(key)?.soaringContractVersion)
+        || older(readFetched(key), readCached(key), 'generatedAt'))) selected.delete(key);
   }
   return selected;
 }
@@ -261,6 +267,17 @@ export async function seedPublishedGroup(output, group, options) {
         if (!existsSync(join(output, model))) { outcomes.push({ model, status: 'absent' }); continue; }
         validateModelDirectory(output, completeness);
         outcomes.push({ model, status: 'retained' });
+        continue;
+      }
+      let current = false;
+      try { current = pointProduct(output, model, options.sites ?? [], { retained: true }).methodVersion === SOARING_CONTRACT_VERSION; }
+      catch { /* The staged source may repair an absent or invalid cache. */ }
+      const profiles = [...files].filter(([key]) => key.startsWith(`${model}/sites/`));
+      if (current && profiles.some(([, value]) => {
+        const profile = parseJsonBytes(Buffer.from(bytesOf(value)), 'profile.json');
+        return diagnosticMethodDowngrade(profile.soaringMeta?.contractVersion, SOARING_CONTRACT_VERSION);
+      })) {
+        outcomes.push({ model, status: 'retained', reason: 'Published origin has an older diagnostic method' });
         continue;
       }
       await stageModel({ outputRoot: output, ...completeness,

@@ -13,7 +13,7 @@ function uniformLapseView(lapseCPer1000Ft: number) {
   profile.hours = profile.hours.slice(0, 2);
   for (const hour of profile.hours) {
     hour.surface.temperatureC = 20;
-    for (const level of hour.levels) level.temperatureC = 20 + (level.heightM - profile.site.modelElevationM) / 304.8 * lapseCPer1000Ft;
+    for (const level of hour.levels) level.temperatureC = 20 + (level.heightM - (profile.site.modelElevationM + 2)) / 304.8 * lapseCPer1000Ft;
   }
   return buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 600 });
 }
@@ -115,7 +115,7 @@ test("interval lapse values stay exact while the displayed bands blend between l
   };
   for (const hour of view.sampling) {
     assert.deepEqual(hour.lapseCPer1000Ft.map(node => Math.round(node.value * 1000) / 1000),
-      [-3.048, -3.048, 3.048, 3.048, -3.048, -3.048]);
+      [-3.060, -3.060, 3.048, 3.048, -3.048, -3.048]);
   }
   // Each measured interval retains its gradient at its true height midpoint.
   assert.deepEqual(classesAtHeight(250), ["meteo-gram-stab-very-unstable"]);

@@ -10,6 +10,8 @@ import { validateRegionCatalogue, validateReplayManifest, validateReplayHour, re
 import { assessForecastFreshness, fetchWithRetry } from '@windgrams/data-client';
 import { MODELS, modelDescriptor, modelCoversSite } from '@windgrams/providers/registry';
 import { catalogueFingerprint } from '@windgrams/pipeline';
+import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
+import { validateRetainedDiagnostics } from './lib/diagnostic-completeness.mjs';
 import catalogue from '../sites.json' with { type: 'json' };
 import launchDetails from '../../web/src/data/launches.json' with { type: 'json' };
 import { parseProviderHealth } from './lib/provider-health.mjs';
@@ -47,8 +49,12 @@ function pointInventory(model, manifest, coverage, sites) {
 }
 
 async function monitorPoint(read, now, model, manifest, site) {
-  const profile = parsePublishedProfileJson((await read(`${model.id}/sites/${site.slug}.json`)).text);
+  const document = await read(`${model.id}/sites/${site.slug}.json`);
+  const profile = parsePublishedProfileJson(document.text);
   if (!profile || profile.model !== model.id || profile.site.id !== site.slug || !profile.hours.length) throw new Error('Missing or invalid representative profile');
+  // Presentation parsing drops null diagnostics; completeness needs the original absence markers.
+  validateRetainedDiagnostics(document.raw);
+  if (manifest.diagnosticMethod && manifest.diagnosticMethod.version !== profile.soaringMeta.contractVersion) throw new Error('Point diagnostic method differs from manifest');
   const first = Date.parse(profile.hours[0].validAt), last = Date.parse(profile.hours.at(-1).validAt), reference = Date.parse(manifest.referenceTime);
   const consistent = profile.run.referenceTime === manifest.referenceTime
     && profile.site.latitude === site.latitude && profile.site.longitude === site.longitude
@@ -59,7 +65,7 @@ async function monitorPoint(read, now, model, manifest, site) {
     && profile.hours.length === model.forecastHours.length;
   const result = assessment(model.id, 'point', { now, referenceTime: profile.run.referenceTime, validUntil: profile.hours.at(-1).validAt, policy: model.catalogue, consistent });
   if (!result.ok) result.reason = `${site.slug}: ${result.reason}`;
-  return result;
+  return { ...result, methodVersion: profile.soaringMeta.contractVersion, retainedMethod: profile.soaringMeta.contractVersion !== SOARING_CONTRACT_VERSION };
 }
 
 // Supplemental forecasts have no model-cadence policy: use their actual horizon.
@@ -197,12 +203,15 @@ export async function monitorServed({ from, now = new Date().toISOString(), mode
           const bundle = `${path}/${pointer.bundle}`;
           const manifest = validateReplayManifest((await read(`${bundle}/manifest.json`, pointer.manifestSha256)).raw);
           if (!manifest || manifest.case.id !== native.caseId || replayModel(manifest) !== native.model || !manifest.hours.length) throw new Error('Regional manifest identity differs from catalogue');
-          const profile = parsePublishedProfileJson((await read(`${bundle}/profile.json`, manifest.files?.['profile.json'])).text);
+          const document = await read(`${bundle}/profile.json`, manifest.files?.['profile.json']);
+          const profile = parsePublishedProfileJson(document.text);
           if (!profile || profile.model !== native.model || profile.run.referenceTime !== manifest.case.referenceTime
             || profile.hours.length !== manifest.hours.length || profile.hours.some((hour, index) => hour.validAt !== manifest.hours[index].validAt)) throw new Error('Regional profile differs from its manifest');
+          if (document.raw.soaringMeta && document.raw.soaringMeta.contractVersion !== manifest.soaringContractVersion) throw new Error('Regional profile method differs from manifest');
+          validateRetainedDiagnostics({ ...document.raw, soaringMeta: { contractVersion: manifest.soaringContractVersion, modelKind: 'deterministic-column' } });
           for (const hour of new Set([manifest.hours[0], manifest.hours.at(-1)])) {
             const published = validateReplayHour((await read(`${bundle}/${hour.file}`, manifest.files?.[hour.file])).raw, manifest.cellCount);
-            if (!published || published.validAt !== hour.validAt || published.forecastHour !== hour.forecastHour) throw new Error('Regional boundary hour differs from its manifest');
+            if (!published || published.validAt !== hour.validAt || published.forecastHour !== hour.forecastHour || published.soaringContractVersion !== manifest.soaringContractVersion) throw new Error('Regional boundary hour differs from its manifest');
           }
           const point = manifests.get(native.model);
           const consistent = Boolean(point && point.referenceTime === manifest.case.referenceTime)
@@ -210,7 +219,7 @@ export async function monitorServed({ from, now = new Date().toISOString(), mode
               && (index === 0 || hour.forecastHour > manifest.hours[index - 1].forecastHour));
           const check = assessment(native.caseId, 'regional', { now, referenceTime: manifest.case.referenceTime, validUntil: manifest.hours.at(-1).validAt, policy: model.catalogue, consistent });
           if (point && point.referenceTime !== manifest.case.referenceTime) check.reason = `Regional run ${manifest.case.referenceTime} differs from point run ${point.referenceTime}; regional publication is lagging or inconsistent.`;
-          checks.push(check);
+          checks.push({ ...check, methodVersion: manifest.soaringContractVersion, retainedMethod: manifest.soaringContractVersion !== SOARING_CONTRACT_VERSION });
         } catch (error) { checks.push(failure(native.caseId, 'regional', error)); }
       }
     }

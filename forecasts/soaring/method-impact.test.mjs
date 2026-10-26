@@ -12,12 +12,15 @@ const read = path => JSON.parse(readFileSync(new URL(path, root), 'utf8'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const evidence = read('forecasts/soaring/fixtures/method-2.2-impact.json');
 
-test('method 2.2 parcel/flux changes retain the recorded rounded diagnostics on 18 native and 84 reconstructed archived columns', () => {
-  assert.equal(SOARING_CONTRACT_VERSION, evidence.comparedMethod);
+test('method 2.3 retains 2.2 scalars on 18 native and 84 reconstructed columns without model surface pressure', () => {
+  assert.equal(SOARING_CONTRACT_VERSION, '2.3.0');
+  assert.equal(evidence.comparedMethod, '2.2.0');
   for (const [path, expected] of Object.entries(evidence.sources)) assert.equal(hash(readFileSync(new URL(path, root))), expected, path);
   const groups = { hrrrNative: [], rrfsNative: [], iconNative: [], rrfsPublishedReconstruction: [] };
   const add = (group, terrain, source, baseline = {}) => {
-    const { contractVersion, ...diagnostics } = deriveDiagnosticsV2(terrain, source, baseline);
+    const { contractVersion, diagnosticSupport, ...diagnostics } = deriveDiagnosticsV2(terrain, source, baseline);
+    // New support metadata is tested independently; the frozen scalar evidence stays unchanged.
+    delete diagnostics.verticalResolution.sampling;
     groups[group].push(diagnostics);
   };
   const c = read('forecasts/soaring/cases/north-sound-20261021-00z.json');

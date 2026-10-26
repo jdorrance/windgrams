@@ -2,7 +2,7 @@
 
 Soaring diagnostics estimate thermal strength, lift ceilings, cloud base and layer winds from forecast columns. They describe the atmosphere represented by the model: terrain smoothing, vertical resolution and missing source fields all affect the result. Convective velocity characterizes air motion; glider climb also depends on sink rate and position within a thermal.
 
-The calculations below describe method 2.2.0. Published point profiles store them in `hours[].soaring`; regional maps and soundings use the same diagnostic fields. [Regional operations](../forecasts/soaring/README.md) explains how to build them, and [observation evaluation](../forecasts/verification/README.md) explains how to measure their errors.
+The calculations below describe method 2.3.0. Published point profiles store them in `hours[].soaring`; regional maps and soundings use the same diagnostic fields. [Regional operations](../forecasts/soaring/README.md) explains how to build them, and [observation evaluation](../forecasts/verification/README.md) explains how to measure their errors.
 
 ## Inputs and heights
 
@@ -12,7 +12,7 @@ The available vertical levels depend on the model and capture. The [historical H
 
 ICON-EU uses model levels 45–74 with cell-specific pressure. Full-level heights are calculated from bounding HHL interfaces, and dew point is calculated from specific humidity. The resulting temperature, moisture and wind columns use the same parcel and layer calculations as HRRR and RRFS. Armenian launch elevations come from Copernicus GLO-90; catalogue elevations with an unconfirmed datum are retained only as source information.
 
-`verticalResolution` records the native and above-ground level counts and other coverage details. Interpolated values retain the source column's vertical resolution.
+`verticalResolution` records the native and above-ground level counts. Its optional `sampling` section reports the first measured height AGL, native samples in the lowest kilometre and the full native-node gap intersecting that kilometre, separately for temperature, moisture and wind. Surface nodes are excluded from these counts. Interpolated values retain the source column's vertical resolution. `diagnosticSupport` records the thermal-depth branch, bracket or profile-top limit, cloud-cap source and pressure source; it is evidence of support, not a calibrated quality score.
 
 ## Thermal depth and strength
 
@@ -24,7 +24,7 @@ $$
 w_*=\left[\frac{g z_i\,\overline{(w'\theta_v')_s}}{\theta_{v0}}\right]^{1/3}.
 $$
 
-Surface density uses pressure and virtual temperature. The pressure helper accepts surface pressure or estimates it hypsometrically; available inputs depend on the adapter. The heat flux and reference temperature use the same potential-temperature factor, which cancels in the ratio.
+Surface density uses pressure and virtual temperature. Method 2.3 composition uses a supplied positive model surface pressure, or estimates it hypsometrically when absent; sea-level pressure is never substituted. Available inputs depend on the adapter. The heat flux and reference temperature use the same potential-temperature factor, which cancels in the ratio.
 
 Method 2.2.0 preserves missing heat fluxes as null, so W* and its dependent lift ceilings and buoyancy/shear ratio remain unavailable. Measured zero heat flux or a known zero layer depth produces zero W* when the other required inputs are available. Layer means can still use a known model PBL depth; an unknown depth does not become a surface-only mixed layer. The first-layer fallback now reaches its first-level cap in the neutral limit, and upper-layer crossings use bracketed linear interpolation. The [method-change notes](refactor-plan.md#method-220-parcel-depth-and-missing-inputs) derive the limit, document the remaining closure boundary and report archived comparisons.
 
@@ -66,7 +66,7 @@ For ensembles, nonlinear quantities must be calculated for each member before ta
 
 ECMWF and NWS adapters expose surface LCL and the wind or layer fields their sources support. Their limited profiles and heat-flux inputs leave thermal strength and usable lift unavailable.
 
-`soaring.experimental.terrainAdjustment` records the difference between launch and model terrain and, where the column brackets launch altitude, interpolated launch wind. Diagnostic heights remain in model MSL coordinates. `site-context.json` supplies the launch elevation and its provenance.
+`soaring.experimental.terrainAdjustment` records the difference between launch and model terrain and, where adjacent valid wind nodes bracket launch ground elevation MSL, an experimental free-air wind estimate. Model surface wind is at terrain + 10 m, optional 80 m wind at terrain + 80 m. Missing or duplicate brackets and extrapolation are excluded; local slope flow and gusts are not inferred. Diagnostic heights remain in model MSL coordinates. `site-context.json` supplies the launch elevation and its provenance.
 
 ## Reproducible example
 
@@ -74,4 +74,4 @@ The [Blanchard regression](../forecasts/soaring/soaring.test.mjs) uses the Octob
 
 The [fixed replay](soaring-replay.md) reproduces this example from captured source fields to check numerical consistency. [Issued-history evaluation](../forecasts/verification/README.md) measures error against observations, and the [evaluation plan](soaring-forecast-plan.md) describes the broader sample still needed.
 
-For implementation details, thermodynamic and layer-wind routines are in [meteorology](../packages/meteorology/README.md); parcel depth, lift ceilings, diagnostic composition and ensemble handling are in [soaring](../packages/soaring/README.md).
+For implementation details, thermodynamic and layer-wind routines are in [meteorology](../packages/meteorology/README.md); parcel depth, lift ceilings, diagnostic composition and ensemble handling are in [soaring](../packages/soaring/README.md). The [review repair status](forecast-repair-status.md) records implemented fixes, reproducible evidence and source-migration gates.

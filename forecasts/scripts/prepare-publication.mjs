@@ -3,12 +3,12 @@ import { appendFileSync, constants, cpSync, existsSync, mkdirSync, mkdtempSync, 
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { SOARING_CONTRACT_VERSION } from '@windgrams/soaring';
 import { MODELS } from '@windgrams/providers/registry';
-import { validateModelDirectory } from '@windgrams/pipeline';
 import { validateRegionCatalogue } from '@windgrams/contracts/regional';
+import { copyIssuedHistoryTree } from '../verification/issued-history.mjs';
 import { mergeArtifacts } from './merge-artifacts.mjs';
-import { publicationOwnedName, regionalProduct, readJson, writeJson } from './lib/artifact-products.mjs';
-import { validateCurrentDiagnostics } from './lib/diagnostic-completeness.mjs';
+import { pointProduct, publicationOwnedName, regionalProduct, readJson, writeJson } from './lib/artifact-products.mjs';
 import { REGION_INDEXES } from './lib/model-coverage.mjs';
 import { mergeSiteContextFiles } from './merge-site-contexts.mjs';
 import { mergeSoaringRegionFiles } from './merge-soaring-regions.mjs';
@@ -23,7 +23,8 @@ export function preparePublication(incoming, output, catalogue = readJson(new UR
   const staging = mkdtempSync(join(dirname(output), '.publication-')), candidate = join(staging, 'dataset'), previous = join(staging, 'previous');
   try {
     if (existsSync(output)) cpSync(output, candidate, { recursive: true, mode: constants.COPYFILE_FICLONE,
-      filter: path => { const first = relative(output, path).split(sep)[0]; return !first || publicationOwnedName(first); } });
+      filter: path => { const first = relative(output, path).split(sep)[0]; return !first || first !== 'history' && publicationOwnedName(first); } });
+    if (existsSync(join(output, 'history'))) copyIssuedHistoryTree(join(output, 'history'), join(candidate, 'history'));
     const report = prepareCandidate(incoming, candidate, catalogue);
     if (dryRun) return { ...report, validationMs: Date.now() - start };
     if (existsSync(output)) renameSync(output, previous);
@@ -50,9 +51,11 @@ function prepareCandidate(incoming, output, catalogue) {
   const merged = mergeArtifacts(incoming, output, { sites: catalogue.sites });
   const validated = [];
   const unavailable = [];
+  const retainedMethods = [];
   for (const model of MODELS) if (existsSync(join(output, model.id))) {
     try {
-      validateModelDirectory(output, { model: model.id, expectedForecastHours: model.forecastHours, validateProfile: validateCurrentDiagnostics });
+      const product = pointProduct(output, model.id, catalogue.sites, { retained: true });
+      if (product.methodVersion !== SOARING_CONTRACT_VERSION) retainedMethods.push({ product: model.id, methodVersion: product.methodVersion });
       validated.push(model.id);
     } catch (error) { unavailable.push({ model: model.id, reason: error.message }); }
   }
@@ -79,8 +82,8 @@ function prepareCandidate(incoming, output, catalogue) {
   }
   for (const [caseId, models] of activeCases) {
     try {
-      if (models.size) for (const model of models) regionalProduct(regionalRoot, caseId, [model]);
-      else regionalProduct(regionalRoot, caseId, MODELS.map(model => model.id));
+      if (models.size) for (const model of models) regionalProduct(regionalRoot, caseId, [model], { retained: true });
+      else regionalProduct(regionalRoot, caseId, MODELS.map(model => model.id), { retained: true });
     }
     catch (error) {
       unavailableRegions.push({ caseId, reason: error.message });
@@ -94,7 +97,7 @@ function prepareCandidate(incoming, output, catalogue) {
   writeJson(join(output, 'sites.json'), catalogue);
   writeJson(join(output, 'models.json'), modelsCatalogue());
   writeJson(join(output, 'runs.json'), runsIndexFromDisk(output));
-  return { merged, validated, unavailable, unavailableRegions, terrain, pruned };
+  return { merged, validated, retainedMethods, unavailable, unavailableRegions, terrain, pruned };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

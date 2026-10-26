@@ -8,11 +8,11 @@ import { windgramDayHours } from '../lib/windgram-view.ts';
 import { windgramViewport } from '../lib/windgram-viewport.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
 import { SkewTChart } from '../lib/skewt-chart.ts';
-import { compassPoint } from '../lib/launches.ts';
 import { renderCrossSectionSvg } from '../lib/cross-section-view.ts';
 import {
   buildLaunchComparisonRows,
   buildRegionalLaunchTableRows,
+  formatRegionalWind,
   renderMultimodelComparisonBody,
   renderRaobVerificationTable,
   renderRegionalLaunchesTables,
@@ -486,11 +486,16 @@ async function main() {
     const bsr = hour.buoyancyShearRatio?.[selectedCell];
     const modelLaunchHour = matchedLaunch?.models?.[activeModel]?.hours?.find(mh => mh.validAt === hour.validAt);
     const expTerr = modelLaunchHour?.experimentalTerrain;
+    const surfaceWind = formatRegionalWind(w10s, w10d);
+    const surfaceWindBearing = formatRegionalWind(w10s, w10d, { bearing: true });
+    const meanWind = formatRegionalWind(blws, blwd, { bearing: true });
+    const launchWind = expTerr?.bracketsLaunchAltitude
+      ? formatRegionalWind(expTerr.launchWindSpeedMps, expTerr.launchWindDirectionDeg, { bearing: true }) : null;
     const detailRows: [string, string][] = [
       ['Thermal strength · current / legacy', `${displayMetric(hour.thermalVelocityV2Mps?.[selectedCell], 'thermalVelocityV2Mps', hour.status[selectedCell])} · v1: ${displayMetric(hour.thermalVelocityMps[selectedCell], 'thermalVelocityMps', hour.status[selectedCell])}`],
       [`Usable lift top · ${formatQuantity(1, 'lift')} sink`, `${displayMetric(hour.usableLiftTopV2M?.[selectedCell], 'usableLiftTopV2M', hour.status[selectedCell])} · v1: ${displayMetric(hour.usableLiftTopM[selectedCell], 'usableLiftTopM', hour.status[selectedCell])}`],
       [`Paraglider ceiling · ${formatQuantity(1.143, 'lift')} sink`, displayMetric(hour.hcritWxtoflyM?.[selectedCell], 'hcritWxtoflyM', hour.status[selectedCell])],
-      ['Thermal top', fmtM(hour.resolvedThermalTopM?.[selectedCell], 'MSL')],
+      ['Thermal top (parcel)', fmtM(hour.resolvedThermalTopM?.[selectedCell], 'MSL')],
       [`Thermal top · +${formatQuantity(1, 'temperatureDelta')} sensitivity`, fmtM(hour.thermalTopPlus1CM?.[selectedCell], 'MSL')],
       ['Parcel top · legacy', fmtM(hour.boundaryLayerTopM[selectedCell], 'MSL')],
       [`${modelLabel(activeModel)} model boundary-layer depth`, fmtM(hour.pblHeightM[selectedCell], 'AGL')],
@@ -498,9 +503,9 @@ async function main() {
       ['Effective cloud limit (model near-saturation proxy)', fmtM((hour.effectiveCloudLimitM ?? hour.cloudBaseM)[selectedCell], 'MSL')],
       ['Mixed-layer cloud base', fmtM(hour.mixedLayerLclM?.[selectedCell], 'MSL')],
       ['Cu / OD potential', `${hour.cuPotentialM?.[selectedCell] != null ? `${hour.cuPotentialM[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.cuPotentialM[selectedCell], 'elevation')}` : '–'} / ${hour.odPotentialM?.[selectedCell] != null ? `${hour.odPotentialM[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.odPotentialM[selectedCell], 'elevation')}` : '–'}`],
-      [`Wind at ${formatQuantity(10, 'elevation')} AGL (gust)`, w10s != null && w10d != null ? `${compassPoint(w10d)} (${w10d.toFixed(0)}°) @ ${formatQuantity(w10s, 'wind')}${w10g != null ? ` (gust ${formatQuantity(w10g, 'wind')})` : ''}` : 'Unavailable'],
-      ['Launch-elevation wind · experimental', expTerr ? (expTerr.bracketsLaunchAltitude && expTerr.launchWindSpeedMps != null && expTerr.launchWindDirectionDeg != null ? `${compassPoint(expTerr.launchWindDirectionDeg)} (${expTerr.launchWindDirectionDeg.toFixed(0)}°) @ ${formatQuantity(expTerr.launchWindSpeedMps, 'wind')} at ${formatQuantity(expTerr.launchElevationM, 'elevation')} MSL` : `Launch (${formatQuantity(expTerr.launchElevationM, 'elevation')}) outside profile bracket`) : 'Select a launch'],
-      ['BL mean wind & shear', blws != null && blwd != null ? `${compassPoint(blwd)} (${blwd.toFixed(0)}°) @ ${formatQuantity(blws, 'wind')} · shear ${formatQuantity(blsh, 'wind')} (B/S ${bsr?.toFixed(2) ?? '–'})` : 'Unavailable'],
+      [`Wind at ${formatQuantity(10, 'elevation')} above model ground (gust)`, surfaceWindBearing ? `${surfaceWindBearing}${w10g != null ? ` (gust ${formatQuantity(w10g, 'wind')})` : ''}` : 'Unavailable'],
+      ['Estimated wind at launch elevation · experimental', expTerr ? `${launchWind ?? 'Wind unavailable'} at launch (${formatQuantity(expTerr.launchElevationM, 'elevation')} MSL)${launchWind ? ' · local terrain flow unresolved' : ''}` : 'Select a launch'],
+      ['BL mean wind & shear', meanWind ? `${meanWind} · shear ${formatQuantity(blsh, 'wind')} (B/S ${bsr?.toFixed(2) ?? '–'})` : 'Unavailable'],
       [`Vertical motion at ${formatQuantity(925, 'pressure')} / convergence`, `${hour.w925Mps?.[selectedCell] != null ? `${hour.w925Mps[selectedCell]! >= 0 ? '+' : ''}${formatQuantity(hour.w925Mps[selectedCell], 'lift')}` : '–'} · ${hour.convergence10mX1e5?.[selectedCell] != null ? `${hour.convergence10mX1e5[selectedCell]! >= 0 ? '+' : ''}${hour.convergence10mX1e5[selectedCell]!.toFixed(1)} ×10⁻⁵ s⁻¹` : '–'}`],
       ['Sensible / latent heat flux', `${hour.sensibleHeatFluxWm2?.[selectedCell]?.toFixed(0) ?? '–'} / ${hour.latentHeatFluxWm2?.[selectedCell]?.toFixed(0) ?? '–'} W/m²`],
       ['Clouds (total / low / mid / high)', `${hour.cloudCoverPercent?.[selectedCell]?.toFixed(0) ?? '–'}% (${hour.lowCloudPercent?.[selectedCell]?.toFixed(0) ?? '–'}% / ${hour.midCloudPercent?.[selectedCell]?.toFixed(0) ?? '–'}% / ${hour.highCloudPercent?.[selectedCell]?.toFixed(0) ?? '–'}%)`],
@@ -509,7 +514,7 @@ async function main() {
       ['Thermal strength', displayMetric((hour.thermalVelocityV2Mps ?? hour.thermalVelocityMps)[selectedCell], 'thermalVelocityV2Mps', hour.status[selectedCell])],
       ['Usable lift top', displayMetric((hour.usableLiftTopV2M ?? hour.usableLiftTopM)[selectedCell], 'usableLiftTopV2M', hour.status[selectedCell])],
       ['Potential cloud base', fmtFt((hour.surfaceLclM ?? hour.cloudBaseM)[selectedCell])],
-      ['Surface wind', w10s != null && w10d != null ? `${compassPoint(w10d)} ${formatQuantity(w10s, 'wind')}${w10g != null ? ` · gusts ${formatQuantity(w10g, 'wind')}` : ''}` : 'Unavailable'],
+      ['Model surface wind · 10 m', surfaceWind ? `${surfaceWind}${w10g != null ? ` · gusts ${formatQuantity(w10g, 'wind')}` : ''}` : 'Unavailable'],
       ['Cloud cover', displayMetric(hour.cloudCoverPercent?.[selectedCell], 'cloudCoverPercent')],
     ];
     if (!['thermalVelocityV2Mps', 'usableLiftTopV2M', 'surfaceLclM', 'wind10mSpeedMps', 'cloudCoverPercent'].includes(layer)) {

@@ -1,4 +1,4 @@
-import { feetPerMinuteToMps, legacyFeetToMetres, formatQuantity, legacyKnotsToMps, mpsToMph } from './units.ts';
+import { feetPerMinuteToMps, legacyFeetToMetres, formatQuantity, legacyKnotsToMps } from './units.ts';
 // Weather-balloon soundings as Skew-T soundings, read for pilots.
 //
 // Three sources, all for the upper-air station nearest the launch:
@@ -14,11 +14,10 @@ import { feetPerMinuteToMps, legacyFeetToMetres, formatQuantity, legacyKnotsToMp
 // ceiling is reached (which is then flagged as profile-limited).
 
 import {
-  findCloudLayers, findStableLayers, freezingLevel, isThermalTopProfileLimited, liftParcel, thermalTop, windAtHeight,
+  findCloudLayers, findStableLayers, freezingLevel, isThermalTopProfileLimited, liftParcel, thermalTop, windAtHeight, windText,
   type Finding, type Reading, type Sounding, type SoundingPoint,
 } from "./skewt.ts";
 import type { Srg, SrgProfile } from "./srg.ts";
-import { compassPoint } from "./launches.ts";
 
 const G = 9.80665;
 const RD = 287.04;
@@ -306,12 +305,11 @@ export function readChoice(choice: Choice, srg: Srg | null, launchM: number | nu
   if (lid) findings.push({ key: "lid", title: lid.kind === "inversion" ? "Inversion" : "Stable layer", text: `${ftText(lid.baseM)}–${referenceHeight(lid.topM)} · thermal cap.`, tone: "neutral" });
 
   // Wind
-  const at = (z: number) => windAtHeight(s.points, z);
-  const words = (w: { speedMps: number; directionDeg: number } | null) => (!w ? "–" : mpsToMph(w.speedMps) < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${formatQuantity(w.speedMps, "wind")}`);
+  const at = (z: number) => windAtHeight(s.windPoints ?? s.points, z);
   const heights = [launchM ?? station + 600, top ?? station + 2000];
   const [low, high2] = heights.map(at);
-  const wind = [`${referenceHeight(heights[0])}: ${low ? words(low) : "unavailable"}.`];
-  if (Math.abs(heights[1] - heights[0]) > 1) wind.push(`${referenceHeight(heights[1])}: ${high2 ? words(high2) : "unavailable"}.`);
+  const wind = [`${referenceHeight(heights[0])}: ${windText(low)}.`];
+  if (Math.abs(heights[1] - heights[0]) > 1) wind.push(`${referenceHeight(heights[1])}: ${windText(high2)}.`);
   findings.push({ key: "wind", title: "Station profile wind", text: wind.join(" "), tone: "neutral" });
 
   // Stability and storms

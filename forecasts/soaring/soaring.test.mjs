@@ -115,7 +115,9 @@ test('real archived Blanchard columns reproduce every published hour exactly and
   assert.equal(expTerrain.bracketsLaunchAltitude, true);
   assert.equal(expTerrain.launchElevationM, 378.5);
   assert.equal(expTerrain.modelElevationM, 221.7);
-  assert.equal(expTerrain.launchWindSpeedMps, 2.47);
+  // Method 2.3 places the source surface wind at terrain + 10 m, not at ground.
+  assert.equal(expTerrain.launchWindSpeedMps, 2.42);
+  assert.equal(expTerrain.bracketMslM[0], real.terrain + 10);
 
   const wTest = geometricWFromOmegaMps(-1.0, 925, 14.46);
   assert.ok(wTest > 0.08 && wTest < 0.12);

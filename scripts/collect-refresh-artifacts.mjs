@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } 
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { SOARING_CONTRACT_VERSION } from '../forecasts/soaring/science.mjs';
+import { acceptsDiagnosticMethod } from '../forecasts/scripts/lib/diagnostic-completeness.mjs';
 import { githubApi } from './github-actions.mjs';
 import { refreshGroups, refreshWorkflow } from './refresh-policy.mjs';
 import { validateFileTree } from '../forecasts/scripts/lib/artifact-products.mjs';
@@ -38,7 +38,7 @@ export async function collectRefreshArtifacts(output, { repository = process.env
           validateFileTree(temporary);
           const metadata = JSON.parse(readFileSync(join(temporary, '.artifact.json'), 'utf8'));
           if (metadata.schemaVersion !== 1 || metadata.group !== group || metadata.sourceSha !== run.head_sha
-            || metadata.soaringContractVersion !== SOARING_CONTRACT_VERSION || !Number.isFinite(Date.parse(metadata.createdAt))) throw new Error('Incompatible artifact provenance');
+            || !acceptsDiagnosticMethod(metadata.soaringContractVersion, { retained: true }) || !Number.isFinite(Date.parse(metadata.createdAt))) throw new Error('Incompatible artifact provenance');
           const destination = join(output, `data-${group}--${run.id}`);
           if (existsSync(destination)) throw new Error(`Artifact output already exists: ${destination}`);
           renameSync(temporary, destination);

@@ -75,10 +75,10 @@ import { href } from '../lib/site';
 
       <section aria-labelledby="launches-heading">
         <h2 id="launches-heading">Compare launches</h2>
-        <p class="muted">Select a launch to see its forecast. Heights are above sea level (MSL).</p>
+        <p class="muted">Select a launch to see its forecast. Heights are above sea level (MSL). Surface wind is 10 m above model ground; local launch wind may differ.</p>
         <div class="table-scroll">
           <table class="soaring-table" id="launches-table">
-            <thead><tr><th>Launch</th><th>Thermal strength</th><th>Usable lift top</th><th>Potential cloud base</th><th>Surface wind</th></tr></thead>
+            <thead><tr><th>Launch</th><th>Thermal strength</th><th>Usable lift top</th><th>Potential cloud base</th><th>Model surface wind · 10 m</th></tr></thead>
             <tbody id="launches-table-body"></tbody>
           </table>
         </div>
@@ -86,7 +86,7 @@ import { href } from '../lib/site';
           <summary>More launch details</summary>
           <div class="table-scroll">
             <table class="soaring-table">
-              <thead><tr><th>Launch / model elevation</th><th>Thermal strength</th><th>Usable lift top · <Unit kind="lift" value={1} /></th><th>Lift top · <Unit kind="lift" value={1.143} /></th><th>Thermal top</th><th>Earlier parcel estimate</th><th>Model boundary-layer depth</th><th>Potential cloud base</th><th>Cumulus / overcast potential</th><th>Surface wind</th><th>Average wind / shear</th><th>Convergence</th></tr></thead>
+              <thead><tr><th>Launch / model elevation</th><th>Thermal strength</th><th>Usable lift top · <Unit kind="lift" value={1} /></th><th>Lift top · <Unit kind="lift" value={1.143} /></th><th>Thermal top (parcel)</th><th>Earlier parcel estimate</th><th>Model boundary-layer depth</th><th>Potential cloud base</th><th>Cumulus / overcast potential</th><th>Model surface wind · 10 m</th><th>Average wind / shear</th><th>Convergence</th></tr></thead>
               <tbody id="launch-details-body"></tbody>
             </table>
           </div>
@@ -133,7 +133,7 @@ import { href } from '../lib/site';
         <summary id="multimodel-heading">Compare forecast models</summary>
         <div class="table-scroll">
           <table class="soaring-table" id="multimodel-table">
-            <thead><tr><th>Model</th><th>Issued</th><th>Terrain elevation</th><th>Temperature / dew point</th><th>Surface wind (gust)</th><th>Thermal strength</th><th>Usable lift top</th><th>Thermal top / mixing depth</th><th>Potential LCL / cloud limit / cover</th></tr></thead>
+            <thead><tr><th>Model</th><th>Issued</th><th>Terrain elevation</th><th>Temperature / dew point</th><th>Model surface wind · 10 m (gust)</th><th>Thermal strength</th><th>Usable lift top</th><th>Thermal top / mixing depth</th><th>Potential LCL / cloud limit / cover</th></tr></thead>
             <tbody id="multimodel-table-body"></tbody>
           </table>
         </div>

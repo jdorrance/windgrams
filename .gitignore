@@ -30,6 +30,7 @@ artifacts/windgram-visual/
 web/test-results/
 web/playwright-report/
 .codex-attachments/
+.playwright-mcp/
 
-# Immutable public evidence and generated scientific review reports.
+# Local immutable review captures and generated reports; fixtures belong in test/.
 forecasts/.scientific-review/

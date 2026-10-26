@@ -51,3 +51,39 @@ client has verified them. Existing immutable bundles remain readable in their
 original format.
 
 The [operator checks](../README.md#checks) and [website checks](../../web/README.md#checks) cover calculations, publication and rendering. Replaying a fixture establishes reproducibility; [matched observations](../verification/README.md) are needed to measure forecast error.
+
+## Normalized NOAA source experiments
+
+Capture points and an optional region together, decoding each source field once:
+
+```sh
+pnpm run noaa:capture --model hrrr-conus \
+  --reference-time 2026-10-26T06:00:00Z --hours 1,2,3 \
+  --sites selected-launches.json --bounds=-123.5,47.8,-121.5,49 \
+  --mode legacy-pressure --output experiments/hrrr-legacy.json
+```
+
+The site file is an array or a catalogue with a `sites` array. Select only launches
+inside the requested model coverage. Omit `--bounds` for point-only acquisition.
+The output contains raw normalized columns, native cell geometry/terrain,
+selected source hashes and time/field semantics; it does not publish profiles.
+Existing output files are rejected before acquisition; a per-output lock prevents concurrent captures. Failed acquisitions release the lock for a retry. A separate `.metrics.json` records invocation timing and referenced source bytes
+(including reused cache objects). Captures retain the provider implementation
+digest and mark partial columns with explicit missing reasons. Cache receipts are keyed by exact
+source URL and byte range and verified against content hashes on reuse.
+
+For a controlled source-impact experiment, repeat with a new output filename and
+`--mode expanded-pressure`, or with HRRR only `--mode hrrr-native`. These modes
+add actual fields, never interpolated pseudo-levels. The HRRR native inventory
+must contain every selected hybrid level and supplied pressure/height; acquisition
+fails if it is unavailable. RRFS and GFS native are not advertised. GFS uses its own verified 15-level
+pressure inventory and three-hour forecast schedule; six-hour-boundary flux and
+precipitation products are recovered from companion fields with their intervals
+verified. Use `--model gfs --hours 21,24` to exercise both window cases. Keep the selected run,
+hours, cells and diagnostic method fixed when comparing modes, then inspect lower
+profile gaps, terrain masking, pressure, wind rotation and downstream diagnostic
+changes. Accept a production migration only after that measured impact is reviewed.
+
+The shared [provider contract](../../packages/providers/README.md#noaa-source-experiments)
+contains the acquisition limits. Existing regional replay uses the same pressure
+field identities and scalar conversions; its legacy inventory remains unchanged.

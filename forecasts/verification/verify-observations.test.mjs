@@ -88,3 +88,12 @@ test('each metric retains its own support and exact/near-init observations never
   assert.deepEqual(result.byMatchTier['exact-valid-time'].meanProfileWindVectorRmseMps, { comparisons: 1, independentStationDays: 1, mean: 4 });
   assert.equal(result.byMatchTier['near-init-f01-60min'].temperatureMaeC.mean, 20);
 });
+
+test('independent station-days normalize offsets to UTC before deduplicating', () => {
+  const row = { model: 'hrrr-conus', station: { id: 'KMFR' }, soundingValidAt: '2026-11-01T23:30:00-05:00', regime: 'test',
+    leadTimeBucket: 'f00-f06', matchTier: 'exact-valid-time', metrics: { temperatureMaeC: 1 } };
+  const result = summarizeVerifications([row, { ...row, model: 'rrfs', soundingValidAt: '2026-11-02T04:30:00Z' }]);
+  assert.equal(result.independentStationDays, 1);
+  assert.equal(result.byMatchTier['exact-valid-time'].independentStationTimes, 1);
+  assert.equal(result.byMatchTier['exact-valid-time'].temperatureMaeC.independentStationDays, 1);
+});

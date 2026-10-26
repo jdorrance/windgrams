@@ -38,7 +38,7 @@ test("NWS and ECMWF chart data, wind limits, legends and tables share the select
   close(metric[0].limit!, 20 * 1.609344);
   close(windExtras(launch, [300]).band.from, 5 * 1.609344);
   assert.equal(metric[0].arrows![0].inWindow, true, "unit selection preserves the direction window");
-  assert.equal(metricNws.tooltip(nws).find((row) => row.label === "Wind")!.extra, "✓");
+  assert.equal(metricNws.tooltip(nws).find((row) => row.label === "Wind")!.extra, "△");
   assert.match(metricNws.tooltip(nws).find((row) => row.label === "Temperature")!.value, /20 °C/);
   assert.match(metricNws.table!.columns.join(" "), /Wind \(km\/h\).*Mixing ht \(m\)/);
   const metricEcmwf = ecmwfSpec(launch);
@@ -78,6 +78,18 @@ test("unknown launch limits retain weather without bands, thresholds or suitabil
     assert.ok(Number.isFinite(panel.yMax));
     assert.equal(panel.band, undefined);
     assert.equal(panel.limit, undefined);
-    assert.ok(spec.tooltip(ecmwf as never).every(row => row.extra !== "✓"));
+    assert.ok(spec.tooltip(ecmwf as never).every(row => row.extra !== "✓" && row.extra !== "△"));
+  }
+});
+
+test('forecast direction comparisons retain their surface basis and omit calm or missing direction marks', () => {
+  for (const spec of [nwsSpec(launch), ecmwfSpec(launch)]) {
+    assert.match(spec.table!.footnote!, /Surface .*wind may differ from local launch wind/);
+    assert.doesNotMatch(spec.table!.footnote!, /✓ Launch/);
+    for (const windSpeedMps of [0, null]) {
+      const missing = { ...ecmwf, windSpeedMps };
+      assert.equal(spec.tooltip(missing).find(row => row.label === 'Wind')?.extra, undefined);
+      assert.equal(spec.panels([missing])[0].arrows![0].deg, null);
+    }
   }
 });

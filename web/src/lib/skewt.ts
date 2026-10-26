@@ -9,7 +9,8 @@ import { publishedEffectiveCloudLimit, publishedLift } from "./published-lift.ts
 // the top of the lift, and a plain-language reading of all of it.
 
 import type { SiteForecast } from "@azohra/meteo.briefing/contract";
-import { DRY_ADIABATIC_LAPSE_C_PER_M, lapseRateCPer1000Ft, parcelAscent, stabilityClass, windToComponents, componentsToWind } from "@azohra/meteo.briefing/derive";
+import { DRY_ADIABATIC_LAPSE_C_PER_M, lapseRateCPer1000Ft, parcelAscent, stabilityClass } from "@azohra/meteo.briefing/derive";
+import { sampleWindAtHeight } from '@windgrams/meteorology';
 import { compassPoint } from "./launches.ts";
 
 type Hour = SiteForecast["hours"][number];
@@ -33,7 +34,7 @@ export interface SoundingPoint {
   windDirectionDeg: number | null;
   /** Wind sampling height when it differs from the temperature anchor (model 10 m wind). */
   windHeightM?: number;
-  /** The surface (2 m / 10 m) values at model elevation. */
+  /** The model surface values: temperature/moisture at 2 m, wind at windHeightM. */
   surface: boolean;
 }
 
@@ -45,6 +46,9 @@ export interface ParcelSample {
   /** Virtual-temperature excess with complete moisture; dry-temperature excess for a qualified dry curve. */
   buoyancyC: number;
 }
+
+/** Wind support is independent of whether temperature or dew point can be plotted. */
+export type SoundingWindPoint = Pick<SoundingPoint, 'heightM' | 'windHeightM' | 'windSpeedMps' | 'windDirectionDeg'> & { pressureHpa?: number };
 
 interface ParcelCurve {
   parcel: ParcelSample[];
@@ -68,6 +72,7 @@ export interface Sounding extends ParcelCurve {
   modelElevationM: number;
   /** Surface first, then the published levels upward. */
   points: SoundingPoint[];
+  windPoints?: SoundingWindPoint[];
   boundaryLayerTopM: number | null;
   thermalVelocityMps: number | null;
   cloudBaseM: number | null;
@@ -121,8 +126,11 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
   levels.sort((a, b) => a.heightM - b.heightM);
   if (levels.length < 2) return null;
 
+  const modelPressure = finiteScalar((s as { surfacePressureHpa?: unknown }).surfacePressureHpa);
+  // The parcel calculation retains its model-ground initialization convention.
+  // The returned environmental point is moved to its measured 2 m height below.
   const surface: SoundingPoint = {
-    pressureHpa: surfacePressureHpa({ heightM: zs, temperatureC: ts }, levels[0]),
+    pressureHpa: modelPressure !== null && modelPressure > 0 ? modelPressure : surfacePressureHpa({ heightM: zs, temperatureC: ts }, levels[0]),
     heightM: zs,
     temperatureC: ts,
     dewPointC: Math.min(tds, ts),
@@ -131,10 +139,20 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
     windHeightM: zs + 10,
     surface: true,
   };
-  const points = [surface, ...levels];
+  const parcelPoints = [surface, ...levels];
+  const points = [{ ...surface, heightM: zs + 2, pressureHpa: pressureAtHeight(parcelPoints, zs + 2) }, ...levels];
+  const windPoints: SoundingWindPoint[] = [
+    { heightM: zs + 10, windSpeedMps: surface.windSpeedMps, windDirectionDeg: surface.windDirectionDeg },
+    ...hour.levels.flatMap(level => {
+      const heightM = scalar(level.heightM), pressureHpa = scalar(level.pressureHpa);
+      return heightM !== null && heightM > zs ? [{ heightM,
+        windSpeedMps: scalar(level.windSpeedMps), windDirectionDeg: scalar(level.windDirectionDeg),
+        ...(pressureHpa !== null ? { pressureHpa } : {}) }] : [];
+    }),
+  ].sort((a, b) => a.heightM - b.heightM);
   const topM = levels[levels.length - 1].heightM;
 
-  const { parcel, lclM, dryParcelOnly } = liftParcel(points, ts, surface.dewPointC);
+  const { parcel, lclM, dryParcelOnly } = liftParcel(parcelPoints, ts, surface.dewPointC);
 
   const d = publishedLift(hour);
   const w = scalar(d.thermalVelocityMps);
@@ -149,6 +167,7 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
     validAt: hour.validAt,
     modelElevationM: zs,
     points,
+    windPoints,
     parcel,
     lclM,
     boundaryLayerTopM: bl,
@@ -271,25 +290,9 @@ export function environmentAtHeight(points: SoundingPoint[], z: number) {
 }
 
 /** Wind at a height in metres MSL, interpolated only within the available wind column. */
-export function windAtHeight(points: SoundingPoint[], z: number): { speedMps: number; directionDeg: number } | null {
-  if (!Number.isFinite(z)) return null;
-  const known = points
-    .filter((p) => Number.isFinite(p.windSpeedMps) && Number.isFinite(p.windDirectionDeg))
-    .map((p) => ({ ...p, heightM: p.windHeightM ?? p.heightM }))
-    .sort((a, b) => a.heightM - b.heightM);
-  if (known.length === 0 || z < known[0].heightM) return null;
-  const last = known[known.length - 1];
-  if (z > last.heightM) return null;
-  const exact = known.find((p) => p.heightM === z);
-  if (exact) return { speedMps: exact.windSpeedMps!, directionDeg: exact.windDirectionDeg! };
-  let i = 0;
-  while (known[i + 1].heightM < z) i += 1;
-  const a = known[i];
-  const b = known[i + 1];
-  const f = (z - a.heightM) / (b.heightM - a.heightM);
-  const ua = windToComponents(a.windSpeedMps!, a.windDirectionDeg!);
-  const ub = windToComponents(b.windSpeedMps!, b.windDirectionDeg!);
-  return componentsToWind(ua.uMps + f * (ub.uMps - ua.uMps), ua.vMps + f * (ub.vMps - ua.vMps));
+export function windAtHeight(points: readonly SoundingWindPoint[], z: number): { speedMps: number; directionDeg: number | null } | null {
+  const wind = sampleWindAtHeight(points.map(point => ({ ...point, heightM: point.windHeightM ?? point.heightM })), z);
+  return wind.status === 'available' ? { speedMps: wind.speedMps, directionDeg: wind.directionDeg } : null;
 }
 
 // ── features ────────────────────────────────────────────────────────────────
@@ -371,8 +374,13 @@ const heightText = (m: number) => {
   return `${(Math.round(height / step) * step).toLocaleString("en-US")} ${getUnitSystem() === "metric" ? "m" : "ft"}`;
 };
 const referenceHeightText = (m: number) => formatQuantity(m, "elevation");
-const speedText = (mps: number) => formatQuantity(mps, "wind");
-const windText = (w: { speedMps: number; directionDeg: number }) => (mpsToMph(w.speedMps) < 2 ? "calm" : `${compassPoint(w.directionDeg)} ${speedText(w.speedMps)}`);
+/** One wording for model, balloon and hovered sounding winds. */
+export function windText(wind: ReturnType<typeof windAtHeight>): string {
+  if (!wind) return 'unavailable';
+  if (mpsToMph(wind.speedMps) < 2) return 'calm';
+  const direction = wind.directionDeg === null ? 'Direction unavailable' : compassPoint(wind.directionDeg);
+  return `${direction} ${formatQuantity(wind.speedMps, 'wind')}`;
+}
 
 /** Thermal strength words for Deardorff's w* (m/s). */
 export function strengthWords(wStar: number | null): { word: string; tone: Tone } {
@@ -482,17 +490,18 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   // Aloft: the top of the lift, or about 3,000 ft above launch when there are no thermals.
   const topHeight = hasThermals ? (top ?? bl!) : launch + 900;
   const surfaceWindHeight = sounding.points[0].windHeightM ?? sounding.modelElevationM;
+  const windPoints = sounding.windPoints ?? sounding.points;
   const windReference = launchM ?? surfaceWindHeight;
-  const atLaunch = windAtHeight(sounding.points, windReference);
-  const atTop = windAtHeight(sounding.points, topHeight);
+  const atLaunch = windAtHeight(windPoints, windReference);
+  const atTop = windAtHeight(windPoints, topHeight);
   const windParts: string[] = [];
   if (launchM !== null) {
-    if (atLaunch) windParts.push(`Launch (${referenceHeightText(launchM)} MSL): ${windText(atLaunch)}.`);
+    if (atLaunch) windParts.push(`Estimated wind at launch elevation (${referenceHeightText(launchM)} MSL): ${windText(atLaunch)}. Local terrain flow is unresolved.`);
     else if (launchM < sounding.modelElevationM) windParts.push(`Launch wind unavailable (${referenceHeightText(launchM)} MSL) · Below model ground.`);
     else windParts.push(`Wind unavailable at launch elevation (${referenceHeightText(launchM)} MSL).`);
   }
   if (launchM === null || !atLaunch) {
-    const surfaceWind = windAtHeight(sounding.points, surfaceWindHeight);
+    const surfaceWind = windAtHeight(windPoints, surfaceWindHeight);
     if (surfaceWind) windParts.push(`Model surface (${formatQuantity(surfaceWindHeight - sounding.modelElevationM, "elevation")} AGL): ${windText(surfaceWind)}.`);
   }
   if (topHeight !== windReference) {

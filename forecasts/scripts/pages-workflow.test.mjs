@@ -26,6 +26,7 @@ test('provider completions publish independently while preserving schedules', ()
   }
   const publish = workflow.split('  publish:')[1];
   assert.equal(publish.includes('needs:'), false, 'publisher has no provider completion barrier');
+  assert.match(publish, /timeout-minutes: 60/, 'allow the Check wait and complete retained-history validation');
   assert.match(publish, /concurrency:\n      group: pages/);
   assert.match(workflow, /types: \[completed\]/);
   assert.match(workflow, /head_repository.full_name == github.repository/);
@@ -34,15 +35,27 @@ test('provider completions publish independently while preserving schedules', ()
 
 test('publication seeds, collects, validates, assembles and measures before deploying', () => {
   const publish = workflow.split('  publish:')[1];
-  const commands = ['scripts/seed-published.mjs', 'scripts/collect-refresh-artifacts.mjs',
+  const commands = ['scripts/await-publication-check.mjs', 'scripts/seed-published.mjs', 'scripts/collect-refresh-artifacts.mjs',
     'scripts/prepare-publication.mjs', 'pnpm run build', 'scripts/prepare-pages.mjs', 'actions/upload-pages-artifact@', 'actions/deploy-pages@'];
   let previous = -1;
   for (const command of commands) { const index = publish.indexOf(command); assert.ok(index > previous, command); previous = index; }
   assert.match(publish, /--dry-run/);
+  assert.match(publish, /Require successful checks for this checkout\n        if: \$\{\{ !inputs.dry_run \}\}\n        run: node scripts\/await-publication-check.mjs/);
   assert.match(publish, /if: inputs.dry_run\n        run: node forecasts\/scripts\/prepare-publication.mjs .* --dry-run/);
   assert.match(publish, /!inputs.dry_run/);
   assert.match(publish, /PUBLIC_WINDGRAMS_DATA_BASE:/);
   assert.match(publish, /ref: main/);
+  for (const source of [publish, refresh]) {
+    assert.ok(source.indexOf('scripts/prepare-refresh-runner.mjs') < source.indexOf('./.github/actions/setup-pnpm'));
+    assert.ok(source.indexOf('scripts/prepare-refresh-runner.mjs') < source.indexOf('actions/cache/restore@'));
+    assert.match(source, /key: issued-data-v2-\$\{\{ github.run_id \}\}/);
+    assert.match(source, /restore-keys: \|\n            issued-data-v2-\n            forecast-data-/,
+      'gzip readers prefer their cache format and can migrate legacy caches');
+    assert.doesNotMatch(source, /key: forecast-data-/,
+      'old readers must never restore new gzip archives through their legacy prefix');
+  }
+  assert.match(publish, /node scripts\/prepare-refresh-runner.mjs pages/);
+  assert.match(refresh, /node scripts\/prepare-refresh-runner.mjs "\$REFRESH_GROUP"/);
 });
 
 test('refresh always packs retained products and preserves native decoder setup', () => {
@@ -57,13 +70,14 @@ test('refresh always packs retained products and preserves native decoder setup'
   assert.match(monitor, /scripts\/monitor-served.mjs/);
 });
 
-test('token-dispatched refreshes request publication after upload, including failed refreshes', () => {
+test('token-dispatched refreshes require a successful artifact upload, including retained data after acquisition failures', () => {
   const dispatch = refresh.split('- name: Request publication after token dispatch')[1];
   assert.ok(dispatch, 'token dispatches need an explicit replacement for suppressed workflow_run events');
   assert.ok(refresh.indexOf('Request publication after token dispatch') > refresh.indexOf('actions/upload-artifact@'));
   const condition = dispatch.match(/if: \$\{\{ (.*) \}\}/)?.[1];
-  assert.equal(condition, "!cancelled() && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]'",
-    'continue after failures, but avoid duplicate requests for scheduled or owner-dispatched runs');
+  assert.equal(condition, "!cancelled() && steps.artifact.outcome == 'success' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]'",
+    'acquisition failure can publish retained uploads; a failed upload or early runner guard cannot request publication');
+  assert.match(refresh, /actions\/upload-artifact@[^\n]+\n        id: artifact\n        if: always\(\)/);
   assert.match(dispatch, /GH_TOKEN: \$\{\{ secrets.GITHUB_TOKEN \}\}/);
   assert.match(dispatch, /gh workflow run pages\.yml --repo "\$GITHUB_REPOSITORY" --ref main -f refresh=none\s*$/);
 });
@@ -99,4 +113,15 @@ test('Pages configuration command writes the exact job outputs used by acquisiti
   assert.equal(result.status, 0, result.stderr);
   assert.equal(readFileSync(output, 'utf8'), 'site=https://pilot.github.io/windgrams\nbase=/windgrams\ndata=https://pilot.github.io/forecast\n');
   assert.match(workflow, /run: node scripts\/pages-config\.mjs/);
+});
+
+
+test('science source pushes refresh model producers without publication feedback loops', () => {
+  const source = readFileSync(new URL('../../.github/workflows/refresh-science.yml', import.meta.url), 'utf8');
+  assert.match(source, /push:\n    branches: \[main\]/);
+  for (const path of ['packages/soaring/src/**', 'packages/providers/src/**', 'packages/contracts/src/**', 'forecasts/soaring/**', 'forecasts/scripts/build-*.mjs', 'pnpm-lock.yaml']) assert.ok(source.includes(path), path);
+  assert.match(source, /node scripts\/dispatch-refresh.mjs models/);
+  for (const event of ['workflow_run:', 'workflow_dispatch:', 'schedule:']) assert.equal(source.includes(event), false);
+  assert.equal(source.includes('web/**'), false, 'display-only changes do not redownload model source');
+  assert.equal(source.includes('forecasts/sites.json'), false, 'catalogue pushes remain owned by provider-specific workflows');
 });

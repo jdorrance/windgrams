@@ -1,5 +1,6 @@
 import { forecastCapabilities, launchCountry, defaultSoaringRegion, shortModelLabel } from "../lib/forecast-capabilities.ts";
 import { forecastCoversWindow, initialForecastDay, launchDayWindow, launchConditions, matchingHourIndex, peakLiftIndex, validDateKey } from "../lib/launch-forecast.ts";
+import { forecastDataSupport } from "../lib/forecast-data-support.ts";
 // Launch page: day tabs and a model switch scope the meteogram and the NWS
 // charts below them. All forecast data is read from /data at view time, so the
 // page is always as fresh as the dataset without rebuilding the site.
@@ -385,6 +386,16 @@ function renderMeteogram() {
 
 const hourFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
 
+function replaceDetails(host: HTMLElement, rows: readonly (readonly [string, string])[]) {
+  host.replaceChildren(...rows.map(([label, value]) => {
+    const group = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = label;
+    dd.textContent = value;
+    group.append(dt, dd);
+    return group;
+  }));
+}
+
 function renderConditions(hour: SiteForecast['hours'][number], index: number) {
   const label = hourFormat.format(new Date(hour.validAt)).replace(":00", "");
   const slider = $<HTMLInputElement>('forecast-hour');
@@ -396,14 +407,15 @@ function renderConditions(hour: SiteForecast['hours'][number], index: number) {
   $('forecast-hour-panel').hidden = false;
   $('forecast-conditions-panel').hidden = false;
   $('forecast-hour-panel').dataset.validAt = hour.validAt;
-  const conditions = launchConditions(hour, launch, launchElevationM);
-  const host = $('forecast-conditions'); host.replaceChildren();
-  for (const [lbl, value] of conditions.values) {
-    const group = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
-    dt.textContent = lbl; dd.textContent = value; group.append(dt, dd); host.append(group);
-  }
+  const conditions = launchConditions(hour, launch, launchElevationM, model ? profiles.get(model)?.profile.site.modelElevationM ?? null : null);
+  replaceDetails($('forecast-conditions'), conditions.values);
   $('forecast-wind-note').textContent = conditions.issues.join(' · ');
   $('forecast-wind-note').hidden = !conditions.issues.length;
+  $('forecast-wind-basis').textContent = conditions.windBasis;
+  const support = forecastDataSupport(hour);
+  replaceDetails($('forecast-data-support'), support.rows);
+  $('forecast-data-limit').textContent = support.limit ?? '';
+  $('forecast-data-limit').hidden = support.limit === null;
 }
 
 function showSkewTHour(index: number) {

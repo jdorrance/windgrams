@@ -29,6 +29,10 @@ geometric vertical velocity. The pressure fallback is a compatibility estimate,
 not a terrain-dependent standard atmosphere or a measured surface pressure.
 [`computeBoundaryLayerWind`](src/boundary-layer-wind.ts) interpolates the layer
 boundaries and averages wind components by height.
+[`sampleWindAtHeight`](src/wind-sampling.ts) samples adjacent wind nodes at their
+physical MSL heights. It returns the bracket or an explicit unavailable reason;
+missing winds and duplicate heights block interpolation, and it never extrapolates.
+Zero speed remains calm even without a direction.
 
 The [`/sun` module](src/sun.ts) provides solar position, refraction, a sun vector
 and sunrise/sunset times. It accepts UTC epoch milliseconds and coordinates in

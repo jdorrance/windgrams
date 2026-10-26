@@ -1,22 +1,43 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { prepareRefreshRunner } from './prepare-refresh-runner.mjs';
+import { MIN_FORECAST_FREE_BYTES, prepareRefreshRunner } from './prepare-refresh-runner.mjs';
+import { refreshGroups } from './refresh-policy.mjs';
 import { refreshCommands, refreshProvider } from '../forecasts/scripts/refresh-provider.mjs';
 
-test('runner disk cleanup is confined to the ECCC disposable GitHub Linux runner', () => {
+test('runner disk cleanup covers every shared-cache reader on disposable GitHub Linux jobs', () => {
   const calls = [], run = (...args) => calls.push(args);
-  assert.equal(prepareRefreshRunner('eccc', { platform: 'darwin', githubActions: 'true', run }), false);
-  // undefined selects the process.env default, which is true inside Actions.
-  for (const githubActions of [null, '', 'false']) {
-    assert.equal(prepareRefreshRunner('eccc', { platform: 'linux', githubActions, run }), false);
+  const options = { platform: 'linux', githubActions: 'true', runnerEnvironment: 'github-hosted', run,
+    availableBytes: () => { throw new Error('Unexpected disk access'); } };
+  for (const overrides of [{ platform: 'darwin' }, { githubActions: null }, { githubActions: '' }, { githubActions: 'false' },
+    { runnerEnvironment: 'self-hosted' }, { runnerEnvironment: '' }]) {
+    assert.equal(prepareRefreshRunner('eccc', { ...options, ...overrides }), false);
   }
-  assert.equal(prepareRefreshRunner('rrfs', { platform: 'linux', githubActions: 'true', run }), false);
+  assert.equal(prepareRefreshRunner('unknown', options), false);
   assert.equal(calls.length, 0);
-  assert.equal(prepareRefreshRunner('eccc', { platform: 'linux', githubActions: 'true', run }), true);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][0], 'sudo');
-  assert.deepEqual(calls[0][1].slice(0, 2), ['rm', '-rf']);
-  assert.ok(calls[0][1].slice(2).every(path => path.startsWith('/usr/') || path.startsWith('/opt/')));
+  for (const group of [...refreshGroups, 'pages']) {
+    let samples = 0;
+    const result = prepareRefreshRunner(group, { ...options, availableBytes: () => ++samples === 1 ? 1 : MIN_FORECAST_FREE_BYTES });
+    assert.deepEqual(result, { group, freeBytesBefore: 1, freeBytes: MIN_FORECAST_FREE_BYTES, minimumFreeBytes: MIN_FORECAST_FREE_BYTES, cleaned: true });
+  }
+  assert.equal(calls.length, refreshGroups.length + 1);
+  for (const [command, args] of calls) {
+    assert.equal(command, 'sudo');
+    assert.deepEqual(args, ['rm', '-rf', '/usr/share/dotnet', '/usr/local/lib/android', '/opt/ghc', '/opt/hostedtoolcache/CodeQL', '/usr/local/share/boost']);
+  }
+});
+
+test('runner reservation measures headroom and stops before cache extraction if cleanup is insufficient', () => {
+  const options = { platform: 'linux', githubActions: 'true', runnerEnvironment: 'github-hosted' };
+  const enough = prepareRefreshRunner('pages', { ...options, availableBytes: () => MIN_FORECAST_FREE_BYTES,
+    run: () => { throw new Error('Cleanup is unnecessary'); } });
+  assert.equal(enough.cleaned, false);
+  let cleanups = 0;
+  for (const group of ['dwd', 'observations', 'terrain']) {
+    assert.throws(() => prepareRefreshRunner(group, { ...options, availableBytes: () => MIN_FORECAST_FREE_BYTES - 1,
+      run: () => { cleanups++; } }), /Insufficient forecast workspace.*before cache restore/);
+  }
+  assert.equal(cleanups, 3);
+  assert.throws(() => prepareRefreshRunner('rrfs', { ...options, availableBytes: () => NaN }), /Cannot measure/);
 });
 
 test('RRFS keeps bounded readiness retries and a failed region does not skip downstream validation', () => {

@@ -16,12 +16,13 @@ import {
   WXTOFLY_SINK_MPS,
   computeThermalVelocityMps,
   computeUsableLiftTopV2M,
-  resolvedParcelDepthM,
 } from './convective-lift.js';
 import { computeBoundaryLayerWind } from '@windgrams/meteorology';
 import { computeExperimentalTerrainAdjustment } from './terrain-adjustment.js';
+import { verticalSampling } from './vertical-support.js';
+import { resolveParcelDepth } from './parcel-depth.js';
 
-export const SOARING_CONTRACT_VERSION = '2.2.0';
+export const SOARING_CONTRACT_VERSION = '2.3.0';
 export const metrics = ['thermalVelocityMps', 'usableLiftTopM', 'boundaryLayerTopM', 'cloudBaseM', 'pblHeightM'];
 export const v2LayerMetrics = [
   'resolvedThermalTopM',
@@ -84,29 +85,17 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
   const sfcLclAgl = parcelLclAglM(source.temperatureC, surfaceDewPointC);
   const surfaceLclM = sfcLclAgl == null ? null : Math.max(terrain, terrain + sfcLclAgl);
 
-  const resolvedDepthM = resolvedParcelDepthM(
-    source.temperatureC,
-    source.sensibleHeatFluxWm2,
-    source.latentHeatFluxWm2,
-    source.pblHeightM,
-    terrain,
-    levels,
-    0,
-  );
+  const parcel = { surfaceTemperatureC: source.temperatureC,
+    sensibleHeatFluxWm2: source.sensibleHeatFluxWm2, latentHeatFluxWm2: source.latentHeatFluxWm2,
+    pblHeightM: source.pblHeightM, modelElevationM: terrain, levels };
+  const { depthM: resolvedDepthM, support: thermalDepth } = resolveParcelDepth(parcel);
   const resolvedThermalTopM = resolvedDepthM != null && resolvedDepthM > 0 ? terrain + resolvedDepthM : null;
-
-  const plus1DepthM = resolvedParcelDepthM(
-    source.temperatureC,
-    source.sensibleHeatFluxWm2,
-    source.latentHeatFluxWm2,
-    source.pblHeightM,
-    terrain,
-    levels,
-    1.0,
-  );
+  const { depthM: plus1DepthM } = resolveParcelDepth({ ...parcel, deltaTC: 1 });
   const thermalTopPlus1CM = plus1DepthM != null && plus1DepthM > 0 ? terrain + plus1DepthM : null;
 
-  const pSfcHpa = hypsometricSurfacePressureHpa(terrain, source.temperatureC, levels[0]);
+  const hasModelPressure = finite(source.surfacePressureHpa) && source.surfacePressureHpa > 0;
+  const pSfcHpa = hasModelPressure ? source.surfacePressureHpa!
+    : hypsometricSurfacePressureHpa(terrain, source.temperatureC, levels[0]);
   const thermalVelocityV2Raw = computeThermalVelocityMps({
     surfaceTemperatureC: source.temperatureC,
     surfaceDewPointC,
@@ -127,34 +116,19 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
   const cuPotentialM = resolvedThermalTopM != null && surfaceLclM != null ? resolvedThermalTopM - surfaceLclM : null;
   const odPotentialM = resolvedThermalTopM != null && mixedLayerLclM != null ? resolvedThermalTopM - mixedLayerLclM : null;
 
-  const effectiveCloudLimitM = v1Hour.derived?.cloudBaseM ?? surfaceLclM;
+  const baselineCloudLimitM = v1Hour.derived?.cloudBaseM;
+  const effectiveCloudLimitM = finite(baselineCloudLimitM) ? baselineCloudLimitM : surfaceLclM;
 
   // Consistent v2 usable-lift diagnostics computed from resolvedThermalTopM and thermalVelocityV2Mps
-  const usableLiftTopV2M = computeUsableLiftTopV2M({
-    modelElevationM: terrain,
-    resolvedThermalTopM,
-    thermalVelocityV2Mps,
-    cloudBaseM: effectiveCloudLimitM,
-  }, 1.0);
-
-  const hcritWxtoflyM = computeUsableLiftTopV2M({
-    modelElevationM: terrain,
-    resolvedThermalTopM,
-    thermalVelocityV2Mps,
-    cloudBaseM: effectiveCloudLimitM,
-  }, WXTOFLY_SINK_MPS);
-
-  const dryHcritM = computeUsableLiftTopV2M({
-    modelElevationM: terrain,
-    resolvedThermalTopM,
-    thermalVelocityV2Mps,
-    cloudBaseM: null,
-  }, 1.0);
+  const lift = { modelElevationM: terrain, resolvedThermalTopM, thermalVelocityV2Mps, cloudBaseM: effectiveCloudLimitM };
+  const usableLiftTopV2M = computeUsableLiftTopV2M(lift, 1);
+  const hcritWxtoflyM = computeUsableLiftTopV2M(lift, WXTOFLY_SINK_MPS);
+  const dryHcritM = computeUsableLiftTopV2M({ ...lift, cloudBaseM: null }, 1);
 
   // Height-weighted boundary-layer mean wind, BL top wind, and vector shear clipped at actual BL top
   const blWind = layerTopM == null ? null : computeBoundaryLayerWind(
     terrain,
-   { windSpeedMps: source.windSpeedMps, windDirectionDeg: source.windDirectionDeg },
+    { windSpeedMps: source.windSpeedMps, windDirectionDeg: source.windDirectionDeg },
     levels,
     layerTopM,
     finite(source.wind80mSpeedMps) && finite(source.wind80mDirectionDeg)
@@ -174,14 +148,12 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
   let minDownwardVelocityMps: number | null = null;
   const wByPressure: Record<number, number> = {};
   for (const l of rawLevels) {
-    if (l.heightM <= terrain + 20) continue;
+    if (!finite(l.heightM) || l.heightM <= terrain + 20) continue;
     const w = geometricWFromOmegaMps(l.verticalVelocityPaS, l.pressureHpa, l.temperatureC);
     if (w != null) {
       wByPressure[l.pressureHpa] = w;
-      if (l.heightM > terrain + 20) {
-        if (maxUpwardVelocityMps === null || w > maxUpwardVelocityMps) maxUpwardVelocityMps = w;
-        if (minDownwardVelocityMps === null || w < minDownwardVelocityMps) minDownwardVelocityMps = w;
-      }
+      if (maxUpwardVelocityMps === null || w > maxUpwardVelocityMps) maxUpwardVelocityMps = w;
+      if (minDownwardVelocityMps === null || w < minDownwardVelocityMps) minDownwardVelocityMps = w;
     }
   }
 
@@ -192,6 +164,11 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
 
   const result: SoaringDiagnostics = {
     contractVersion: SOARING_CONTRACT_VERSION,
+    diagnosticSupport: {
+      thermalDepth,
+      cloudLimit: { source: finite(baselineCloudLimitM) ? 'baseline-cloud-base' : surfaceLclM != null ? 'surface-lcl' : 'unavailable' },
+      surfacePressure: { source: hasModelPressure ? 'model' : 'hypsometric', valueHpa: pSfcHpa },
+    },
     resolvedThermalTopM: round1(resolvedThermalTopM),
     thermalTopPlus1CM: round1(thermalTopPlus1CM),
     thermalVelocityV2Mps,
@@ -239,12 +216,13 @@ export function deriveDiagnosticsV2(terrain: number | null | undefined, source: 
       hasUpperAirAbove600Levels: hasAbove600,
       has80mWind: finite(source.wind80mSpeedMps),
       synthesizedLevels: 0,
+      sampling: verticalSampling(terrain, rawLevels),
     },
   };
 
   if (finite(options.launchElevationM)) {
     result.experimental = {
-      terrainAdjustment: computeExperimentalTerrainAdjustment(terrain, options.launchElevationM, source, levels),
+      terrainAdjustment: computeExperimentalTerrainAdjustment(terrain, options.launchElevationM, source, rawLevels),
     };
   }
 

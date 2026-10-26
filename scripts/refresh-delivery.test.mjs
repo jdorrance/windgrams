@@ -180,16 +180,16 @@ test('all refresh dispatches are attempted independently and targeted aliases pr
   assert.equal(calls.length, refreshGroups.length);
 });
 
-test('provider stage failures cannot skip remaining validation or another provider dispatch', () => {
+test('point acquisition failure still validates retained RRFS forecasts without starting retired regional work', () => {
   const commands = refreshCommands('rrfs', 'https://example.test/data');
-  assert.deepEqual(commands.map(item => item.stage), ['seed', 'acquire', 'regional', 'validate']);
+  assert.deepEqual(commands.map(item => item.stage), ['seed', 'acquire', 'validate']);
   const calls = [];
   const outcomes = refreshProvider('rrfs', 'https://example.test/data', args => {
     calls.push(args[0]); if (args[0].includes('run-provider')) throw new Error('upstream unavailable');
   });
   assert.equal(outcomes[1].ok, false);
   assert.equal(outcomes.at(-1).ok, true);
-  assert.equal(calls.length, commands.length);
+  assert.deepEqual(calls, ['scripts/seed-published.mjs', 'scripts/run-provider.mjs', 'scripts/validate-rrfs.mjs']);
   assert.throws(() => refreshCommands('unknown', 'url'), /Unknown/);
 });
 

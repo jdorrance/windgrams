@@ -27,8 +27,6 @@ The configured NOAA source is `noaa-rrfs-ops-pds`, with 00/06/12/18 UTC CONUS ru
 ```sh
 pnpm run build:model rrfs
 node scripts/validate-rrfs.mjs --data data --sites sites.json
-node scripts/build-live-soaring.mjs --model rrfs --output data
-node scripts/merge-soaring-regions.mjs --output data
 node scripts/write-runs-index.mjs --output data
 ```
 
@@ -152,7 +150,9 @@ Complete newer products replace their retained counterparts. Older runs, partial
 
 Preparation works in a temporary copy of the forecast products. If no point model is complete, or terrain validation fails, the original dataset is unchanged. Sunlight and scratch caches are transferred without copying their bytes. A dry run performs the same preparation and checks, then discards the temporary result.
 
-Seeding checks immutable files against SHA-256 hashes. Pages keeps each active regional case's current and previous bundle, plus historical cases. Packaging compacts ordinary JSON, preserves bundle bytes and reports size by product. It warns at 800 MB and stops at 1 GB. Forecast history stays in provider artifacts and caches rather than Pages; see [history retention](../verification/README.md#source-columns-and-retention). Refresh artifacts expire after two days, with the published dataset and saved cache providing the fallback, and the weekly [issued-history backup](#issued-history-backup-and-restore) holding the durable copy if the cache is evicted.
+Seeding checks immutable files against SHA-256 hashes. Pages keeps each active regional case's current and previous bundle, plus historical cases except retired public regions. The North Sound and Shenandoah/Blue Ridge grids are retired to reserve delivery capacity for Mexican launch forecasts. Publication excludes their generated map bundles and catalogue entries, including copies in older caches and artifacts. Their point forecasts, issued point history and source replay fixtures remain available; Armenia's ICON-EU grid continues to publish.
+
+Packaging compacts ordinary JSON, preserves bundle bytes and reports size by product. It warns at 800 MB and stops at 1 GB. Forecast history stays in provider artifacts and caches rather than Pages; see [history retention](../verification/README.md#source-columns-and-retention). Refresh artifacts expire after two days, with the published dataset and saved cache providing the fallback, and the weekly [issued-history backup](#issued-history-backup-and-restore) holding the durable copy if the cache is evicted.
 
 Archive storage uses gzip for profile payloads while revision identities continue
 hashing the original JSON bytes. CI restores `issued-data-v2-*` caches first and

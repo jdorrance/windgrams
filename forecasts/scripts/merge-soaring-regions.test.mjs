@@ -2,6 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mergeRegionIndexes } from './merge-soaring-regions.mjs';
 
+test('Armenia becomes the default after retired primary grids and nested retired pointers are removed', () => {
+  const primary = { trialRegionId: 'north-sound', regions: [{ id: 'north-sound', caseId: 'north-sound-20261021-00z-live' }] };
+  const icon = { trialRegionId: 'armenia', regions: [{ id: 'armenia', status: 'active-verified-trial', caseId: 'armenia-icon-eu-live',
+    nativeModels: [{ model: 'icon-eu', caseId: 'armenia-icon-eu-live', expandedCaseId: 'north-sound-expanded-v2' }] }] };
+  const result = mergeRegionIndexes(primary, null, () => true, icon);
+  assert.equal(result.trialRegionId, 'armenia');
+  assert.deepEqual(result.regions.map(region => region.id), ['armenia']);
+  assert.deepEqual(result.regions[0].nativeModels, [{ model: 'icon-eu', caseId: 'armenia-icon-eu-live' }]);
+  assert.equal(icon.regions[0].nativeModels[0].expandedCaseId, 'north-sound-expanded-v2', 'source metadata remains unchanged');
+});
+
 test('independent model overlays retain primary and last-good native case pointers', () => {
   const primary = { regions: [
     { id: 'north', caseId: 'north-hrrr-new', nativeModels: [{ model: 'rrfs', caseId: 'north-rrfs-old' }] },

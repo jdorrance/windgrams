@@ -58,9 +58,10 @@ async function main() {
   const { values } = parseArgs({
     options: {
       source: { type: "string", default: "data" },
-      case: { type: "string", default: "north-sound-20261021-00z" },
+      case: { type: "string" },
     },
   });
+  if (!values.case) throw new Error('Specify the regional case to publish with --case CASE_ID');
   const store = storeFromEnv();
   const result = await publishSoaringCase(values.source, values.case, store);
   console.log(`Published ${result.uploadedCount} soaring object(s) for ${result.caseId} (${result.bundle}) to ${result.storeName}`);

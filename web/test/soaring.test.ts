@@ -6,9 +6,10 @@ import { availableReplayLayers, crossSectionHeightScale, refreshReplayLayerLabel
 import { LAYER_SPECS, buildCrossSectionLinePath, defaultReplayQuery, displayMetric, forecastHourAtValidTime, historicalLabel, nativeModels, regionForCase, replayLocation, replaySelection, selectedState, setReplaySelectionQuery, type RegionCatalogue, type ReplayManifest, type ReplayHour } from '../src/lib/soaring.ts';
 
 test('replay links preserve the project base and reject unknown cases', () => {
-  assert.equal(replayLocation('?hour=27','/windgrams/data').root,'/windgrams/data/soaring/v1/north-sound-20261021-00z');
-  assert.equal(replayLocation('?hour=27','/data').hour,27);
-  assert.equal(replayLocation('?hour=NaN','/data').hour,20);
+  assert.equal(replayLocation('?case=armenia-icon-eu-live&hour=27','/windgrams/data').root,'/windgrams/data/soaring/v1/armenia-icon-eu-live');
+  assert.equal(replayLocation('?case=armenia-icon-eu-live&hour=27','/data').hour,27);
+  assert.equal(replayLocation('?case=armenia-icon-eu-live&hour=NaN','/data').hour,20);
+  assert.throws(()=>replayLocation('?hour=27','/data'),/unavailable/, 'an absent catalogue selection must not revive a retired replay');
   assert.throws(()=>replayLocation('?case=../bad','/data'),/Unknown/);
   assert.match(historicalLabel('2026-10-21T00:00:00Z',false,'hrrr-conus'),/Historical forecast.*HRRR.*2026-10-21.*00:00 UTC/);
 });
@@ -287,6 +288,7 @@ test('Armenia regional links select ICON-EU and retain its full forecast horizon
   const query = defaultReplayQuery('?region=armenia&model=icon-eu', catalogue);
   assert.equal(query.get('case'), 'armenia-icon-eu-live');
   assert.equal(defaultReplayQuery('?country=AM', catalogue).get('case'), 'armenia-icon-eu-live');
+  assert.equal(defaultReplayQuery('', catalogue).get('case'), 'armenia-icon-eu-live');
   assert.equal(replayLocation(`?${query}&hour=120`, '/data').hour, 120);
   assert.equal(replayLocation(`?${query}&hour=121`, '/data').hour, 121, 'horizon selection follows manifest hours');
   assert.equal(regionForCase(catalogue.regions, 'armenia-icon-eu-live'), region);
@@ -294,6 +296,12 @@ test('Armenia regional links select ICON-EU and retain its full forecast horizon
   assert.throws(() => defaultReplayQuery('?region=armenia&model=rrfs', catalogue), /unavailable/);
   assert.throws(() => defaultReplayQuery('?region=armenia', null), /unavailable/);
   assert.throws(() => defaultReplayQuery('?region=unknown', catalogue), /unavailable/);
+  for (const region of ['north-sound', 'shenandoah-blue-ridge']) {
+    assert.throws(() => defaultReplayQuery(`?region=${region}`, catalogue), /unavailable/, 'removed regions must not select an unrelated map');
+  }
+  assert.throws(() => defaultReplayQuery('?country=US', catalogue), /unavailable/, 'US launch navigation must not select the Armenian map');
+  assert.throws(() => defaultReplayQuery('?country=US', null), /unavailable/);
+  assert.throws(() => defaultReplayQuery('', null), /unavailable/, 'missing catalogue must not select a retired archive');
   assert.throws(() => defaultReplayQuery('?country=NZ', catalogue), /unavailable/, 'country navigation must not select an unrelated map');
   assert.throws(() => defaultReplayQuery('?country=NZ', null), /unavailable/);
   assert.throws(() => defaultReplayQuery('?country=MX', catalogue), /unavailable/, 'Mexico launch navigation must not select an unrelated map');

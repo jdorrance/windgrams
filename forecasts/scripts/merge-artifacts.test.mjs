@@ -86,6 +86,31 @@ function terrain(root) {
       landCover: { source: 'worldcover2021', atLaunch: 'grassland', fractions: [{ radiusKm: 1, byClass: { grassland: 1 } }] } } } });
 }
 
+test('publication retires cached grids and ignores old artifact replacements without changing issued history', t => {
+  const root = workspace(t), output = join(root, 'data'), incoming = join(root, 'incoming'), source = join(incoming, 'data-rrfs');
+  point(output); terrain(output);
+  const retired = ['north-sound-20261021-00z-live', 'north-sound-expanded-v2', 'shenandoah-blue-ridge-20261021-00z-rrfs-live'];
+  for (const caseId of retired) {
+    write(join(output, 'soaring/v1', caseId, 'index.json'), { retired: true });
+    write(join(source, 'soaring/v1', caseId, 'index.json'), { invalidOldCandidate: true });
+  }
+  catalogue(output, retired); catalogue(source, retired);
+  write(join(output, 'soaring/v1/armenia-icon-eu-live/retained.json'), { armenia: true });
+  write(join(output, 'history/retained-evidence.json'), { issued: true });
+  const pointPath = join(output, 'rrfs/sites', `${site.slug}.json`), before = readFileSync(pointPath);
+  const preview = preparePublication(incoming, output, { sites }, { dryRun: true });
+  assert.deepEqual(preview.merged.rejected, []);
+  for (const caseId of retired) assert.equal(existsSync(join(output, 'soaring/v1', caseId)), true, 'dry-run leaves the original intact');
+  const report = preparePublication(incoming, output, { sites });
+  assert.deepEqual(report.merged.rejected, []);
+  for (const caseId of retired) assert.equal(existsSync(join(output, 'soaring/v1', caseId)), false);
+  assert.deepEqual(JSON.parse(readFileSync(join(output, 'soaring/v1/regions.json'))).regions, []);
+  assert.equal(existsSync(join(output, 'soaring/v1/armenia-icon-eu-live/retained.json')), true);
+  assert.equal(existsSync(join(output, 'history/retained-evidence.json')), true);
+  assert.deepEqual(readFileSync(pointPath), before);
+  assert.equal(existsSync(join(source, 'soaring/v1', retired[0])), true, 'incoming evidence is read-only');
+});
+
 test('regional profile inventory declares availability and validates every supplied cell identity', t => {
   for (const include of [false, true]) {
     const root = workspace(t);

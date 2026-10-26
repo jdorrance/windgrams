@@ -25,7 +25,6 @@ export function replayModel(manifest: ReplayManifest): string {
   return explicitReplayModel(normalizeReplayManifest(manifest));
 }
 
-export const DEFAULT_CASE = 'north-sound-20261021-00z';
 export type Layer =
   | 'thermalVelocityV2Mps'
   | 'usableLiftTopV2M'
@@ -198,7 +197,8 @@ export function crossSectionHeightScale(
 }
 
 export function replayLocation(search: string, dataBase: string) {
-  const query = new URLSearchParams(search), caseId = query.get('case') ?? DEFAULT_CASE;
+  const query = new URLSearchParams(search), caseId = query.get('case');
+  if (!caseId) throw new Error('Regional forecast is unavailable.');
   // Published catalogues can introduce regions without a web release. Explicit
   // historical links remain addressable; the fetched manifest verifies identity.
   if (!/^[a-z0-9][a-z0-9-]{0,159}$/.test(caseId)) throw new Error(`Unknown replay case: ${caseId}`);
@@ -308,7 +308,7 @@ export function defaultReplayQuery(search: string, catalogue: RegionCatalogue | 
   if (query.has('case')) return query;
   const country = query.get('country');
   const requestedRegion = query.get('region') ?? (country ? defaultSoaringRegion(country) : undefined);
-  if (country && country !== 'US' && !requestedRegion) throw new Error('Regional forecast is unavailable.');
+  if (country && !requestedRegion) throw new Error('Regional forecast is unavailable.');
   const requested = requestedRegion ? catalogue?.regions.find(r => r.id === requestedRegion && r.status === 'active-verified-trial') : undefined;
   if (requestedRegion && !requested) throw new Error('Regional forecast is unavailable.');
   const available = catalogue?.regions.filter(r => r.status === 'active-verified-trial' && nativeModels(r).length) ?? [];
@@ -319,10 +319,8 @@ export function defaultReplayQuery(search: string, catalogue: RegionCatalogue | 
     if (requestedModel && !selected) throw new Error(`${modelLabel(requestedModel)} regional forecast is unavailable.`);
     if (!nativeModels(region).length) throw new Error('Regional forecast model is unavailable.');
     query.set('case', selected?.caseId ?? nativeModels(region)[0].caseId);
-  } else if (catalogue) {
+  } else {
     throw new Error('Regional forecast is unavailable.');
-  } else if (query.has('model') && query.get('model') !== 'hrrr-conus') {
-    throw new Error(`${modelLabel(query.get('model')!)} regional forecast is unavailable.`);
   }
   return query;
 }

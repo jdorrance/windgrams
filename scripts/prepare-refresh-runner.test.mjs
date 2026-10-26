@@ -40,15 +40,15 @@ test('runner reservation measures headroom and stops before cache extraction if 
   assert.throws(() => prepareRefreshRunner('rrfs', { ...options, availableBytes: () => NaN }), /Cannot measure/);
 });
 
-test('RRFS keeps bounded readiness retries and a failed region does not skip downstream validation', () => {
+test('RRFS keeps bounded readiness retries and validates retained points after acquisition failure', () => {
   const commands = refreshCommands('rrfs', 'https://example.test/data');
   const acquire = commands.find(command => command.stage === 'acquire').args;
   assert.deepEqual(acquire.slice(-4), ['--readiness-attempts', '6', '--readiness-delay-ms', '60000']);
   const calls = [];
   const result = refreshProvider('rrfs', 'https://example.test/data', args => {
     calls.push(args[0]);
-    if (args[0].includes('build-live-soaring')) throw new Error('regional failure');
+    if (args[0].includes('run-provider')) throw new Error('upstream failure');
   });
-  assert.deepEqual(result.map(stage => [stage.stage, stage.ok]), [['seed', true], ['acquire', true], ['regional', false], ['validate', true]]);
-  assert.equal(calls.at(-1), 'scripts/validate-rrfs.mjs');
+  assert.deepEqual(result.map(stage => [stage.stage, stage.ok]), [['seed', true], ['acquire', false], ['validate', true]]);
+  assert.deepEqual(calls, ['scripts/seed-published.mjs', 'scripts/run-provider.mjs', 'scripts/validate-rrfs.mjs']);
 });

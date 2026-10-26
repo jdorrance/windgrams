@@ -70,6 +70,10 @@ source normalizer performs no thermal calculations or launch-altitude correction
 [Operator commands](../../forecasts/soaring/README.md#normalized-noaa-source-experiments)
 write these experiments separately from published and first-issued forecasts.
 The [public types](src/internal/noaa/types.ts) define limits and provenance.
+Expanded captures retain native cloud base, ceiling, top, LCL, LFC and
+equilibrium-level heights in metres MSL. Experimental profiles carry these
+independent readings alongside surface pressure and 80 m winds. Lift caps follow
+the published method. NOAA CAPE/CIN use a surface parcel, recorded in `convectiveParcel`.
 
 ## Native areas
 
@@ -125,6 +129,9 @@ application reuse the acquisition for point and regional publication. Optional
   It needs an explicit cache directory and a Python decoder. The package exports
   `/icon-decoder` and `/icon-requirements`; the
   [ICON setup guide](../../forecasts/docs/operations.md#icon-eu) gives the commands.
+  Native `PS` pressure is converted from Pa to hPa for point and map diagnostics.
+  Sea-level pressure is separate; extracts missing PS use the hypsometric estimate.
+  CAPE/CIN use the model's mixed-layer parcel.
 - [`/nws`](src/nws.ts) and [`/ecmwf`](src/ecmwf.ts) fetch supplemental site
   documents and manifests.
 - [`/solar`](src/solar.ts) builds terrain tiles and relief from supplied elevation

@@ -74,6 +74,7 @@ test('NOAA point and area APIs expose the same frozen columns and reject incompa
   const regional = await area.acquire({ run, cacheDir, bounds: [-122.5, 48.5, -122.3, 48.7], forecastHours: c.forecastHours });
   const pointCell = regional.cells.findIndex(cell => cell.gridIndex === acquired.native.cells[0].index);
   assert.deepEqual(regional.hours[0].columns[pointCell].column, acquired.columns[0].column);
+  assert.ok(createNoaaAreaAdapter('hrrr-conus', { verticalMode: 'expanded-pressure' }).fields.includes('nativeCloudBaseM'));
   await assert.rejects(area.acquire({ run, cacheDir, bounds: [-123, 48, -122, 49], forecastHours: [14], fields: ['nativeCloudBaseM'] }), /Unsupported NOAA area required capability/);
 });
 
@@ -91,6 +92,26 @@ test('expanded selection adds real pressure, 80m and lower levels without changi
   const raw = { ...real.hours[0].raw, surfacePressureHpa: 99000, u80m: 0, v80m: 0 };
   const column = cellSource(c, real.grid, real.cell, 14, raw);
   assert.equal(column.surfacePressureHpa, 990); assert.equal(column.wind80mSpeedMps, 0);
+});
+
+test('offline capture uses the registered full horizon and fails on cache misses', async t => {
+  const root = await temporary(t), sitesPath = join(root, 'sites.json');
+  await writeFile(sitesPath, JSON.stringify([c.site]));
+  let selected;
+  const summary = await captureNoaaColumns({ model: 'gfs', 'reference-time': '2026-10-21T00:00:00Z',
+    hours: 'all', sites: sitesPath, mode: 'expanded-pressure', offline: true, output: join(root, 'capture.json') }, {
+    acquire: async options => {
+      selected = options;
+      assert.throws(() => options.fetchImpl('https://example.invalid'), /Offline cache miss/);
+      return { verticalMode: options.verticalMode, completeness: 'complete', assets: [], cells: [],
+        hours: options.forecastHours.map(forecastHour => ({ forecastHour, columns: [] })) };
+    },
+  });
+  assert.equal(selected.forecastHours.length, 128);
+  assert.equal(selected.forecastHours[0], 3);
+  assert.equal(selected.forecastHours.at(-1), 384);
+  assert.equal(summary.fullHorizon, true);
+  assert.equal(summary.offline, true);
 });
 
 test('RRFS preserves preceding-hour rain support and vertical velocity normalization', async t => {

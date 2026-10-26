@@ -33,14 +33,16 @@ measurement.
 
 - [`@windgrams/contracts/published-lift`](src/published-lift.ts) parses profile
   JSON and reads published lift, cloud-base and ceiling diagnostics. It preserves
-  profile extensions and replaces malformed lift fields with `null`.
+  profile extensions and replaces malformed optional measurements with `null`.
+  `surfaceExtensionsSchema` defines the native surface fields retained during publication.
   `publishedLiftFamily(hour)` names the family an hour carries: `'v2'` when
   `hour.soaring` publishes `thermalVelocityV2Mps`, otherwise `'v1-legacy'`, in
   which case `publishedLift` returns the upstream `hour.derived` values from
   `@azohra/meteo.forecast`'s earlier method. Ensemble percentile products (GEPS)
   are always `'v1-legacy'`, because V2 is calculated per member and not for
-  percentiles. The two families are not interchangeable; readers label V1 values
-  rather than mixing them with V2. The V1 method is pinned in several places that
+  percentiles. Readers label each family separately. V2 nulls, including the effective cloud limit,
+  stay unavailable. V1 ceilings and surface LCL remain separate readings.
+  The V1 method is pinned in several places that
   move together: `LEGACY_FORECAST_VERSION` and the `catalogue-0.6.0.json` /
   `forecast-hours-0.6.0.json` tables in [`@windgrams/providers`](../providers/src/legacy.ts),
   the `@azohra/meteo.forecast` dependency in `packages/providers/package.json` and

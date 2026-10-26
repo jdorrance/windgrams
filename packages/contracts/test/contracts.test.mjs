@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAtmosphericColumn, parseNormalizedColumnRecord } from '@windgrams/contracts';
-import { publishedLift } from '@windgrams/contracts/published-lift';
+import { publishedLift, publishedCloudBaseKind, publishedEffectiveCloudLimit } from '@windgrams/contracts/published-lift';
 import { validateReplayGrid, validateReplayAudit, validateLaunchesDoc, validateCrossSectionDoc, validateVerificationDoc } from '@windgrams/contracts/regional';
 
 const validAt = '2026-10-25T12:00:00Z';
@@ -67,11 +67,24 @@ test('diagnostic selection preserves explicit V2 nulls and legacy fallback', () 
   assert.equal(publishedLift({derived}),derived);
   const actual=publishedLift({derived,soaring:{thermalVelocityV2Mps:0,usableLiftTopV2M:null,surfaceLclM:1400}});
   assert.deepEqual(actual,{thermalVelocityMps:0,boundaryLayerTopM:null,usableLiftTopM:null,cloudBaseM:1400});
+  assert.equal(publishedCloudBaseKind({ derived }), 'effective');
+  assert.equal(publishedCloudBaseKind({ derived, soaring: { thermalVelocityV2Mps: null } }), 'potential');
 });
 
 test('regional boundary validators retain strict required data and nullable sidecars', () => {
   assert.throws(()=>validateReplayGrid({type:'FeatureCollection',features:[]}));
   assert.equal(validateLaunchesDoc({launches:[{}]}),null);
+});
+
+test('effective cloud ceilings follow the published family and preserve V2 absence', () => {
+  const derived = { thermalVelocityMps: 2, boundaryLayerTopM: 2000, usableLiftTopM: 1800, cloudBaseM: 1500 };
+  assert.equal(publishedEffectiveCloudLimit({ derived }), 1500);
+  const soaring = { thermalVelocityV2Mps: 2, surfaceLclM: 2400, effectiveCloudLimitM: 1600 };
+  assert.equal(publishedEffectiveCloudLimit({ derived, soaring }), 1600);
+  assert.equal(publishedEffectiveCloudLimit({ derived, soaring: { ...soaring, effectiveCloudLimitM: null } }), null);
+  delete soaring.effectiveCloudLimitM;
+  assert.equal(publishedEffectiveCloudLimit({ derived, soaring }), null);
+  assert.equal(publishedEffectiveCloudLimit({ derived, soaring: { ...soaring, effectiveCloudLimitM: 0 } }), 0);
 });
 
 test('sidecar validators reject formerly unchecked declared fields', () => {

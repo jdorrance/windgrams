@@ -2,7 +2,7 @@ import { finiteScalar as scalar, formatQuantity, gustNoun, type GustSemantics } 
 import type { ForecastManifest, SiteForecast } from '@azohra/meteo.briefing/contract';
 import { localDateKey, localHourOfDay, localInstantMs } from '@azohra/meteo.briefing/derive';
 import { sunriseSunset } from '@windgrams/meteorology/sun';
-import { publishedLift, publishedLiftFamily } from './published-lift.ts';
+import { publishedLift, publishedLiftFamily, publishedCloudBaseKind } from './published-lift.ts';
 import { compassPoint, inArc, windLimitsLabel, windWindow, type LaunchDetails, type SiteEntry } from './launches.ts';
 
 type Hour = SiteForecast['hours'][number];
@@ -89,7 +89,7 @@ export function launchConditions(hour: Hour, settings: LaunchDetails, launchElev
       ['Model surface wind', speed === null ? 'Unavailable' : speed < 0.5 ? 'Light / calm' : `${direction === null ? 'Direction unavailable · ' : compassPoint(direction) + ' '}${formatQuantity(speed, 'wind')}`],
       [`Model surface ${gustWord}`, gust === null ? 'Unavailable' : `${formatQuantity(gust, 'wind')}`],
       ['Usable lift top', strength === null ? 'Unavailable' : top === null ? `${family}Below sink threshold` : family + displayHeight(top)],
-      ['Potential cloud base', base === null ? 'Unavailable' : family + displayHeight(base)],
+      [publishedCloudBaseKind(hour) === 'potential' ? 'Potential cloud base (surface LCL)' : 'Effective cloud limit', base === null ? 'Unavailable' : family + displayHeight(base)],
       ['Thermal strength', strength === null ? 'Unavailable' : family + displayLift(strength)],
     ] satisfies [string, string][],
     issues,

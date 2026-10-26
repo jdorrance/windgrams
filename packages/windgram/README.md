@@ -38,12 +38,32 @@ event listeners. Build a new view and call `update` when the forecast, units or
 container width changes. Call `dispose` when removing the chart.
 
 Pass a `readout` element to show inspected weather and `onSelectHour` to
-synchronize other views. Inspection snaps to the published lift ceiling.
+synchronize other views. Inspection defaults to the published lift ceiling;
+`inspectionMode: 'height'` follows pointer altitude with 100 m keyboard steps.
+Surface weather stays available when lift is missing. The standalone inspector
+accepts `{ mode: 'height' }`; its cleanup function also exposes `select(hourIndex)`
+and `select(null)` to clear inspection.
 [`readWindgram`](src/scene.ts) also supports programmatic readings: its height
 argument is metres MSL, missing measurements are `null`, and returned field
 names specify their units. Readings keep those units when display units change.
 The optional launch elevation supplies the AGL reference; otherwise the chart
 uses model terrain.
+
+Readings include dew point (°C), RH (%), and vertical motion (omega, Pa/s;
+negative means ascent), with native or interpolated source labels. For models
+with declared omega levels, availability requires three valid levels in view.
+Unavailable readings return `null` with a reason. Published 80 m AGL wind
+participates in interpolation. Missing or
+duplicate wind nodes break interpolation and leave shear unavailable.
+Shear reports vector wind change across the surrounding native nodes in m/s per
+kilometre, with both MSL bounds.
+
+Cloud readings identify V2 surface-parcel LCL, legacy effective cloud limits, and the
+effective limit used to cap V2 lift. Native model cloud heights and model PBL top
+have their own fields. CAPE/CIN retains its surface or mixed-layer parcel basis.
+Published V2 layer mean wind, top wind and surface-to-top vector shear keep their
+stored values at every cursor height. `readWindgram` also returns the published
+dimensionless buoyancy/shear ratio.
 
 [`/svg/external`](src/svg-external.ts) renders SVG using the shared stylesheet.
 The SVG modules also render height axes, diagnostics, keys and wind barbs.

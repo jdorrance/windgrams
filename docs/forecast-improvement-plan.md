@@ -66,6 +66,11 @@ Before any calculation changes:
 2. Measure the effect on frozen columns (the method-impact harness, not live data): distribution of changes in BL mean wind, BL-top wind, shear and buoyancy/shear ratio per model and per layer-depth band, including calm and shallow-layer cases.
 3. Decide from that evidence, then ship any change as a method-version bump with retained-method handling and regenerated impact evidence. Display or documentation edits must not be used to imply the calculation already follows the chosen policy.
 
+The [offline wind-anchor experiment](../forecasts/verification/boundary-layer-wind-impact.mjs)
+compares policies (a) and (c) at the original 80 m and native-level heights.
+Results include reproduction of the current method and differences by model
+and layer-depth band. Candidate means require a layer deeper than 10 m.
+
 ## Model handling
 
 Point postprocessing adds the soaring diagnostics while retaining the baseline `derived` fields. The browser selects the published diagnostic family and preserves its nulls. Older profiles may provide a 1 m/s ceiling without a 225 ft/min ceiling.

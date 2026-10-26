@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { roundDocument } from '@azohra/meteo.forecast';
-import { deriveSiteForecast } from '../../soaring/vendor/derive-0.6.0.mjs';
+import { deriveSourceForecast } from '../../soaring/source-profile.mjs';
 import { postprocessPointForecast } from '@windgrams/soaring/compatibility';
 import { acquireIcon, ICON_BASE, ICON_FORECAST_HOURS, ICON_SEMANTICS } from '@windgrams/providers/icon';
 export { acquireIcon, ICON_BASE, ICON_MODEL_LEVELS, ICON_FORECAST_HOURS, ICON_SEMANTICS,
@@ -14,7 +14,7 @@ export function deriveIconProfile(acquired, cellIndex, site, { launchElevationM 
   if (!cell) throw new Error('ICON cell index is outside the extraction');
   const hours = acquired.hours.map(hour => hour.sources[cellIndex]);
   if (hours.some(hour => !hour)) throw new Error(`ICON ${site.slug}: incomplete native profile`);
-  const profile = roundDocument(deriveSiteForecast({ siteId: site.slug, siteName: site.name, latitude: site.latitude, longitude: site.longitude,
+  const profile = roundDocument(deriveSourceForecast({ siteId: site.slug, siteName: site.name, latitude: site.latitude, longitude: site.longitude,
     siteTimeZone: site.timeZone ?? 'Asia/Yerevan', modelElevationM: cell.terrainM,
     referenceTime: acquired.referenceTime, generatedAt, hours }, 'icon-eu', ICON_SEMANTICS));
   // The common publication table leaves arbitrary native pressures untouched.

@@ -82,14 +82,21 @@ const areaFields: readonly (keyof AtmosphericColumn)[] = [
   'temperatureC', 'dewPointDepressionC', 'windSpeedMps', 'windDirectionDeg', 'levels',
   'sensibleHeatFluxWm2', 'latentHeatFluxWm2', 'precipitationMm',
 ];
+const extendedAreaFields: readonly (keyof AtmosphericColumn)[] = [
+  'surfacePressureHpa', 'wind80mSpeedMps', 'wind80mDirectionDeg',
+  'nativeCloudCeilingM', 'nativeCloudBaseM', 'nativeCloudTopM',
+  'nativeAdiabaticLclM', 'nativeLfcM', 'nativeEquilibriumLevelM', 'capeJkg', 'cinJkg',
+];
 export function createNoaaAreaAdapter(modelId: NoaaModel, options: Omit<NoaaAdapterOptions, 'bounds' | 'forecastHours'> = {}): AreaAcquisitionAdapter<NoaaAreaResult> {
   const model = noaaDescriptor(modelId, options.verticalMode);
+  const supportedFields = options.verticalMode && options.verticalMode !== 'legacy-pressure'
+    ? [...areaFields, ...extendedAreaFields] : areaFields;
   return {
     model,
-    fields: areaFields,
+    fields: supportedFields,
     async acquire(request) {
       assertRun(request.run, model);
-      if (request.fields?.some(field => !areaFields.includes(field))) throw new Error('Unsupported NOAA area required capability');
+      if (request.fields?.some(field => !supportedFields.includes(field))) throw new Error('Unsupported NOAA area required capability');
       const native = await acquireNoaa({
         ...options,
         model: modelId,

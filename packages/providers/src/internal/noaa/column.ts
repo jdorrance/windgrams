@@ -23,6 +23,7 @@ export function cellSource(c: NoaaColumnOptions, grid: NoaaGrid, cell: { longitu
     sensibleHeatFluxWm2: raw.sensibleHeatFluxWm2,
     precipitationMm: raw.precipitationMm! * (modelFor(c) === 'hrrr-conus' ? 3600 : 1),
     seaLevelPressureHpa: raw.seaLevelPressureHpa! / 100,
+    convectiveParcel: 'surface',
     levels: [],
   };
   for (const key of optional) if (finite(raw[key])) source[key] = raw[key]!;

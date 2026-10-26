@@ -21,7 +21,9 @@
     "soaring:replay": "node scripts/soaring.mjs replay",
     "verify:history": "node verification/score-history.mjs",
     "verify:wxtofly": "node verification/review-wxtofly.mjs",
-    "noaa:capture": "node scripts/capture-noaa-columns.mjs"
+    "noaa:capture": "node scripts/capture-noaa-columns.mjs",
+    "verify:noaa-sources": "node verification/noaa-source-impact.mjs",
+    "verify:wind-anchor": "node verification/boundary-layer-wind-impact.mjs"
   },
   "engines": {
     "node": ">=24"

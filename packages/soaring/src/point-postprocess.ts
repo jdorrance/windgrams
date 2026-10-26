@@ -132,6 +132,13 @@ export function sourceFromPublishedDeterministicHour(hour: CompatibilityHour | n
     capeJkg: s.capeJkg ?? null,
     cinJkg: s.cinJkg ?? null,
     pblHeightM: s.pblHeightM ?? null,
+    ...(s.convectiveParcel ? { convectiveParcel: s.convectiveParcel } : {}),
+    nativeCloudCeilingM: s.nativeCloudCeilingM ?? null,
+    nativeCloudBaseM: s.nativeCloudBaseM ?? null,
+    nativeCloudTopM: s.nativeCloudTopM ?? null,
+    nativeAdiabaticLclM: s.nativeAdiabaticLclM ?? null,
+    nativeLfcM: s.nativeLfcM ?? null,
+    nativeEquilibriumLevelM: s.nativeEquilibriumLevelM ?? null,
     levels: hour.levels.map((l: NonNullable<CompatibilityHour["levels"]>[number]) => ({
       pressureHpa: l.pressureHpa,
       heightM: l.heightM,

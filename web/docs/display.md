@@ -91,6 +91,20 @@ when the ceiling is missing or outside the view. AGL is measured from launch ter
 where available, otherwise from model terrain, as labelled in the readout. This
 reference stays the same in focused and full-height views.
 
+The readout shows temperature, wind, dew point, RH and vertical motion (omega,
+Pa/s; negative means ascent), plus surface weather and cloud limits. **Inspect any height**
+follows pointer altitude. Up/down moves 100 m; left/right keeps the height.
+Surface weather stays available when lift is missing. Published 80 m AGL wind
+participates in interpolation. For models with declared omega levels,
+availability requires three valid levels in view.
+
+CAPE/CIN names its parcel basis or shows “unspecified”. Published V2 layer mean
+wind, top wind and surface-to-top vector shear keep their values at every cursor
+height. Native model cloud heights, LCL, LFC and equilibrium level have their own
+labels. Shear at the cursor uses the surrounding native wind measurements, with
+m/s per kilometre and both MSL bounds. Missing or duplicate wind nodes leave
+interpolation and shear unavailable.
+
 ### Layers and symbols
 
 Background lapse-rate colours follow [WxToFly](http://wxtofly.net/windgramexplain.html).
@@ -99,8 +113,11 @@ underlying lapse rates remain layer averages; inversions and missing-data
 boundaries keep their source heights.
 
 Diagonal hatching shows model cloud, white crosshatching shows RH above 94%, and
-outlined clouds show potential LCL. Each connected temperature contour gets one
-label where space permits. Paraglider symbols use `hcritWxtoflyM`, the ceiling for
+clouds with dashed outlines show potential surface LCL in V2; solid outlines
+show the legacy/V1 effective cloud limit. A teal dashed
+line shows the V2 effective cloud limit where it differs from surface LCL.
+Each connected temperature contour gets one label where space permits.
+Paraglider symbols use `hcritWxtoflyM`, the ceiling for
 225 ft/min sink; the blue line uses `usableLiftTopV2M`, the ceiling for 1 m/s sink.
 Missing estimates leave the corresponding marks empty. **Strongest thermals**
 selects the day's highest published w*.

@@ -59,6 +59,43 @@ export interface WindgramReading {
   directionDeg: number | null;
   interpolated: boolean;
   gustKt: number | null;
-  cloud: 'model' | 'humidity' | 'potential' | null;
+  cloud: 'model' | 'humidity' | 'potential' | 'effective' | null;
+  /** Moisture and omega at the inspected height; omega < 0 is ascent. */
+  dewPointC: number | null;
+  relativeHumidityPercent: number | null;
+  verticalVelocityPaS: number | null;
+  windSource: 'surface-10m' | 'surface-80m' | 'model-level' | 'interpolated' | null;
+  /** Vector wind change between surrounding native nodes. Bounds: metres MSL;
+   * gradient: m/s per km. Missing or duplicate nodes yield null. */
+  windShear: { lowerM: number; upperM: number; vectorChangeMps: number; perKmMps: number } | null;
+  verticalVelocitySource: 'model-level' | 'interpolated' | null;
+  verticalVelocityUnavailableReason: string | null;
+  /** Surface weather is available independently of lift. */
+  surfaceWindSpeedMps: number | null;
+  surfaceWindDirectionDeg: number | null;
+  precipitationMmHr: number | null;
+  capeJkg: number | null;
+  cinJkg: number | null;
+  convectiveParcel: 'surface' | 'mixed-layer' | null;
+  cloudBaseM: number | null;
+  cloudBaseKind: 'potential' | 'effective';
+  effectiveCloudLimitM: number | null;
+  cloudCapped: boolean | null;
+  /** Native model diagnostic heights, metres MSL. */
+  modelPblTopM: number | null;
+  nativeCloudBaseM: number | null;
+  nativeCloudCeilingM: number | null;
+  nativeCloudTopM: number | null;
+  nativeAdiabaticLclM: number | null;
+  nativeLfcM: number | null;
+  nativeEquilibriumLevelM: number | null;
+  /** Published V2 layer diagnostics, independent of inspected height.
+   * Speeds and surface-to-layer-top vector shear are m/s; bearings are wind-from
+   * degrees clockwise from true north. The buoyancy/shear ratio is dimensionless. */
+  publishedLayerWind: {
+    meanSpeedMps: number | null; meanDirectionDeg: number | null;
+    topSpeedMps: number | null; topDirectionDeg: number | null;
+    surfaceToTopShearMps: number | null; buoyancyShearRatio: number | null;
+  } | null;
 }
 export interface WindgramSvgOptions { idPrefix?: string }

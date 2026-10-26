@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseSiteForecast } from "@azohra/meteo.briefing/contract";
 import {  buildWindgramView, heightToY, readWindgram, type WindgramView  } from "./helpers/windgram.ts";
-import {  mountWindgramInspector, renderWindgramSvg  } from "./helpers/windgram.ts";
+import {  mountWindgramInspector, renderWindgramSvg, visibleWindgramHourIndices  } from "./helpers/windgram.ts";
 import { setUnitSystem } from "../src/lib/units.ts";
 
 const originalDOMPoint = globalThis.DOMPoint;
@@ -42,7 +42,7 @@ test("AGL uses launch ground in either height range, including launch below mode
   close(readWindgram(noLaunch, 0, terrain + 200).heightAglM, 200);
 });
 
-function inspector(t: TestContext, view: WindgramView) {
+function inspector(t: TestContext, view: WindgramView, mode: 'lift' | 'height' = 'lift') {
   class Point {
     x: number; y: number;
     constructor(x = 0, y = 0) { this.x = x; this.y = y; }
@@ -67,7 +67,7 @@ function inspector(t: TestContext, view: WindgramView) {
     removeAttribute: (key: string) => attributes.delete(key), tabIndex: -1, scrollLeft: 0,
   });
   const selected: string[] = [];
-  const cleanup = mountWindgramInspector(host as unknown as HTMLElement, null, view, time => selected.push(time));
+  const cleanup = mountWindgramInspector(host as unknown as HTMLElement, null, view, time => selected.push(time), undefined, { mode });
   t.after(cleanup);
   const pointer = (type: string, x: number, y: number, pointerType = "mouse") => {
     const event = new Event(type, { cancelable: true });
@@ -78,6 +78,71 @@ function inspector(t: TestContext, view: WindgramView) {
   const key = (key: string) => { const event = new Event("keydown", { cancelable: true }); Object.assign(event, { key }); host.dispatchEvent(event); return event; };
   return { nodes, host, bounds, matrix, selected, pointer, key, cleanup, attributes, ownerDocument };
 }
+
+test('height inspection handles missing lift and keeps altitude on hour changes', t => {
+  const p = liftProfile();
+  for (const hour of p.hours) hour.derived.usableLiftTopM = null;
+  const view = buildWindgramView(p, { timeZone: 'Etc/UTC', unitSystem: 'metric', heightRange: 'full' });
+  const h = inspector(t, view, 'height');
+  const height = view.floorM + 500;
+  h.pointer('pointerdown', view.hours[0].x, heightToY(view, height), 'touch');
+  h.pointer('pointerup', view.hours[0].x, heightToY(view, height), 'touch');
+  assert.match(h.attributes.get('aria-label')!, /Inspected height/);
+  close(Number(h.nodes['cursor-point'].getAttribute('cy')), heightToY(view, height));
+  h.key('ArrowRight');
+  close(Number(h.nodes['cursor-point'].getAttribute('cy')), heightToY(view, height));
+  assert.equal(h.key('ArrowUp').defaultPrevented, true);
+  close(Number(h.nodes['cursor-point'].getAttribute('cy')), heightToY(view, height + 100));
+  assert.match(h.attributes.get('aria-label')!, /Dew point/);
+  assert.match(h.attributes.get('aria-label')!, /CIN/);
+});
+
+test('programmatic inspection clears stale readings and stops after disposal', t => {
+  const view = buildWindgramView(liftProfile(), { timeZone: 'Etc/UTC', heightRange: 'full' });
+  const h = inspector(t, view);
+  const instructions = h.attributes.get('aria-label');
+  h.cleanup.select(0);
+  assert.match(h.attributes.get('aria-label')!, /Lift top ·/);
+  h.cleanup.select(null);
+  assert.equal(h.attributes.get('aria-label'), instructions);
+  assert.equal(h.nodes['windgram-cursor'].getAttribute('visibility'), 'hidden');
+  h.cleanup.select(1);
+  h.cleanup.select(view.hours.length);
+  assert.equal(h.attributes.get('aria-label'), instructions);
+  h.cleanup();
+  h.cleanup.select(0);
+  assert.equal(h.attributes.has('aria-label'), false);
+});
+
+test('height keys stay inside daylight after clearing an off-chart hour', t => {
+  const profile = liftProfile();
+  Object.assign(profile.site, { latitude: 45, longitude: 0 });
+  profile.hours = Array.from({ length: 8 }, (_, index) => ({
+    ...structuredClone(profile.hours[0]), validAt: new Date(Date.parse('2026-10-25T00:00:00Z') + index * 3 * 3_600_000).toISOString(),
+  }));
+  const view = buildWindgramView(profile, { timeZone: 'Etc/UTC', heightRange: 'full' });
+  const visible = visibleWindgramHourIndices(view, 0);
+  assert.ok(visible[0] > 0, 'the view retains an earlier source hour outside daylight');
+  const h = inspector(t, view, 'height');
+  for (const index of [0, view.hours.length + 10]) {
+    h.cleanup.select(null);
+    view.selectedHourIndex = index;
+    h.key('ArrowUp');
+    const selectedIndex = view.hours.findIndex(hour => hour.validAt === h.selected.at(-1));
+    assert.ok(visible.includes(selectedIndex));
+    close(Number(h.nodes['cursor-point'].getAttribute('cx')), view.hours[selectedIndex].x);
+  }
+});
+
+test('calm surface wind omits direction in the inspector', t => {
+  const profile = liftProfile();
+  profile.hours[0].surface.windSpeedMps = 0;
+  profile.hours[0].surface.windDirectionDeg = 90;
+  const view = buildWindgramView(profile, { timeZone: 'Etc/UTC', heightRange: 'full' });
+  const h = inspector(t, view);
+  h.cleanup.select(0);
+  assert.match(h.attributes.get('aria-label')!, /Model surface wind 0 mph ·/);
+});
 
 test("hover snaps to each hour's usable-lift line regardless of pointer height", t => {
   const profile = liftProfile();
@@ -322,7 +387,8 @@ test("missing or clipped lift ceilings hide heights while taps and keys still se
     const hour = view.hours[index];
     h.pointer("pointermove", hour.x, pointerY);
     assert.equal(h.nodes["windgram-cursor"].getAttribute("visibility"), "hidden", "a missing ceiling never inherits a stale height or clamps to the plot edge");
-    assert.doesNotMatch(h.attributes.get("aria-label")!, /\d[\d,]* ft (AGL|MSL)/);
+    assert.doesNotMatch(h.attributes.get("aria-label")!, /Lift top · .*ft AGL/);
+    assert.match(h.attributes.get("aria-label")!, /Model surface wind/);
     h.pointer("pointerdown", hour.x, pointerY, "touch");
     h.pointer("pointerup", hour.x, pointerY, "touch");
     assert.equal(h.selected.at(-1), hour.validAt);

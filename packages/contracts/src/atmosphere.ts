@@ -2,6 +2,15 @@ import { z } from 'zod';
 import { checked, finite, index, latitude, longitude, text, timestamp } from './schema.js';
 
 const optionalNumber = finite.nullish();
+/** Native model fields retained alongside the upstream published surface contract. */
+export const surfaceExtensionsSchema = z.object({
+  surfacePressureHpa: optionalNumber,
+  wind80mSpeedMps: optionalNumber, wind80mDirectionDeg: optionalNumber,
+  nativeCloudCeilingM: optionalNumber, nativeCloudBaseM: optionalNumber, nativeCloudTopM: optionalNumber,
+  nativeAdiabaticLclM: optionalNumber, nativeLfcM: optionalNumber, nativeEquilibriumLevelM: optionalNumber,
+  /** Parcel used by the model's CAPE/CIN diagnostics; absence means unspecified. */
+  convectiveParcel: z.enum(['surface', 'mixed-layer']).optional(),
+});
 const sourceTimestamp = timestamp.regex(/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/);
 const moistureSchema = z.union([
   z.object({ dewPointC: finite, dewPointDepressionC: optionalNumber }),
@@ -20,17 +29,16 @@ const levelSchema = z.intersection(moistureSchema, z.object({
 export type AtmosphericLevel = z.infer<typeof levelSchema>;
 
 const columnSchema = z.intersection(moistureSchema, z.object({
+  ...surfaceExtensionsSchema.shape,
   validAt: sourceTimestamp, temperatureC: finite, windSpeedMps: finite, windDirectionDeg: finite,
-  wind80mSpeedMps: optionalNumber, wind80mDirectionDeg: optionalNumber, windGustMps: optionalNumber,
+  windGustMps: optionalNumber,
   cloudCoverPercent: optionalNumber, lowCloudPercent: optionalNumber,
   midCloudPercent: optionalNumber, highCloudPercent: optionalNumber,
   /** Amount/rate support is declared in fieldSemantics. */
   precipitationMm: optionalNumber,
   sensibleHeatFluxWm2: optionalNumber, latentHeatFluxWm2: optionalNumber,
-  seaLevelPressureHpa: optionalNumber, surfacePressureHpa: optionalNumber,
+  seaLevelPressureHpa: optionalNumber,
   capeJkg: optionalNumber, cinJkg: optionalNumber, pblHeightM: optionalNumber,
-  nativeCloudCeilingM: optionalNumber, nativeCloudBaseM: optionalNumber, nativeCloudTopM: optionalNumber,
-  nativeAdiabaticLclM: optionalNumber, nativeLfcM: optionalNumber, nativeEquilibriumLevelM: optionalNumber,
   smoke: z.object({ surfaceUgm3: finite, columnMgm2: finite, aot: finite }).optional(),
   levels: z.array(levelSchema).readonly(),
 }));

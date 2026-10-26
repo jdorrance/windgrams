@@ -64,12 +64,13 @@ test('lift rows carry the v1 label only when the hour publishes no current-metho
   Object.assign(legacy.derived, { thermalVelocityMps: 1.26, usableLiftTopM: 1234.4, cloudBaseM: 1274.6 });
   const rows = Object.fromEntries(launchConditions(legacy, limits, 530, 407.1).values);
   assert.equal(rows['Usable lift top'], 'v1: 1,250 m MSL');
-  assert.equal(rows['Potential cloud base'], 'v1: 1,250 m MSL');
+  assert.equal(rows['Effective cloud limit'], 'v1: 1,250 m MSL');
   assert.equal(rows['Thermal strength'], 'v1: 1.30 m/s');
   assert.equal(Object.fromEntries(forecastDataSupport(legacy).rows)['Diagnostic support'], 'Not published for this forecast; the earlier method (v1) lift diagnostics are shown instead.');
   const current: PublishedForecastHour = { ...legacy, soaring: { thermalVelocityV2Mps: 1.26, usableLiftTopV2M: 1234.4, surfaceLclM: 1274.6, resolvedThermalTopM: 1500 } };
   const v2 = Object.fromEntries(launchConditions(current, limits, 530, 407.1).values);
   assert.equal(v2['Usable lift top'], '1,250 m MSL');
+  assert.equal(v2['Potential cloud base (surface LCL)'], '1,250 m MSL');
   assert.equal(v2['Thermal strength'], '1.30 m/s');
   assert.equal(Object.fromEntries(forecastDataSupport(current).rows)['Diagnostic support'], 'Not published for this forecast.');
   const belowSink: PublishedForecastHour = { ...legacy, derived: { ...legacy.derived, thermalVelocityMps: 0.4, usableLiftTopM: null } };

@@ -24,6 +24,7 @@ export const SCIENCE_IMPLEMENTATION_FILES = Object.freeze([
   'model-comparison.mjs',
   'point-postprocess.mjs',
   'science.mjs',
+  'source-profile.mjs',
   'terrain-adjustment.mjs',
   'thermodynamics.mjs',
   'vendor/derive-0.6.0.d.mts',

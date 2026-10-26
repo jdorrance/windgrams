@@ -22,17 +22,21 @@ export function iconColumnRecord(acquired: IconAcquisition, hourIndex: number, c
     windGustMps: ['VMAX_10M', 'm/s', 'maximum'], sensibleHeatFluxWm2: ['ASHFL_S', 'W/m2', 'mean'],
     latentHeatFluxWm2: ['ALHFL_S', 'W/m2', 'mean'], precipitationMm: ['TOT_PREC', 'mm', 'accumulation'],
     pblHeightM: ['MH', 'm', 'instant'], levels: ['P/T/QV/U/V/HHL', 'native-levels', 'instant'],
+    surfacePressureHpa: ['PS', 'hPa', 'instant'], seaLevelPressureHpa: ['PMSL', 'hPa', 'instant'],
+    capeJkg: ['CAPE_ML', 'J/kg', 'instant'], cinJkg: ['CIN_ML', 'J/kg', 'instant'],
   };
   for (const [key, [sourceField, unit, kind]] of Object.entries(fields)) {
+    if (column[key as keyof AtmosphericColumn] == null) continue;
     fieldSemantics[key] = { sourceRunId: id, sourceField, unit, sampling: key === 'levels' ? 'native' : 'derived',
       timeSupport: kind === 'instant' ? { kind, validAt: hour.validAt } : { kind, start, end: hour.validAt },
       ...(key.endsWith('HeatFluxWm2') ? { positiveDirection: 'upward' as const, normalization: 'Successive run means converted to preceding-hour upward mean' } : {}),
+      ...(key === 'surfacePressureHpa' || key === 'seaLevelPressureHpa' ? { normalization: 'Pa divided by 100 to hPa' } : {}),
       ...(key === 'pblHeightM' ? { heightDatum: 'AGL' as const } : key === 'levels' ? { heightDatum: 'MSL' as const } : {}) };
   }
   const record: NormalizedColumnRecord = { schemaVersion: 1, column, modelElevationM: cell.terrainM, provenance: {
     sources: [{ id, provider: 'DWD', product: ICON_BASE, model: 'icon-eu', referenceTime: acquired.referenceTime, acquiredAt: acquired.provenance.capturedAt, gridId: acquired.grid.uuid }],
     fieldSemantics, gridCell: { id: String(cell.index), latitude: cell.latitude, longitude: cell.longitude, gridIndex: cell.index },
-    capabilities: { verticalCoordinates: 'model-levels', ensemble: 'deterministic', fields: { temperature: 'available', wind: 'available', heatFluxes: 'available', verticalVelocity: 'unsupported', cloudProfile: 'unsupported' } },
+    capabilities: { verticalCoordinates: 'model-levels', ensemble: 'deterministic', fields: { temperature: 'available', wind: 'available', heatFluxes: 'available', verticalVelocity: 'unsupported', cloudProfile: 'unsupported', surfacePressure: column.surfacePressureHpa == null ? 'unknown' : 'available' } },
   } };
   if (!parseNormalizedColumnRecord(record)) throw new Error('Invalid normalized ICON column');
   return record;

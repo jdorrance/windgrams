@@ -1,10 +1,9 @@
 import type { ModelCapabilities, SiteForecast } from '@azohra/meteo.briefing/contract';
-import { buildWindgramView, type WindgramOptions, type WindgramView } from '@windgrams/windgram/scene';
+import { buildWindgramView, windgramPresentationKey, type WindgramOptions, type WindgramView } from '@windgrams/windgram/scene';
 import { windgramViewport } from '../lib/windgram-viewport.ts';
 import { renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from '@windgrams/windgram/svg/external';
-import { mountWindgramInspector } from '@windgrams/windgram/dom';
+import { mountWindgramInspector, type WindgramInspector } from '@windgrams/windgram/dom';
 import { getUnitSystem, type UnitSystem } from '../lib/units.ts';
-import { windgramPresentationKey } from '@windgrams/windgram/scene';
 
 /**
  * Coordinates asynchronous keyed loads with out-of-order completion protection
@@ -124,7 +123,7 @@ export interface WindgramRenderRequest {
 
 export function createWindgramController(elements: WindgramControllerElements) {
   const { host, axisHost, keyHost, fullProfileButton, diagnosticsHost, detailsElement } = elements;
-  let clearInspector: (() => void) | null = null;
+  let clearInspector: WindgramInspector | null = null;
   let currentView: WindgramView | null = null;
   let currentLayoutKey = '';
   let currentSelectedValidAt: string | null = null;
@@ -136,6 +135,26 @@ export function createWindgramController(elements: WindgramControllerElements) {
   let nextProfileId = 1;
   const syncedScrollPositions = new WeakMap<HTMLElement, number>();
   const abortController = new AbortController();
+  const inspection = host.ownerDocument.createElement('div');
+  inspection.className = 'windgram-inspection';
+  const heightLabel = host.ownerDocument.createElement('label');
+  const heightToggle = host.ownerDocument.createElement('input');
+  heightToggle.type = 'checkbox';
+  heightLabel.append(heightToggle, host.ownerDocument.createTextNode(' Inspect any height'));
+  const readout = host.ownerDocument.createElement('p');
+  readout.className = 'windgram-readout';
+  inspection.append(heightLabel, readout);
+  inspection.hidden = true;
+  (host.parentElement ?? host).insertAdjacentElement('afterend', inspection);
+  const attachInspector = () => {
+    clearInspector?.();
+    clearInspector = null;
+    if (!currentView || !lastRequest) return;
+    readout.id = `${host.id || lastRequest.idPrefix}-readout`;
+    clearInspector = mountWindgramInspector(host, readout, currentView, time => lastRequest?.onSelectHour(time), { mode: heightToggle.checked ? 'height' : 'lift' });
+    select(lastRequest.selectedValidAt);
+  };
+  heightToggle.addEventListener('change', attachInspector, { signal: abortController.signal });
   const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
     if (!disposed && lastRequest && Math.abs(host.clientWidth - lastContainerWidth) > 0.5) render(lastRequest);
   });
@@ -188,6 +207,7 @@ export function createWindgramController(elements: WindgramControllerElements) {
     keyHost.replaceChildren();
     diagnosticsHost?.replaceChildren();
     if (detailsElement) detailsElement.hidden = true;
+    inspection.hidden = true;
   }
 
   function select(validAt: string | null, reveal = false, rebuilt = false) {
@@ -197,6 +217,7 @@ export function createWindgramController(elements: WindgramControllerElements) {
     const hour = idx >= 0 ? currentView.hours[idx] : undefined;
     const displayedHour = hour && hour.x >= currentView.left && hour.x <= currentView.left + currentView.plotWidth ? hour : undefined;
     currentView.selectedHourIndex = Math.max(0, idx);
+    clearInspector?.select(displayedHour ? idx : null);
     cursorRect?.setAttribute('visibility', displayedHour ? 'visible' : 'hidden');
     if (cursorRect && displayedHour) {
       const left = Math.max(currentView.left, displayedHour.x - currentView.columnWidth / 2);
@@ -223,6 +244,7 @@ export function createWindgramController(elements: WindgramControllerElements) {
     }
     currentSelectedValidAt = validAt;
     if (validAt) host.dataset.validAt = validAt;
+    else delete host.dataset.validAt;
   }
 
   function render(req: WindgramRenderRequest): WindgramView {
@@ -240,9 +262,10 @@ export function createWindgramController(elements: WindgramControllerElements) {
       req.launch, req.launchWindows, req.capabilities, req.hours.map(hour => hour.validAt), req.cursorStyle,
     ]);
 
-    const rebuilt = !layoutKey || layoutKey !== currentLayoutKey || !currentView;
+    const rebuilt = layoutKey !== currentLayoutKey || !currentView;
     if (rebuilt) {
       clearInspector?.();
+      clearInspector = null;
       currentLayoutKey = layoutKey;
       currentView = buildWindgramView(req.profile, {
         timeZone: req.timeZone,
@@ -280,7 +303,7 @@ export function createWindgramController(elements: WindgramControllerElements) {
         fillOpacity: 0.04,
         stroke: '#237e81',
       };
-      cursorRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      cursorRect = host.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'rect');
       for (const [k, v] of Object.entries({
         y: currentView.top,
         height: currentView.plotHeight,
@@ -296,7 +319,8 @@ export function createWindgramController(elements: WindgramControllerElements) {
       }
       const chartSvg = host.querySelector('svg')!;
       chartSvg.insertBefore(cursorRect, chartSvg.querySelector('[data-windgram-cursor]'));
-      clearInspector = mountWindgramInspector(host, null, currentView, req.onSelectHour);
+      inspection.hidden = false;
+      attachInspector();
     }
 
     select(req.selectedValidAt, true, rebuilt);
@@ -305,10 +329,12 @@ export function createWindgramController(elements: WindgramControllerElements) {
   }
 
   function dispose() {
+    if (disposed) return;
     disposed = true;
     resizeObserver?.disconnect();
     clear();
     abortController.abort();
+    inspection.remove();
   }
 
   return {

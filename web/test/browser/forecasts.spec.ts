@@ -54,6 +54,27 @@ test('an old run keeps a visible stale notice alongside its chart', async ({ pag
   await expect(notice).toHaveText('Old forecast · reload for update');
 });
 
+test('height inspection is available when usable lift is absent', async ({ page }) => {
+  await page.route('**/hrrr-conus/sites/wa-blanchard.json', async route => {
+    const response = await route.fetch(), profile = await response.json();
+    for (const hour of profile.hours) {
+      hour.derived.usableLiftTopM = null;
+      if (hour.soaring) hour.soaring.usableLiftTopV2M = null;
+    }
+    await route.fulfill({ json: profile });
+  });
+  await page.goto(launch);
+  await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+  await page.getByLabel('Inspect any height').check();
+  const chart = page.locator('#meteogram > svg');
+  const bounds = (await chart.boundingBox())!;
+  await chart.hover({ position: { x: bounds.width * .55, y: bounds.height * .4 } });
+  await expect(page.locator('#meteogram-readout')).toContainText('MSL');
+  await expect(page.locator('#meteogram-readout')).toContainText('Inspected height');
+  await expect(page.locator('#meteogram-readout')).toContainText('Dew point');
+  await expect(page.locator('#meteogram-readout')).not.toContainText('NaN');
+});
+
 test('launch wind basis and native support remain explicit beside the chart', async ({ page }) => {
   await page.route('**/hrrr-conus/sites/wa-blanchard.json', async route => {
     const response = await route.fetch(), profile = await response.json();

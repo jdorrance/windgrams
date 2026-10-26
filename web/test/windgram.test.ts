@@ -14,6 +14,13 @@ const fixture = (name = "convective-cycle") => {
   assert.ok(profile, `${name} is a valid forecast fixture`);
   return profile;
 };
+function publishV2(profile: SiteForecast) {
+  for (const hour of profile.hours) Object.assign(hour, { soaring: {
+    thermalVelocityV2Mps: hour.derived.thermalVelocityMps, resolvedThermalTopM: hour.derived.boundaryLayerTopM,
+    usableLiftTopV2M: hour.derived.usableLiftTopM, surfaceLclM: hour.derived.cloudBaseM,
+  } });
+  return profile;
+}
 const viewOf = (profile: SiteForecast) => buildWindgramView(profile, { timeZone: "Etc/UTC", widthPx: 1000 });
 const close = (actual: number, expected: number, tolerance = 1e-6) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≈ ${expected}`);
 
@@ -197,7 +204,7 @@ test("cloud evidence distinguishes dry LCL, saturated layers and model cloud", (
     hour.surface.cloudCoverPercent = 0;
     for (const level of hour.levels) level.dewPointC = Number(level.temperatureC) - 20;
   }
-  const potential = viewOf(dry);
+  const potential = viewOf(publishV2(dry));
   assert.ok(potential.clouds.some((cloud) => cloud.kind === "potential"));
   assert.ok(potential.clouds.every((cloud) => cloud.kind === "potential"), "a dry LCL must not masquerade as forecast cloud");
   assert.equal(potential.cloudBands.length, 0);
@@ -215,6 +222,7 @@ test("cloud evidence distinguishes dry LCL, saturated layers and model cloud", (
 
   const inaccessible = structuredClone(dry);
   for (const hour of inaccessible.hours) hour.derived.cloudBaseM = 10000;
+  publishV2(inaccessible);
   assert.equal(viewOf(inaccessible).clouds.length, 0, "LCL above the available profile is absent");
 });
 
@@ -271,7 +279,7 @@ test("potential cloud base remains visible when thermals cannot reach it or have
       level.cloudFractionPercent = 0;
     }
   }
-  const view = viewOf(profile);
+  const view = viewOf(publishV2(profile));
   assert.ok(base < view.topM);
   assert.equal(view.cloudBands.length, 0, "a dry LCL does not imply existing cloud");
   assert.equal(view.clouds.length, profile.hours.length);
@@ -657,6 +665,7 @@ test("compact charts retain isolated model cloud bands and every potential cloud
     }
   }
   profile.hours[2].levels[2].cloudFractionPercent = 100;
+  publishV2(profile);
   const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, widthPx: 320, heightPx: 667 });
   assert.ok(!visibleWindgramHourIndices(view).includes(2));
   const modelCloud = view.clouds.filter((cloud) => cloud.kind === "model");

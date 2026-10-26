@@ -15,16 +15,17 @@ const baseline = JSON.parse(readFileSync(new URL('./scene-parity.sha256.json', i
 const load = entry => parsePublishedProfileJson(gunzipSync(readFileSync(new URL(entry.file, fixtures))).toString());
 
 // Wind trigonometry differs by a few ULPs between V8's ARM64 and x64 builds.
-// Keep 15 significant digits for derived components, speeds, bearings and shear.
+// Keep 15 significant digits for components, speeds and bearings; 14 for shear
+// after component subtraction. This avoids rounding-boundary differences.
 // SVGs, keys, source measurements, coordinates and all other data stay exact.
 function sceneParityHash(payload) {
-  const windNumber = value => typeof value === 'number' ? Number(value.toPrecision(15)) : value;
+  const windNumber = (value, digits = 15) => typeof value === 'number' ? Number(value.toPrecision(digits)) : value;
   const serialized = JSON.stringify(payload, (key, value) => {
     if (key === 'speedKt' || key === 'directionDeg') return windNumber(value);
     if (key === 'windU' || key === 'windV') {
       return value.map(node => ({ ...node, value: windNumber(node.value) }));
     }
-    if (key === 'windShear' && value) return { ...value, vectorChangeMps: windNumber(value.vectorChangeMps), perKmMps: windNumber(value.perKmMps) };
+    if (key === 'windShear' && value) return { ...value, vectorChangeMps: windNumber(value.vectorChangeMps, 14), perKmMps: windNumber(value.perKmMps, 14) };
     return value;
   });
   return createHash('sha256').update(serialized).digest('hex');
@@ -76,6 +77,16 @@ test('scene parity tolerates only insignificant derived wind rounding', () => {
     { key: '<text>Wind 11 kt</text>' },
   ]) assert.notEqual(sceneParityHash({ ...payload, ...change }), hash, JSON.stringify(change));
   assert.deepEqual(payload, original, 'snapshot normalization never mutates scientific data');
+});
+
+test('scene parity handles the measured ARM/x64 shear rounding boundary', () => {
+  const arm = { windShear: { lowerM: 2864.1, upperM: 2964.8, vectorChangeMps: 0.7633700187386473, perKmMps: 7.5806357372258715 } };
+  const x64 = { windShear: { ...arm.windShear, vectorChangeMps: 0.7633700187386476, perKmMps: 7.580635737225875 } };
+  assert.equal(sceneParityHash(arm), sceneParityHash(x64));
+  for (const field of ['vectorChangeMps', 'perKmMps', 'lowerM', 'upperM']) {
+    const changed = { windShear: { ...arm.windShear, [field]: arm.windShear[field] + 1e-12 } };
+    assert.notEqual(sceneParityHash(arm), sceneParityHash(changed), field);
+  }
 });
 
 test('independent contexts need no browser preferences and produce independent SVG ids', () => {

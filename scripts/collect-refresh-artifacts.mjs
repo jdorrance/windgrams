@@ -10,7 +10,7 @@ import { validateFileTree } from '../forecasts/scripts/lib/artifact-products.mjs
 
 export function trustedRuns(runs, group, repository) {
   return runs.filter(run => ['completed', 'in_progress'].includes(run.status) && run.head_branch === 'main'
-    && run.head_repository?.full_name === repository && ['schedule', 'workflow_dispatch'].includes(run.event)
+    && run.head_repository?.full_name === repository && ['schedule', 'workflow_dispatch', 'push'].includes(run.event)
     && run.path === `.github/workflows/${refreshWorkflow(group)}` && /^[a-f0-9]{40}$/.test(run.head_sha)
     && Number.isSafeInteger(run.id) && run.id > 0 && Number.isFinite(Date.parse(run.created_at)))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);

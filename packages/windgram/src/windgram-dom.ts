@@ -2,6 +2,7 @@ import { renderWindgramSvg } from './windgram-chart.ts';
 import { fahrenheitToCelsius, formatQuantity, knotsToMps, type UnitSystem } from './windgram-format.ts';
 import { heightToY } from './windgram-scale.ts';
 import { readWindgram } from './windgram-inspector.ts';
+import { visibleWindgramHourIndices } from './windgram-time-axis.ts';
 import type { WindgramView } from './windgram-view.ts';
 import type { WindgramMountOptions, WindgramMount } from './dom.ts';
 const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(high, n));
@@ -19,7 +20,8 @@ export function mountWindgramInspector(
 ): () => void {
   const system = view.unitSystem;
   const svg = host.querySelector<SVGSVGElement>("svg.windgram");
-  if (!svg || !view.hours.length) return () => {};
+  const visibleHours = visibleWindgramHourIndices(view, 0);
+  if (!svg || !visibleHours.length) return () => {};
   const ownerDocument = host.ownerDocument;
   const cursor = svg.querySelector<SVGGElement>("[data-windgram-cursor]");
   const vertical = svg.querySelector<SVGLineElement>("[data-cursor-vertical]");
@@ -171,8 +173,10 @@ export function mountWindgramInspector(
     const position = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
     if (position.x < view.left || position.x > view.left + view.plotWidth || position.y < view.top || position.y > view.bottom) return null;
     const dataLeft = view.hours[0].x - view.columnWidth / 2;
-    const hourIndex = Math.floor((position.x - dataLeft) / view.columnWidth);
-    if (hourIndex < 0 || hourIndex >= view.hours.length) return null;
+    const dataRight = view.hours.at(-1)!.x + view.columnWidth / 2;
+    if (position.x < dataLeft || position.x > dataRight) return null;
+    const hourIndex = visibleHours.reduce((best, index) =>
+      Math.abs(view.hours[index].x - position.x) < Math.abs(view.hours[best].x - position.x) ? index : best);
     return { hourIndex };
   };
   const onMove = (event: PointerEvent) => {
@@ -213,10 +217,10 @@ export function mountWindgramInspector(
     event.preventDefault();
     pinned = true;
     let hourIndex = selectedHourIndex?.() ?? activeHour ?? view.selectedHourIndex;
-    if (event.key === "ArrowLeft") hourIndex = Math.max(0, hourIndex - 1);
-    if (event.key === "ArrowRight") hourIndex = Math.min(view.hours.length - 1, hourIndex + 1);
-    if (event.key === "Home") hourIndex = 0;
-    if (event.key === "End") hourIndex = view.hours.length - 1;
+    if (event.key === "ArrowLeft") hourIndex = visibleHours.findLast(index => index < hourIndex) ?? visibleHours[0];
+    if (event.key === "ArrowRight") hourIndex = visibleHours.find(index => index > hourIndex) ?? visibleHours.at(-1)!;
+    if (event.key === "Home") hourIndex = visibleHours[0];
+    if (event.key === "End") hourIndex = visibleHours.at(-1)!;
     update(hourIndex, true);
   };
   host.addEventListener("pointermove", onMove);
@@ -251,11 +255,16 @@ export function mountWindgram(host: HTMLElement, options: InternalMountOptions):
   const select = (validAt: string | null) => {
     if (disposed) return;
     selectedValidAt = validAt;
-    const index = validAt ? view.hours.findIndex(hour => hour.validAt === validAt) : -1;
+    const index = validAt ? view.hours.findIndex(hour => hour.validAt === validAt && hour.x >= view.left && hour.x <= view.left + view.plotWidth) : -1;
     const cursor = host.querySelector<SVGRectElement>('[data-selected-hour]');
     if (cursor) {
       cursor.setAttribute('visibility', index >= 0 ? 'visible' : 'hidden');
-      if (index >= 0) cursor.setAttribute('x', String(view.hours[index].x - view.columnWidth / 2));
+      if (index >= 0) {
+        const left = Math.max(view.left, view.hours[index].x - view.columnWidth / 2);
+        const right = Math.min(view.left + view.plotWidth, view.hours[index].x + view.columnWidth / 2);
+        cursor.setAttribute('x', String(left));
+        cursor.setAttribute('width', String(right - left));
+      }
     }
   };
   const update = (next: WindgramView) => {

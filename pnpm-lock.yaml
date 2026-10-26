@@ -47,6 +47,9 @@ importers:
       '@windgrams/soaring':
         specifier: workspace:*
         version: link:../packages/soaring
+      '@windgrams/windgram':
+        specifier: workspace:*
+        version: link:../packages/windgram
     devDependencies:
       '@types/node':
         specifier: 24.10.1

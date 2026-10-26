@@ -30,16 +30,18 @@ export function timeGaps(hours: readonly { validAt: string }[]): Set<number> {
   return new Set(hours.flatMap((h, i) => i && Date.parse(h.validAt) - Date.parse(hours[i - 1].validAt) > limit ? [i] : []));
 }
 
-/** Thin only display marks, keeping both ends of the complete forecast visible. */
+/** Thin display marks inside the plot, retaining the first and last visible samples. */
 export function visibleWindgramHourIndices(
-  view: { hours: readonly { x: number }[]; compact: boolean },
-  minimumSpacingPx = WINDGRAM_PRESENTATION.glyphs.minimumHorizontalSpacing,
+  view: { hours: readonly { x: number }[]; compact: boolean; left?: number; plotWidth?: number },
+  minimumSpacingPx: number = WINDGRAM_PRESENTATION.glyphs.minimumHorizontalSpacing,
 ): number[] {
   const selected: number[] = [];
+  let lastIndex = -1;
   for (const [i, hour] of view.hours.entries()) {
+    if (view.left !== undefined && view.plotWidth !== undefined && (hour.x < view.left || hour.x > view.left + view.plotWidth)) continue;
+    lastIndex = i;
     if (!selected.length || hour.x - view.hours[selected.at(-1)!].x >= minimumSpacingPx) selected.push(i);
   }
-  const lastIndex = view.hours.length - 1;
   if (selected.length > 1 && selected.at(-1) !== lastIndex) selected[selected.length - 1] = lastIndex;
   return selected;
 }
@@ -148,8 +150,21 @@ export function buildWindgramTimeLayout(
   }
   const columnCount = Math.max(1, emptyTimes.length, before + hours.length + after);
   const { left, right, top, plotWidth } = options.presentation ?? resolveWindgramPresentation({ compact, widthPx: options.widthPx });
-  const columnWidth = plotWidth / columnCount;
-  const dataLeft = left + before * columnWidth;
+  const times = hours.length ? hours.map(hour => Date.parse(hour.validAt)) : emptyTimes;
+  // Keep source indexes and interpolation intact; crop their horizontal frame at
+  // the solar crossings, including fractional columns in coarse forecasts.
+  const positionAt = (time: number) => {
+    const next = times.findIndex(value => value >= time);
+    if (next === 0) return (time - times[0]) / cadence;
+    if (next < 0) return times.length - 1 + (time - times.at(-1)!) / cadence;
+    return next - 1 + (time - times[next - 1]) / (times[next] - times[next - 1]);
+  };
+  const crop = daylight && (overlapsDaylight || emptyTimes.length);
+  const start = crop ? positionAt(daylight.sunrise) : -before - .5;
+  const end = crop ? positionAt(daylight.sunset) : hours.length + after - .5;
+  const columnWidth = plotWidth / (end > start ? end - start : columnCount);
+  const dataLeft = left - (start + .5) * columnWidth;
+  const axisLeft = dataLeft - before * columnWidth;
 
   return {
     left,
@@ -159,6 +174,7 @@ export function buildWindgramTimeLayout(
     columnWidth,
     plotWidth,
     dataLeft,
+    axisLeft,
     before,
     after,
     cadence,

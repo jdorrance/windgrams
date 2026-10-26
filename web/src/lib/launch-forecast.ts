@@ -1,10 +1,35 @@
 import { formatQuantity } from './units.ts';
-import type { SiteForecast } from '@azohra/meteo.briefing/contract';
-import { localHourOfDay } from '@azohra/meteo.briefing/derive';
+import type { ForecastManifest, SiteForecast } from '@azohra/meteo.briefing/contract';
+import { localDateKey, localHourOfDay, localInstantMs } from '@azohra/meteo.briefing/derive';
+import { sunriseSunset } from '@windgrams/meteorology/sun';
 import { publishedLift } from './published-lift.ts';
-import { compassPoint, inArc, windWindow, type LaunchDetails } from './launches.ts';
+import { compassPoint, inArc, windWindow, type LaunchDetails, type SiteEntry } from './launches.ts';
 
 type Hour = SiteForecast['hours'][number];
+type Location = Pick<SiteEntry, 'latitude' | 'longitude' | 'timeZone'>;
+
+/** Local daylight, or the complete local day when sunrise/sunset do not both occur. */
+export function launchDayWindow(site: Location, dateKey: string) {
+  const startMs = localInstantMs(dateKey, 0, site.timeZone);
+  const endMs = localInstantMs(dateKey, 24, site.timeZone);
+  const sun = sunriseSunset(startMs, endMs, site.latitude, site.longitude);
+  return sun ? { startMs: sun.sunrise, endMs: sun.sunset } : { startMs, endMs };
+}
+
+/** Open tomorrow after sunset; UTC date boundaries do not change the launch's day. */
+export function initialForecastDay(site: Location, nowMs = Date.now()) {
+  const today = localDateKey(new Date(nowMs).toISOString(), site.timeZone);
+  return nowMs > launchDayWindow(site, today).endMs
+    ? localDateKey(new Date(localInstantMs(today, 24, site.timeZone)).toISOString(), site.timeZone)
+    : today;
+}
+
+export function forecastCoversWindow(manifest: Pick<ForecastManifest, 'referenceTime' | 'firstForecastHour' | 'lastForecastHour'>, window: { startMs: number; endMs: number }) {
+  const reference = Date.parse(manifest.referenceTime);
+  return reference + manifest.firstForecastHour * 3_600_000 <= window.endMs
+    && reference + manifest.lastForecastHour * 3_600_000 >= window.startMs;
+}
+
 export function scalar(value: unknown): number | null {
   const number = typeof value === 'number' ? value : value && typeof value === 'object' && 'p50' in value ? value.p50 : null;
   return typeof number === 'number' && Number.isFinite(number) ? number : null;

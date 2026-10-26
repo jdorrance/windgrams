@@ -39,7 +39,7 @@ test('launch model switching preserves one interactive chart across resize, unit
   await expect(page.locator('#forecast-hour')).toHaveValue(String(previous + 1));
   await expect(page.locator('#meteogram > svg')).toHaveCount(1);
   await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })));
-  await page.locator('#forecast-hour-next').click();
+  await page.locator('#forecast-hour-prev').click();
   await expect(page.locator('#forecast-hour')).toHaveValue(String(previous + 1));
   expect(errors).toEqual([]);
 });
@@ -52,6 +52,42 @@ test('an old run keeps a visible stale notice alongside its chart', async ({ pag
   await expect(notice).toBeVisible();
   await expect(notice).toHaveAttribute('data-freshness', 'stale');
   await expect(notice).toHaveText('Old forecast · reload for update');
+});
+
+test('NZ launches retain their country, local day and global models on mobile', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/?country=NZ');
+  await expect(page.locator('#launch-country')).toHaveValue('NZ');
+  await expect(page.locator('.state-group[data-country="US"]:visible')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Coronet Peak', exact: true }).click();
+  await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Launch info', exact: true }).click();
+  await expect(page.locator('#launch-info a[href="https://southernclub.co.nz/visiting-pilots/"]')).toBeVisible();
+  await page.getByRole('button', { name: 'Close launch info', exact: true }).click();
+  expect(await page.locator('#model-select option').evaluateAll(options => options.map(option => (option as HTMLOptionElement).value)))
+    .toEqual(['gfs', 'gdps', 'geps']);
+  await expect(page).toHaveURL(/day=2026-10-26/);
+  for (const model of ['gdps', 'geps', 'gfs']) {
+    await page.locator('#model-select').selectOption(model);
+    await expect(page.locator('#model-selected-name')).toHaveText(model.toUpperCase());
+    await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+    await expect(page).toHaveURL(/day=2026-10-26/);
+  }
+  await page.locator('#unit-system').selectOption('metric');
+  const chart = page.locator('#meteogram > svg');
+  const initialSize = await chart.getAttribute('viewBox');
+  await page.locator('#forecast-hour-next').click();
+  await expect(chart).toHaveAttribute('viewBox', initialSize!);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('#soaring-nav-link').click();
+  await expect(page).toHaveURL(/country=NZ/);
+  await expect(page.locator('#replay-windgram > svg')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /New Zealand launches/i })).toBeVisible();
+  await page.getByRole('link', { name: /New Zealand launches/i }).click();
+  await expect(page.locator('#launch-country')).toHaveValue('NZ');
+  expect(errors).toEqual([]);
 });
 
 test('a current forecast shows a failed refresh without hiding the chart or changing its age', async ({ page }) => {

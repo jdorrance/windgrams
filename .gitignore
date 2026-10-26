@@ -30,3 +30,6 @@ artifacts/windgram-visual/
 web/test-results/
 web/playwright-report/
 .codex-attachments/
+
+# Immutable public evidence and generated scientific review reports.
+forecasts/.scientific-review/

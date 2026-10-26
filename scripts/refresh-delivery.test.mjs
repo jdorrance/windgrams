@@ -21,8 +21,10 @@ test('collector trusts completed and in-progress repository/main provider workfl
   const valid = run('rrfs', 2);
   assert.deepEqual(trustedRuns([valid, run('rrfs', 1), run('rrfs', 3, { status: 'in_progress' }),
     run('rrfs', 4, { status: 'queued' }), run('rrfs', 5, { status: 'waiting' }),
-    { ...valid, event: 'pull_request' }, { ...valid, head_branch: 'trial' }, { ...valid, head_repository: { full_name: 'fork/windgrams' } },
-    { ...valid, path: '.github/workflows/check.yml' }], 'rrfs', repository).map(item => item.id), [3, 2, 1]);
+    run('rrfs', 6, { event: 'push' }), run('rrfs', 7, { event: 'workflow_dispatch' }),
+    { ...valid, event: 'pull_request' }, { ...valid, event: 'pull_request_target' }, { ...valid, event: 'repository_dispatch' },
+    { ...valid, event: 'push', head_branch: 'trial' }, { ...valid, event: 'push', head_repository: { full_name: 'fork/windgrams' } },
+    { ...valid, event: 'push', head_sha: 'invalid' }, { ...valid, event: 'push', path: '.github/workflows/check.yml' }], 'rrfs', repository).map(item => item.id), [7, 6, 3, 2, 1]);
 });
 
 test('collection publishes ready providers while others run and falls back from incompatible artifacts', async t => {

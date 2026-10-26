@@ -194,12 +194,14 @@ export function createWindgramController(elements: WindgramControllerElements) {
     if (lastRequest) lastRequest = { ...lastRequest, selectedValidAt: validAt };
     if (!currentView) return;
     const idx = validAt ? currentView.hours.findIndex(hour => hour.validAt === validAt) : -1;
-    const displayedHour = idx >= 0 ? currentView.hours[idx] : undefined;
+    const hour = idx >= 0 ? currentView.hours[idx] : undefined;
+    const displayedHour = hour && hour.x >= currentView.left && hour.x <= currentView.left + currentView.plotWidth ? hour : undefined;
     currentView.selectedHourIndex = Math.max(0, idx);
     cursorRect?.setAttribute('visibility', displayedHour ? 'visible' : 'hidden');
     if (cursorRect && displayedHour) {
-      const left = displayedHour.x - currentView.columnWidth / 2;
+      const left = Math.max(currentView.left, displayedHour.x - currentView.columnWidth / 2);
       cursorRect.setAttribute('x', String(left));
+      cursorRect.setAttribute('width', String(Math.min(currentView.left + currentView.plotWidth, displayedHour.x + currentView.columnWidth / 2) - left));
       const axisWidth = Number(host.dataset.axisWidth ?? 0);
       if (axisWidth > 0 && reveal) {
         if (left < host.scrollLeft + axisWidth) host.scrollLeft = Math.max(0, left - axisWidth);

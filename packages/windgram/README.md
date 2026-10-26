@@ -26,6 +26,9 @@ The returned SVG includes its styles. Use a different `idPrefix` for every chart
 in the same document. Keep the original view object when calling renderers or
 inspection functions; copying its visible fields loses the internal scene data.
 
+Single-day plots follow local daylight, retaining adjacent forecast samples for
+interpolation. Polar dates keep their supplied hours.
+
 ## Interactive charts
 
 Import `@windgrams/windgram/styles.css` once, then use

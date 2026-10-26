@@ -29,7 +29,7 @@ function sceneParityHash(payload) {
   return createHash('sha256').update(serialized).digest('hex');
 }
 
-test('package extraction preserves 40 scenes, exact SVGs and keys, and physical readouts', () => {
+test('frozen forecasts match reviewed scenes, SVGs, legends and physical readouts', () => {
   for (const entry of manifest.fixtures.filter(f => f.file)) for (const unitSystem of ['imperial', 'metric']) for (const compact of [false, true]) for (const heightRange of ['soaring', 'full']) {
     const profile = load(entry);
     const view = buildWindgramView(profile, { unitSystem, compact, heightRange, widthPx: compact ? 356 : 800, timeZone: entry.timeZone, launch: entry.launch, hours: { dateKey: entry.day, timeZone: entry.timeZone } });

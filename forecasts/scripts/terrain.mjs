@@ -57,7 +57,6 @@ export async function measure(sites, { open = T.openCog, fetchImpl = globalThis.
     if (failed.includes(centre)) throw results[urls.indexOf(centre)].reason;
     const tiles = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
     if (failed.length > 0) {
-      if (tiles[0].nodata === null) throw new Error(`${site.slug}: neighbouring tile(s) unavailable (${failed.join(", ")}) and the source declares no nodata value`);
       warn(`WARN ${site.slug}: neighbouring tile(s) unavailable, treated as no data: ${failed.join(", ")}`);
     }
     if (tiles.length > 1) log(`${site.slug}: joined ${tiles.length} tiles for a ${Math.round(halfM / 1000)} km window`);

@@ -125,9 +125,11 @@ Scripts with `--publish` or `--sync` select a store through `WINDGRAMS_STORE`. T
 node scripts/import-flyingsites.mjs
 ```
 
-The importer merges US and Armenian records into `sites.json` and `web/src/data/launches.json`. `--country=am` uses the bundled Armenian source; `--country=us` reads the adjacent `flyingsites/data/us.geojson.json`. `FLYINGSITES_US` and `FLYINGSITES_AM` override those inputs.
+The importer merges launch records into `sites.json` and `web/src/data/launches.json`. Choose `--country=nz` or `--country=am` for the reviewed country catalogues. `--country=us` reads the adjacent `flyingsites/data/us.geojson.json`. With no arguments, it imports all three. `FLYINGSITES_US`, `FLYINGSITES_AM` and `FLYINGSITES_NZ` override the inputs.
 
-Imports add missing records and metadata while preserving existing coordinates, notes, wind settings and other countries. Apply deliberate corrections and removals directly to the retained records. The [Armenian source notes](../scripts/data/ARMENIA.md) explain the coordinate choices, exclusions and licences.
+Imports add missing records and metadata while preserving existing coordinates, notes, wind settings and other countries. Apply deliberate corrections and removals directly to the retained records. Source notes for [Armenia](../scripts/data/ARMENIA.md) and [New Zealand](../scripts/data/NEW_ZEALAND.md) record coordinate choices, exclusions and licences.
+
+Changes to `forecasts/sites.json` on `main` start NOAA and ECCC refreshes, including missing launch terrain. Their completed artifacts publish automatically. Pages can show new launches as unavailable until the first covering forecast finishes. New Zealand uses GFS, GDPS and GEPS with GLO-30 terrain; its regional map fields remain a separate product.
 
 ## Refresh health
 
@@ -145,6 +147,8 @@ Check the public dataset with:
 node scripts/monitor-served.mjs --from https://jdorrance.github.io/windgrams/data
 ```
 
-The monitor exits unsuccessfully for delayed, stale, expired or inconsistent products; failed refreshes; missing health records; and missing or invalid served documents. It reads a representative profile for each configured model, every active regional pointer and profile, and the first and last map hours of each regional horizon. It also checks NWS, ECMWF and balloon attempt manifests and representative payloads. Supplemental forecasts use their actual forecast horizon; balloon queries and observations use the acquisition's 48-hour search window. These probes check what the website can actually fetch; full build validation checks the complete dataset before upload.
+The monitor checks each model's site inventory against the current catalogue and coverage, accepting native-grid exclusions recorded against the same catalogue. It reads one point profile per covered country, every active regional pointer and profile, and the first and last map hours. Older inventories fail this check until forecasts cover the new launches.
+
+Delayed, stale, expired or inconsistent forecasts, failed refreshes, missing health records and unavailable documents fail the monitor. NWS, ECMWF and balloon checks read attempt manifests and representative payloads. Supplemental forecasts use their actual horizon; balloon queries and observations use the 48-hour acquisition window. Full build validation checks every profile before upload.
 
 Freshness limits come from model cadence, as they do in the UI. An unfinished attempt is allowed one run interval; a completed refresh must be within three intervals plus lag. Reads are limited to 32 MiB with a 10-second timeout and HTTP retries. Use `--now ISO_UTC` to repeat an investigation with a fixed clock.

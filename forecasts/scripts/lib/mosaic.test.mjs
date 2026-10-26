@@ -84,6 +84,43 @@ test("mosaic joins USGS 3DEP tiles, whose stored pixel size is rounded", async (
 
 const HALF_M = Math.max(...T.RELIEF_RADII_M) + 200;
 
+test('missing mosaic corners stay masked when source tiles have no nodata sentinel', async () => {
+  const tile = (west, south) => syntheticTile({ west, south, res: .1, nodata: null, value: () => 100, type: Uint16Array });
+  const joined = mosaic([tile(-116, 43), tile(-117, 42)]);
+  const values = await joined.readWindow(8, 8, 4, 4);
+  assert.ok(Number.isNaN(joined.nodata));
+  assert.ok(Number.isNaN(values[0]));
+  assert.equal(values[2], 100);
+  const { window } = await T.cogWindow(joined, 43, -116, 1000);
+  assert.ok(window.mask.some(value => value === 1));
+  assert.ok(window.values.every((value, index) => window.mask[index] ? Number.isNaN(value) : value === 100));
+});
+
+test('coastal launch terrain excludes an absent offshore tile and still requires launch data', async () => {
+  const site = { slug: 'nz-coast', latitude: -39.0651, longitude: 174.021, timeZone: 'Pacific/Auckland' };
+  const missing = 'Copernicus_DSM_COG_10_S39_00_E173_00_DEM';
+  const open = async url => {
+    if (url.includes(missing)) throw Object.assign(new Error('No offshore tile'), { status: 404 });
+    const dem = /Copernicus_DSM_COG_10_S(\d+)_00_E(\d+)_00_DEM/.exec(url);
+    if (dem) return syntheticTile({ west: +dem[2], south: -dem[1], res: .001, nodata: null, value: () => 100 });
+    const cover = /ESA_WorldCover_10m_2021_v200_S(\d+)E(\d+)_Map/.exec(url);
+    if (cover) return syntheticTile({ west: +cover[2], south: -cover[1], degrees: 3, res: .001, nodata: 0, value: () => 30, type: Uint8Array });
+    throw new Error(`Unexpected source: ${url}`);
+  };
+  const warnings = [];
+  const document = await measure([site], { open, log: () => {}, warn: message => warnings.push(message) });
+  const terrain = document.sites[site.slug].terrain;
+  assert.equal(terrain.elevationM, 100);
+  assert.equal(terrain.slopeDeg, 0);
+  assert.ok(terrain.relief.every(disc => disc.minM === 100 && disc.maxM === 100));
+  assert.match(warnings.join('\n'), /offshore|S39_00_E173/);
+  assert.ok(parseSiteContextJson(JSON.stringify(document)));
+  await assert.rejects(measure([site], { open: async url => {
+    if (url === T.glo30Url(site.latitude, site.longitude)) throw Object.assign(new Error('Launch tile missing'), { status: 404 });
+    return open(url);
+  }, log: () => {}, warn: () => {} }), /Launch tile missing/);
+});
+
 test("one tile reproduces the engine's tile-edge failure at Cervidae", async () => {
   const single = syntheticTile({ west: -116, south: 43 });
   const { window, lats, lons } = await T.cogWindow(single, CERVIDAE.latitude, CERVIDAE.longitude, HALF_M);

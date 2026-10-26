@@ -20,6 +20,9 @@ test('provider completions publish independently while preserving schedules', ()
     assert.ok(source.includes(`group: ${group}`));
     const schedule = group === 'rrfs' ? '55 3,9,15,21 * * *' : group === 'dwd' ? '55 4,10,16,22 * * *' : '55 1,7,13,19 * * *';
     assert.ok(source.includes(schedule));
+    const push = source.match(/^  push:\n((?:    .*\n)+)/m)?.[1];
+    if (['noaa-cloud', 'eccc'].includes(group)) assert.equal(push, '    branches: [main]\n    paths: [forecasts/sites.json]\n');
+    else assert.equal(push, undefined, `${group} keeps its independent schedule`);
   }
   const publish = workflow.split('  publish:')[1];
   assert.equal(publish.includes('needs:'), false, 'publisher has no provider completion barrier');

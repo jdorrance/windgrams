@@ -87,7 +87,36 @@ The `refresh` choices are `all`, `rrfs`, `icon-eu` and `none`. Choose `none` to 
 
 The provider schedules use UTC. Check the provider workflow's scheduled runs separately from Pages: a successful publication can contain retained forecasts. Compare the expected cron time with the run's `created_at`, then compare that with the job's `started_at`. A missing run or late creation points to event delivery; a created run waiting for a job points to runner or concurrency queues. Errors after a job starts belong to the refresh itself.
 
-GitHub documents that [scheduled events can be delayed or dropped](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). The hourly served-data monitor uses the same scheduler, so it cannot independently detect a scheduler outage. Use the manual dispatch above for recovery; verify new model initialization times and refresh health before treating publication as a successful refresh.
+GitHub documents that [scheduled events can be delayed or dropped](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). The hourly served-data monitor uses the same scheduler, so it cannot by itself detect a scheduler outage; the heartbeat below exists for that. Use the manual dispatch above for recovery; verify new model initialization times and refresh health before treating publication as a successful refresh.
+
+### Served-data alerting and the external watchdog
+
+A failed hourly check opens (or updates) a single GitHub issue labelled `served-data` via `scripts/report-served-failure.mjs`; the monitor report is also kept as a 14-day `served-report-*` artifact. Comments are deduplicated by the sorted set of failing checks: a changed failure or 24 hours without an update earns a new comment, and a passing check closes the issue. The report's `rollbackEligible` field separates corrupt or unavailable served bytes (repairable by republishing, see below) from staleness (not repairable that way).
+
+Independent freshness needs a watcher outside GitHub's scheduler. On success the monitor pings `HEALTHCHECKS_SERVICEDATA_URL` and the Pages publisher pings `HEALTHCHECKS_PUBLISH_URL` (repository secrets holding ping URLs from a free-tier watchdog such as healthchecks.io; any equivalent URL-ping service works, and there is no recurring charge at this scale). Configure the served check with a 1-hour period and 2-hour grace, the publish check with a 6-hour period and 12-hour grace, alerting the repository owner. Without those secrets the ping steps are no-ops and a scheduler outage remains undetectable — that limitation is deliberate and visible in the workflow logs, not silent.
+
+### Issued-history backup and restore
+
+Actions caches and 2-day artifacts are not the only copy of first-issued history. The weekly [Backup issued history](../../.github/workflows/backup-history.yml) workflow packs `forecasts/data/history` with `scripts/backup-issued-history.mjs` (tar chunks under 2 GiB plus `history-backup-manifest.json` naming every file's SHA-256 and a tree hash; issued revisions are re-verified against their receipts during packing) and uploads it to the `issued-history` pre-release. Release storage on this public repository carries no recurring charge.
+
+To recover after a cache eviction, dispatch that workflow with `restore=true`: it downloads the release, verifies chunk, archive and per-file hashes, checks revision evidence, and only then places the tree. The same steps work locally:
+
+```sh
+node forecasts/scripts/backup-issued-history.mjs verify --history forecasts/data/history
+node forecasts/scripts/backup-issued-history.mjs pack --history forecasts/data/history --output /tmp/backup
+node forecasts/scripts/backup-issued-history.mjs restore --archive /tmp/backup --output /tmp/restored-history
+```
+
+Verify a restored tree with `pnpm verify:history` against a known window before trusting it for scoring; a backup proves byte integrity, not forecast accuracy.
+
+### Recover the previous complete publication
+
+Pages keeps each active regional case's current and previous bundle, and the served dataset is the seed source. To republish the last complete dataset after a bad (but valid) publication:
+
+1. Confirm the currently served data is the bad one and note the last good Pages run: `node forecasts/scripts/monitor-served.mjs --from "$DATA_BASE" --output /tmp/served-report.json` (a report with `rollbackEligible: true` is the repairable case; staleness is not).
+2. Validate the recovery candidate without deploying: `gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=none -f dry_run=true`, and check that run's preparation succeeds.
+3. Republish with `gh workflow run pages.yml --repo jdorrance/windgrams --ref main -f refresh=none`. Publication seeds from the last complete served dataset (`seed-published.mjs --best-effort`), keeps older complete products in place, and removes only invalid ones, so a plain republish restores the previous complete state rather than inventing data.
+4. Verify recovery with the monitor command from step 1 and confirm the `served-data` alert issue closes on its next hourly run (or close it manually with the passing report attached).
 
 ### Publication and retention
 
@@ -123,7 +152,7 @@ Complete newer products replace their retained counterparts. Older runs, partial
 
 Preparation works in a temporary copy of the forecast products. If no point model is complete, or terrain validation fails, the original dataset is unchanged. Sunlight and scratch caches are transferred without copying their bytes. A dry run performs the same preparation and checks, then discards the temporary result.
 
-Seeding checks immutable files against SHA-256 hashes. Pages keeps each active regional case's current and previous bundle, plus historical cases. Packaging compacts ordinary JSON, preserves bundle bytes and reports size by product. It warns at 800 MB and stops at 1 GB. Forecast history stays in provider artifacts and caches rather than Pages; see [history retention](../verification/README.md#source-columns-and-retention). Refresh artifacts expire after two days, with the published dataset and saved cache providing the fallback.
+Seeding checks immutable files against SHA-256 hashes. Pages keeps each active regional case's current and previous bundle, plus historical cases. Packaging compacts ordinary JSON, preserves bundle bytes and reports size by product. It warns at 800 MB and stops at 1 GB. Forecast history stays in provider artifacts and caches rather than Pages; see [history retention](../verification/README.md#source-columns-and-retention). Refresh artifacts expire after two days, with the published dataset and saved cache providing the fallback, and the weekly [issued-history backup](#issued-history-backup-and-restore) holding the durable copy if the cache is evicted.
 
 Archive storage uses gzip for profile payloads while revision identities continue
 hashing the original JSON bytes. CI restores `issued-data-v2-*` caches first and

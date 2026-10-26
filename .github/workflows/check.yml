@@ -20,7 +20,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-pnpm
+      - run: pnpm run check:workflows
       - run: pnpm run check:boundaries
       - run: pnpm run check:api
       - name: Offline tests and kernel coverage
@@ -35,6 +38,8 @@ jobs:
         working-directory: forecasts
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Install the pinned native ICON decoder
         run: |
           python3.12 -m venv .venv-icon
@@ -50,6 +55,8 @@ jobs:
         working-directory: forecasts
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-pnpm
       - name: Validate sites.json
         run: pnpm run check
@@ -66,6 +73,8 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-pnpm
       - name: Type checks
         run: pnpm run check
@@ -81,6 +90,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-pnpm
       - run: pnpm --dir web exec playwright install --with-deps chromium
       - name: Offline browser checks

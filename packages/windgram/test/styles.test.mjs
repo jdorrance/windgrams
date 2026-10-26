@@ -26,6 +26,23 @@ test('external and self-contained SVG share geometry and one canonical styleshee
   }
 });
 
+test('chart text carries a dark halo legible on every stability fill', () => {
+  const rule = selector => chartCss.match(new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]+)\\}'))?.[1] ?? '';
+  const text = rule('.windgram text');
+  assert.match(text, /paint-order: stroke;/);
+  assert.match(text, /stroke: #1a142e;/);
+  const luminance = hex => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  assert.ok(contrast('#ffffff', '#1a142e') >= 4.5, 'label fill against its halo');
+  for (const { className, color } of WINDGRAM_STABILITY) {
+    assert.ok(contrast('#1a142e', color) >= 4.5, `halo against ${className} fill ${color}: ${contrast('#1a142e', color).toFixed(2)}:1`);
+  }
+});
+
 test('canonical CSS matches geometry font, stroke and physical category assumptions', () => {
   const { fonts, strokes } = WINDGRAM_PRESENTATION;
   const rule = selector => chartCss.match(new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]+)\\}'))?.[1] ?? '';

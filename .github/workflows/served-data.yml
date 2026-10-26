@@ -12,8 +12,13 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-pnpm
       - id: urls
         env:
@@ -22,6 +27,33 @@ jobs:
           WINDGRAMS_DATA_BASE: ${{ vars.WINDGRAMS_DATA_BASE }}
         run: node scripts/pages-config.mjs
       - name: Check the published dataset
+        id: monitor
         env:
           DATA_BASE: ${{ steps.urls.outputs.data }}
-        run: node forecasts/scripts/monitor-served.mjs --from "$DATA_BASE"
+        run: node forecasts/scripts/monitor-served.mjs --from "$DATA_BASE" --output served-report.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: served-report-${{ github.run_id }}
+          path: served-report.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Open or update the alert issue
+        if: failure() && steps.monitor.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node forecasts/scripts/report-served-failure.mjs --report served-report.json
+      - name: Close the alert issue on recovery
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node forecasts/scripts/report-served-failure.mjs --report served-report.json --resolve
+      # Independent freshness: an external watchdog expects this ping hourly.
+      # Without the secret this step is a no-op and a scheduler outage stays
+      # undetectable; see forecasts/docs/operations.md (Served-data alerting).
+      - name: Heartbeat to the external watchdog
+        if: success()
+        env:
+          PING_URL: ${{ secrets.HEALTHCHECKS_SERVICEDATA_URL }}
+        run: |
+          if [ -n "$PING_URL" ]; then curl -fsS -m 10 --retry 3 "$PING_URL"; else echo "HEALTHCHECKS_SERVICEDATA_URL is not configured; skipping heartbeat."; fi

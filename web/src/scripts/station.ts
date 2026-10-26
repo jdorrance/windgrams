@@ -102,7 +102,7 @@ function start() {
     const gust = recentGust(doc, now);
     if (current && current.windSpeedMps !== null) {
       const deg = current.windDirectionDeg;
-      wind.textContent = `${deg === null ? "Calm" : compassPoint(deg)} ${formatQuantity(current.windSpeedMps, "wind")}`;
+      wind.textContent = `${deg === null ? (current.windSpeedMps < 0.45 ? "Calm" : "Direction unavailable ·") : compassPoint(deg)} ${formatQuantity(current.windSpeedMps, "wind")}`;
       gustLine.textContent = gust === null ? "" : `Gusts to ${formatQuantity(gust, "wind")} · 15 min peak`;
       drawArrow(byId<SVGSVGElement>("station-compass"), deg, deg !== null && inArc(deg, arc), current.windSpeedMps);
     } else {
@@ -226,10 +226,12 @@ function drawArrow(svg: SVGSVGElement, deg: number | null, inWindow: boolean, sp
   const group = svg.querySelector(".compass-arrow")!;
   group.replaceChildren();
   group.setAttribute("class", `compass-arrow${inWindow ? " in-window" : ""}`);
-  if (deg === null || speedMps < 0.45) {
+  if (speedMps < 0.45) {
     svgEl("circle", { cx: C, cy: C, r: 6, class: "compass-calm" }, group);
     return;
   }
+  // No direction at speed: no arrow and no calm circle; the hero text says direction is unavailable.
+  if (deg === null) return;
   svgEl("path", { d: "M0 0 L-8 -15 L-3 -13 L-3 -36 L3 -36 L3 -13 L8 -15 Z", transform: `translate(${C} ${C}) rotate(${deg})` }, group);
 }
 

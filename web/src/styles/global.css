@@ -1654,7 +1654,7 @@ fieldset {
 .skewt-isotherm.skewt-zero { stroke: var(--series-1); opacity: 0.55; stroke-width: 1.5; }
 .skewt-adiabat { fill: none; stroke: var(--axis); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.8; }
 .skewt-thermal-zone { fill: var(--series-1); fill-opacity: 0.09; }
-.skewt-lid { fill: url(#skewt-hatch); }
+/* Lid fill is set per chart instance (url(#skewt-<n>-hatch)); ids must stay unique across charts. */
 .skewt-lid-soft { opacity: 0.5; }
 .skewt-hatch-line { stroke: var(--ink-3); stroke-width: 1.2; opacity: 0.55; }
 .skewt-cloud-layer { fill: var(--muted); fill-opacity: 0.22; }

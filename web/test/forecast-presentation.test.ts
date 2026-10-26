@@ -113,4 +113,46 @@ test('support readout separates native profile support, thermal branch and nativ
   assert.equal(values['Cloud limit source'], 'Surface-parcel LCL');
   assert.match(values['Surface pressure'], /hypsometric estimate/);
   assert.match(support.limit!, /upper boundary is unresolved/);
+  assert.match(support.caution!, /sparse native levels \(2 in the lowest/, 'sparse-profile caution is visible outside the collapsed details');
+});
+
+test('fallback thermal tops carry a visible caution, and resolved dense tops do not', () => {
+  const hour: PublishedForecastHour = profile().hours[0];
+  const supportFor = (branch: string, sparse = false) => {
+    hour.soaring = {
+      thermalVelocityV2Mps: null,
+      verticalResolution: { nativeLevelCount: 18, aboveGroundLevelCount: 18, isSparseProfile: sparse, hasSub925Levels: true, hasUpperAirAbove600Levels: true, has80mWind: true, synthesizedLevels: 0 },
+      diagnosticSupport: {
+        thermalDepth: { branch, bracketMslM: null, topLimited: false },
+        cloudLimit: { source: 'surface-lcl' }, surfacePressure: { source: 'model', valueHpa: 950 },
+      },
+    } as PublishedForecastHour['soaring'];
+    return forecastDataSupport(hour);
+  };
+  assert.match(supportFor('model-pbl-fallback').caution!, /fallback estimate, not a resolved parcel crossing/);
+  assert.match(supportFor('heat-flux-fallback').caution!, /fallback estimate/);
+  assert.match(supportFor('parcel-crossing', true).caution!, /sparse native levels/);
+  assert.equal(supportFor('parcel-crossing').caution, null);
+  assert.equal(supportFor('parcel-crossing').limit, null);
+});
+
+test('unsourced launch limits are labelled defaults and soaring displays round coarsely without touching stored values', () => {
+  setUnitSystem('metric');
+  const hour = profile().hours[0];
+  hour.surface.windSpeedMps = 9; // ≈20 mph, above the 15 mph limit
+  const original = structuredClone(hour);
+  const conditions = launchConditions(hour, limits, 530, 407.1);
+  assert.ok(conditions.issues.includes('Model surface wind above default speed limit'));
+  assert.match(conditions.windBasis, /Wind limits are unsourced defaults, not launch-specific/);
+  const sourced = launchConditions(hour, { ...limits, source: { name: 'Club', url: 'https://example.invalid', checkedAt: '2026-10-26', license: 'CC0' } }, 530, 407.1);
+  assert.ok(sourced.issues.includes('Model surface wind above saved speed limit'));
+  assert.doesNotMatch(sourced.windBasis, /unsourced defaults/);
+  assert.deepEqual(hour, original, 'display rounding must not mutate the published hour');
+  const precise = profile().hours[0];
+  Object.assign(precise.derived, { thermalVelocityMps: 1.26, usableLiftTopM: 1234.4, cloudBaseM: 1274.6 });
+  const rounded = launchConditions(precise, limits, 530, 407.1);
+  assert.equal(rounded.values[2][1], '1,250 m MSL', 'lift top displays to the nearest 50 m');
+  assert.equal(rounded.values[3][1], '1,250 m MSL', 'cloud base displays to the nearest 50 m');
+  assert.equal(rounded.values[4][1], '1.30 m/s', 'thermal strength displays to 0.1 m/s');
+  assert.equal(precise.derived.usableLiftTopM, 1234.4, 'stored precision is retained');
 });

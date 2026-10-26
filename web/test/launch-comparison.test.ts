@@ -204,6 +204,25 @@ test('regional summary and detail rows share explicit units despite the global p
   }
 });
 
+test('a missing thermal top is unavailable, and stable requires a valid zero thermal velocity', () => {
+  const launch: LaunchEntry = {
+    slug: 'test', name: 'Test', latitude: 48, longitude: -122, timeZone: 'America/Los_Angeles',
+    cellIndex: 0, gridIndex: 100, distanceKm: 0, launchElevationM: 500, modelElevationM: 400, models: {},
+  };
+  const base = {
+    thermalVelocityMps: [1], thermalVelocityV2Mps: [1],
+    usableLiftTopM: [1000], usableLiftTopV2M: [1000], boundaryLayerTopM: [1100],
+    pblHeightM: [700], cloudBaseM: [1200], wind10mSpeedMps: [5], wind10mDirDeg: [270],
+    resolvedThermalTopM: [null],
+  };
+  const row = (patch: Record<string, unknown>) => buildRegionalLaunchTableRows([launch], { ...base, ...patch } as ReplayHour, 0, 'metric')[0];
+  assert.equal(row({ status: ['valid'], thermalVelocityV2Mps: [null] }).detailCells.resolvedTopText, 'Unavailable');
+  assert.equal(row({ status: ['valid'], thermalVelocityV2Mps: [0] }).detailCells.resolvedTopText, 'Stable');
+  assert.equal(row({ status: ['insufficient-levels'] }).detailCells.resolvedTopText, 'Insufficient vertical coverage');
+  assert.equal(row({ status: ['missing'] }).detailCells.resolvedTopText, 'Unavailable');
+  assert.equal(row({ status: ['valid'], thermalVelocityV2Mps: [0] }).detailCells.resolvedTopMuted, true);
+});
+
 test('Stage 2: comparison view-model handles deterministic V2, absent V2, explicit V2 null, GEPS legacy/V2 spreads, ECMWF/NWS sparse, and ICON-EU', () => {
   const validAt = '2026-10-21T20:00:00Z';
   const launch: LaunchEntry = {

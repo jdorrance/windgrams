@@ -17,6 +17,23 @@ test('sibling models share one validated provider health request', async () => {
   assert.equal(urls.length, 1);
 });
 
+test('a failed health read is retried and a successful read is reused only within the TTL', async () => {
+  let calls = 0, clock = 1_000_000;
+  const read = createRefreshHealthReader({ baseUrl: 'https://forecast.invalid/data', now: () => clock, fetch: async () => {
+    calls += 1;
+    return calls === 1 ? new Response('', { status: 404 })
+      : Response.json({ schemaVersion: 1, group: 'noaa-cloud', models: { gfs: attempt } });
+  } });
+  assert.equal(await read('gfs'), null);
+  assert.deepEqual(await read('gfs'), attempt, 'failure is not cached for the page lifetime');
+  assert.equal(calls, 2);
+  assert.deepEqual(await read('gfs'), attempt);
+  assert.equal(calls, 2, 'success is shared within the TTL');
+  clock += 5 * 60_000;
+  assert.deepEqual(await read('gfs'), attempt);
+  assert.equal(calls, 3, 'a long-lived tab re-reads health after the TTL');
+});
+
 test('missing and malformed health remain unknown instead of inventing a refresh result', async () => {
   for (const response of [new Response('', { status: 404 }), Response.json({ schemaVersion: 1, group: 'noaa-cloud', models: { rrfs: attempt } }),
     Response.json({ schemaVersion: 1, group: 'noaa-cloud', models: { gfs: { ...attempt, completedAt: null } } })]) {

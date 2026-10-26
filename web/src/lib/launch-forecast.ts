@@ -3,7 +3,7 @@ import type { ForecastManifest, SiteForecast } from '@azohra/meteo.briefing/cont
 import { localDateKey, localHourOfDay, localInstantMs } from '@azohra/meteo.briefing/derive';
 import { sunriseSunset } from '@windgrams/meteorology/sun';
 import { publishedLift } from './published-lift.ts';
-import { compassPoint, inArc, windWindow, type LaunchDetails, type SiteEntry } from './launches.ts';
+import { compassPoint, inArc, windLimitsLabel, windWindow, type LaunchDetails, type SiteEntry } from './launches.ts';
 
 type Hour = SiteForecast['hours'][number];
 export { scalar };
@@ -59,26 +59,32 @@ export function launchConditions(hour: Hour, settings: LaunchDetails, launchElev
   const gust = scalar(hour.surface.windGustMps), lift = publishedLift(hour);
   const strength = scalar(lift.thermalVelocityMps), top = scalar(lift.usableLiftTopM), base = scalar(lift.cloudBaseM);
   const feet = (v: number) => `${formatQuantity(v, 'elevation')} MSL`;
+  // Display rounding only: published diagnostic values keep their stored precision.
+  // Soaring heights are shown to the nearest 50 m and thermal strength to 0.1 m/s,
+  // which is the resolution these estimates can support; terrain stays exact.
+  const displayHeight = (v: number) => `${formatQuantity(Math.round(v / 50) * 50, 'elevation')} MSL`;
+  const displayLift = (v: number) => formatQuantity(Math.round(v * 10) / 10, 'lift');
+  const limitWord = windLimitsLabel(settings) ?? 'saved';
   const issues: string[] = [];
   const window = windWindow(settings);
   if (window !== null && (speed === null || direction === null)) issues.push('Model surface wind direction comparison unavailable');
-  if (speed !== null && speed >= 0.5 && direction !== null && window !== null && !inArc(direction, window)) issues.push('Model surface wind outside saved direction window');
+  if (speed !== null && speed >= 0.5 && direction !== null && window !== null && !inArc(direction, window)) issues.push(`Model surface wind outside ${limitWord} direction window`);
   if (settings.windMaxMph !== null && speed === null) issues.push('Model surface speed comparison unavailable');
-  if (settings.windMaxMph !== null && speed !== null && speed * 2.23693629 > settings.windMaxMph) issues.push('Model surface wind above saved speed limit');
+  if (settings.windMaxMph !== null && speed !== null && speed * 2.23693629 > settings.windMaxMph) issues.push(`Model surface wind above ${limitWord} speed limit`);
   if (settings.gustMaxMph !== null && gust === null) issues.push('Model surface gust comparison unavailable');
-  if (settings.gustMaxMph !== null && gust !== null && gust * 2.23693629 > settings.gustMaxMph) issues.push('Model surface gust above saved limit');
+  if (settings.gustMaxMph !== null && gust !== null && gust * 2.23693629 > settings.gustMaxMph) issues.push(`Model surface gust above ${limitWord} limit`);
   if (top !== null && launchElevationM !== null && top <= launchElevationM) issues.push('Usable lift below launch');
   const terrain = scalar(modelElevationM), launch = scalar(launchElevationM);
   const delta = terrain === null || launch === null ? null : terrain - launch;
   const signedDelta = delta === null ? 'unknown' : `${delta < 0 ? '−' : delta > 0 ? '+' : ''}${formatQuantity(Math.abs(delta), 'elevation')}`;
   return {
-    windBasis: `Wind is 10 m above model ground. Model ground: ${terrain === null ? 'unknown' : feet(terrain)} · Launch: ${launch === null ? 'unknown' : feet(launch)} · Model − launch: ${signedDelta}. Saved-limit comparisons use this model surface forecast; local launch wind may differ.`,
+    windBasis: `Wind is 10 m above model ground. Model ground: ${terrain === null ? 'unknown' : feet(terrain)} · Launch: ${launch === null ? 'unknown' : feet(launch)} · Model − launch: ${signedDelta}. ${limitWord === 'default' ? 'Wind limits are unsourced defaults, not launch-specific. ' : ''}Limit comparisons use this model surface forecast; local launch wind may differ.`,
     values: [
       ['Model surface wind', speed === null ? 'Unavailable' : speed < 0.5 ? 'Light / calm' : `${direction === null ? 'Direction unavailable · ' : compassPoint(direction) + ' '}${formatQuantity(speed, 'wind')}`],
       ['Model surface gusts', gust === null ? 'Unavailable' : `${formatQuantity(gust, 'wind')}`],
-      ['Usable lift top', strength === null ? 'Unavailable' : top === null ? 'Below sink threshold' : feet(top)],
-      ['Potential cloud base', base === null ? 'Unavailable' : feet(base)],
-      ['Thermal strength', strength === null ? 'Unavailable' : formatQuantity(strength, 'lift')],
+      ['Usable lift top', strength === null ? 'Unavailable' : top === null ? 'Below sink threshold' : displayHeight(top)],
+      ['Potential cloud base', base === null ? 'Unavailable' : displayHeight(base)],
+      ['Thermal strength', strength === null ? 'Unavailable' : displayLift(strength)],
     ] satisfies [string, string][],
     issues,
   };

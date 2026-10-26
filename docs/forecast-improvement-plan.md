@@ -56,6 +56,16 @@ Layer winds are integrated as horizontal vector components over height, using su
 
 The buoyancy/shear ratio is W* divided by the surface-to-layer-top vector shear, with a 0.2 m/s denominator floor. Native-grid convergence and vertical velocity are separate fields with their own units and sign conventions.
 
+## Open scientific change: boundary-layer wind lower node
+
+This is recorded as a separate scientific change and is **not** part of the current method. `computeBoundaryLayerWind` integrates layer winds from a surface node placed at model terrain, while terrain adjustment and the sounding place the same 10 m surface wind at terrain + 10 m. The trapezoidal mean, BL-top shear and therefore the buoyancy/shear ratio depend on that choice, especially for shallow layers.
+
+Before any calculation changes:
+
+1. Define the candidate lower-layer policies explicitly: (a) anchor the surface node at terrain + 10 m and integrate from 10 m to the layer top, (b) extrapolate to the ground with a stated profile (for example log-law with a named roughness), or (c) retain the ground node as a documented approximation with measured effect.
+2. Measure the effect on frozen columns (the method-impact harness, not live data): distribution of changes in BL mean wind, BL-top wind, shear and buoyancy/shear ratio per model and per layer-depth band, including calm and shallow-layer cases.
+3. Decide from that evidence, then ship any change as a method-version bump with retained-method handling and regenerated impact evidence. Display or documentation edits must not be used to imply the calculation already follows the chosen policy.
+
 ## Model handling
 
 Point postprocessing adds the soaring diagnostics while retaining the baseline `derived` fields. The browser selects the published diagnostic family and preserves its nulls. Older profiles may provide a 1 m/s ceiling without a 225 ft/min ceiling.

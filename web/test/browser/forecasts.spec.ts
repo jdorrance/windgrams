@@ -173,6 +173,22 @@ test('Mexico launches retain local forecasts and return from the unavailable gri
   expect(errors).toEqual([]);
 });
 
+test('long launch names keep heading controls inside the card on narrow screens', async ({ page }) => {
+  await page.goto('/launches/mx-valle-de-bravo-el-penon?model=gfs&units=metric');
+  await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+  for (const width of [390, 360, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const layout = await page.locator('.forecast-heading').evaluate(heading => ({
+      headingRight: heading.getBoundingClientRect().right,
+      controlsRight: Math.max(...Array.from(heading.querySelectorAll('button'), button => button.getBoundingClientRect().right)),
+      pageWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth,
+    }));
+    expect(layout.controlsRight, `heading controls at ${width}px`).toBeLessThanOrEqual(layout.headingRight);
+    expect(layout.pageWidth, `page width at ${width}px`).toBeLessThanOrEqual(layout.viewportWidth);
+  }
+});
+
 test('northern Mexican launches offer published regional point forecasts', async ({ page }) => {
   await page.goto('/launches/mx-la-salina');
   await expect(page.locator('#meteogram > svg')).toHaveCount(1);

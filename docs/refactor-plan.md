@@ -40,7 +40,7 @@ New products use method 2.2.0. Complete retained point source profiles can be re
 
 ## Numerical compatibility
 
-The dry parcel lapse is 0.0098°C/m. The backend and sounding calculations use gas constants of 287.05 and 287.04 J/(kg·K), respectively. Unifying those constants would be a numerical change, so it needs the same input-by-input comparison as an equation change.
+The dry parcel lapse is 0.0098°C/m, owned by `@azohra/meteo.briefing/derive` (`DRY_ADIABATIC_LAPSE_C_PER_M`). The dry-air gas constant and gravity are owned by `@windgrams/meteorology/thermodynamics` (`RD_J_PER_KG_K` = 287.05 J/(kg·K), `GRAVITY_MPS2`); the Skew-T, balloon, radiosonde and dev-data hypsometric steps import them. Those steps previously used 287.04 J/(kg·K); the unification was measured input by input before it was made: a relative shift of 3.5 × 10⁻⁵ in each hypsometric step, which moved Skew-T surface pressures by at most 0.0033 hPa across 8,450 archived model soundings, balloon-table pressures by at most 0.011 hPa, radiosonde-filled heights by at most the 1 m rounding step, and no derived height, finding or text. The provider adapters keep their Bolton (1980) dew-point and LCL forms in one internal owner (`packages/providers/src/internal/thermodynamics.ts`); unifying those with the Magnus forms in `@windgrams/meteorology` would be a numerical change, so it needs the same input-by-input comparison as an equation change.
 
 The 1 m/s and 225 ft/min (1.143 m/s) sink ceilings describe different thresholds and must remain distinct. Ensemble diagnostics are derived per member before percentile reduction. Absent fields, null values and numerical zero also have different meanings; converting between them can make unsupported diagnostics appear available.
 

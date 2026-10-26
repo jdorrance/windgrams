@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { replayModel, validateRegionCatalogue, validateReplayManifest, validateReplayHour } from '@windgrams/contracts/regional';
+import { replayModel, validateLaunchesDoc, validateRegionCatalogue, validateReplayManifest, validateReplayHour } from '@windgrams/contracts/regional';
 
 const site = { name: 'Chatham', latitude: -43.95, longitude: -176.56, timeZone: 'Pacific/Chatham' };
 const manifest = {
@@ -19,6 +19,13 @@ test('regional boundaries retain valid metadata, fractional zones and missing-ce
   assert.equal(validateReplayManifest(manifest), manifest);
   assert.equal(validateReplayHour(hour, 2), hour);
   assert.equal(validateReplayManifest({ ...manifest, semantics: { gust: 'hourMax' }, cellProfiles: 'cell-{index}.json.gz' }).semantics.gust, 'hourMax');
+  // A launch series may echo its source document's semantics; absence is retained, not defaulted.
+  const launch = { slug: 'chatham', name: 'Chatham', ...site, cellIndex: 0, gridIndex: 0, distanceKm: 0, launchElevationM: 10, modelElevationM: 5 };
+  const series = { referenceTime: null, modelElevationM: 5, hours: [{ validAt: '2026-10-25T01:00:00Z' }] };
+  const launches = validateLaunchesDoc({ launches: [{ ...launch, models: { gfs: series, geps: { ...series, semantics: { gust: 'instant' } } } }] });
+  assert.equal(launches.launches[0].models.geps.semantics.gust, 'instant');
+  assert.equal(launches.launches[0].models.gfs.semantics, undefined);
+  assert.equal(validateLaunchesDoc({ launches: [{ ...launch, models: { gfs: { ...series, semantics: { gust: 'hourly-ish' } } } }] }), null);
 });
 
 test('manifest validation confines filenames and verifies metadata before requests', () => {

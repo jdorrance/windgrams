@@ -2,6 +2,7 @@ import type { AtmosphericColumn, AtmosphericLevel } from '@windgrams/contracts';
 import type { IconBounds, IconCell, IconFieldRecord, IconExtract, IconExtractRecord, IconAcquisition, IconAcquireOptions } from './icon-types.ts';
 import type { Bounds } from '@windgrams/geography';
 import { object } from './json.ts';
+import { specificHumidityDewpointC } from './thermodynamics.ts';
 import { parseIconExtract, parseIconRecord, parseIconAcquisition, parseIconHour, parseIconArchive } from './icon-json.ts';
 // DWD ICON-EU v1 native triangular grid. Decoding stays in icon-decode.py;
 // unit/time normalization and the shared soaring derivation stay here.
@@ -65,14 +66,6 @@ export async function discoverIconRun({ now = new Date(), fetchFn = fetch, lastF
     if (probes.every(probe => probe.status === 'fulfilled' && probe.value.ok)) return { referenceTime: iconReferenceTime(referenceTime), forecastHours: lastForecastHour, completionUrls: urls };
   }
   throw new Error('ICON-EU has no complete main run; keep the last published forecast');
-}
-
-/** QV is specific humidity (kg water / kg moist air), not mixing ratio. */
-export function iconDewPointC(specificHumidity: number | null | undefined, pressurePa: number | null | undefined): number | null {
-  if (!finite(specificHumidity) || specificHumidity <= 0 || specificHumidity >= 1 || !finite(pressurePa) || pressurePa <= 0) return null;
-  const vaporPressureHpa = specificHumidity * pressurePa / (0.622 + 0.378 * specificHumidity) / 100;
-  const logarithm = Math.log(vaporPressureHpa / 6.112);
-  return 243.5 * logarithm / (17.67 - logarithm);
 }
 
 /** Convert DWD's run-mean downward flux to the preceding hour's upward mean. */
@@ -143,7 +136,7 @@ export function iconSource(extract: IconExtract & { records: Record<string, Icon
   const terrain = extract.cells[cellIndex].terrainM;
   for (const level of extract.levels) {
     const pressure = value('P', 'Pa', forecastHour, level), t = value('T', 'K', forecastHour, level);
-    const q = value('QV', 'kg kg**-1', forecastHour, level), dewpoint = iconDewPointC(q, pressure);
+    const q = value('QV', 'kg kg**-1', forecastHour, level), dewpoint = specificHumidityDewpointC(q, pressure);
     const upper = value('HHL', 'm', 0, level), lower = value('HHL', 'm', 0, level + 1);
     const w = wind(value('U', 'm s**-1', forecastHour, level), value('V', 'm s**-1', forecastHour, level));
     if (!w || !finite(pressure) || !finite(t) || !finite(dewpoint) || !finite(upper) || !finite(lower)) return null;

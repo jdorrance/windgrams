@@ -28,6 +28,7 @@ import { buildSolarTerrain, domainFor, expandBounds, gridFromFunction, metresPer
 import { ALOFT_FIELDS, SURFACE_FIELDS, buildManifest as buildEcmwfManifest, buildSiteDocument as buildEcmwfDocument, paths as ecmwfPaths } from "@windgrams/providers/ecmwf";
 import { SCHEMA_VERSION as STATION_SCHEMA, SOURCE as STATION_SOURCE, dashboardUrl, parseWuCurrent, parseWuHistory } from "../src/lib/station.ts";
 import { writeRegionalFixture } from './regional-fixture.mjs';
+import { GRAVITY_MPS2, RD_J_PER_KG_K } from "@windgrams/meteorology/thermodynamics";
 
 const { values: args } = parseArgs({ options: {
   out: { type: "string", default: "dev-data" },
@@ -358,7 +359,7 @@ write(nwsPaths.office("BOI"), {
     rows.forEach((r, i) => {
       const z = i === 0 ? 874 : r.z;
       const t = r.t + warm * Math.max(0, 1 - (z - 874) / 2500);
-      if (i > 0) p *= Math.exp((-9.80665 * (z - levels[i - 1].heightM)) / (287.04 * ((levels[i - 1].temperatureC + t) / 2 + 273.15)));
+      if (i > 0) p *= Math.exp((-GRAVITY_MPS2 * (z - levels[i - 1].heightM)) / (RD_J_PER_KG_K * ((levels[i - 1].temperatureC + t) / 2 + 273.15)));
       levels.push({ pressureHpa: Math.round(p * 10) / 10, heightM: Math.round(z), temperatureC: Math.round(t * 10) / 10, dewPointC: Math.round((t - 11 - z / 900) * 10) / 10, windDirectionDeg: r.dir, windSpeedMps: Math.round(r.kt * 0.514 * 10) / 10 });
     });
     return { validAt, levels: levels.filter((l) => l.pressureHpa >= 250) };

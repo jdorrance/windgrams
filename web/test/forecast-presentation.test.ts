@@ -38,6 +38,44 @@ test('launch readings name model terrain, signed height separation and unavailab
   assert.equal(launchConditions(hour, limits, null).values[0][1], 'Unavailable', 'an empty ensemble has no usable median');
 });
 
+test('gust readings are named by the document\'s declared class and compared the same way', () => {
+  setUnitSystem('metric');
+  const source = profile(), hour = source.hours[0];
+  hour.surface.windSpeedMps = 3;
+  hour.surface.windDirectionDeg = 0;
+  hour.surface.windGustMps = 12; // ≈27 mph, above the 20 mph limit
+  assert.equal(source.semantics?.gust, 'hourMax', 'fixture declares the hour-max class');
+  const declared = launchConditions(hour, limits, 530, 407.1, source.semantics?.gust ?? null);
+  assert.deepEqual(declared.values[1], ['Model surface hour-max gust', '43 km/h']);
+  assert.deepEqual(declared.issues, ['Model surface hour-max gust above default limit']);
+  const sampled = launchConditions(hour, limits, 530, 407.1, 'instant');
+  assert.deepEqual(sampled.values[1], ['Model surface gust sample', '43 km/h']);
+  assert.deepEqual(sampled.issues, ['Model surface gust sample above default limit']);
+  const undeclared = launchConditions(hour, limits, 530, 407.1);
+  assert.deepEqual(undeclared.values[1], ['Model surface gust', '43 km/h'], 'an undeclared class keeps the plain word, never a default');
+  assert.deepEqual(undeclared.issues, ['Model surface gust above default limit']);
+  hour.surface.windGustMps = null;
+  assert.ok(launchConditions(hour, limits, 530, 407.1, 'hourMax').issues.includes('Model surface hour-max gust comparison unavailable'));
+});
+
+test('lift rows carry the v1 label only when the hour publishes no current-method diagnostics', () => {
+  setUnitSystem('metric');
+  const legacy = profile().hours[0];
+  Object.assign(legacy.derived, { thermalVelocityMps: 1.26, usableLiftTopM: 1234.4, cloudBaseM: 1274.6 });
+  const rows = Object.fromEntries(launchConditions(legacy, limits, 530, 407.1).values);
+  assert.equal(rows['Usable lift top'], 'v1: 1,250 m MSL');
+  assert.equal(rows['Potential cloud base'], 'v1: 1,250 m MSL');
+  assert.equal(rows['Thermal strength'], 'v1: 1.30 m/s');
+  assert.equal(Object.fromEntries(forecastDataSupport(legacy).rows)['Diagnostic support'], 'Not published for this forecast; the earlier method (v1) lift diagnostics are shown instead.');
+  const current: PublishedForecastHour = { ...legacy, soaring: { thermalVelocityV2Mps: 1.26, usableLiftTopV2M: 1234.4, surfaceLclM: 1274.6, resolvedThermalTopM: 1500 } };
+  const v2 = Object.fromEntries(launchConditions(current, limits, 530, 407.1).values);
+  assert.equal(v2['Usable lift top'], '1,250 m MSL');
+  assert.equal(v2['Thermal strength'], '1.30 m/s');
+  assert.equal(Object.fromEntries(forecastDataSupport(current).rows)['Diagnostic support'], 'Not published for this forecast.');
+  const belowSink: PublishedForecastHour = { ...legacy, derived: { ...legacy.derived, thermalVelocityMps: 0.4, usableLiftTopM: null } };
+  assert.equal(Object.fromEntries(launchConditions(belowSink, limits, 530, 407.1).values)['Usable lift top'], 'v1: Below sink threshold');
+});
+
 test('saved direction glyphs compare model wind and leave calm or missing wind unknown', () => {
   const source = profile();
   source.hours = source.hours.slice(0, 5);
@@ -151,8 +189,9 @@ test('unsourced launch limits are labelled defaults and soaring displays round c
   const precise = profile().hours[0];
   Object.assign(precise.derived, { thermalVelocityMps: 1.26, usableLiftTopM: 1234.4, cloudBaseM: 1274.6 });
   const rounded = launchConditions(precise, limits, 530, 407.1);
-  assert.equal(rounded.values[2][1], '1,250 m MSL', 'lift top displays to the nearest 50 m');
-  assert.equal(rounded.values[3][1], '1,250 m MSL', 'cloud base displays to the nearest 50 m');
-  assert.equal(rounded.values[4][1], '1.30 m/s', 'thermal strength displays to 0.1 m/s');
+  // The fixture publishes only the earlier (v1) family, so the rows say so.
+  assert.equal(rounded.values[2][1], 'v1: 1,250 m MSL', 'lift top displays to the nearest 50 m');
+  assert.equal(rounded.values[3][1], 'v1: 1,250 m MSL', 'cloud base displays to the nearest 50 m');
+  assert.equal(rounded.values[4][1], 'v1: 1.30 m/s', 'thermal strength displays to 0.1 m/s');
   assert.equal(precise.derived.usableLiftTopM, 1234.4, 'stored precision is retained');
 });

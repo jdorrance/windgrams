@@ -5,6 +5,7 @@ import { buildCellSiteForecast, type ReplayManifest, type ReplayHour } from '../
 import {
   publishedEffectiveCloudLimit,
   publishedLift,
+  publishedLiftFamily,
   publishedMixedLayerLcl,
   publishedSurfaceLcl,
   publishedWxtoflyLiftTop,
@@ -130,8 +131,12 @@ test('point loading retains published diagnostics and nulls without resurrecting
   assert.equal(publishedLift(parsed.hours[6]).usableLiftTopM, null);
   assert.equal(buildSounding(parsed, parsed.hours[6])!.usableLiftTopM, null);
   assert.deepEqual(publishedLift(parsed.hours[0]), golden.hours[0].derived);
+  assert.equal(publishedLiftFamily(parsed.hours[6]), 'v2');
+  assert.equal(publishedLiftFamily(parsed.hours[0]), 'v1-legacy', 'no diagnostics block means the upstream V1 values are in use');
+  assert.equal(publishedLiftFamily({ ...parsed.hours[6], soaring: { surfaceLclM: 1315 } }), 'v1-legacy', 'a block without the V2 marker is not a V2 family');
   rawProfile.hours[6].soaring.thermalVelocityV2Mps = null;
   const missing = parsePublishedProfileJson(JSON.stringify(rawProfile))!;
+  assert.equal(publishedLiftFamily(missing.hours[6]), 'v2', 'an explicit V2 null stays in the V2 family and is not backfilled from V1');
   const sounding = buildSounding(missing, missing.hours[6])!;
   assert.equal(sounding.thermalVelocityMps, null);
   assert.match(readSounding(sounding, 378.5).headline, /Unavailable/);

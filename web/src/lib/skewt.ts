@@ -11,13 +11,11 @@ import { publishedEffectiveCloudLimit, publishedLift } from "./published-lift.ts
 import type { SiteForecast } from "@azohra/meteo.briefing/contract";
 import { DRY_ADIABATIC_LAPSE_C_PER_M, lapseRateCPer1000Ft, parcelAscent, stabilityClass } from "@azohra/meteo.briefing/derive";
 import { sampleWindAtHeight } from '@windgrams/meteorology';
+import { GRAVITY_MPS2, RD_J_PER_KG_K } from '@windgrams/meteorology/thermodynamics';
 import { compassPoint } from "./launches.ts";
 
 type Hour = SiteForecast["hours"][number];
 type Value = number | { p50: number | null; members?: number } | null | undefined;
-
-const G = 9.80665;
-const RD = 287.04;
 
 /** Scalar value of a field: the number itself, or the ensemble median. */
 export function scalar(v: Value): number | null {
@@ -103,7 +101,7 @@ export interface Sounding extends ParcelCurve {
 /** Surface pressure from the lowest level by the hypsometric equation. */
 export function surfacePressureHpa(surface: { heightM: number; temperatureC: number }, level: { pressureHpa: number; heightM: number; temperatureC: number }) {
   const meanK = (surface.temperatureC + level.temperatureC) / 2 + 273.15;
-  return level.pressureHpa * Math.exp((G * (level.heightM - surface.heightM)) / (RD * meanK));
+  return level.pressureHpa * Math.exp((GRAVITY_MPS2 * (level.heightM - surface.heightM)) / (RD_J_PER_KG_K * meanK));
 }
 
 /** The sounding for one hour, or null when the hour has too few levels to draw. */

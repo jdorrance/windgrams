@@ -127,6 +127,46 @@ test("inspection follows the view's units while the global preference differs", 
   }
 });
 
+test("the readout names the document's gust class and the earlier lift method only when they apply", t => {
+  const readout = (profile: ReturnType<typeof liftProfile>) => {
+    const view = buildWindgramView(profile, { timeZone: "Etc/UTC", compact: true, heightRange: "full", widthPx: 390, unitSystem: "metric" });
+    const h = inspector(t, view);
+    h.key("Home");
+    return { view, text: h.attributes.get("aria-label")! };
+  };
+  const declared = liftProfile();
+  assert.equal(declared.semantics?.gust, "hourMax", "fixture declares the hour-max class");
+  declared.hours[0].surface.windGustMps = 7;
+  const hourMax = readout(declared);
+  assert.equal(hourMax.view.gustSemantics, "hourMax");
+  assert.deepEqual(hourMax.view.hours.map(hour => hour.liftFamily).slice(0, 2), ["v1-legacy", "v1-legacy"], "the fixture publishes only hour.derived");
+  assert.match(hourMax.text, /Surface hour-max gust 7\.0 m\/s/);
+  assert.match(hourMax.text, /Earlier lift method \(v1\)/);
+
+  const sampled = liftProfile();
+  sampled.semantics = { ...sampled.semantics, gust: "instant" };
+  sampled.hours[0].surface.windGustMps = 7;
+  assert.match(readout(sampled).text, /Surface gust sample 7\.0 m\/s/);
+
+  const undeclared = liftProfile();
+  delete undeclared.semantics;
+  undeclared.hours[0].surface.windGustMps = 7;
+  const plain = readout(undeclared);
+  assert.equal(plain.view.gustSemantics, null);
+  assert.match(plain.text, /Surface gust 7\.0 m\/s/, "an undeclared class keeps the plain word, never a default");
+
+  const current = liftProfile();
+  for (const hour of current.hours) {
+    (hour as typeof hour & { soaring: unknown }).soaring = {
+      thermalVelocityV2Mps: hour.derived.thermalVelocityMps, usableLiftTopV2M: hour.derived.usableLiftTopM,
+      resolvedThermalTopM: hour.derived.boundaryLayerTopM, surfaceLclM: hour.derived.cloudBaseM,
+    };
+  }
+  const v2 = readout(current);
+  assert.equal(v2.view.hours[0].liftFamily, "v2");
+  assert.doesNotMatch(v2.text, /Earlier lift method/);
+});
+
 test("unavailable daylight edges stay blank and cannot select a forecast hour", t => {
   const profile = liftProfile();
   Object.assign(profile.site, { latitude: 40.5913, longitude: 44.4741, timeZone: "Asia/Yerevan" });

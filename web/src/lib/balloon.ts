@@ -18,9 +18,8 @@ import {
   type Finding, type Reading, type Sounding, type SoundingPoint,
 } from "./skewt.ts";
 import type { Srg, SrgProfile } from "./srg.ts";
+import { GRAVITY_MPS2, RD_J_PER_KG_K } from "@windgrams/meteorology/thermodynamics";
 
-const G = 9.80665;
-const RD = 287.04;
 /** Display ceiling: the flyable band and a margin (about 21,000 ft). */
 const TOP_HPA = 450;
 
@@ -117,7 +116,7 @@ export function srgSounding(profile: SrgProfile, stationElevationM: number, star
     const z = legacyFeetToMetres(r.heightFt);
     if (i > 0) {
       const below = points[i - 1];
-      p *= Math.exp((-G * (z - below.heightM)) / (RD * ((below.temperatureC + r.temperatureC) / 2 + 273.15)));
+      p *= Math.exp((-GRAVITY_MPS2 * (z - below.heightM)) / (RD_J_PER_KG_K * ((below.temperatureC + r.temperatureC) / 2 + 273.15)));
     }
     points.push({
       pressureHpa: p,

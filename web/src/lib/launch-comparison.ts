@@ -13,7 +13,8 @@ import type {
   MatchedRaobPair,
   PercentileSpread,
 } from './soaring-contracts.ts';
-import { finiteScalar, formatQuantity, getUnitSystem, type QuantityKind, type UnitSystem } from './units.ts';
+import type { PublishedLiftFamily } from './published-lift.ts';
+import { finiteScalar, formatQuantity, getUnitSystem, gustNoun, type GustSemantics, type QuantityKind, type UnitSystem } from './units.ts';
 
 /** Regional readouts keep known speed even when direction is unavailable. */
 export function formatRegionalWind(speed: number | null | undefined, direction: number | null | undefined,
@@ -39,7 +40,8 @@ export const MULTIMODEL_DISPLAY_ORDER: readonly (readonly [string, string])[] = 
   ['nws', 'NWS'],
 ] as const;
 
-export type DiagnosticFamily = 'v2' | 'v1-legacy' | 'unsupported' | 'unavailable';
+/** A published lift family, or why a cell shows none. */
+export type DiagnosticFamily = PublishedLiftFamily | 'unsupported' | 'unavailable';
 
 export interface ComparisonDiagnosticCell {
   family: DiagnosticFamily;
@@ -107,6 +109,7 @@ const formatSpread = (
 
 /**
  * Pure view-model builder for a single model's comparison row at `validAt`.
+ * `gustSemantics` is the series' echoed gust class; it names the gust reading and nothing else.
  */
 export function buildMultimodelComparisonRow(
   modelSlug: string,
@@ -115,6 +118,7 @@ export function buildMultimodelComparisonRow(
   modelElevationM: number | null | undefined,
   mh: LaunchModelHour,
   system: UnitSystem = getUnitSystem(),
+  gustSemantics: GustSemantics | null = null,
 ): MultimodelComparisonRow {
   const isSparseAdapter = modelSlug === 'ecmwf' || modelSlug === 'nws';
   const isLegacyOnlyEnsemble =
@@ -290,7 +294,7 @@ export function buildMultimodelComparisonRow(
     (mh.dewPointC != null && Number.isFinite(mh.dewPointC) ? ` / ${formatQuantity(mh.dewPointC, 'temperature', 1, system)}` : '');
   const windText =
     (formatRegionalWind(mh.windSpeedMps, mh.windDirectionDeg, { system }) ?? '–') +
-    (mh.windGustMps != null && Number.isFinite(mh.windGustMps) ? ` (g ${formatQuantity(mh.windGustMps, 'wind', undefined, system)})` : '');
+    (mh.windGustMps != null && Number.isFinite(mh.windGustMps) ? ` (${gustNoun(gustSemantics)} ${formatQuantity(mh.windGustMps, 'wind', undefined, system)})` : '');
 
   return {
     modelSlug,
@@ -321,7 +325,7 @@ export function buildLaunchComparisonRows(
     if (!mdata) continue;
     const mh = mdata.hours.find(h => h.validAt === validAt);
     if (!mh) continue;
-    rows.push(buildMultimodelComparisonRow(mslug, mlabel, mdata.referenceTime, mdata.modelElevationM, mh, system));
+    rows.push(buildMultimodelComparisonRow(mslug, mlabel, mdata.referenceTime, mdata.modelElevationM, mh, system, mdata.semantics?.gust ?? null));
   }
   return rows;
 }

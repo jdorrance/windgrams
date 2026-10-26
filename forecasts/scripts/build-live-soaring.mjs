@@ -219,6 +219,8 @@ export function enrichBundleWithSidecars(dataRoot, soaringV1Root, caseId, newBun
         launch.models[mslug] = {
           referenceTime: mdoc.run?.referenceTime ?? mdoc.models?.surface?.run ?? mdoc.updateTime ?? null,
           modelElevationM: meta.modelElevationM,
+          // Echo the site document's own semantics so readers can name the gust class; never default it.
+          ...(mdoc.semantics ? { semantics: mdoc.semantics } : {}),
           hours: matchedHours.map(mh => normalizeLaunchComparisonHour(mslug, mh)),
         };
       }

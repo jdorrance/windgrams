@@ -7,7 +7,8 @@ import { parseForecastManifest, parseSiteForecast } from '@azohra/meteo.briefing
 import { postprocessPointForecast } from '../../soaring/point-postprocess.mjs';
 import { SOARING_CONTRACT_VERSION } from '../../soaring/science.mjs';
 import { discoverIconRun, normalizeIconExtract, deriveIconProfile, buildIconPointProfiles, writeIconAcquisition, readIconAcquisition, ICON_MODEL_LEVELS } from './icon-eu.mjs';
-import { iconBounds, iconReferenceTime, iconFieldUrl, iconDewPointC, iconHourlyFlux, iconHourlyPrecipitation, iconSource } from '../../../packages/providers/src/internal/icon-native.ts';
+import { iconBounds, iconReferenceTime, iconFieldUrl, iconHourlyFlux, iconHourlyPrecipitation, iconSource } from '../../../packages/providers/src/internal/icon-native.ts';
+import { specificHumidityDewpointC } from '../../../packages/providers/src/internal/thermodynamics.ts';
 
 const fixture = JSON.parse(readFileSync(new URL('./icon-native-fixture.json', import.meta.url), 'utf8'));
 const copy = () => structuredClone(fixture);
@@ -61,9 +62,9 @@ test('rain is the previous hour, with packing tolerance and no counter-reset spi
 test('specific humidity uses moist-air denominator and reconstructs a known vapor pressure', () => {
   const e = 611.2, p = 80000;
   const q = 0.622 * e / (p - 0.378 * e);
-  close(iconDewPointC(q, p), 0);
-  assert.equal(iconDewPointC(null, p), null);
-  assert.equal(iconDewPointC(0, p), null);
+  close(specificHumidityDewpointC(q, p), 0);
+  assert.equal(specificHumidityDewpointC(null, p), null);
+  assert.equal(specificHumidityDewpointC(0, p), null);
 });
 
 test('real native geometry and columns retain 30 terrain-following levels and actual pressure', () => {

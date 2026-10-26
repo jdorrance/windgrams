@@ -24,10 +24,22 @@ export type PublishedSoaringDiagnostics = z.infer<typeof diagnosticsSchema>;
 export type PublishedForecastHour = Hour & { soaring?: PublishedSoaringDiagnostics };
 export type PublishedSiteForecast = Omit<SiteForecast, 'hours'> & { hours: PublishedForecastHour[] };
 
+/**
+ * Which lift family a published hour carries: the current diagnostics (`hour.soaring`, V2)
+ * or the earlier upstream method (`hour.derived`, V1) that remains when V2 was not published
+ * (ensemble percentiles always). See README "Reading published data".
+ */
+export type PublishedLiftFamily = 'v2' | 'v1-legacy';
+
+export function publishedLiftFamily(hour: PublishedForecastHour): PublishedLiftFamily {
+  const extension = hour.soaring;
+  return extension && Object.hasOwn(extension, 'thermalVelocityV2Mps') ? 'v2' : 'v1-legacy';
+}
+
 /** Select one published diagnostic family and preserve its nulls. */
 export function publishedLift(hour: PublishedForecastHour): Lift {
   const extension = hour.soaring;
-  if (!extension || !Object.hasOwn(extension, 'thermalVelocityV2Mps')) return hour.derived;
+  if (!extension || publishedLiftFamily(hour) === 'v1-legacy') return hour.derived;
   return Object.fromEntries(Object.entries(fields).map(([key, source]) => [key, extension[source] ?? null])) as Lift;
 }
 
@@ -42,7 +54,7 @@ export function publishedSurfaceLcl(hour: PublishedForecastHour): Lift['cloudBas
  */
 export function publishedEffectiveCloudLimit(hour: PublishedForecastHour): Lift['cloudBaseM'] {
   const extension = hour.soaring;
-  if (!extension || !Object.hasOwn(extension, 'thermalVelocityV2Mps')) return hour.derived.cloudBaseM;
+  if (!extension || publishedLiftFamily(hour) === 'v1-legacy') return hour.derived.cloudBaseM;
   return extension.effectiveCloudLimitM ?? hour.derived.cloudBaseM ?? extension.surfaceLclM ?? null;
 }
 

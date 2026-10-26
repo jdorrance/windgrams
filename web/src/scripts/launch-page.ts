@@ -407,7 +407,8 @@ function renderConditions(hour: SiteForecast['hours'][number], index: number) {
   $('forecast-hour-panel').hidden = false;
   $('forecast-conditions-panel').hidden = false;
   $('forecast-hour-panel').dataset.validAt = hour.validAt;
-  const conditions = launchConditions(hour, launch, launchElevationM, model ? profiles.get(model)?.profile.site.modelElevationM ?? null : null);
+  const profile = model ? profiles.get(model)?.profile : undefined;
+  const conditions = launchConditions(hour, launch, launchElevationM, profile?.site.modelElevationM ?? null, profile?.semantics?.gust ?? null);
   replaceDetails($('forecast-conditions'), conditions.values);
   $('forecast-wind-note').textContent = conditions.issues.join(' · ');
   $('forecast-wind-note').hidden = !conditions.issues.length;

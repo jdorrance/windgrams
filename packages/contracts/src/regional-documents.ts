@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { forecastSemanticsSchema } from '@azohra/meteo.briefing/contract';
 import { checked, finite, index, latitude, longitude, text, timestamp, timezone } from './schema.js';
 
 const nullableNumber = finite.nullable();
@@ -53,7 +54,10 @@ const launchHourSchema = z.object({
   thermalTopSpreadM: spreadSchema.nullish(), cloudLimitSpreadM: spreadSchema.nullish(), blTopLegacySpreadM: spreadSchema.nullish(),
   experimentalTerrain: terrainSchema.nullish(),
 });
-const seriesSchema = z.object({ referenceTime: timestamp.nullish(), modelElevationM: optionalNumber, hours: z.array(launchHourSchema) });
+// `semantics` echoes the source site document's declaration; absence means that document predates the tag.
+const seriesSchema = z.object({
+  referenceTime: timestamp.nullish(), modelElevationM: optionalNumber, semantics: forecastSemanticsSchema.optional(), hours: z.array(launchHourSchema),
+});
 const launchSchema = z.object({
   slug: text, name: text, latitude, longitude, timeZone: timezone,
   cellIndex: index, gridIndex: index, distanceKm: finite,

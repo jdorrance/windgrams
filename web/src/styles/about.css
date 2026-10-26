@@ -7,3 +7,7 @@
 .about-content section > details {
   margin-top: 8px;
 }
+
+.about-content li + li {
+  margin-top: 4px;
+}

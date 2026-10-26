@@ -34,6 +34,19 @@ measurement.
 - [`@windgrams/contracts/published-lift`](src/published-lift.ts) parses profile
   JSON and reads published lift, cloud-base and ceiling diagnostics. It preserves
   profile extensions and replaces malformed lift fields with `null`.
+  `publishedLiftFamily(hour)` names the family an hour carries: `'v2'` when
+  `hour.soaring` publishes `thermalVelocityV2Mps`, otherwise `'v1-legacy'`, in
+  which case `publishedLift` returns the upstream `hour.derived` values from
+  `@azohra/meteo.forecast`'s earlier method. Ensemble percentile products (GEPS)
+  are always `'v1-legacy'`, because V2 is calculated per member and not for
+  percentiles. The two families are not interchangeable; readers label V1 values
+  rather than mixing them with V2. The V1 method is pinned in several places that
+  move together: `LEGACY_FORECAST_VERSION` and the `catalogue-0.6.0.json` /
+  `forecast-hours-0.6.0.json` tables in [`@windgrams/providers`](../providers/src/legacy.ts),
+  the `@azohra/meteo.forecast` dependency in `packages/providers/package.json` and
+  `forecasts/package.json`, the `versions` table in `forecasts/soaring/common.mjs`,
+  the vendored `forecasts/soaring/vendor/derive-0.6.0.{mjs,d.mts}` recorded in
+  `forecasts/soaring/inventory.mjs`, and [`docs/soaring-replay.md`](../../docs/soaring-replay.md).
 - [`@windgrams/contracts/regional`](src/regional.ts) validates regional
   catalogues, manifests, grids, forecast hours and supporting documents.
   Grid and audit validation throw on invalid input; the optional-document

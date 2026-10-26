@@ -35,7 +35,8 @@
     "@windgrams/meteorology": "workspace:*",
     "@windgrams/soaring": "workspace:*",
     "@windgrams/providers": "workspace:*",
-    "@windgrams/pipeline": "workspace:*"
+    "@windgrams/pipeline": "workspace:*",
+    "@windgrams/windgram": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

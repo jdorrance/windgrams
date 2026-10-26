@@ -875,6 +875,1007 @@
       "latitude": 39.9139,
       "longitude": 44.9151,
       "timeZone": "Asia/Yerevan"
+    },
+    {
+      "slug": "nz-bridges",
+      "name": "Bridges",
+      "latitude": -36.4929,
+      "longitude": 174.476,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-cliff-road-glover-park",
+      "name": "Cliff Road / Glover Park",
+      "latitude": -36.8459,
+      "longitude": 174.869,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-dills-hill",
+      "name": "Dill's Hill",
+      "latitude": -36.4572,
+      "longitude": 174.548,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-duders-peninsula",
+      "name": "Duders Peninsula",
+      "latitude": -36.9049,
+      "longitude": 175.08,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-five-fingers",
+      "name": "Five Fingers",
+      "latitude": -36.4815,
+      "longitude": 174.463,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-glover-park",
+      "name": "Glover Park",
+      "latitude": -36.8453,
+      "longitude": 174.868,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-karioitahi-a",
+      "name": "Karioitahi A",
+      "latitude": -37.276,
+      "longitude": 174.653,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-karioitahi-e",
+      "name": "Karioitahi E",
+      "latitude": -37.2868,
+      "longitude": 174.658,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-kennedy-park",
+      "name": "Kennedy Park",
+      "latitude": -36.7565,
+      "longitude": 174.767,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-maioro",
+      "name": "Maioro",
+      "latitude": -37.3258,
+      "longitude": 174.677,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mangawhai-heads",
+      "name": "Mangawhai Heads",
+      "latitude": -36.0798,
+      "longitude": 174.598,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-north-head",
+      "name": "Maungauika / North Head",
+      "latitude": -36.8267,
+      "longitude": 174.812,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-moirs-hill",
+      "name": "Moirs Hill",
+      "latitude": -36.4711,
+      "longitude": 174.586,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-muriwai",
+      "name": "Muriwai",
+      "latitude": -36.8336,
+      "longitude": 174.427,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-muriwai-janies",
+      "name": "Muriwai - Janies",
+      "latitude": -36.8371,
+      "longitude": 174.428,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-muriwai-nw",
+      "name": "Muriwai - NW",
+      "latitude": -36.8316,
+      "longitude": 174.426,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-musick-point",
+      "name": "Musick Point",
+      "latitude": -36.8492,
+      "longitude": 174.903,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-piha-north",
+      "name": "Piha North",
+      "latitude": -36.9335,
+      "longitude": 174.457,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-port-waikato",
+      "name": "Port Waikato",
+      "latitude": -37.4022,
+      "longitude": 174.708,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-puketutu",
+      "name": "Puketutu",
+      "latitude": -37.1949,
+      "longitude": 175.019,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-shakespear-regional-south",
+      "name": "Shakespear Regional Park — South",
+      "latitude": -36.6121,
+      "longitude": 174.827,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-tangihua",
+      "name": "Tangihua",
+      "latitude": -35.8703,
+      "longitude": 174.135,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-whangaparaoa-army-bay",
+      "name": "Whangaparaoa - Army Bay",
+      "latitude": -36.6019,
+      "longitude": 174.808,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-whangaparaoa-tiri-channel",
+      "name": "Whangaparaoa - Tiri Channel",
+      "latitude": -36.6094,
+      "longitude": 174.836,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-whangarei-heads",
+      "name": "Whangarei Heads",
+      "latitude": -35.8408,
+      "longitude": 174.579,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-bobs-hill",
+      "name": "Bobs Hill",
+      "latitude": -37.8448,
+      "longitude": 176.561,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-braemar-road",
+      "name": "Braemar Road",
+      "latitude": -37.9677,
+      "longitude": 176.731,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-hamurana",
+      "name": "Hamurana",
+      "latitude": -38.028,
+      "longitude": 176.281,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-hickeys-bluff",
+      "name": "Hickeys Bluff",
+      "latitude": -38.3616,
+      "longitude": 176.344,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-kaimai",
+      "name": "Kaimai Range",
+      "latitude": -37.8204,
+      "longitude": 175.906,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-kohe-point",
+      "name": "Kohi Point",
+      "latitude": -37.9484,
+      "longitude": 177.011,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-little-waihi",
+      "name": "Little Waihi",
+      "latitude": -37.7641,
+      "longitude": 176.468,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-maketu",
+      "name": "Maketu",
+      "latitude": -37.7531,
+      "longitude": 176.46,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-matata",
+      "name": "Matata",
+      "latitude": -37.8714,
+      "longitude": 176.7,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mokau",
+      "name": "Mokau",
+      "latitude": -38.6744,
+      "longitude": 174.627,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mokau-cemetery",
+      "name": "Mokau Cemetery",
+      "latitude": -38.694,
+      "longitude": 174.617,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-newdicks",
+      "name": "Newdicks",
+      "latitude": -37.748,
+      "longitude": 176.472,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-paeroa-range",
+      "name": "Paeroa Range",
+      "latitude": -38.3737,
+      "longitude": 176.264,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-pukemore",
+      "name": "Pukemore",
+      "latitude": -37.533,
+      "longitude": 175.224,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-putauaki",
+      "name": "Putauaki",
+      "latitude": -38.1045,
+      "longitude": 176.736,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-raglan",
+      "name": "Raglan",
+      "latitude": -37.8153,
+      "longitude": 174.834,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-rogers-road",
+      "name": "Rogers Road",
+      "latitude": -37.8102,
+      "longitude": 176.565,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-tarawera",
+      "name": "Tarawera",
+      "latitude": -38.2109,
+      "longitude": 176.514,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-taupo-urban",
+      "name": "Taupō Urban",
+      "latitude": -38.6918,
+      "longitude": 176.073,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-waiotahi",
+      "name": "Waiotahi",
+      "latitude": -37.9916,
+      "longitude": 177.21,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-whakaipo-bay",
+      "name": "Whakaipo Bay",
+      "latitude": -38.6837,
+      "longitude": 175.966,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-ohiwa-hill-onekawa-pa",
+      "name": "Ōhiwa Hill / Onekawa Pā",
+      "latitude": -37.9896,
+      "longitude": 177.166,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-ohope",
+      "name": "Ōhope",
+      "latitude": -37.9612,
+      "longitude": 177.023,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-burma-rd",
+      "name": "Burma Rd",
+      "latitude": -39.7544,
+      "longitude": 176.682,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-centennial-park",
+      "name": "Centennial Park",
+      "latitude": -39.0651,
+      "longitude": 174.021,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-kaupok",
+      "name": "Kaupok",
+      "latitude": -39.5688,
+      "longitude": 174.064,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-kourarau",
+      "name": "Kourarau",
+      "latitude": -41.0719,
+      "longitude": 175.7,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-climie",
+      "name": "Mt Climie",
+      "latitude": -41.1497,
+      "longitude": 175.141,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-dick",
+      "name": "Mt Dick / Dalefield Road",
+      "latitude": -41.0071,
+      "longitude": 175.439,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-ocean-beach",
+      "name": "Ocean Beach",
+      "latitude": -41.3727,
+      "longitude": 175.054,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-paekakariki-hill",
+      "name": "Paekākāriki Hill",
+      "latitude": -41.0056,
+      "longitude": 174.935,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-patea-beach",
+      "name": "Patea Beach",
+      "latitude": -39.7679,
+      "longitude": 174.481,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-pukerua-bay-escarpment",
+      "name": "Pukerua Bay escarpment",
+      "latitude": -41.0305,
+      "longitude": 174.876,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-sunrise",
+      "name": "Sunrise",
+      "latitude": -39.7769,
+      "longitude": 176.171,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-te-mata",
+      "name": "Te Mata",
+      "latitude": -39.7018,
+      "longitude": 176.91,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-turangi-road",
+      "name": "Turangi Road",
+      "latitude": -38.9837,
+      "longitude": 174.313,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-urenui",
+      "name": "Urenui",
+      "latitude": -38.9875,
+      "longitude": 174.395,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-barnicoat",
+      "name": "Barnicoat",
+      "latitude": -41.34322010035545,
+      "longitude": 173.253573910888,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-bird-s-clearing",
+      "name": "Bird's Clearing",
+      "latitude": -40.8631,
+      "longitude": 172.89,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-blowhard-i",
+      "name": "Blowhard I",
+      "latitude": -41.752,
+      "longitude": 173.095,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-flat-top",
+      "name": "Flat Top",
+      "latitude": -42.038,
+      "longitude": 172.545,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-foote-hill",
+      "name": "Foote Hill",
+      "latitude": -41.3292,
+      "longitude": 173.752,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-inwoods-lookout",
+      "name": "Inwoods Lookout",
+      "latitude": -41.5713,
+      "longitude": 172.936,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-lake-station",
+      "name": "Lake Station",
+      "latitude": -41.7608,
+      "longitude": 172.737,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-millerton",
+      "name": "Millerton",
+      "latitude": -41.6472,
+      "longitude": 171.85,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-murchison",
+      "name": "Mt Murchison",
+      "latitude": -41.73,
+      "longitude": 172.5,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-robert",
+      "name": "Mt Robert",
+      "latitude": -41.834,
+      "longitude": 172.808,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-puheke",
+      "name": "Puheke",
+      "latitude": -34.8607,
+      "longitude": 173.335,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-shipwreck-bay",
+      "name": "Shipwreck Bay",
+      "latitude": -35.1822,
+      "longitude": 173.134,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-tapawera",
+      "name": "Tapawera",
+      "latitude": -41.4315,
+      "longitude": 172.855,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-travers-saddle",
+      "name": "Travers Saddle",
+      "latitude": -42.0274,
+      "longitude": 172.737,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-takaka-hill",
+      "name": "Tākaka Hill",
+      "latitude": -41.0256,
+      "longitude": 172.861,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-alex-knob",
+      "name": "Alex Knob",
+      "latitude": -43.4278,
+      "longitude": 170.151,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-allendale",
+      "name": "Allandale",
+      "latitude": -43.6436,
+      "longitude": 172.624,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-avalanche-peak",
+      "name": "Avalanche Peak",
+      "latitude": -42.9426,
+      "longitude": 171.541,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-ball-pass",
+      "name": "Ball Pass",
+      "latitude": -43.6386,
+      "longitude": 170.166,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-barnett-park",
+      "name": "Barnett Park",
+      "latitude": -43.5856,
+      "longitude": 172.729,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-cass-bay",
+      "name": "Cass Bay",
+      "latitude": -43.593,
+      "longitude": 172.7,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-castle-rock",
+      "name": "Castle Rock",
+      "latitude": -43.5909,
+      "longitude": 172.698,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-craigieburn-1525",
+      "name": "Craigieburn 1525",
+      "latitude": -43.1303,
+      "longitude": 171.719,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-hamilton-peak",
+      "name": "Hamilton Peak",
+      "latitude": -43.1122,
+      "longitude": 171.688,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-britten-reserve",
+      "name": "John Britten Reserve",
+      "latitude": -43.5833,
+      "longitude": 172.725,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-kamilas-hill",
+      "name": "Kamilas Hill",
+      "latitude": -42.3681,
+      "longitude": 172.536,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-lake-stream-gap",
+      "name": "Lake Stream Gap",
+      "latitude": -43.3277,
+      "longitude": 171.144,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-little-river",
+      "name": "Little River",
+      "latitude": -43.8097,
+      "longitude": 172.82,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mount-fiffi",
+      "name": "Mount Fiffi",
+      "latitude": -42.3115,
+      "longitude": 173.61,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-bruce",
+      "name": "Mt Bruce",
+      "latitude": -43.0466,
+      "longitude": 171.622,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-cheeseman",
+      "name": "Mt Cheeseman",
+      "latitude": -43.1562,
+      "longitude": 171.672,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-faust",
+      "name": "Mt Faust",
+      "latitude": -42.502,
+      "longitude": 172.417,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-fox",
+      "name": "Mt Fox",
+      "latitude": -43.498,
+      "longitude": 170.009,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-hutt",
+      "name": "Mt Hutt",
+      "latitude": -43.5325,
+      "longitude": 171.554,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-potts",
+      "name": "Mt Potts",
+      "latitude": -43.5009,
+      "longitude": 170.962,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-oxford",
+      "name": "Oxford",
+      "latitude": -43.2339,
+      "longitude": 172.217,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-scarborough-cliffs",
+      "name": "Scarborough Cliffs",
+      "latitude": -43.5775,
+      "longitude": 172.777,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-south-temple",
+      "name": "South Temple",
+      "latitude": -44.1534,
+      "longitude": 169.756,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-st-james-range-north-pt-1980",
+      "name": "St James Range North Pt 1980",
+      "latitude": -42.1601,
+      "longitude": 172.681,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-taylors-mistake",
+      "name": "Taylor’s Mistake",
+      "latitude": -43.586,
+      "longitude": 172.766,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-the-gondola-christchurch",
+      "name": "The Gondola (Christchurch)",
+      "latitude": -43.5887,
+      "longitude": 172.718,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-van-ash",
+      "name": "Van Ash",
+      "latitude": -43.5846,
+      "longitude": 172.761,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-white-horse",
+      "name": "White Horse",
+      "latitude": -44.7427,
+      "longitude": 171.008,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-woolshed-hill",
+      "name": "Woolshed Hill",
+      "latitude": -42.9677,
+      "longitude": 171.776,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-barrier-knob",
+      "name": "Barrier Knob",
+      "latitude": -44.7403,
+      "longitude": 168.026,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-bealy-range",
+      "name": "Bealy Range",
+      "latitude": -44.0017,
+      "longitude": 169.489,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-black-peak",
+      "name": "Black Peak",
+      "latitude": -44.5778,
+      "longitude": 168.843,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-boundary-spur",
+      "name": "Boundary Spur",
+      "latitude": -44.3398,
+      "longitude": 169.183,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-brewester-hut",
+      "name": "Brewster Hut",
+      "latitude": -44.0881,
+      "longitude": 169.42,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-coronet-peak",
+      "name": "Coronet Peak",
+      "latitude": -44.9289,
+      "longitude": 168.735,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-gladwish",
+      "name": "Gladwish",
+      "latitude": -44.322,
+      "longitude": 169.57,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-glengyle-spur",
+      "name": "Glengyle Spur",
+      "latitude": -44.4842,
+      "longitude": 168.689,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-kea-basin",
+      "name": "Kea Basin",
+      "latitude": -44.6065,
+      "longitude": 168.437,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-water-front-lake-hawea",
+      "name": "Lake Hāwea Waterfront",
+      "latitude": -44.6092,
+      "longitude": 169.283,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-lovers-leap",
+      "name": "Lovers Leap",
+      "latitude": -44.721,
+      "longitude": 168.439,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-awful",
+      "name": "Mt Awful",
+      "latitude": -44.1406,
+      "longitude": 169.066,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-burns",
+      "name": "Mt Burns",
+      "latitude": -45.7621,
+      "longitude": 167.4,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-cargill",
+      "name": "Mt Cargill",
+      "latitude": -45.8131,
+      "longitude": 170.557,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-fastness",
+      "name": "Mt Fastness",
+      "latitude": -44.3638,
+      "longitude": 168.797,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-gilbert-south-ridge",
+      "name": "Mt Gilbert South Ridge",
+      "latitude": -44.895,
+      "longitude": 168.593,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-jumbo",
+      "name": "Mt Jumbo",
+      "latitude": -44.2804,
+      "longitude": 168.986,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-maude",
+      "name": "Mt Maude",
+      "latitude": -44.6202,
+      "longitude": 169.218,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-mt-shrimpton",
+      "name": "Mt Shrimpton",
+      "latitude": -44.2389,
+      "longitude": 169.259,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-niger",
+      "name": "Niger",
+      "latitude": -44.4957,
+      "longitude": 168.639,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-niger-peak",
+      "name": "Niger Peak",
+      "latitude": -44.5191,
+      "longitude": 168.857,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-ocean-peak",
+      "name": "Ocean Peak",
+      "latitude": -44.7358,
+      "longitude": 168.199,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-pigeon-island-flydown-launch",
+      "name": "Pigeon Island Flydown launch",
+      "latitude": -44.9254,
+      "longitude": 168.457,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-pipson-spur",
+      "name": "Pipson Spur",
+      "latitude": -44.0586,
+      "longitude": 169.409,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-pluto-plateau",
+      "name": "Pluto Plateau",
+      "latitude": -44.5857,
+      "longitude": 168.377,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-queenstown-crown-terrace",
+      "name": "Queenstown - Crown Terrace",
+      "latitude": -44.9806,
+      "longitude": 168.861,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-rees-valley-slopes-above-shelter-rock",
+      "name": "Rees Valley Slopes Above Shelter Rock",
+      "latitude": -44.5609,
+      "longitude": 168.526,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-rob-roy",
+      "name": "Rob Roy",
+      "latitude": -44.4554,
+      "longitude": 168.7,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-sawyer-burn",
+      "name": "Sawyer Burn",
+      "latitude": -44.4252,
+      "longitude": 169.256,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-scott-creek-saddle",
+      "name": "Scott Creek Saddle",
+      "latitude": -44.7403,
+      "longitude": 168.274,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-skyline-gondola",
+      "name": "Skyline Gondola",
+      "latitude": -45.0191,
+      "longitude": 168.65,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-snowpark",
+      "name": "SnowPark",
+      "latitude": -44.8871,
+      "longitude": 169.084,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-sugarloaf-spur",
+      "name": "Sugarloaf Spur",
+      "latitude": -44.688,
+      "longitude": 168.262,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-taniwha",
+      "name": "Taniwha",
+      "latitude": -44.4723,
+      "longitude": 168.785,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-temple-peak",
+      "name": "Temple Peak",
+      "latitude": -44.7842,
+      "longitude": 168.438,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-tooth-peak",
+      "name": "Tooth Peak",
+      "latitude": -44.9559,
+      "longitude": 168.319,
+      "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "nz-treble-cone",
+      "name": "Treble Cone",
+      "latitude": -44.6378,
+      "longitude": 168.908,
+      "timeZone": "Pacific/Auckland"
     }
   ]
 }

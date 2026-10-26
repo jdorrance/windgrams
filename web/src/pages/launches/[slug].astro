@@ -123,7 +123,9 @@ const station = stationEntry && (() => {
       <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong> <span class="muted" id="launch-elevation-source"></span></li>
       <li>Times in {zoneName}</li>
     </ul>
-    {launch.notes && <div class="notice"><p class="muted">Launch notes</p><p>{launchNoteParts(launch.notes).map(part => 'text' in part ? part.text : <Unit kind={part.kind} value={part.value} />)}</p></div>}
+    {launch.notes && <div class="notice"><p class="muted">Launch notes</p><p>{launchNoteParts(launch.notes).map(part => 'text' in part
+      ? part.href ? <a href={part.href} rel="noopener noreferrer" target="_blank">{part.text}</a> : part.text
+      : <Unit kind={part.kind} value={part.value} />)}</p></div>}
     <a href={href()}>Browse launches →</a>
   </div>
 

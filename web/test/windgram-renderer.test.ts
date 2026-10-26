@@ -31,6 +31,9 @@ test("main chart uses aligned fixed rows, shared fonts and one timezone footer",
     const bottoms = [...svg.matchAll(new RegExp(`<text x="([\\d.]+)" y="${view.bottom + 24}"[^>]+class="wg-hour">([^<]+)<\\/text>`, "g"))].map(m => [m[1], m[2]]);
     assert.ok(tops.length > 1);
     assert.deepEqual(tops, bottoms);
+    assert.equal(tops[0][1], view.timeAxis[0].label);
+    assert.equal(tops.at(-1)![1], view.timeAxis.at(-1)!.label);
+    assert.ok(tops.every(([x]) => Number(x) >= view.left && Number(x) <= view.left + view.plotWidth));
     const footer = [...svg.matchAll(/<text[^>]+class="wg-axis-unit wg-footer">([^<]+)<\/text>/g)];
     assert.equal(footer.length, 1);
     assert.match(footer[0][1], /E[DS]T · Wind kt · temperature °F/);

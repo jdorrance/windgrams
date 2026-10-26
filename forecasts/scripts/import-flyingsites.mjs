@@ -8,8 +8,9 @@
 //   node scripts/import-flyingsites.mjs
 //   node scripts/import-flyingsites.mjs --country=am
 //   node scripts/import-flyingsites.mjs --country=us
+//   node scripts/import-flyingsites.mjs --country=nz
 // FLYINGSITES_US overrides the path to us.geojson.json.
-// FLYINGSITES_AM overrides the reviewed Armenian catalogue, not a raw API dump.
+// FLYINGSITES_AM / FLYINGSITES_NZ override reviewed catalogues, not raw API dumps.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -68,6 +69,7 @@ export function pointInGeometry(lon, lat, geometry) {
 
 export function timeZoneFor(code, longitude) {
   if (code === "AM") return "Asia/Yerevan";
+  if (code === "NZ") return "Pacific/Auckland";
   if (code === "VA" || code === "MD" || code === "NC") return "America/New_York";
   if (code === "OR" && longitude > -117.25) return "America/Boise";
   return "America/Los_Angeles";
@@ -172,19 +174,23 @@ export function buildCatalog(features, states) {
 
 /** Import reviewed country records. Explicit slugs survive source-name changes. */
 export function buildCountryCatalog(catalog) {
-  const { countryCode, region, timeZone } = catalog;
-  if (!/^[A-Z]{2}$/.test(countryCode) || !region || !timeZone) throw new Error("Country, region and time zone are required");
-  new Intl.DateTimeFormat("en", { timeZone }).format();
+  const { countryCode } = catalog;
+  if (!/^[A-Z]{2}$/.test(countryCode)) throw new Error("A two-letter country code is required");
   const sites = [];
   const launches = {};
   for (const record of catalog.launches ?? []) {
-    const { slug, name, latitude, longitude, facingDeg = null, windArcHalfWidthDeg = null, notes = "", source } = record;
+    const { slug, name, latitude, longitude, region = catalog.region, timeZone = catalog.timeZone,
+      facingDeg = null, windArcHalfWidthDeg = null, notes = "", source } = record;
     if (!new RegExp(`^${countryCode.toLowerCase()}-[a-z0-9]+(?:-[a-z0-9]+)*$`).test(slug) || Object.hasOwn(launches, slug)) {
       throw new Error(`Invalid or duplicate launch slug: ${slug}`);
     }
     if (!name || name.length > 80 || !Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
       throw new Error(`Invalid launch location: ${slug}`);
     }
+    if (typeof region !== "string" || !region.trim() || typeof timeZone !== "string" || !timeZone.trim()) {
+      throw new Error(`Region and time zone are required: ${slug}`);
+    }
+    new Intl.DateTimeFormat("en", { timeZone }).format();
     if ((facingDeg === null) !== (windArcHalfWidthDeg === null) || (facingDeg !== null && (!Number.isFinite(facingDeg) || facingDeg < 0 || facingDeg >= 360 || !Number.isFinite(windArcHalfWidthDeg) || windArcHalfWidthDeg < 0 || windArcHalfWidthDeg > 180))) {
       throw new Error(`Invalid launch directions: ${slug}`);
     }
@@ -220,9 +226,9 @@ function writeJson(path, value) {
 
 function main() {
   const countries = process.argv.slice(2).length ? process.argv.slice(2).map((arg) => {
-    if (!/^--country=(am|us)$/.test(arg)) throw new Error(`Unknown option: ${arg}. Use --country=am or --country=us.`);
+    if (!/^--country=(am|nz|us)$/.test(arg)) throw new Error(`Unknown option: ${arg}. Use --country=am, --country=nz or --country=us.`);
     return arg.slice("--country=".length);
-  }) : ["us", "am"];
+  }) : ["us", "am", "nz"];
   const sitesPath = resolve(HERE, "../sites.json");
   const launchesPath = resolve(HERE, "../../web/src/data/launches.json");
   let catalog = {
@@ -236,14 +242,15 @@ function main() {
       const features = JSON.parse(readFileSync(usPath, "utf-8")).features ?? [];
       catalog = mergeCatalogs(catalog, buildCatalog(features, states));
     } else {
-      const amPath = process.env.FLYINGSITES_AM ?? resolve(HERE, "data/armenia-launches.json");
-      catalog = mergeCatalogs(catalog, buildCountryCatalog(JSON.parse(readFileSync(amPath, "utf-8"))));
+      const file = country === "am" ? "armenia-launches.json" : "new-zealand-launches.json";
+      const path = process.env[`FLYINGSITES_${country.toUpperCase()}`] ?? resolve(HERE, "data", file);
+      catalog = mergeCatalogs(catalog, buildCountryCatalog(JSON.parse(readFileSync(path, "utf-8"))));
     }
   }
   const { sitesFile, launchesFile } = catalog;
   writeJson(sitesPath, sitesFile);
   writeJson(launchesPath, launchesFile);
-  const counts = Object.fromEntries([...STATE_ORDER, "AM"].map((code) => [code, 0]));
+  const counts = Object.fromEntries([...STATE_ORDER, "AM", "NZ"].map((code) => [code, 0]));
   for (const site of sitesFile.sites) {
     const code = site.slug.slice(0, 2).toUpperCase();
     if (code in counts) counts[code] += 1;

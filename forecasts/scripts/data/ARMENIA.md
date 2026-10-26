@@ -49,6 +49,6 @@ From `forecasts/`, import the bundled Armenian records with:
 node scripts/import-flyingsites.mjs --country=am
 ```
 
-This import works offline. `--country=us` imports the selected US states from `FLYINGSITES_US` or the adjacent `flyingsites` catalogue. With no arguments, the command merges both sources.
+This import works offline. `--country=us` imports the selected US states from `FLYINGSITES_US` or the adjacent `flyingsites` catalogue. With no arguments, the command also imports the reviewed New Zealand catalogue.
 
 Imports add new slugs and missing metadata while preserving existing field values, manual launch notes, coordinates, wind settings and other countries. Apply reviewed corrections and removals directly to the retained records. Set `FLYINGSITES_AM` to import another reviewed catalogue with the same schema.

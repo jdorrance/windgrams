@@ -70,7 +70,7 @@ jobs:
       - name: Type checks
         run: pnpm run check
       - name: Sample dataset
-        # All 125 model profiles are validated; synthetic terrain is exercised
+        # Every launch's model profiles are validated; synthetic terrain is exercised
         # at western and eastern US launches without rebuilding every tile pyramid.
         run: pnpm run dev-data --solar-site wa-blanchard --solar-site va-woodstock
       - name: Build

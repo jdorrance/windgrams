@@ -133,14 +133,14 @@ test("unavailable daylight edges stay blank and cannot select a forecast hour", 
   profile.hours = profile.hours.slice(0, 3).map((hour, index) => ({ ...hour, validAt: `2026-10-24T${String(9 + index).padStart(2, "0")}:00:00.000Z` }));
   const view = buildWindgramView(profile, { timeZone: "Asia/Yerevan", compact: true, widthPx: 390, heightRange: "full" });
   const h = inspector(t, view), y = (view.top + view.bottom) / 2;
-  assert.equal(view.timeAxis[0].label, "7a");
-  assert.equal(view.timeAxis.at(-1)!.label, "7p");
+  assert.equal(view.timeAxis[0].label, "8a");
+  assert.equal(view.timeAxis.at(-1)!.label, "6p");
   assert.equal(view.timeAxis[0].hourIndex, null);
   assert.equal(view.timeAxis.at(-1)!.hourIndex, null);
   const rendered = renderWindgramSvg(view);
-  assert.match(rendered, /Windgram 7a–7p/, "accessible description uses the complete daylight extent");
-  assert.match(rendered, />7a</);
-  assert.match(rendered, />7p</);
+  assert.match(rendered, /Windgram 8a–6p/, "accessible description uses visible daylight ticks");
+  assert.match(rendered, />8a</);
+  assert.match(rendered, />6p</, 'the final daylight label stays visible inside the chart');
   assert.equal([...rendered.matchAll(/data-forecast-unavailable=""/g)].length, 2, "both unavailable edges receive the missing-data treatment");
   for (const tick of [view.timeAxis[0], view.timeAxis.at(-1)!]) {
     h.pointer("pointermove", view.hours[0].x, y);
@@ -163,6 +163,33 @@ test("unavailable daylight edges stay blank and cannot select a forecast hour", 
   h.pointer("pointerup", view.hours[0].x, y, "touch");
   assert.equal(h.selected.at(-1), view.hours[0].validAt, "a tap at the shifted first source column selects that source hour");
   close(Number(h.nodes["cursor-point"].getAttribute("cx")), view.hours[0].x);
+});
+
+test('coarse daylight inspection selects visible native hours while retaining night brackets for interpolation', t => {
+  const profile = liftProfile();
+  Object.assign(profile.site, { latitude: -45.03, longitude: 168.66, timeZone: 'Pacific/Auckland' });
+  profile.hours = Array.from({ length: 7 }, (_, index) => ({
+    ...structuredClone(profile.hours[0]), validAt: new Date(Date.parse('2026-12-20T15:00:00Z') + index * 3 * 3_600_000).toISOString(),
+  }));
+  profile.hours[0].derived.thermalVelocityMps = 9;
+  profile.hours[3].derived.thermalVelocityMps = 5;
+  const view = buildWindgramView(profile, { timeZone: 'Pacific/Auckland', compact: true, widthPx: 390, heightRange: 'full' });
+  assert.equal(view.hours.length, 7);
+  assert.ok(view.hours[0].x < view.left && view.hours.at(-1)!.x > view.left + view.plotWidth);
+  assert.equal(view.selectedHourIndex, 3, 'peak selection ignores the hidden nighttime maximum');
+  const h = inspector(t, view), y = (view.top + view.bottom) / 2;
+  h.key('Home');
+  h.key('ArrowLeft');
+  assert.deepEqual(h.selected, [view.hours[1].validAt, view.hours[1].validAt]);
+  h.key('End');
+  h.key('ArrowRight');
+  assert.equal(h.selected.at(-1), view.hours[5].validAt);
+  for (const [x, index] of [[view.left + 1, 1], [view.left + view.plotWidth - 1, 5]]) {
+    h.pointer('pointerdown', x, y, 'touch');
+    h.pointer('pointerup', x, y, 'touch');
+    assert.equal(h.selected.at(-1), view.hours[index].validAt);
+    close(Number(h.nodes['cursor-point'].getAttribute('cx')), view.hours[index].x);
+  }
 });
 
 test("touch pins the lift ceiling; dragging, cancellation and Escape leave scrolling and clearing intact", t => {

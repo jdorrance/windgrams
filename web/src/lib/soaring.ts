@@ -6,6 +6,7 @@ import { containsPolygon, distanceKm, validPosition as validCoordinates } from '
 import type { Grid } from '@windgrams/contracts/regional';
 import { replayModel as explicitReplayModel, type Quality, type ReplayHour, type ReplayManifest, type RegionDescriptor, type RegionCatalogue } from '@windgrams/contracts/regional';
 import legacyReplayModels from '../../../forecasts/soaring/legacy-replay-models.json' with { type: 'json' };
+import { defaultSoaringRegion } from './forecast-capabilities.ts';
 export type { Grid, Cell, Quality, LevelArrays, ReplayHour, ReplayManifest, RegionDescriptor, RegionCatalogue } from '@windgrams/contracts/regional';
 
 export function legacyReplayModel(caseId: string): string | undefined {
@@ -305,7 +306,9 @@ export function regionForCase(regions: RegionDescriptor[], caseId: string) {
 export function defaultReplayQuery(search: string, catalogue: RegionCatalogue | null) {
   const query = new URLSearchParams(search);
   if (query.has('case')) return query;
-  const requestedRegion = query.get('region');
+  const country = query.get('country');
+  const requestedRegion = query.get('region') ?? (country ? defaultSoaringRegion(country) : undefined);
+  if (country && country !== 'US' && !requestedRegion) throw new Error('Regional forecast is unavailable.');
   const requested = requestedRegion ? catalogue?.regions.find(r => r.id === requestedRegion && r.status === 'active-verified-trial') : undefined;
   if (requestedRegion && !requested) throw new Error('Regional forecast is unavailable.');
   const available = catalogue?.regions.filter(r => r.status === 'active-verified-trial' && nativeModels(r).length) ?? [];

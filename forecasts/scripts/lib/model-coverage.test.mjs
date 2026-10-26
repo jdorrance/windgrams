@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { modelCoversSite, nwsCoversSite, regionSupportsModel } from './model-coverage.mjs';
 const sites = JSON.parse(readFileSync(new URL('../../sites.json', import.meta.url))).sites;
+const launches = JSON.parse(readFileSync(new URL('../../../web/src/data/launches.json', import.meta.url))).launches;
 
-test('all Armenian launches use ICON and global providers while leaving US regional jobs intact', () => {
+test('catalogued launches use covered providers and US observation feeds stay local', () => {
   for (const site of sites) {
-    const armenia = site.timeZone === 'Asia/Yerevan';
-    assert.equal(nwsCoversSite(site), !armenia);
-    for (const model of ['hrrr-conus', 'rrfs', 'hrdps-continental', 'rdps']) assert.equal(modelCoversSite(model, site), !armenia);
+    const country = launches[site.slug].countryCode;
+    const armenia = country === 'AM', us = country === 'US';
+    assert.equal(nwsCoversSite(site), us);
+    for (const model of ['hrrr-conus', 'rrfs', 'hrdps-continental', 'rdps']) assert.equal(modelCoversSite(model, site), us);
     assert.equal(modelCoversSite('icon-eu', site), armenia);
     for (const model of ['gfs', 'gdps', 'geps']) assert.equal(modelCoversSite(model, site), true);
   }

@@ -8,18 +8,59 @@ import { parseForecastManifestJson } from '@azohra/meteo.briefing/contract';
 import { parsePublishedProfileJson } from '@windgrams/contracts/published-lift';
 import { validateRegionCatalogue, validateReplayManifest, validateReplayHour, replayModel } from '@windgrams/contracts/regional';
 import { assessForecastFreshness, fetchWithRetry } from '@windgrams/data-client';
-import { MODELS, modelDescriptor } from '@windgrams/providers/registry';
+import { MODELS, modelDescriptor, modelCoversSite } from '@windgrams/providers/registry';
+import { catalogueFingerprint } from '@windgrams/pipeline';
+import catalogue from '../sites.json' with { type: 'json' };
+import launchDetails from '../../web/src/data/launches.json' with { type: 'json' };
 import { parseProviderHealth } from './lib/provider-health.mjs';
 import { parseObservationManifest } from './lib/observation-manifest.mjs';
 import { LOOKBACK_HOURS, MIN_LEVELS } from './lib/raob.mjs';
 
 const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
+// Country is a probe grouping, separate from the provider's catalogue fingerprint.
+const currentSites = catalogue.sites.map(site => ({ ...site, countryCode: launchDetails.launches[site.slug]?.countryCode }));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const failure = (product, kind, error) => ({ product, kind, status: 'unavailable', ok: false, reason: error instanceof Error ? error.message : String(error) });
 const assessment = (product, kind, input) => {
   const result = assessForecastFreshness(input);
   return { product, kind, status: result.status, ok: result.status === 'current', reason: result.reason };
 };
+
+function pointInventory(model, manifest, coverage, sites) {
+  const covered = sites.filter(site => modelCoversSite(model, site));
+  const excluded = coverage?.excluded ?? [];
+  if (coverage !== undefined && (!coverage || !Array.isArray(coverage.excluded) || coverage.reason !== 'outside-native-grid'
+    || coverage.requestedSiteHash !== catalogueFingerprint(covered) || new Set(excluded).size !== excluded.length
+    || excluded.some(slug => !covered.some(site => site.slug === slug)))) throw new Error('Invalid or outdated coverage exclusions');
+  const expected = covered.filter(site => !excluded.includes(site.slug));
+  const actual = new Set(manifest.sites.map(site => site.slug));
+  const missing = expected.filter(site => !actual.has(site.slug)).length;
+  const unexpected = [...actual].filter(slug => !expected.some(site => site.slug === slug)).length;
+  if (actual.size !== manifest.sites.length) throw new Error('Duplicate sites in point manifest');
+  if (missing || unexpected) throw new Error(`Site inventory differs from current catalogue: ${missing} missing, ${unexpected} unexpected`);
+  const representatives = new Map();
+  for (const site of expected) {
+    if (!/^[A-Z]{2}$/.test(site.countryCode ?? '')) throw new Error(`${site.slug}: missing catalogue country`);
+    if (!representatives.has(site.countryCode)) representatives.set(site.countryCode, site);
+  }
+  return [...representatives.values()];
+}
+
+async function monitorPoint(read, now, model, manifest, site) {
+  const profile = parsePublishedProfileJson((await read(`${model.id}/sites/${site.slug}.json`)).text);
+  if (!profile || profile.model !== model.id || profile.site.id !== site.slug || !profile.hours.length) throw new Error('Missing or invalid representative profile');
+  const first = Date.parse(profile.hours[0].validAt), last = Date.parse(profile.hours.at(-1).validAt), reference = Date.parse(manifest.referenceTime);
+  const consistent = profile.run.referenceTime === manifest.referenceTime
+    && profile.site.latitude === site.latitude && profile.site.longitude === site.longitude
+    && (site.name === undefined || profile.site.name === site.name) && (site.timeZone === undefined || profile.site.timeZone === site.timeZone)
+    && first === reference + manifest.firstForecastHour * 3_600_000 && last === reference + manifest.lastForecastHour * 3_600_000
+    && profile.hours.length === manifest.forecastHours
+    && profile.hours.every((hour, index) => Date.parse(hour.validAt) === reference + model.forecastHours[index] * 3_600_000)
+    && profile.hours.length === model.forecastHours.length;
+  const result = assessment(model.id, 'point', { now, referenceTime: profile.run.referenceTime, validUntil: profile.hours.at(-1).validAt, policy: model.catalogue, consistent });
+  if (!result.ok) result.reason = `${site.slug}: ${result.reason}`;
+  return result;
+}
 
 // Supplemental forecasts have no model-cadence policy: use their actual horizon.
 // Balloon age uses the same archive search window as acquisition.
@@ -65,8 +106,8 @@ async function monitorObservations(read, now) {
   return checks;
 }
 
-/** Inject fetch/clock/model selection for fixtures; production checks each configured model. */
-export async function monitorServed({ from, now = new Date().toISOString(), models = MODELS, fetchImpl = fetch, timeoutMs = 10_000 }) {
+/** Inject fetch/clock/catalogue for fixtures; production checks each configured model. */
+export async function monitorServed({ from, now = new Date().toISOString(), models = MODELS, sites = currentSites, fetchImpl = fetch, timeoutMs = 10_000 }) {
   const base = new URL(from);
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash) throw new Error('Use an HTTP dataset root without credentials, query or fragment');
   if (!Number.isFinite(Date.parse(now))) throw new Error('Invalid monitor clock');
@@ -103,19 +144,19 @@ export async function monitorServed({ from, now = new Date().toISOString(), mode
   // Sequential per-model probes keep the monitor's network/memory cost bounded.
   for (const model of models) {
     try {
-      const manifest = parseForecastManifestJson((await read(`${model.id}/manifest.json`)).text);
+      const document = await read(`${model.id}/manifest.json`);
+      const manifest = parseForecastManifestJson(document.text);
       if (!manifest || manifest.model !== model.id || !manifest.sites.length) throw new Error('Missing or invalid point manifest');
-      const site = manifest.sites[0].slug;
-      const profile = parsePublishedProfileJson((await read(`${model.id}/sites/${site}.json`)).text);
-      if (!profile || profile.model !== model.id || profile.site.id !== site || !profile.hours.length) throw new Error('Missing or invalid representative profile');
-      const first = Date.parse(profile.hours[0].validAt), last = Date.parse(profile.hours.at(-1).validAt), reference = Date.parse(manifest.referenceTime);
-      const consistent = profile.run.referenceTime === manifest.referenceTime
-        && first === reference + manifest.firstForecastHour * 3_600_000 && last === reference + manifest.lastForecastHour * 3_600_000
-        && profile.hours.length === manifest.forecastHours
-        && profile.hours.every((hour, index) => Date.parse(hour.validAt) === reference + model.forecastHours[index] * 3_600_000)
-        && profile.hours.length === model.forecastHours.length;
+      if (document.raw.trial) throw new Error('Trial forecast served as production');
+      let check;
+      for (const site of pointInventory(model.id, manifest, document.raw.coverage, sites)) {
+        let result;
+        try { result = await monitorPoint(read, now, model, manifest, site); }
+        catch (error) { result = failure(model.id, 'point', error); result.reason = `${site.slug}: ${result.reason}`; }
+        if (!check || check.ok) check = result;
+      }
       manifests.set(model.id, manifest);
-      checks.push(assessment(model.id, 'point', { now, referenceTime: profile.run.referenceTime, validUntil: profile.hours.at(-1).validAt, policy: model.catalogue, consistent }));
+      checks.push(check);
     } catch (error) { checks.push(failure(model.id, 'point', error)); }
   }
 

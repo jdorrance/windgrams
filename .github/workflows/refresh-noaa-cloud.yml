@@ -1,6 +1,9 @@
 # Each completion can publish independently of slower providers.
 name: Refresh noaa-cloud
 on:
+  push:
+    branches: [main]
+    paths: [forecasts/sites.json]
   schedule:
     - cron: "55 1,7,13,19 * * *"
   workflow_dispatch:

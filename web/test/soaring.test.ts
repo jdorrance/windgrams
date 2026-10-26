@@ -286,6 +286,7 @@ test('Armenia regional links select ICON-EU and retain its full forecast horizon
   const catalogue = { regions: [region] } as RegionCatalogue;
   const query = defaultReplayQuery('?region=armenia&model=icon-eu', catalogue);
   assert.equal(query.get('case'), 'armenia-icon-eu-live');
+  assert.equal(defaultReplayQuery('?country=AM', catalogue).get('case'), 'armenia-icon-eu-live');
   assert.equal(replayLocation(`?${query}&hour=120`, '/data').hour, 120);
   assert.equal(replayLocation(`?${query}&hour=121`, '/data').hour, 121, 'horizon selection follows manifest hours');
   assert.equal(regionForCase(catalogue.regions, 'armenia-icon-eu-live'), region);
@@ -293,4 +294,7 @@ test('Armenia regional links select ICON-EU and retain its full forecast horizon
   assert.throws(() => defaultReplayQuery('?region=armenia&model=rrfs', catalogue), /unavailable/);
   assert.throws(() => defaultReplayQuery('?region=armenia', null), /unavailable/);
   assert.throws(() => defaultReplayQuery('?region=unknown', catalogue), /unavailable/);
+  assert.throws(() => defaultReplayQuery('?country=NZ', catalogue), /unavailable/, 'country navigation must not select an unrelated map');
+  assert.throws(() => defaultReplayQuery('?country=NZ', null), /unavailable/);
+  assert.equal(defaultReplayQuery('?country=NZ&case=nz-archive', catalogue).get('case'), 'nz-archive', 'explicit map links remain addressable');
 });

@@ -173,6 +173,7 @@ for (const [model, ref, step, count, build] of [
   ["hrrr-conus", hrrrRef, 1, 48, profile],
   ["rrfs", hrrrRef, 1, 84, profile],
   ["gfs", gfsRef, 3, 56, profile],
+  ["gdps", gfsRef, 3, 56, profile],
   ["geps", gfsRef, 3, 56, ensembleProfile],
 ]) {
   for (const site of sites.sites) write(`${model}/sites/${site.slug}.json`, build(model, site, ref, step, count), parseSiteForecastJson);

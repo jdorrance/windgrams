@@ -1521,6 +1521,2294 @@
         "retrievedAt": "2026-10-20"
       },
       "countryCode": "AM"
+    },
+    "nz-bridges": {
+      "countryCode": "NZ",
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17828",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-cliff-road-glover-park": {
+      "countryCode": "NZ",
+      "facingDeg": 22,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17108",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-dills-hill": {
+      "countryCode": "NZ",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6673",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-duders-peninsula": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19737",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-five-fingers": {
+      "countryCode": "NZ",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11614",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-glover-park": {
+      "countryCode": "NZ",
+      "facingDeg": 22,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide/coastal-soaring/flying-site-glover-park",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10805",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-karioitahi-a": {
+      "countryCode": "NZ",
+      "facingDeg": 247,
+      "windArcHalfWidthDeg": 67,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10879",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-karioitahi-e": {
+      "countryCode": "NZ",
+      "facingDeg": 247,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10880",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-kennedy-park": {
+      "countryCode": "NZ",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14793",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-maioro": {
+      "countryCode": "NZ",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9323",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mangawhai-heads": {
+      "countryCode": "NZ",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11905",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-north-head": {
+      "countryCode": "NZ",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide/coastal-soaring/flying-site-north-head",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11517",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-moirs-hill": {
+      "countryCode": "NZ",
+      "facingDeg": 202,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9322",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-muriwai": {
+      "countryCode": "NZ",
+      "facingDeg": 292,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide/coastal-soaring/flying-site-muriwai-maori-bay",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10788",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-muriwai-janies": {
+      "countryCode": "NZ",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14809",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-muriwai-nw": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14808",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-musick-point": {
+      "countryCode": "NZ",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19247",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-piha-north": {
+      "countryCode": "NZ",
+      "facingDeg": 158,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10806",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-port-waikato": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10881",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-puketutu": {
+      "countryCode": "NZ",
+      "facingDeg": 337,
+      "windArcHalfWidthDeg": 68,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Seasonal lambing restrictions. Confirm access with the site monitor. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10826",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-shakespear-regional-south": {
+      "countryCode": "NZ",
+      "facingDeg": 202,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19591",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-tangihua": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10717",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-whangaparaoa-army-bay": {
+      "countryCode": "NZ",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14821",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-whangaparaoa-tiri-channel": {
+      "countryCode": "NZ",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14822",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-whangarei-heads": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://www.cloudbase.org.nz/site-guide",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20115",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-bobs-hill": {
+      "countryCode": "NZ",
+      "facingDeg": 337,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15307",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-braemar-road": {
+      "countryCode": "NZ",
+      "facingDeg": 112,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15954",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-hamurana": {
+      "countryCode": "NZ",
+      "facingDeg": 180,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15173",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-hickeys-bluff": {
+      "countryCode": "NZ",
+      "facingDeg": 158,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11447",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-kaimai": {
+      "countryCode": "NZ",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6853",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-kohe-point": {
+      "countryCode": "NZ",
+      "facingDeg": 292,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://bophgpg.org.nz/flying-sites/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14222",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-little-waihi": {
+      "countryCode": "NZ",
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15953",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-maketu": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15164",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-matata": {
+      "countryCode": "NZ",
+      "facingDeg": 22,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15325",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mokau": {
+      "countryCode": "NZ",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16019",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mokau-cemetery": {
+      "countryCode": "NZ",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16020",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-newdicks": {
+      "countryCode": "NZ",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15330",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-paeroa-range": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6809",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-pukemore": {
+      "countryCode": "NZ",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10770",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-putauaki": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15988",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-raglan": {
+      "countryCode": "NZ",
+      "facingDeg": 292,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15183",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-rogers-road": {
+      "countryCode": "NZ",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15308",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-tarawera": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15987",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-taupo-urban": {
+      "countryCode": "NZ",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16737",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-waiotahi": {
+      "countryCode": "NZ",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15324",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-whakaipo-bay": {
+      "countryCode": "NZ",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16740",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-ohiwa-hill-onekawa-pa": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://bophgpg.org.nz/flying-sites/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15323",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-ohope": {
+      "countryCode": "NZ",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Waikato / Bay of Plenty",
+      "notes": "Local briefing and access information. https://bophgpg.org.nz/flying-sites/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14221",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-burma-rd": {
+      "countryCode": "NZ",
+      "facingDeg": 135,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14307",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-centennial-park": {
+      "countryCode": "NZ",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19827",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-kaupok": {
+      "countryCode": "NZ",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16004",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-kourarau": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12747",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-climie": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13512",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-dick": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14077",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-ocean-beach": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17248",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-paekakariki-hill": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13107",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-patea-beach": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=18521",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-pukerua-bay-escarpment": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14647",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-sunrise": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20122",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-te-mata": {
+      "countryCode": "NZ",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14176",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-turangi-road": {
+      "countryCode": "NZ",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15316",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-urenui": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Central / Lower North Island",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15317",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-barnicoat": {
+      "countryCode": "NZ",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 22.5,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Barnicoat requires the club induction and current landing/airspace procedure. https://www.thgpc.org.nz/index.php?page=barnicoat",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13459",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-bird-s-clearing": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14290",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-blowhard-i": {
+      "countryCode": "NZ",
+      "facingDeg": 337,
+      "windArcHalfWidthDeg": 68,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17695",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-flat-top": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16643",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-foote-hill": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11898",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-inwoods-lookout": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13458",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-lake-station": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16322",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-millerton": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16564",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-murchison": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13457",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-robert": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13218",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-puheke": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15455",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-shipwreck-bay": {
+      "countryCode": "NZ",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Northland / Auckland",
+      "notes": "Local briefing and access information. https://nzhgpa.org.nz/local-clubs/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15456",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-tapawera": {
+      "countryCode": "NZ",
+      "facingDeg": 225,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16060",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-travers-saddle": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19958",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-takaka-hill": {
+      "countryCode": "NZ",
+      "facingDeg": 247,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Nelson / Tasman / Marlborough",
+      "notes": "Local briefing and access information. https://thgpc.org.nz/index.php?page=sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13292",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-alex-knob": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16037",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-allendale": {
+      "countryCode": "NZ",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Seasonal lambing restrictions. Confirm access with the club. https://www.chgpc.org.nz/allandale",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9277",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-avalanche-peak": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20014",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-ball-pass": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=18398",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-barnett-park": {
+      "countryCode": "NZ",
+      "facingDeg": 22,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9278",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-cass-bay": {
+      "countryCode": "NZ",
+      "facingDeg": 202,
+      "windArcHalfWidthDeg": 23,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11325",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-castle-rock": {
+      "countryCode": "NZ",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10196",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-craigieburn-1525": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12743",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-hamilton-peak": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13844",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-britten-reserve": {
+      "countryCode": "NZ",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11328",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-kamilas-hill": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19959",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-lake-stream-gap": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19960",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-little-river": {
+      "countryCode": "NZ",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10267",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mount-fiffi": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=21169",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-bruce": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15473",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-cheeseman": {
+      "countryCode": "NZ",
+      "facingDeg": 68,
+      "windArcHalfWidthDeg": 68,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=10796",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-faust": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14956",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-fox": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17181",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-hutt": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20656",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-potts": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19957",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-oxford": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14255",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-scarborough-cliffs": {
+      "countryCode": "NZ",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11332",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-south-temple": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20044",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-st-james-range-north-pt-1980": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19961",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-taylors-mistake": {
+      "countryCode": "NZ",
+      "facingDeg": 45,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=9279",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-the-gondola-christchurch": {
+      "countryCode": "NZ",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=18828",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-van-ash": {
+      "countryCode": "NZ",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11114",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-white-horse": {
+      "countryCode": "NZ",
+      "facingDeg": 90,
+      "windArcHalfWidthDeg": 90,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17246",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-woolshed-hill": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Canterbury / West Coast",
+      "notes": "Local briefing and access information. https://www.chgpc.org.nz/flying-sites",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=16327",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-barrier-knob": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11974",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-bealy-range": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19039",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-black-peak": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11947",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-boundary-spur": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20042",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-brewester-hut": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14644",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-coronet-peak": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11086",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-gladwish": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20045",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-glengyle-spur": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20043",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-kea-basin": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20041",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-water-front-lake-hawea": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15740",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-lovers-leap": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14240",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-awful": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=18467",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-burns": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15698",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-cargill": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20018",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-fastness": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17228",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-gilbert-south-ridge": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20038",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-jumbo": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13178",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-maude": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11952",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-mt-shrimpton": {
+      "countryCode": "NZ",
+      "facingDeg": 315,
+      "windArcHalfWidthDeg": 20,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14640",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-niger": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11727",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-niger-peak": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=12735",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-ocean-peak": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15726",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-pigeon-island-flydown-launch": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20026",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-pipson-spur": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=18484",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-pluto-plateau": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17318",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-queenstown-crown-terrace": {
+      "countryCode": "NZ",
+      "facingDeg": 270,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6905",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-rees-valley-slopes-above-shelter-rock": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20040",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-rob-roy": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=11722",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-sawyer-burn": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20039",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-scott-creek-saddle": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15552",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-skyline-gondola": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Skyline requires Southern Club accreditation and the current airspace procedure. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=14251",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-snowpark": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=15179",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-sugarloaf-spur": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=17319",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-taniwha": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=13177",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-temple-peak": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=20037",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-tooth-peak": {
+      "countryCode": "NZ",
+      "facingDeg": null,
+      "windArcHalfWidthDeg": null,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Local briefing and access information. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=19971",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
+    },
+    "nz-treble-cone": {
+      "countryCode": "NZ",
+      "facingDeg": 0,
+      "windArcHalfWidthDeg": 45,
+      "windMinMph": null,
+      "windMaxMph": null,
+      "gustMaxMph": null,
+      "region": "Southern Lakes / Otago / Southland",
+      "notes": "Treble Cone access requires the club’s current farm registration and sign-in. https://southernclub.co.nz/visiting-pilots/",
+      "source": {
+        "name": "Paragliding Earth contributors",
+        "url": "https://paraglidingearth.com/?site=6171",
+        "checkedAt": "2026-10-25",
+        "license": "CC-BY-SA-3.0"
+      }
     }
   }
 }

@@ -22,6 +22,15 @@ The archive retains 120 rolling runs plus pinned cases—about 30 days at four s
 
 Method 2.2.0 corrects the numerical near-neutral zero-depth cliff and missing-input behavior; the [method-change evidence](refactor-plan.md#method-220-parcel-depth-and-missing-inputs) records analytic tests, archived comparisons and the remaining physical closure boundary. Further atmospheric levels, regional maps, pressure-gradient views and run comparisons should be chosen according to the errors they help explain and the cost of acquiring and serving their data.
 
+## Prospective observation programme (outline)
+
+The display, provenance and delivery repairs in this repository do not establish forecast accuracy. The current observation evidence (eight near-initialization comparisons over three station observation times on one date) checks profile matching and scoring only. A small prospective programme to change that:
+
+1. **Pre-register the questions.** Per diagnostic (thermal top, W\*, usable ceiling, surface/mixed LCL, OD occurrence, launch wind), name the observation source, metric, regime split and acceptance threshold before collecting data. Thresholds come from the first baseline distribution, not from targets invented in advance.
+2. **Use independent sources in order of availability.** RAOB soundings through the existing issued-history scorer (expanding matched station pairs beyond the current four sites); surface stations (METAR/ASOS/WU) for launch wind and surface temperature/dew point; ceilometer or satellite cloud-base estimates for LCL/OD checks; and, only with a licensing and consent decision that does not yet exist in this repository, IGC/vario climb records for W\* and ceiling checks. Each source is scored separately; balloon-derived parcel tops are profile proxies, not observed soaring.
+3. **Keep the evidence honest.** First-issued forecasts only; exact-time and near-initialization tiers separate; daytime leads (f13–f24) reported separately from near-initialization scores; independent station-days counted once per station and UTC date; failures and unmatched cases published alongside errors. No tuning on the evaluation sample — policy changes need their own holdout.
+4. **Gate claims on the existing promotion rule.** "Validated" wording for any diagnostic waits for at least 30 independent station-days per headline metric, across multiple stations and regimes (the `PROMOTION_GATES` floor in the verification history module). Until then, pilot-facing copy describes soaring numbers as uncalibrated model guidance.
+
 ## Experimental WRF work
 
 [`forecasts/wrf/`](../forecasts/wrf/) contains a North Sound configuration with a 3 km parent domain and a 1 km nest. The runner's default mode estimates the work involved. Running the integration requires WRF/WPS executables, geographic inputs and forcing data. Runtime and cost must be measured from completed integrations.

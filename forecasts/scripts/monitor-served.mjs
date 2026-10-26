@@ -1,5 +1,6 @@
 // Bounded reads of the deployed origin: cadence, representative profiles, and live bundles.
 import { createHash } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +18,11 @@ import launchDetails from '../../web/src/data/launches.json' with { type: 'json'
 import { parseProviderHealth } from './lib/provider-health.mjs';
 import { parseObservationManifest } from './lib/observation-manifest.mjs';
 import { LOOKBACK_HOURS, MIN_LEVELS } from './lib/raob.mjs';
+
+/** Corrupt/invalid served bytes can be repaired by republishing; staleness cannot. */
+export function rollbackEligible(checks) {
+  return checks.some(check => (check.kind === 'point' || check.kind === 'regional') && check.status === 'unavailable');
+}
 
 const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
 // Country is a probe grouping, separate from the provider's catalogue fingerprint.
@@ -224,14 +230,15 @@ export async function monitorServed({ from, now = new Date().toISOString(), mode
       }
     }
   } catch (error) { checks.push(failure('regions', 'regional', error)); }
-  return { schemaVersion: 1, checkedAt: now, baseUrl: root, ok: checks.every(check => check.ok), checks };
+  return { schemaVersion: 1, checkedAt: now, baseUrl: root, ok: checks.every(check => check.ok), rollbackEligible: rollbackEligible(checks), checks };
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { from: { type: 'string' }, now: { type: 'string' } } });
+  const { values } = parseArgs({ options: { from: { type: 'string' }, now: { type: 'string' }, output: { type: 'string' } } });
   if (!values.from) throw new Error('Use --from the deployed dataset URL');
   const report = await monitorServed({ from: values.from, now: values.now });
   console.log(JSON.stringify(report, null, 2));
+  if (values.output) writeFileSync(values.output, `${JSON.stringify(report, null, 2)}\n`);
   if (!report.ok) process.exitCode = 1;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error); process.exitCode = 1; });

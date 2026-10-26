@@ -26,8 +26,19 @@ export function forecastDataSupport(hour: PublishedForecastHour) {
     rows.push(['Cloud limit source', { 'baseline-cloud-base': 'Published baseline cloud-base diagnostic', 'surface-lcl': 'Surface-parcel LCL', unavailable: 'Unavailable' }[support.cloudLimit.source]]);
     rows.push(['Surface pressure', `${support.surfacePressure.valueHpa == null ? 'Unavailable' : formatQuantity(support.surfacePressure.valueHpa, 'pressure')} · ${support.surfacePressure.source === 'model' ? 'model pressure' : 'hypsometric estimate'}`]);
   } else rows.push(['Diagnostic support', 'Not published for this forecast.']);
+  // Consequential limitations stay visible outside the collapsed support details:
+  // a fallback thermal top or sparse native sampling can move the headline heights.
+  const branch = support?.thermalDepth.branch;
+  const lowLevels = sampling?.temperature.levelsInLowest1000M;
+  const sparse = hour.soaring?.verticalResolution?.isSparseProfile === true || (lowLevels != null && lowLevels <= 2);
+  const caution = branch === 'model-pbl-fallback' || branch === 'heat-flux-fallback'
+    ? 'Thermal top here comes from a fallback estimate, not a resolved parcel crossing — added model levels can move it substantially.'
+    : sparse
+      ? `Thermal estimates rest on sparse native levels${lowLevels != null ? ` (${lowLevels} in the lowest ${formatQuantity(1000, 'elevation')})` : ''}; added model levels can move them substantially.`
+      : null;
   return {
     rows,
+    caution,
     limit: support?.thermalDepth.topLimited ? 'Thermal depth reaches the highest available model level; its upper boundary is unresolved.' : null,
   };
 }

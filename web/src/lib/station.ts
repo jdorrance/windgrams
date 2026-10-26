@@ -229,8 +229,12 @@ export function readWind(current: StationObservation, gustMps: number | null, li
   const mph = (v: number) => formatQuantity(v / MPS_TO_MPH, "wind");
   const checks: Check[] = [];
 
-  if (deg === null || speed < 1) {
+  // Calm is a claim about speed alone; a missing direction at speed is unknown, not calm.
+  const calm = speed < 1;
+  if (calm) {
     checks.push({ label: "Direction", tone: "neutral", text: "Calm · direction variable" });
+  } else if (deg === null) {
+    checks.push({ label: "Direction", tone: "neutral", text: `Direction unavailable · ${mph(speed)}` });
   } else if (limits.window === null) {
     checks.push({ label: "Direction", tone: "neutral", text: `${compass(deg)} ${deg}° · launch sector unknown` });
   } else if (inArc(deg, limits.window)) {
@@ -256,7 +260,7 @@ export function readWind(current: StationObservation, gustMps: number | null, li
       ? "Within saved limits"
       : tone === "warning"
         ? `Outside limits: ${checks.filter((c) => c.tone === "warning").map((c) => c.label.toLowerCase()).join(", ")}`
-        : deg === null || speed < 1
+        : calm
           ? "Calm"
           : tone === "neutral" ? (limits.window === null || limits.windMinMph === null || limits.windMaxMph === null || limits.gustMaxMph === null ? "Launch limits incomplete" : "Wind observations incomplete") : "Light wind";
   return { tone, headline, checks, gustMps };

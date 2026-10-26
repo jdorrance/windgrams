@@ -127,8 +127,9 @@ conversion.
 The model sounding plots surface temperature/moisture at 2 m and wind at 10 m
 above model ground. Parcel initialization retains its ground-based calculation
 convention. Supplied model surface pressure takes precedence over the labelled
-hypsometric fallback. Estimated wind at launch elevation uses adjacent valid
-wind nodes; missing or duplicate nodes break interpolation. It does not resolve
+hypsometric fallback. The experimental free-air wind estimate at launch elevation uses adjacent valid
+wind nodes; missing or duplicate nodes break interpolation. It is distinct from
+the model surface wind (10 m above model ground) and does not resolve
 local terrain flow or gusts.
 
 Page owners release chart observers, station polling and sunlight graphics on final

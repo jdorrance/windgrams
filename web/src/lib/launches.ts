@@ -56,6 +56,15 @@ export interface DirectionArc {
 
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/**
+ * Wind limits with no recorded source are catalogue defaults, not launch-specific
+ * values. Returns null when the launch carries no wind limits at all.
+ */
+export function windLimitsLabel(details: Pick<LaunchDetails, "windMinMph" | "windMaxMph" | "gustMaxMph" | "source">): "saved" | "default" | null {
+  if (details.windMinMph === null && details.windMaxMph === null && details.gustMaxMph === null) return null;
+  return details.source ? "saved" : "default";
+}
+
 export const DEFAULT_DETAILS: LaunchDetails = {
   countryCode: "",
   facingDeg: null,

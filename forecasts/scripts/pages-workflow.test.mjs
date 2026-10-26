@@ -40,7 +40,10 @@ test('publication seeds, collects, validates, assembles and measures before depl
   let previous = -1;
   for (const command of commands) { const index = publish.indexOf(command); assert.ok(index > previous, command); previous = index; }
   assert.match(publish, /--dry-run/);
-  assert.match(publish, /Require successful checks for this checkout\n        if: \$\{\{ !inputs.dry_run \}\}\n        run: node scripts\/await-publication-check.mjs/);
+  assert.match(publish, /Require successful checks for this checkout\n        if: \$\{\{ !inputs.dry_run \}\}\n        env:\n          GH_TOKEN: \$\{\{ secrets.GITHUB_TOKEN \}\}\n        run: node scripts\/await-publication-check.mjs/,
+    'the token is exposed only to the step that calls the Actions API');
+  assert.match(publish, /actions: read\n      pages: write/, 'publisher reads runs/artifacts; it never dispatches');
+  assert.doesNotMatch(publish, /\n    env:\n      GH_TOKEN/, 'no job-level token env on the publisher');
   assert.match(publish, /if: inputs.dry_run\n        run: node forecasts\/scripts\/prepare-publication.mjs .* --dry-run/);
   assert.match(publish, /!inputs.dry_run/);
   assert.match(publish, /PUBLIC_WINDGRAMS_DATA_BASE:/);
@@ -68,6 +71,19 @@ test('refresh always packs retained products and preserves native decoder setup'
   const monitor = readFileSync(new URL('../../.github/workflows/served-data.yml', import.meta.url), 'utf8');
   assert.match(monitor, /17 \* \* \* \*/);
   assert.match(monitor, /scripts\/monitor-served.mjs/);
+});
+
+test('served-data failures open a deduplicated alert and history is backed up outside caches', () => {
+  const monitor = readFileSync(new URL('../../.github/workflows/served-data.yml', import.meta.url), 'utf8');
+  assert.match(monitor, /issues: write/);
+  assert.match(monitor, /report-served-failure\.mjs --report served-report\.json/);
+  assert.match(monitor, /--resolve/);
+  assert.match(monitor, /HEALTHCHECKS_SERVICEDATA_URL/);
+  const backup = readFileSync(new URL('../../.github/workflows/backup-history.yml', import.meta.url), 'utf8');
+  assert.match(backup, /cron: '17 6 \* \* 1'/);
+  assert.match(backup, /backup-issued-history\.mjs pack/);
+  assert.match(backup, /gh release upload issued-history/);
+  assert.match(backup, /backup-issued-history\.mjs restore/);
 });
 
 test('token-dispatched refreshes require a successful artifact upload, including retained data after acquisition failures', () => {

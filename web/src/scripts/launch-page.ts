@@ -416,6 +416,8 @@ function renderConditions(hour: SiteForecast['hours'][number], index: number) {
   replaceDetails($('forecast-data-support'), support.rows);
   $('forecast-data-limit').textContent = support.limit ?? '';
   $('forecast-data-limit').hidden = support.limit === null;
+  $('forecast-sampling-caution').textContent = support.caution ?? '';
+  $('forecast-sampling-caution').hidden = support.caution === null;
 }
 
 function showSkewTHour(index: number) {
@@ -438,6 +440,7 @@ function showSkewTHour(index: number) {
   skewt.set(sounding, { name: launch.name, elevationM: launchElevationM });
   const list = $("skewt-findings");
   list.replaceChildren();
+  $("skewt-dew-legend").hidden = sounding !== null && !sounding.hasDewPoint;
   if (!sounding) {
     $("skewt-headline").textContent = "Too few forecast levels to draw a sounding.";
     return;
@@ -514,16 +517,22 @@ async function chooseDefaultModel() {
   if (!manualModel && profiles.get(choice) === null) await chooseDefaultModel();
 }
 
+/** Re-read provider health; the reader's TTL bounds this to one request per group per 5 minutes. */
+async function loadRefreshHealth() {
+  await Promise.all(MODEL_ORDER.map(async slug => {
+    const health = await readRefreshHealth(slug);
+    if (lifetime.disposed) return;
+    if (health) refreshHealth.set(slug, health); else refreshHealth.delete(slug);
+    if (model === slug) freshnessNotice.refresh();
+  }));
+}
+window.addEventListener('pageshow', () => { void loadRefreshHealth(); }, eventOptions);
+
 export async function start() {
   if (lifetime.disposed) return;
   const raobPromise = capabilities.raob ? getJson<RaobDocument>(`raob/sites/${launch.slug}.json`) : Promise.resolve(null);
   const metadata = Promise.all([
-    Promise.all(MODEL_ORDER.map(async slug => {
-      const health = await readRefreshHealth(slug);
-      if (lifetime.disposed) return;
-      if (health) refreshHealth.set(slug, health);
-      if (model === slug) freshnessNotice.refresh();
-    })),
+    loadRefreshHealth(),
     getJson<unknown>('models.json').then(doc => { if (lifetime.disposed) return; catalogue = doc ? parseModelCatalogueJson(JSON.stringify(doc)) : null; renderModelSelect(MODEL_ORDER.filter(slug => manifests.has(slug))); if (model && profiles.get(model)) renderMeteogram(); }),
     getJson<unknown>('site-context.json').then(doc => {
       if (lifetime.disposed) return;

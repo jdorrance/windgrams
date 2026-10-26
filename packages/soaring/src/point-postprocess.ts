@@ -154,23 +154,30 @@ export function sourceFromPublishedDeterministicHour(hour: CompatibilityHour | n
  */
 export function postprocessSparseAdapterDocument<T extends CompatibilityDocument>(doc: T, { modelSlug, launchElevationM = null }: PostprocessOptions = {}) {
   const slug = modelSlug ?? (doc.grid?.office ? 'nws' : 'ecmwf');
-  const gridElevationM = slug === 'nws'
-    ? (finite(doc.grid?.elevationM) && doc.grid.elevationM > 0 ? doc.grid.elevationM : (finite(launchElevationM) ? launchElevationM : 0))
-    : (finite(doc.site?.gridElevationM) ? doc.site.gridElevationM : (finite(launchElevationM) ? launchElevationM : 0));
+  // Unknown terrain is not sea level: keep it null so MSL heights stay unavailable.
+  // Legitimate zero and negative (below-sea-level) elevations are preserved as-is.
+  const gridElevationM: number | null = slug === 'nws'
+    ? (finite(doc.grid?.elevationM) ? doc.grid.elevationM : (finite(launchElevationM) ? launchElevationM : null))
+    : (finite(doc.site?.gridElevationM) ? doc.site.gridElevationM : (finite(launchElevationM) ? launchElevationM : null));
+  const elevationSource: 'grid' | 'launch' | 'unavailable' = slug === 'nws'
+    ? (finite(doc.grid?.elevationM) ? 'grid' : (finite(launchElevationM) ? 'launch' : 'unavailable'))
+    : (finite(doc.site?.gridElevationM) ? 'grid' : (finite(launchElevationM) ? 'launch' : 'unavailable'));
 
   const hours = (doc.hours ?? []).map(h => {
     const tempC = h.temperatureC ?? null;
     const dewC = (slug === 'nws' ? h.dewpointC : h.dewPointC) ?? null;
     const lclAglM = finite(tempC) && finite(dewC) ? parcelLclAglM(tempC, dewC) : null;
-    const surfaceLclM = lclAglM == null ? null : round1(gridElevationM + lclAglM);
+    const surfaceLclM = lclAglM == null || gridElevationM === null ? null : round1(gridElevationM + lclAglM);
     const aglBlHeight = slug === 'nws' ? (h.mixingHeightM ?? null) : (h.boundaryLayerHeightM ?? null);
-    const modelBlTopM = finite(aglBlHeight) && aglBlHeight > 0 ? round1(gridElevationM + aglBlHeight) : null;
+    const modelBlTopM = finite(aglBlHeight) && aglBlHeight > 0 && gridElevationM !== null ? round1(gridElevationM + aglBlHeight) : null;
 
     return {
       ...h,
       soaring: {
         contractVersion: SOARING_CONTRACT_VERSION,
         modelKind: 'surface-or-sparse-adapter',
+        gridElevationM,
+        elevationSource,
         surfaceLclM,
         modelBlTopM,
         blMeanWindSpeedMps: slug === 'nws' ? (h.transportWindSpeedMps ?? null) : null,
@@ -198,6 +205,8 @@ export function postprocessSparseAdapterDocument<T extends CompatibilityDocument
       unsupportedDiagnostics: ['thermalVelocityV2Mps', 'usableLiftTopV2M', 'hcritWxtoflyM', 'dryHcritM', 'mixedLayerLclM'],
       unsupportedReason: 'Missing surface sensible/latent heat fluxes and dense vertical profile levels.',
       synthesizedLevels: 0,
+      gridElevationM,
+      elevationSource,
     } satisfies SoaringMetadata,
     hours,
   };

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deriveDiagnosticsV2, computeUsableLiftTopV2M } from '@windgrams/soaring';
-import { postprocessPointForecast, aggregateEnsembleMetric, summarizeModelWindowSpread,
+import { postprocessPointForecast, postprocessSparseAdapterDocument, aggregateEnsembleMetric, summarizeModelWindowSpread,
   sourceFromPublishedDeterministicHour, deriveEnsembleSoaringDiagnostics } from '@windgrams/soaring/compatibility';
 
 const fixture=JSON.parse(readFileSync(new URL('./fixtures/diagnostic-parity.json',import.meta.url),'utf8'));
@@ -23,6 +23,33 @@ test('policy sink rates remain explicit and increasing sink cannot raise usable 
   const first=computeUsableLiftTopV2M(inputs,1);
   const second=computeUsableLiftTopV2M(inputs,2);
   assert.ok(first!==null && second!==null && second<=first);
+});
+
+test('sparse adapters never substitute sea level for unknown terrain, and preserve zero and negative elevations', () => {
+  const hour = { validAt: '2026-10-21T20:00:00Z', temperatureC: 20, dewPointC: 10, boundaryLayerHeightM: 1000 };
+  const unknown = postprocessSparseAdapterDocument({ model: 'ecmwf', site: {}, hours: [hour] }, { modelSlug: 'ecmwf' });
+  assert.equal(unknown.hours[0].soaring.surfaceLclM, null);
+  assert.equal(unknown.hours[0].soaring.modelBlTopM, null);
+  assert.equal(unknown.hours[0].soaring.gridElevationM, null);
+  assert.equal(unknown.hours[0].soaring.elevationSource, 'unavailable');
+  assert.equal(unknown.soaringMeta.elevationSource, 'unavailable');
+
+  const launchOnly = postprocessSparseAdapterDocument({ model: 'ecmwf', site: {}, hours: [hour] }, { modelSlug: 'ecmwf', launchElevationM: 500 });
+  assert.ok(launchOnly.hours[0].soaring.surfaceLclM > 500);
+  assert.equal(launchOnly.hours[0].soaring.elevationSource, 'launch');
+
+  for (const elevation of [0, -50]) {
+    const atGrid = postprocessSparseAdapterDocument({ model: 'ecmwf', site: { gridElevationM: elevation }, hours: [hour] }, { modelSlug: 'ecmwf', launchElevationM: 500 });
+    assert.equal(atGrid.hours[0].soaring.gridElevationM, elevation);
+    assert.equal(atGrid.hours[0].soaring.modelBlTopM, elevation + 1000);
+    assert.equal(atGrid.hours[0].soaring.elevationSource, 'grid');
+  }
+  // NWS grid elevation of exactly 0 is legitimate terrain, not missing data.
+  const nwsZero = postprocessSparseAdapterDocument(
+    { grid: { office: 'KBOI', elevationM: 0 }, hours: [{ validAt: hour.validAt, temperatureC: 20, dewpointC: 10, mixingHeightM: 800 }] },
+    { modelSlug: 'nws', launchElevationM: 500 });
+  assert.equal(nwsZero.hours[0].soaring.gridElevationM, 0);
+  assert.equal(nwsZero.hours[0].soaring.modelBlTopM, 800);
 });
 
 test('ensemble postprocessing retains published member percentiles', () => {

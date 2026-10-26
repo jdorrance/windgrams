@@ -94,8 +94,12 @@ export interface SkewTLaunch {
   elevationM: number | null;
 }
 
+/** Instance counter: several Skew-T charts share a page, so SVG ids must be unique per chart. */
+let nextSkewTId = 0;
+
 export class SkewTChart {
   private disposed = false;
+  private readonly idPrefix = `skewt-${++nextSkewTId}`;
   private sounding: Sounding | null = null;
   private readonly observer: ResizeObserver;
   private width = 0;
@@ -156,12 +160,12 @@ export class SkewTChart {
       "aria-label": `Skew-T · Temperature ${unitLabel("temperature")} · Height ${unitLabel("elevation")} MSL · Wind ${unitLabel("wind")} · Thermals, clouds and inversions.`,
     });
     const defs = el("defs", {}, svg);
-    const clip = el("clipPath", { id: "skewt-clip" }, defs);
+    const clip = el("clipPath", { id: `${this.idPrefix}-clip` }, defs);
     el("rect", { x: box.left, y: box.top, width: box.right - box.left, height: box.bottom - box.top }, clip);
-    const hatch = el("pattern", { id: "skewt-hatch", width: 7, height: 7, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
+    const hatch = el("pattern", { id: `${this.idPrefix}-hatch`, width: 7, height: 7, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
     el("line", { x1: 0, y1: 0, x2: 0, y2: 7, class: "skewt-hatch-line" }, hatch);
 
-    const plot = el("g", { "clip-path": "url(#skewt-clip)" }, svg);
+    const plot = el("g", { "clip-path": `url(#${this.idPrefix}-clip)` }, svg);
     el("rect", { x: box.left, y: box.top, width: box.right - box.left, height: box.bottom - box.top, class: "skewt-frame" }, plot);
 
     // Layers first (under everything): thermal zone, lids, cloud layers.
@@ -169,7 +173,10 @@ export class SkewTChart {
       const ya = y(pAt(Math.min(z1, heightAtPressure(s.points, g.pTop))));
       const yb = y(pAt(Math.max(z0, s.modelElevationM)));
       if (yb - ya < 1) return;
-      el("rect", { x: x0, y: ya, width: x1 - x0, height: yb - ya, class: cls }, plot);
+      // Lid bands fill with this chart's own hatch pattern (ids are per-instance).
+      const attrs: Record<string, string | number> = { x: x0, y: ya, width: x1 - x0, height: yb - ya, class: cls };
+      if (cls.includes("skewt-lid")) attrs.fill = `url(#${this.idPrefix}-hatch)`;
+      el("rect", attrs, plot);
     };
     const zoneTop = s.marks.zoneTopM;
     if (zoneTop !== null) band(s.modelElevationM, zoneTop, "skewt-thermal-zone");

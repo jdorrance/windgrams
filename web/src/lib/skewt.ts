@@ -112,19 +112,23 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
   const s = hour.surface;
   const ts = scalar(s.temperatureC);
   const tds = scalar(s.dewPointC);
-  if (ts === null || tds === null) return null;
+  if (ts === null) return null;
 
+  // Missing humidity limits the sounding; it does not erase temperature or wind.
+  // Dew points become NaN (not drawn, no cloud layers), mirroring the balloon path,
+  // and liftParcel then follows its qualified dry-parcel branch.
   const levels: SoundingPoint[] = [];
   for (const l of hour.levels ?? []) {
     const p = scalar(l.pressureHpa);
     const z = scalar(l.heightM);
     const t = scalar(l.temperatureC);
     const td = scalar(l.dewPointC);
-    if (p === null || z === null || t === null || td === null || z <= zs + 5) continue;
-    levels.push({ pressureHpa: p, heightM: z, temperatureC: t, dewPointC: Math.min(td, t), windSpeedMps: scalar(l.windSpeedMps), windDirectionDeg: scalar(l.windDirectionDeg), surface: false });
+    if (p === null || z === null || t === null || z <= zs + 5) continue;
+    levels.push({ pressureHpa: p, heightM: z, temperatureC: t, dewPointC: td === null ? Number.NaN : Math.min(td, t), windSpeedMps: scalar(l.windSpeedMps), windDirectionDeg: scalar(l.windDirectionDeg), surface: false });
   }
   levels.sort((a, b) => a.heightM - b.heightM);
   if (levels.length < 2) return null;
+  const hasDewPoint = tds !== null && levels.every(l => Number.isFinite(l.dewPointC));
 
   const modelPressure = finiteScalar((s as { surfacePressureHpa?: unknown }).surfacePressureHpa);
   // The parcel calculation retains its model-ground initialization convention.
@@ -133,7 +137,7 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
     pressureHpa: modelPressure !== null && modelPressure > 0 ? modelPressure : surfacePressureHpa({ heightM: zs, temperatureC: ts }, levels[0]),
     heightM: zs,
     temperatureC: ts,
-    dewPointC: Math.min(tds, ts),
+    dewPointC: tds === null ? Number.NaN : Math.min(tds, ts),
     windSpeedMps: scalar(s.windSpeedMps),
     windDirectionDeg: scalar(s.windDirectionDeg),
     windHeightM: zs + 10,
@@ -178,15 +182,15 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
     thermalTopProfileLimited: profileLimited,
     capeJkg: scalar(s.capeJkg),
     inversions: findStableLayers(points),
-    cloudLayers: findCloudLayers(points),
+    cloudLayers: hasDewPoint ? findCloudLayers(points) : [],
     freezingLevelM: freezingLevel(points),
     topM,
-    hasDewPoint: true,
+    hasDewPoint,
     dryParcelOnly,
     marks: {
       zoneTopM: zoneTop !== null && zoneTop > zs ? zoneTop : null,
       top: thermals && usable !== null ? { heightM: usable, label: `Top of lift ${formatQuantity(usable, "elevation")}` } : null,
-      cloudBaseM: thermals && base !== null && base <= bl! + 100 ? base : null,
+      cloudBaseM: hasDewPoint && thermals && base !== null && base <= bl! + 100 ? base : null,
     },
   };
 }
@@ -440,7 +444,14 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
 
   // Clouds
   const base = sounding.cloudBaseM;
-  if (hasThermals && base !== null && base <= bl! + 100) {
+  if (hasThermals && !sounding.hasDewPoint) {
+    findings.push({
+      key: "clouds",
+      title: "Cloud base",
+      text: "Unavailable · Humidity missing",
+      tone: "neutral",
+    });
+  } else if (hasThermals && base !== null && base <= bl! + 100) {
     const low = base < launch + 300;
     findings.push({
       key: "clouds",
@@ -496,7 +507,7 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
   const atTop = windAtHeight(windPoints, topHeight);
   const windParts: string[] = [];
   if (launchM !== null) {
-    if (atLaunch) windParts.push(`Estimated wind at launch elevation (${referenceHeightText(launchM)} MSL): ${windText(atLaunch)}. Local terrain flow is unresolved.`);
+    if (atLaunch) windParts.push(`Experimental free-air wind estimate at launch elevation (${referenceHeightText(launchM)} MSL): ${windText(atLaunch)}. This is not the model surface wind. Local terrain flow is unresolved.`);
     else if (launchM < sounding.modelElevationM) windParts.push(`Launch wind unavailable (${referenceHeightText(launchM)} MSL) · Below model ground.`);
     else windParts.push(`Wind unavailable at launch elevation (${referenceHeightText(launchM)} MSL).`);
   }

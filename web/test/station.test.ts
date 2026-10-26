@@ -87,6 +87,16 @@ test("crosswind, strong wind, gusts and calm each get their own call", () => {
   assert.equal(readWind({ ...base, windSpeedMps: null }, null, limits, compassPoint, windowLabel), null);
 });
 
+test("missing direction at speed is direction unavailable, never calm", () => {
+  const base = parseWuCurrent(currentBody)!;
+  const reading = readWind({ ...base, windSpeedMps: 6, windDirectionDeg: null }, 7, limits, compassPoint, windowLabel)!;
+  assert.match(reading.checks[0].text, /^Direction unavailable · /);
+  assert.notEqual(reading.headline, "Calm");
+  assert.equal(reading.checks[1].tone, "good", "speed is still judged on its own evidence");
+  const calm = readWind({ ...base, windSpeedMps: 0, windDirectionDeg: null }, 0.5, limits, compassPoint, windowLabel)!;
+  assert.equal(calm.headline, "Calm");
+});
+
 test("metric station display preserves SI observations and saved-limit classifications", () => {
   const base = parseWuCurrent(currentBody)!;
   const original = structuredClone(base);

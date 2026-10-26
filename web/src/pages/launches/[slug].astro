@@ -4,7 +4,7 @@ import Unit from "../../components/Unit.astro";
 import { launchNoteParts } from "../../lib/launch-notes.ts";
 import Base from "../../layouts/Base.astro";
 import { launches } from "../../lib/catalog.ts";
-import { compassPoint, type Launch } from "../../lib/launches.ts";
+import { compassPoint, windLimitsLabel, type Launch } from "../../lib/launches.ts";
 import stationsFile from "../../data/stations.json";
 import { dashboardUrl, type StationsFile } from "../../lib/station.ts";
 import { href } from "../../lib/site.ts";
@@ -14,6 +14,7 @@ export function getStaticPaths() {
 }
 
 const { launch } = Astro.props as { launch: Launch };
+const limitsAreDefaults = windLimitsLabel(launch) === "default";
 const facing = launch.facingDeg === null ? null : compassPoint(launch.facingDeg);
 const capabilities = forecastCapabilities(launch);
 const zoneName = launch.timeZone;
@@ -96,6 +97,7 @@ const station = stationEntry && (() => {
       <p id="forecast-wind-basis" class="forecast-wind-basis"></p>
       <p id="forecast-wind-note" class="forecast-wind-note" hidden></p>
       <p id="forecast-data-limit" class="forecast-wind-note" hidden></p>
+      <p id="forecast-sampling-caution" class="forecast-wind-note" hidden></p>
       <details class="windgram-details">
         <summary>Profile data support</summary>
         <dl id="forecast-data-support" class="forecast-data-support"></dl>
@@ -124,8 +126,8 @@ const station = stationEntry && (() => {
     {launch.region && <p class="eyebrow">{launch.region}</p>}
     <ul class="facts">
       {facing && <li>Faces <strong>{facing}</strong> ({launch.facingDeg}°)</li>}
-      {launch.windMinMph !== null && launch.windMaxMph !== null && <li>Launch range <strong><Unit kind="wind" value={launch.windMinMph * .44704} numberOnly />–<Unit kind="wind" value={launch.windMaxMph * .44704} /></strong></li>}
-      {launch.gustMaxMph !== null && <li>Gust limit <Unit kind="wind" value={launch.gustMaxMph * .44704} /></li>}
+      {launch.windMinMph !== null && launch.windMaxMph !== null && <li>Launch range <strong><Unit kind="wind" value={launch.windMinMph * .44704} numberOnly />–<Unit kind="wind" value={launch.windMaxMph * .44704} /></strong>{limitsAreDefaults && <span class="muted"> (default limits, not launch-specific)</span>}</li>}
+      {launch.gustMaxMph !== null && <li>Gust limit <Unit kind="wind" value={launch.gustMaxMph * .44704} />{limitsAreDefaults && <span class="muted"> (default, not launch-specific)</span>}</li>}
       {launch.source && <li>Source: <a href={launch.source.url} rel="noopener noreferrer" target="_blank">{launch.source.name}</a> · {launch.source.license}</li>}
       <li id="launch-elevation-item" hidden>Launch elevation <strong id="launch-elevation"></strong> <span class="muted" id="launch-elevation-source"></span></li>
       <li>Times in {zoneName}</li>
@@ -192,7 +194,7 @@ const station = stationEntry && (() => {
         <div class="skewt-figure">
           <ul class="legend skewt-legend">
             <li><span class="key-line" style="color:var(--series-2)"></span>Temperature</li>
-            <li><span class="key-line" style="color:var(--series-3)"></span>Dew point</li>
+            <li id="skewt-dew-legend"><span class="key-line" style="color:var(--series-3)"></span>Dew point</li>
             <li><span class="key-line key-dash"></span>Rising thermal</li>
             <li><span class="key-swatch skewt-key-zone"></span>Thermal zone</li>
             <li><span class="key-swatch skewt-key-buoyant"></span>Thermal warmer than the air</li>

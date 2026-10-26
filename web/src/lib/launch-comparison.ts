@@ -81,7 +81,8 @@ export interface RegionalLaunchRow {
     usableLiftTopText: string;
     wxtoflyTopText: string;
     resolvedTopText: string;
-    resolvedTopStable: boolean;
+    /** True when the top is not a measured height (stable-by-evidence or unavailable); rendered muted. */
+    resolvedTopMuted: boolean;
     v1TopText: string;
     pblDepthText: string;
     lclText: string;
@@ -371,8 +372,15 @@ export function buildRegionalLaunchTableRows(
         wstarText: wstar != null ? formatQuantity(wstar, 'lift', undefined, system) : '–',
         usableLiftTopText: formatElev(uTop, system),
         wxtoflyTopText: formatElev(wxTop, system),
-        resolvedTopText: rTop != null ? formatElev(rTop, system) : 'Stable',
-        resolvedTopStable: rTop == null,
+        // A null top means the parcel depth was unavailable, not stable: parcel-depth
+        // returns 0 (non-convective) for stability and null for missing inputs, and
+        // diagnostics collapses both to a null top. Claim "Stable" only when a valid
+        // hour's thermal velocity is exactly zero; otherwise name the limitation.
+        resolvedTopText: rTop != null ? formatElev(rTop, system)
+          : hour.status[ci] === 'valid' && wstar === 0 ? 'Stable'
+          : hour.status[ci] === 'insufficient-levels' ? 'Insufficient vertical coverage'
+          : 'Unavailable',
+        resolvedTopMuted: rTop == null,
         v1TopText: formatElev(v1Top, system),
         pblDepthText: hpbl != null ? formatElev(hpbl, system) : '–',
         lclText: formatElev(lcl, system),
@@ -509,7 +517,7 @@ export function renderRegionalLaunchesTables(
       appendTextTd(d.wxtoflyTopText);
 
       const rTopTd = doc.createElement('td');
-      if (d.resolvedTopStable) {
+      if (d.resolvedTopMuted) {
         const muted = doc.createElement('span');
         muted.className = 'muted';
         muted.textContent = d.resolvedTopText;

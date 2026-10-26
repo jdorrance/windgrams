@@ -162,6 +162,14 @@ test('archived regional replay labels history and advances the chart with its ho
   expect(errors).toEqual([]);
 });
 
+test('regional legend explains the layer sign conventions', async ({ page }) => {
+  await page.goto('/soaring?case=synthetic-archive&hour=11');
+  await expect(page.locator('#replay-windgram > svg')).toHaveCount(1);
+  // The archived replay opens on surface wind; its layer note must be in the legend,
+  // not only the numeric stops (previously spec.legend was never rendered).
+  await expect(page.locator('#replay-legend')).toContainText('Wind at model surface.');
+});
+
 test('regional audit caveats render as text inside forecast details', async ({ page }) => {
   const limitations = ['Native levels cannot resolve every inversion.', '<img src=x onerror=alert(1)>'];
   await page.route('**/audit.json', async route => {
@@ -336,6 +344,19 @@ test('a balloon with missing humidity visibly qualifies its dry parcel estimate'
   await expect(page.locator('#balloon-chart .skewt-dew')).toHaveCount(0);
   await expect(page.locator('#balloon-chart .skewt-mark-base')).toHaveCount(0);
   await expect(page.locator('#balloon-chart .skewt-barb-calm')).not.toHaveCount(0);
+});
+
+test('model and balloon Skew-T charts on one page use unique SVG ids', async ({ page }) => {
+  await page.goto(launch);
+  await expect(page.locator('#skewt-chart > svg')).toHaveCount(1);
+  await expect(page.locator('#balloon-chart > svg')).toHaveCount(1);
+  const duplicates = await page.evaluate(() => {
+    const ids = [...document.querySelectorAll('#skewt-chart svg [id], #balloon-chart svg [id]')].map(node => node.id);
+    return ids.filter((id, index) => ids.indexOf(id) !== index);
+  });
+  expect(duplicates).toEqual([]);
+  await expect(page.locator('#skewt-chart svg clipPath')).toHaveCount(1);
+  await expect(page.locator('#balloon-chart svg clipPath')).toHaveCount(1);
 });
 
 test('a late sunlight response cannot mount or update a departed view', async ({ page }) => {

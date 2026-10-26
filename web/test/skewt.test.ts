@@ -91,7 +91,7 @@ test("launch altitude is compared in MSL and is not substituted with model surfa
   assert.doesNotMatch(belowTerrain.text, /Launch \(.*\): NW 7 mph/);
 
   const inColumn = readSounding(s, 1520).findings.find((finding) => finding.key === "wind")!;
-  assert.match(inColumn.text, /Estimated wind at launch elevation \(4,987 ft MSL\): WNW 11 mph/);
+  assert.match(inColumn.text, /Experimental free-air wind estimate at launch elevation \(4,987 ft MSL\): WNW 11 mph/);
   assert.match(inColumn.text, /Local terrain flow is unresolved/);
   const aboveColumn = readSounding(s, 5000).findings.find((finding) => finding.key === "wind")!;
   assert.match(aboveColumn.text, /Wind unavailable at launch elevation \(16,404 ft MSL\)/);
@@ -155,7 +155,33 @@ test('sounding wind support survives a missing thermodynamic level without bridg
   Object.assign(middle, { windSpeedMps: 8, windDirectionDeg: 270 });
   const windOnly = buildSounding(site, source)!;
   assert.deepEqual(windAtHeight(windOnly.windPoints!, z), { speedMps: 8, directionDeg: 270 });
-  assert.match(readSounding(windOnly, z).findings.find(f => f.key === 'wind')!.text, /Estimated wind at launch elevation/);
+  assert.match(readSounding(windOnly, z).findings.find(f => f.key === 'wind')!.text, /Experimental free-air wind estimate at launch elevation/);
+});
+
+test("a missing surface dew point keeps a qualified dry sounding instead of deleting it", () => {
+  const source = hour({ t: 25, td: 8 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 });
+  (source.surface as Record<string, unknown>).dewPointC = null;
+  const s = buildSounding(site, source as never)!;
+  assert.ok(s, "temperature and wind support survive a humidity gap");
+  assert.equal(s.hasDewPoint, false);
+  assert.equal(s.dryParcelOnly, true);
+  assert.equal(s.lclM, null);
+  assert.deepEqual(s.cloudLayers, []);
+  assert.equal(s.marks.cloudBaseM, null);
+  assert.equal(s.points.length, 8, "levels are retained, not dropped for missing dew point");
+  assert.ok(s.inversions.length > 0, "temperature-only features still resolve");
+  const clouds = readSounding(s, 1268).findings.find((f) => f.key === "clouds")!;
+  assert.equal(clouds.text, "Unavailable · Humidity missing");
+});
+
+test("one missing level dew point keeps the level and drops only humidity", () => {
+  const source = hour({ t: 25, td: 8 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 });
+  (source.levels[2] as Record<string, unknown>).dewPointC = null;
+  const s = buildSounding(site, source as never)!;
+  assert.equal(s.hasDewPoint, false);
+  assert.equal(s.points.length, 8);
+  assert.ok(Number.isNaN(s.points[3].dewPointC));
+  assert.deepEqual(windAtHeight(s.windPoints!, source.levels[2].heightM), { speedMps: 5, directionDeg: 300 });
 });
 
 test("a cold morning has a ground inversion and no thermals", () => {

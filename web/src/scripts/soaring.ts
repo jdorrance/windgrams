@@ -124,11 +124,16 @@ async function main() {
     refresh: refreshHealth,
   }), lifetime.signal);
   freshnessNotice.refresh();
-  if (!historical) void createRefreshHealthReader({ baseUrl: DATA_BASE, signal: lifetime.signal })(activeModel).then(health => {
+  const readRefreshHealth = createRefreshHealthReader({ baseUrl: DATA_BASE, signal: lifetime.signal });
+  const loadRefreshHealth = async () => {
+    if (historical) return;
+    const health = await readRefreshHealth(activeModel);
     if (lifetime.disposed) return;
     refreshHealth = health;
     freshnessNotice.refresh();
-  });
+  };
+  void loadRefreshHealth();
+  window.addEventListener('pageshow', () => { void loadRefreshHealth(); }, eventOptions);
   const activeRegionMeta = regionForCase(regionsCatalogue?.regions ?? [], location.caseId);
   const optionalBundle = <T>(name: string, validate: (raw: unknown) => T | null) =>
     manifest.files && !Object.hasOwn(manifest.files, name)
@@ -561,8 +566,13 @@ async function main() {
     const explanation = document.createElement('span');
     explanation.className = 'muted';
     explanation.textContent = 'Gray: unavailable · Purple: limited height data';
+    // The layer's own sign/meaning note (e.g. convergence direction, OD wording)
+    // is part of the legend; without it signed colours can be read backwards.
+    const note = document.createElement('span');
+    note.className = 'muted';
+    note.textContent = spec.legend;
     if (layer === 'usableLiftTopV2M' || layer === 'usableLiftTopM') legendTitle.textContent += ` · ${formatQuantity(1, 'lift')} sink`;
-    legend.append(legendTitle, scale, explanation);
+    legend.append(legendTitle, scale, note, explanation);
 
     if (launches.length && el('launches-table-body') && el('launch-details-body')) {
       renderRegionalLaunchesTables(

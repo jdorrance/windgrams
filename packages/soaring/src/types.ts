@@ -89,6 +89,8 @@ export interface CompatibilityDocument {
 export interface SoaringMetadata {
   contractVersion: string; model: string; modelKind: ModelKind;
   launchElevationM?: number | null; terrainDeltaM?: number | null;
+  /** Sparse adapters only: terrain anchor for MSL heights, and where it came from. */
+  gridElevationM?: number | null; elevationSource?: 'grid' | 'launch' | 'unavailable';
   nativeLevelCount?: number; isSparseProfile?: boolean; baselineDerivedRetained?: true;
   synthesizedLevels: 0; rawMslHeightsPreserved?: true;
   members?: number; derivationRule?: 'per-member-before-percentiles';
@@ -97,6 +99,7 @@ export interface SoaringMetadata {
 }
 export interface SparseSoaringDiagnostics {
   contractVersion: typeof SOARING_CONTRACT_VERSION; modelKind: 'surface-or-sparse-adapter';
+  gridElevationM?: number | null; elevationSource?: 'grid' | 'launch' | 'unavailable';
   surfaceLclM: number | null; modelBlTopM: number | null;
   blMeanWindSpeedMps: number | null; blMeanWindDirDeg: number | null;
   thermalVelocityV2Mps: null; usableLiftTopV2M: null; hcritWxtoflyM: null; dryHcritM: null; mixedLayerLclM: null;

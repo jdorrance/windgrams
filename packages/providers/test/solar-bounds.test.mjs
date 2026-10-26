@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { expandBounds } from '../src/solar.ts';
+import { expandBounds, gridFromFunction } from '../src/solar.ts';
+import { sampleGrid } from '../src/internal/solar/grid.ts';
 
 // Integrate a geodesic directly on WGS84 (geodetic latitude, longitude,
 // azimuth) with RK4. This checks coverage independently of degree padding.
@@ -32,10 +33,21 @@ test('padding covers WGS84 geodesics in both hemispheres and across the equator'
   }
 });
 test('reachable poles cover all longitudes and zero padding preserves bounds', () => {
-  for (const bounds of [{ south: 89.9, north: 89.95, west: 10, east: 11 }, { south: -89.95, north: -89.9, west: -20, east: -19 }]) {
+  for (const bounds of [
+    { south: 89.9, north: 89.95, west: 10, east: 11 },
+    { south: -89.95, north: -89.9, west: -20, east: -19 },
+    { south: 89.9, north: 89.95, west: 179.9, east: 180.1 },
+    { south: -89.95, north: -89.9, west: -180.1, east: -179.9 },
+    { south: 89.9, north: 89.95, west: 179, east: 541 },
+  ]) {
     assert.deepEqual(expandBounds(bounds, 0), bounds);
     const expanded = expandBounds(bounds, 20000);
-    assert.equal(expanded.west, -180); assert.equal(expanded.east, 180);
+    assert.equal(expanded.east - expanded.west, Math.max(360, bounds.east - bounds.west));
+    assert.ok(expanded.west <= bounds.west && expanded.east >= bounds.east);
+    const grid = gridFromFunction(() => 100, { ...expanded, dLon: 1, dLat: 0.01 });
+    for (const longitude of [bounds.west, bounds.east]) {
+      assert.equal(sampleGrid(grid, (bounds.south + bounds.north) / 2, longitude), 100);
+    }
     assert.ok(expanded.north <= 90 && expanded.south >= -90);
     assert.ok(expanded.north === 90 || expanded.south === -90);
   }

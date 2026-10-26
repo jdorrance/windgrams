@@ -179,6 +179,32 @@ test("contextIsFresh requires current points, usable elevation and the source po
   assert.equal(contextIsFresh([CERVIDAE], { ...context, generatedAt: 'unknown' }), false);
 });
 
+test('Mexican measurements use GLO-30 across tile edges without Canadian elevation services', async () => {
+  const site = { slug: 'mx-edge', name: 'Synthetic tile-edge test', latitude: 20.001, longitude: -100.001, timeZone: 'America/Mexico_City' };
+  const opened = [];
+  const open = async url => {
+    opened.push(url);
+    const dem = /Copernicus_DSM_COG_10_N(\d+)_00_W(\d+)_00_DEM/.exec(url);
+    if (dem) return syntheticTile({ west: -Number(dem[2]), south: Number(dem[1]), value: () => 1800 });
+    const cover = /ESA_WorldCover_10m_2021_v200_N(\d+)W(\d+)_Map/.exec(url);
+    if (cover) return syntheticTile({ west: -Number(cover[2]), south: Number(cover[1]), degrees: 3, res: 1 / 12000, nodata: 0, value: () => 30, type: Uint8Array });
+    throw new Error(`Unexpected source for Mexico: ${url}`);
+  };
+  const document = await measure([site], { open, fetchImpl: async () => { throw new Error('Mexico must skip Canadian elevation services'); }, log: () => {}, warn: () => {}, generatedAt: '2026-10-26T12:00:00Z' });
+  const entry = document.sites[site.slug];
+  assert.deepEqual(entry.elevation, { source: 'glo30', elevationM: 1800 });
+  assert.equal(entry.terrain.source, 'glo30');
+  assert.equal(entry.terrain.slopeDeg, 0);
+  assert.equal(entry.landCover.source, 'worldcover2021');
+  assert.equal(entry.landCover.atLaunch, 'grassland');
+  assert.equal(opened.filter(url => url.includes('copernicus-dem-30m')).length, 4);
+  assert.equal(document.measurementPolicies[site.slug], 'terrain-v1:glo30');
+  assert.ok(parseSiteContextJson(JSON.stringify(document)));
+  assert.equal(contextIsFresh([site], document), true);
+  assert.equal(contextIsFresh([site], { ...document, measurementPolicies: { [site.slug]: 'terrain-v1:regional-north-america' } }), false);
+  assert.equal(contextIsFresh([site], { ...document, sites: { [site.slug]: { ...entry, elevation: { ...entry.elevation, source: 'mrdem30' } } } }), false);
+});
+
 test('Armenian measurements consistently use 90 m DEM tiles across tile edges', async () => {
   const site = { slug: 'am-edge', name: 'Synthetic tile-edge test', latitude: 40.001, longitude: 44.001, timeZone: 'Asia/Yerevan' };
   const opened = [];

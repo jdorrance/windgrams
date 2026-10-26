@@ -127,6 +127,64 @@ test('NZ launches retain their country, local day and global models on mobile', 
   expect(errors).toEqual([]);
 });
 
+test('Mexico launches retain local forecasts and return from the unavailable grid map on mobile', async ({ page }) => {
+  const errors: string[] = [];
+  const requests: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => requests.push(new URL(request.url()).pathname));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/?country=MX');
+  await expect(page.locator('#launch-country')).toHaveValue('MX');
+  await expect(page.locator('.state-group:not([data-country="MX"]):visible')).toHaveCount(0);
+  const cards = page.locator('.state-group[data-country="MX"] .launch-card');
+  const count = await cards.count();
+  expect(count).toBeGreaterThan(0);
+  await expect(page.locator('#launch-map .map-dot')).toHaveCount(count);
+  await page.locator('.launch-card[href="/launches/mx-valle-de-bravo-el-penon"]').click();
+  await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+  await expect(page).toHaveURL(/day=2026-10-25/);
+  await page.getByRole('button', { name: 'Launch info', exact: true }).click();
+  await expect(page.locator('#launch-info')).toContainText('America/Mexico_City');
+  await expect(page.locator('#launch-info a[href*="paraglidingearth.com"]')).toBeVisible();
+  await page.getByRole('button', { name: 'Close launch info', exact: true }).click();
+  expect(await page.locator('#model-select option').evaluateAll(options => options.map(option => (option as HTMLOptionElement).value)))
+    .toEqual(['gfs', 'gdps', 'geps']);
+  for (const model of ['gdps', 'geps', 'gfs']) {
+    await page.locator('#model-select').selectOption(model);
+    await expect(page.locator('#model-selected-name')).toHaveText(model.toUpperCase());
+    await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+    await expect(page).toHaveURL(/day=2026-10-25/);
+  }
+  await page.locator('#unit-system').selectOption('metric');
+  await page.locator('#forecast-hour-next').click();
+  const validAt = await page.locator('#forecast-hour-panel').getAttribute('data-valid-at');
+  const hour = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Mexico_City', hour: 'numeric' }).format(new Date(validAt!));
+  await expect(page.locator('#forecast-hour-label')).toHaveText(hour);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(requests.filter(path => /\/(nws|raob)\//.test(path))).toEqual([]);
+  await page.locator('#soaring-nav-link').click();
+  await expect(page).toHaveURL(/country=MX/);
+  await expect(page.locator('#replay-windgram > svg')).toHaveCount(0);
+  await expect(page.locator('#soaring-map canvas')).toHaveCount(0);
+  await expect(page.locator('#replay-status')).toHaveText('Regional map unavailable.');
+  await expect(page.getByRole('link', { name: 'Mexico launches', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Mexico launches', exact: true }).click();
+  await expect(page.locator('#launch-country')).toHaveValue('MX');
+  expect(errors).toEqual([]);
+});
+
+test('northern Mexican launches offer published regional point forecasts', async ({ page }) => {
+  await page.goto('/launches/mx-la-salina');
+  await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+  expect(await page.locator('#model-select option').evaluateAll(options => options.map(option => (option as HTMLOptionElement).value)))
+    .toEqual(['hrrr-conus', 'gfs', 'rrfs', 'gdps', 'geps']);
+  await page.locator('#model-select').selectOption('rrfs');
+  await expect(page.locator('#model-selected-name')).toHaveText('RRFS');
+  await expect(page.locator('#meteogram > svg')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Launch info', exact: true }).click();
+  await expect(page.locator('#launch-info')).toContainText('America/Tijuana');
+});
+
 test('a current forecast shows a failed refresh without hiding the chart or changing its age', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-10-25T14:00:00Z'));
   await page.route('**/health/noaa-cloud.json', route => route.fulfill({ json: {

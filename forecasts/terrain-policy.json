@@ -10,6 +10,7 @@
     { "policy": "glo90", "country": "AM" },
     { "policy": "glo90", "region": "am" },
     { "policy": "glo90", "slugPrefix": "am-" },
+    { "policy": "glo30", "slugPrefix": "mx-" },
     { "policy": "regional-north-america", "bounds": [-170, 15, -40, 85] }
   ]
 }

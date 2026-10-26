@@ -1876,6 +1876,531 @@
       "latitude": -44.6378,
       "longitude": 168.908,
       "timeZone": "Pacific/Auckland"
+    },
+    {
+      "slug": "mx-el-wejo",
+      "name": "El Wejo",
+      "latitude": 21.7525,
+      "longitude": -102.721,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-picacho",
+      "name": "Picacho",
+      "latitude": 21.8774,
+      "longitude": -102.422,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-cuervitos",
+      "name": "Cuervitos",
+      "latitude": 32.138,
+      "longitude": -116.875,
+      "timeZone": "America/Tijuana"
+    },
+    {
+      "slug": "mx-cuervos",
+      "name": "Cuervos",
+      "latitude": 32.1414,
+      "longitude": -116.873,
+      "timeZone": "America/Tijuana"
+    },
+    {
+      "slug": "mx-la-salina",
+      "name": "La Salina",
+      "latitude": 32.0628,
+      "longitude": -116.863,
+      "timeZone": "America/Tijuana"
+    },
+    {
+      "slug": "mx-las-antenas",
+      "name": "Las Antenas",
+      "latitude": 31.6755,
+      "longitude": -116.625,
+      "timeZone": "America/Tijuana"
+    },
+    {
+      "slug": "mx-teta-azul-de-la-mision",
+      "name": "Teta Azul de la Misión",
+      "latitude": 26.8488,
+      "longitude": -111.903,
+      "timeZone": "America/Mazatlan"
+    },
+    {
+      "slug": "mx-rusty-pelican",
+      "name": "Rusty Pelican",
+      "latitude": 19.784,
+      "longitude": -90.6317,
+      "timeZone": "America/Merida"
+    },
+    {
+      "slug": "mx-fly-in-chiapas",
+      "name": "Fly In Chiapas",
+      "latitude": 16.7082,
+      "longitude": -92.9037,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-pueblitos",
+      "name": "Pueblitos",
+      "latitude": 27.7214,
+      "longitude": -105.239,
+      "timeZone": "America/Chihuahua"
+    },
+    {
+      "slug": "mx-antenas-de-vizcaya",
+      "name": "Antenas de Vizcaya",
+      "latitude": 25.6052,
+      "longitude": -103.191,
+      "timeZone": "America/Monterrey"
+    },
+    {
+      "slug": "mx-helipuerto",
+      "name": "Helipuerto",
+      "latitude": 25.5009,
+      "longitude": -103.458,
+      "timeZone": "America/Monterrey"
+    },
+    {
+      "slug": "mx-la-cumbre-colima",
+      "name": "La Cumbre — Colima",
+      "latitude": 19.1813,
+      "longitude": -103.692,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-chupaderos",
+      "name": "Chupaderos",
+      "latitude": 24.1357,
+      "longitude": -104.702,
+      "timeZone": "America/Monterrey"
+    },
+    {
+      "slug": "mx-la-ferreria",
+      "name": "La Ferrería",
+      "latitude": 23.9316,
+      "longitude": -104.675,
+      "timeZone": "America/Monterrey"
+    },
+    {
+      "slug": "mx-despegue-bistro",
+      "name": "Despegue Bistro",
+      "latitude": 18.9814,
+      "longitude": -99.5032,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-el-picacho-malinalco",
+      "name": "El Picacho — Malinalco",
+      "latitude": 19.0078,
+      "longitude": -99.4709,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-ixtapan-de-la-sal",
+      "name": "Ixtapan de la Sal",
+      "latitude": 18.894,
+      "longitude": -99.7213,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-la-malinche",
+      "name": "La Malinche",
+      "latitude": 18.9226,
+      "longitude": -99.5972,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-nevado-de-toluca",
+      "name": "Nevado de Toluca",
+      "latitude": 19.111,
+      "longitude": -99.7462,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-valle-de-bravo-el-penon",
+      "name": "Valle de Bravo — El Peñón",
+      "latitude": 19.0616,
+      "longitude": -100.091,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-valle-de-bravo-la-torre",
+      "name": "Valle de Bravo — La Torre",
+      "latitude": 19.1846,
+      "longitude": -100.114,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-canada-de-moreno",
+      "name": "Cañada de Moreno",
+      "latitude": 21.2789,
+      "longitude": -100.357,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-dona-juana",
+      "name": "Doña Juana",
+      "latitude": 20.8242,
+      "longitude": -100.668,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-el-cubilete",
+      "name": "El Cubilete",
+      "latitude": 21.0046,
+      "longitude": -101.371,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-el-salto",
+      "name": "El Salto",
+      "latitude": 21.0646,
+      "longitude": -100.249,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-memo-fly",
+      "name": "Memo Fly",
+      "latitude": 21.1861,
+      "longitude": -99.904,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-picachos",
+      "name": "Picachos",
+      "latitude": 20.8753,
+      "longitude": -100.733,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-tuxpan-iguala",
+      "name": "Tuxpan — Iguala",
+      "latitude": 18.3882,
+      "longitude": -99.4739,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-tulancingo",
+      "name": "Tulancingo",
+      "latitude": 20.1456,
+      "longitude": -98.3036,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-atotonilco",
+      "name": "Atotonilco",
+      "latitude": 20.5593,
+      "longitude": -102.554,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-cantil-de-las-aguilas",
+      "name": "Cantil de las Águilas (Vergel de la Sierra)",
+      "latitude": 21.3698,
+      "longitude": -101.655,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-conchas-chinas",
+      "name": "Conchas Chinas",
+      "latitude": 20.581,
+      "longitude": -105.238,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-el-chante",
+      "name": "El Chante",
+      "latitude": 20.3067,
+      "longitude": -103.393,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-el-toro-bull-hill",
+      "name": "El Toro (Bull Hill)",
+      "latitude": 19.5,
+      "longitude": -104.19,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-gravedad-cero-tapalpa",
+      "name": "Gravedad Cero — Tapalpa",
+      "latitude": 19.9422,
+      "longitude": -103.654,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-la-ceja-tapalpa",
+      "name": "La Ceja — Tapalpa",
+      "latitude": 19.9354,
+      "longitude": -103.654,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-la-hondonada",
+      "name": "La Hondonada",
+      "latitude": 20.0015,
+      "longitude": -103.661,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-nevado-de-colima",
+      "name": "Nevado de Colima",
+      "latitude": 19.5611,
+      "longitude": -103.611,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-trepa-trepa",
+      "name": "Trepa Trepa",
+      "latitude": 20.7615,
+      "longitude": -102.61,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-yelapa-tapa",
+      "name": "Yelapa Tapa",
+      "latitude": 20.474,
+      "longitude": -105.461,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-yelapa-tapita",
+      "name": "Yelapa Tapita",
+      "latitude": 20.4842,
+      "longitude": -105.445,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-escalera",
+      "name": "Escalera",
+      "latitude": 19.6401,
+      "longitude": -101.001,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-lombardia",
+      "name": "Lombardía",
+      "latitude": 19.1743,
+      "longitude": -102.067,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-patzcuaro",
+      "name": "Pátzcuaro",
+      "latitude": 19.5171,
+      "longitude": -101.641,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-tuxpan",
+      "name": "Tuxpan",
+      "latitude": 19.5693,
+      "longitude": -100.492,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-zitacuaro",
+      "name": "Zitácuaro",
+      "latitude": 19.3989,
+      "longitude": -100.368,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-tepoztlan",
+      "name": "Tepoztlán",
+      "latitude": 19.0131,
+      "longitude": -99.0904,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-tecuitata",
+      "name": "Tecuitata",
+      "latitude": 21.4686,
+      "longitude": -105.161,
+      "timeZone": "America/Mazatlan"
+    },
+    {
+      "slug": "mx-volcan-ceboruco",
+      "name": "Volcán Ceboruco",
+      "latitude": 21.106,
+      "longitude": -104.503,
+      "timeZone": "America/Mazatlan"
+    },
+    {
+      "slug": "mx-la-popa",
+      "name": "La Popa",
+      "latitude": 26.1563,
+      "longitude": -100.779,
+      "timeZone": "America/Monterrey"
+    },
+    {
+      "slug": "mx-la-tinaja",
+      "name": "La Tinaja",
+      "latitude": 25.3933,
+      "longitude": -100.207,
+      "timeZone": "America/Monterrey"
+    },
+    {
+      "slug": "mx-nogalera",
+      "name": "Nogalera",
+      "latitude": 25.3597,
+      "longitude": -100.154,
+      "timeZone": "America/Monterrey"
+    },
+    {
+      "slug": "mx-san-antonio-de-las-alazanas",
+      "name": "San Antonio de las Alazanas",
+      "latitude": 25.2478,
+      "longitude": -100.569,
+      "timeZone": "America/Monterrey"
+    },
+    {
+      "slug": "mx-teleferico",
+      "name": "Teleférico",
+      "latitude": 25.6431,
+      "longitude": -100.245,
+      "timeZone": "America/Monterrey"
+    },
+    {
+      "slug": "mx-zaachila",
+      "name": "Zaachila",
+      "latitude": 16.9328,
+      "longitude": -96.8532,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-chalchihuapan-puebla",
+      "name": "Chalchihuapan — Puebla",
+      "latitude": 18.9632,
+      "longitude": -98.3421,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-iztaccihuatl",
+      "name": "Iztaccíhuatl",
+      "latitude": 19.1726,
+      "longitude": -98.6389,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-san-bernardino-chalchihuapan",
+      "name": "San Bernardino Chalchihuapan",
+      "latitude": 18.963,
+      "longitude": -98.3601,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-el-tangano",
+      "name": "El Tángano",
+      "latitude": 20.5704,
+      "longitude": -100.352,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-huimilpan",
+      "name": "Huimilpan",
+      "latitude": 20.3583,
+      "longitude": -100.259,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-la-barreta",
+      "name": "La Barreta",
+      "latitude": 20.8155,
+      "longitude": -100.537,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-la-jolla",
+      "name": "La Jolla",
+      "latitude": 20.8173,
+      "longitude": -100.543,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-boca-paila-dune",
+      "name": "Boca Paila Dune",
+      "latitude": 20.0893,
+      "longitude": -87.4753,
+      "timeZone": "America/Cancun"
+    },
+    {
+      "slug": "mx-el-piedrero-san-luis-potosi",
+      "name": "El Piedrero — San Luis Potosí",
+      "latitude": 22.0456,
+      "longitude": -100.923,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-la-chincheta",
+      "name": "La Chincheta",
+      "latitude": 21.9969,
+      "longitude": -100.931,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-la-cementera",
+      "name": "La Cementera",
+      "latitude": 29.0612,
+      "longitude": -110.943,
+      "timeZone": "America/Hermosillo"
+    },
+    {
+      "slug": "mx-alto-lucero",
+      "name": "Alto Lucero",
+      "latitude": 19.6135,
+      "longitude": -96.7147,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-coetzala",
+      "name": "Coetzala",
+      "latitude": 18.7715,
+      "longitude": -96.934,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-fortin-de-las-flores",
+      "name": "Fortín de las Flores",
+      "latitude": 18.8697,
+      "longitude": -97.0038,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-loma-maria",
+      "name": "Loma María",
+      "latitude": 18.9286,
+      "longitude": -97.1122,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-naranjal",
+      "name": "Naranjal",
+      "latitude": 18.7952,
+      "longitude": -96.9739,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-playa-la-mancha",
+      "name": "Playa La Mancha",
+      "latitude": 19.5832,
+      "longitude": -96.3781,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-frailes",
+      "name": "Frailes",
+      "latitude": 22.7254,
+      "longitude": -102.54,
+      "timeZone": "America/Mexico_City"
+    },
+    {
+      "slug": "mx-zopilotes",
+      "name": "Zopilotes",
+      "latitude": 22.8242,
+      "longitude": -102.556,
+      "timeZone": "America/Mexico_City"
     }
   ]
 }

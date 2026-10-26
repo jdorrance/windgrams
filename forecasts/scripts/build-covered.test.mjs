@@ -128,12 +128,12 @@ test('semantic RRFS errors after postprocessing cannot replace last-good output'
   assert.equal(JSON.parse(readFileSync(join(root, 'rrfs', 'manifest.json'))).referenceTime, oldRun);
 });
 
-test('operator backfills a same-run catalogue, skips complete work and repairs a truncated horizon', async t => {
+test('operator backfills a Mexican launch in the same run, skips complete work and repairs a truncated horizon', async t => {
   const output = mkdtempSync(join(tmpdir(), 'operator-backfill-'));
   t.after(() => rmSync(output, { recursive: true, force: true }));
   const fixture = JSON.parse(readFileSync(new URL('../soaring/fixtures/rrfs-blanchard-published.json', import.meta.url)));
   const first = { slug: fixture.site.id, name: fixture.site.name, latitude: fixture.site.latitude, longitude: fixture.site.longitude, timeZone: fixture.site.timeZone };
-  const second = { ...first, slug: 'wa-neighbour', name: 'Neighbour', latitude: first.latitude + 0.01 };
+  const second = { slug: 'mx-north', name: 'Mexican launch', latitude: 32, longitude: -116, timeZone: 'America/Tijuana' };
   const catalogue = join(output, 'catalogue.json');
   const setSites = selected => writeFileSync(catalogue, JSON.stringify({ sites: selected }));
   let acquisitions = 0;
@@ -179,7 +179,8 @@ test('operator backfills a same-run catalogue, skips complete work and repairs a
   const context = JSON.parse(readFileSync(join(output, 'site-context-rrfs.json')));
   assert.equal(context.measurementTimes[first.slug], '2026-10-24T12:00:00Z');
   assert.equal(context.measurementTimes[second.slug], '2026-10-24T13:00:00Z');
-  assert.equal(context.measurementPolicies[second.slug], 'terrain-v1:regional-north-america');
+  assert.equal(context.measurementPolicies[first.slug], 'terrain-v1:regional-north-america');
+  assert.equal(context.measurementPolicies[second.slug], 'terrain-v1:glo30');
   const manifestPath = join(output, 'rrfs/manifest.json'), manifest = JSON.parse(readFileSync(manifestPath));
   manifest.forecastHours = 1; manifest.lastForecastHour = 1; writeFileSync(manifestPath, JSON.stringify(manifest));
   for (const site of [first, second]) {

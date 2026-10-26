@@ -2,7 +2,7 @@
 
 Windgrams turns weather-model forecasts into launch windgrams, atmospheric
 soundings and regional soaring maps. The app currently covers launches in the
-United States, Armenia and New Zealand.
+United States, Armenia, New Zealand and Mexico.
 
 The weather readers, calculations and charts are also available as independent
 TypeScript packages within this workspace. See the [package guide](docs/toolkit.md)

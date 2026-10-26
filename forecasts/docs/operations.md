@@ -225,11 +225,11 @@ Scripts with `--publish` or `--sync` select a store through `WINDGRAMS_STORE`. T
 node scripts/import-flyingsites.mjs
 ```
 
-The importer merges launch records into `sites.json` and `web/src/data/launches.json`. Choose `--country=nz` or `--country=am` for the reviewed country catalogues. `--country=us` reads the adjacent `flyingsites/data/us.geojson.json`. With no arguments, it imports all three. `FLYINGSITES_US`, `FLYINGSITES_AM` and `FLYINGSITES_NZ` override the inputs.
+The importer merges launch records into `sites.json` and `web/src/data/launches.json`. Choose `--country=nz`, `--country=am` or `--country=mx` for the reviewed country catalogues. `--country=us` reads the adjacent `flyingsites/data/us.geojson.json`. With no arguments, it imports all four. `FLYINGSITES_US`, `FLYINGSITES_AM`, `FLYINGSITES_NZ` and `FLYINGSITES_MX` override the inputs.
 
-Imports add missing records and metadata while preserving existing coordinates, notes, wind settings and other countries. Apply deliberate corrections and removals directly to the retained records. Source notes for [Armenia](../scripts/data/ARMENIA.md) and [New Zealand](../scripts/data/NEW_ZEALAND.md) record coordinate choices, exclusions and licences.
+Imports add missing records and metadata while preserving existing coordinates, notes, wind settings and other countries. Apply deliberate corrections and removals directly to the retained records. Source notes for [Armenia](../scripts/data/ARMENIA.md), [New Zealand](../scripts/data/NEW_ZEALAND.md) and [Mexico](../scripts/data/MEXICO.md) record coordinate choices, exclusions and licences.
 
-Changes to `forecasts/sites.json` on `main` start NOAA and ECCC refreshes, including missing launch terrain. Their completed artifacts publish automatically. Pages can show new launches as unavailable until the first covering forecast finishes. New Zealand uses GFS, GDPS and GEPS with GLO-30 terrain; its regional map fields remain a separate product.
+Changes to `forecasts/sites.json` on `main` start NOAA, ECCC and RRFS refreshes, including missing launch terrain. Their completed artifacts publish automatically. Pages can show new launches as unavailable until the first covering forecast finishes. New Zealand uses GFS, GDPS and GEPS with GLO-30 terrain. Mexico uses the same global models and terrain, plus regional point models wherever native-grid acquisition supports the launch. Published manifests determine the available models; no Mexico regional grid is configured.
 
 ## Refresh health
 

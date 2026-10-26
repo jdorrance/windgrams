@@ -10,9 +10,23 @@ test('catalogued launches use covered providers and US observation feeds stay lo
     const country = launches[site.slug].countryCode;
     const armenia = country === 'AM', us = country === 'US';
     assert.equal(nwsCoversSite(site), us);
-    for (const model of ['hrrr-conus', 'rrfs', 'hrdps-continental', 'rdps']) assert.equal(modelCoversSite(model, site), us);
+    if (country !== 'MX') for (const model of ['hrrr-conus', 'rrfs', 'hrdps-continental', 'rdps']) assert.equal(modelCoversSite(model, site), us);
     assert.equal(modelCoversSite('icon-eu', site), armenia);
     for (const model of ['gfs', 'gdps', 'geps']) assert.equal(modelCoversSite(model, site), true);
+  }
+});
+
+test('Mexican point candidates follow geographic coverage before native-grid acquisition', () => {
+  const regional = ['hrrr-conus', 'rrfs', 'hrdps-continental', 'rdps'];
+  for (const [site, candidates] of [
+    [{ slug: 'mx-north', latitude: 32, longitude: -116 }, regional],
+    [{ slug: 'mx-central', latitude: 20.8, longitude: -103.8 }, ['hrdps-continental', 'rdps']],
+    [{ slug: 'mx-south', latitude: 19, longitude: -100 }, []],
+  ]) {
+    assert.deepEqual(regional.filter(model => modelCoversSite(model, site)), candidates, site.slug);
+    for (const model of ['gfs', 'gdps', 'geps']) assert.equal(modelCoversSite(model, site), true, `${site.slug}: ${model}`);
+    assert.equal(modelCoversSite('icon-eu', site), false);
+    assert.equal(nwsCoversSite(site), false);
   }
 });
 

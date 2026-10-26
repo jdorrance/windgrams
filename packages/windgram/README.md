@@ -28,6 +28,8 @@ inspection functions; copying its visible fields loses the internal scene data.
 
 Single-day plots follow local daylight, retaining adjacent forecast samples for
 interpolation. Polar dates keep their supplied hours.
+For deterministic V2 forecasts, zero W* anchors the blue lift line at ground.
+Published ceilings and readouts retain their missing values.
 
 ## Interactive charts
 

@@ -145,6 +145,25 @@ export interface WindgramView extends WindgramLayout {
   sourceNote: string | null;
   displayInterpolationNote: string;
 }
+
+/** Space valid marks within each lift period, retaining its highest visible ceiling. */
+function selectWingMarks(candidates: WindgramView['wings'], spacing: number, gaps: ReadonlySet<number>): WindgramView['wings'] {
+  const runs: WindgramView['wings'][] = [];
+  for (const candidate of candidates) {
+    const run = runs.at(-1), previous = run?.at(-1);
+    if (!previous || candidate.hourIndex !== previous.hourIndex + 1 || gaps.has(candidate.hourIndex)) runs.push([candidate]);
+    else run!.push(candidate);
+  }
+  return runs.flatMap(run => {
+    const peak = run.reduce((highest, candidate) => candidate.heightM > highest.heightM ? candidate : highest);
+    const selected = [peak];
+    for (const candidate of run) {
+      if (selected.every(mark => Math.abs(mark.x - candidate.x) >= spacing)) selected.push(candidate);
+    }
+    return selected.sort((a, b) => a.hourIndex - b.hourIndex);
+  });
+}
+
 export function buildWindgramView(profile: SiteForecast, options: WindgramOptions): WindgramView {
   const system = options.unitSystem;
   const hours = windgramHours(profile, options);
@@ -446,10 +465,11 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
       view.clouds.push({ hourIndex: i, x, y: y(base), baseM: base, topM: base, kind: cloudBaseKinds[i], coverPercent: null });
     }
     const gliderTop = finiteScalar(publishedWxtoflyLiftTop(h));
-    if (i % 3 === 1 && gliderTop !== null && gliderTop > floorM + 10 && gliderTop <= topM) {
+    if (gliderTop !== null && gliderTop > floorM + 10 && gliderTop <= topM && x >= left && x <= left + plotWidth) {
       view.wings.push({ x, y: y(gliderTop) + 8, heightM: gliderTop, hourIndex: i });
     }
   });
+  view.wings = selectWingMarks(view.wings, presentation.glyphs.minimumHorizontalSpacing, gaps);
 
   for (const [key, label, color, dash] of [
     ["boundaryLayerTopM", "Thermal top (parcel)", "#a56800", "7 5"],
@@ -459,7 +479,11 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   ] as const) {
     const points = lifts.flatMap((lift, i): (Point | null)[] => {
       const z = key === "usableLiftTopM" ? view.hours[i].usableLiftTopM : finiteScalar(lift[key]);
-      const point = z === null || z < floorM || z > topM ? null : { x: view.hours[i].x, y: y(z) };
+      // Zero W* anchors the line at ground; the published ceiling stays null.
+      const zeroLift = key === "usableLiftTopM" && z === null && profile.run.members === undefined && !ensemble
+        && view.hours[i].liftFamily === 'v2' && lift.thermalVelocityMps === 0;
+      const point = zeroLift ? { x: view.hours[i].x, y: y(modelFloorM) }
+        : z === null || z < floorM || z > topM ? null : { x: view.hours[i].x, y: y(z) };
       return gaps.has(i) ? [null, point] : [point];
     });
     const bandRuns: { lower: Point[]; upper: Point[] }[] = [];

@@ -1,12 +1,22 @@
 import { z } from 'zod';
-import { scalarSchema, siteForecastSchema, type SiteForecast } from '@azohra/meteo.briefing/contract';
+import { scalarSchema, siteForecastSchema } from '@azohra/meteo.briefing/contract';
 import { checked } from './schema.js';
 import { surfaceExtensionsSchema } from './atmosphere.js';
 import { diagnosticSupportSchema, verticalResolutionSchema } from './diagnostic-support.js';
 export { surfaceExtensionsSchema } from './atmosphere.js';
 export type { DiagnosticSupport, VerticalResolution, VerticalSampling, ThermalDepthSupport } from './diagnostic-support.js';
 
-type Hour = SiteForecast['hours'][number];
+const sourceHour = siteForecastSchema.shape.hours.element;
+const nullableShape = <Shape extends z.ZodRawShape>(shape: Shape) => Object.fromEntries(
+  Object.entries(shape).map(([key, schema]) => [key, z.nullable(schema)])
+) as { [Key in keyof Shape]: z.ZodNullable<Shape[Key]> };
+const publishedHourSchema = sourceHour.extend({
+  surface: sourceHour.shape.surface.extend(nullableShape(sourceHour.shape.surface.shape)),
+  levels: z.array(sourceHour.shape.levels.element.extend(nullableShape(sourceHour.shape.levels.element.shape))),
+  derived: sourceHour.shape.derived.extend(nullableShape(sourceHour.shape.derived.shape)),
+});
+const publishedProfileSchema = siteForecastSchema.extend({ hours: z.array(publishedHourSchema) });
+type Hour = z.infer<typeof publishedHourSchema>;
 const fields = {
   thermalVelocityMps: 'thermalVelocityV2Mps',
   boundaryLayerTopM: 'resolvedThermalTopM',
@@ -26,13 +36,13 @@ const valueFields = {
   hcritWxtoflyM: diagnosticValue, effectiveCloudLimitM: diagnosticValue, mixedLayerLclM: diagnosticValue,
   ...layerWindFields,
 };
-const metadataFields = { verticalResolution: verticalResolutionSchema.optional(), diagnosticSupport: diagnosticSupportSchema.optional() };
+const metadataFields = { cumulus:z.boolean().nullable().optional(), overdeveloped:z.boolean().nullable().optional(), cloudCapped:z.boolean().nullable().optional(), verticalResolution: verticalResolutionSchema.optional(), diagnosticSupport: diagnosticSupportSchema.optional() };
 const diagnosticsSchema = z.object({ ...valueFields, ...metadataFields });
 export type PublishedSoaringDiagnostics = z.infer<typeof diagnosticsSchema>;
 /** Optional native surface measurements use the atmospheric-column units. */
 export type PublishedSurfaceExtensions = z.infer<typeof surfaceExtensionsSchema>;
 export type PublishedForecastHour = Hour & { surface: Hour['surface'] & PublishedSurfaceExtensions; soaring?: PublishedSoaringDiagnostics };
-export type PublishedSiteForecast = Omit<SiteForecast, 'hours'> & { hours: PublishedForecastHour[] };
+export type PublishedSiteForecast = Omit<z.infer<typeof publishedProfileSchema>, 'hours'> & { hours: PublishedForecastHour[] };
 
 /**
  * Which lift family a published hour carries: the current diagnostics (`hour.soaring`, V2)
@@ -90,7 +100,7 @@ export function publishedWxtoflyLiftTop(hour: PublishedForecastHour): Lift['usab
 /** Parse a profile; malformed optional measurements become null and invalid metadata is omitted. */
 export function parsePublishedProfileJson(text: string): PublishedSiteForecast | null {
   try {
-    const profile = checked(siteForecastSchema, JSON.parse(text));
+    const profile = checked(publishedProfileSchema, JSON.parse(text));
     if (!profile) return null;
     for (const hour of profile.hours) {
       const target = hour as PublishedForecastHour;

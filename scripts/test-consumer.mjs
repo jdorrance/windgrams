@@ -20,6 +20,7 @@ try {
     if (!readdirSync(tarballs).includes(archive)) throw new Error(`Missing package archive ${archive}`);
     return [pkg.manifest.name, `file:${join(tarballs, archive)}`];
   }));
+  dependencies['@azohra/meteo.briefing'] = packages.find(pkg => pkg.manifest.name === '@windgrams/providers').manifest.dependencies['@azohra/meteo.briefing'];
   const consumer = join(temporary, 'app'); mkdirSync(consumer);
   writeFileSync(join(consumer, 'package.json'), JSON.stringify({ name: 'independent-weather-consumer', private: true, type: 'module', dependencies, pnpm: { overrides: dependencies } }, null, 2));
   // This is a separate install, with registry dependencies cached after workspace setup.
@@ -52,6 +53,7 @@ try {
     regional: '@windgrams/contracts/regional',
     providerHealth: '@windgrams/contracts/provider-health',
     client: '@windgrams/data-client',
+    av: '@windgrams/data-client/av',
     dataset: '@windgrams/data-client/dataset',
     offline: '@windgrams/data-client/offline',
     browserStore: '@windgrams/data-client/offline-browser',

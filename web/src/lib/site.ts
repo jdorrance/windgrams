@@ -20,6 +20,7 @@ export function resolveDataBase(configured: string | undefined, siteBase: string
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('Data origin must be an HTTP(S) URL or root-relative path.');
   return value.replace(/\/+$/, '');
 }
+export const AV_API_BASE = import.meta.env?.PUBLIC_AV_API_BASE?.trim() ? (resolveDataBase(import.meta.env.PUBLIC_AV_API_BASE, BASE_URL) || '/') : undefined;
 export const DATA_BASE = resolveDataBase(import.meta.env?.PUBLIC_WINDGRAMS_DATA_BASE, BASE_URL);
 
 /** An in-app path, prefixed for a project site. `href()` is the home page. */

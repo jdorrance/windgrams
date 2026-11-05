@@ -7,7 +7,7 @@ export interface WindLevel extends Wind { heightM: number }
 /** Adjacent-node vector sample, with missing values distinguished from calm wind. */
 export type WindSample =
   | { status: 'available'; speedMps: number; directionDeg: number | null; bracketMslM: [number, number] }
-  | { status: 'unavailable'; reason: 'outside-wind-support' | 'missing-bracket-wind' | 'duplicate-height' };
+  | { status: 'unavailable'; reason: 'outside-wind-support' | 'missing-bracket-wind' | 'duplicate-height' | 'missing-height' };
 export interface SurfaceWind extends Wind { wind80mSpeedMps?: number | null; wind80mDirectionDeg?: number | null }
 export interface BoundaryLayerWind {
   blMeanWindSpeedMps: number; blMeanWindDirDeg: number;

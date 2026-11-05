@@ -1,4 +1,5 @@
-import type { ModelCatalogue, SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
+import type { ModelCatalogue } from '@azohra/meteo.briefing/contract';
 import { EcmwfChart, type EcmwfSiteDocument } from '../lib/ecmwf-chart.ts';
 import { NwsChart, type NwsHour } from '../lib/nws-chart.ts';
 import { compassPoint, type DirectionArc, type Launch } from '../lib/launches.ts';

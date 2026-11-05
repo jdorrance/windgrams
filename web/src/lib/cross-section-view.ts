@@ -13,7 +13,7 @@ export interface CrossSectionColumnGeometry {
   x: number;
   prevX: number;
   colW: number;
-  terrainY: number;
+  terrainY: number | null;
   thermalRect: {
     y: number;
     height: number;
@@ -76,12 +76,12 @@ export function buildCrossSectionScene(
     const prevX = idx === 0 ? left : (xOf(nodes[idx - 1].distanceKm) + x) / 2;
     const nextX = idx === nodes.length - 1 ? width - right : (x + xOf(nodes[idx + 1].distanceKm)) / 2;
     const colW = Math.max(6, nextX - prevX);
-    const terrM = n.modelElevationM ?? 0;
+    const terrM = n.modelElevationM;
     const resTop = (hour.resolvedThermalTopM ?? hour.boundaryLayerTopM)[ci];
     const wstar = (hour.thermalVelocityV2Mps ?? hour.thermalVelocityMps)[ci] ?? 0;
 
     const thermalRect =
-      resTop != null && resTop > terrM && wstar > 0
+      terrM !== null && resTop != null && resTop > terrM && wstar > 0
         ? {
             y: yOf(resTop),
             height: Math.max(0, yOf(terrM) - yOf(resTop)),
@@ -95,7 +95,7 @@ export function buildCrossSectionScene(
       x,
       prevX,
       colW,
-      terrainY: yOf(terrM),
+      terrainY: terrM === null ? null : yOf(terrM),
       thermalRect,
       selected: ci === selectedCell,
     };
@@ -120,11 +120,11 @@ export function buildCrossSectionScene(
     yOf,
   );
 
-  const terrainPolygonPoints = [
+  const terrainPolygonPoints = nodes.every(node=>node.modelElevationM!==null) ? [
     `${left},${top + plotH}`,
-    ...nodes.map(n => `${xOf(n.distanceKm).toFixed(1)},${yOf(n.modelElevationM ?? 0).toFixed(1)}`),
+    ...nodes.map(n => `${xOf(n.distanceKm).toFixed(1)},${yOf(n.modelElevationM!).toFixed(1)}`),
     `${width - right},${top + plotH}`,
-  ].join(' ');
+  ].join(' ') : '';
 
   const waypoints = nodes
     .filter(n => Boolean(n.waypointLabel))

@@ -12,7 +12,7 @@
     "build": "astro build",
     "check": "astro check && tsc -p worker/tsconfig.json",
     "test": "node --test test/*.test.ts",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test && playwright test --config playwright.av.config.ts"
   },
   "packageManager": "pnpm@10.28.0",
   "engines": {

@@ -1,14 +1,14 @@
 import { forecastCapabilities, launchCountry, defaultSoaringRegion, shortModelLabel } from "../lib/forecast-capabilities.ts";
 import { forecastCoversWindow, initialForecastDay, launchDayWindow, launchConditions, matchingHourIndex, peakLiftIndex, validDateKey } from "../lib/launch-forecast.ts";
 import { forecastDataSupport } from "../lib/forecast-data-support.ts";
-// Launch page: day tabs and a model switch scope the meteogram and the NWS
-// charts below them. All forecast data is read from /data at view time, so the
-// page is always as fresh as the dataset without rebuilding the site.
+// Day tabs and model selection scope the windgram and NWS charts.
 
-import { parseForecastManifestJson, parseModelCatalogueJson, parseSiteContextJson } from "@azohra/meteo.briefing/contract";
-import type { ForecastManifest, ModelCatalogue, SiteForecast } from "@azohra/meteo.briefing/contract";
+import { parseModelCatalogueJson, parseSiteContextJson } from "@azohra/meteo.briefing/contract";
+import type { SiteForecast } from "@windgrams/contracts";
+import type { ForecastManifest, ModelCatalogue } from "@azohra/meteo.briefing/contract";
 import { localDateKey, localInstantMs } from "@azohra/meteo.briefing/derive";
 import { createForecastClient } from "@windgrams/data-client";
+import { avModel } from '@windgrams/data-client/av';
 import { windgramHours } from "../lib/windgram-view.ts";
 import { windgramViewport } from "../lib/windgram-viewport.ts";
 import { windWindow, type Launch } from "../lib/launches.ts";
@@ -17,7 +17,7 @@ import { SkewTChart } from "../lib/skewt-chart.ts";
 import { buildSounding, readSounding } from "../lib/skewt.ts";
 import type { RaobDocument } from "../lib/balloon.ts";
 import { fetchWithRetry } from "../lib/http.ts";
-import { DATA_BASE } from "../lib/site.ts";
+import { DATA_BASE, AV_API_BASE } from "../lib/site.ts";
 import { formatQuantity, relativeTime } from "../lib/units.ts";
 import { Sunlight } from "./sunlight.ts";
 import { createBalloonSection, renderFindingsList } from "./balloon-section.ts";
@@ -61,7 +61,7 @@ const lifetime = createPageLifecycle({
   onRestore() { sunlight.resume(); render(); },
 });
 const eventOptions = { signal: lifetime.signal };
-const forecastClient = createForecastClient({ baseUrl: DATA_BASE, signal: lifetime.signal });
+const forecastClient = createForecastClient({ baseUrl: DATA_BASE, avApiBaseUrl: AV_API_BASE, sites: [{...launch, lat: launch.latitude, lon: launch.longitude}], signal: lifetime.signal });
 const readRefreshHealth = createRefreshHealthReader({ baseUrl: DATA_BASE, signal: lifetime.signal });
 
 async function getJson<T>(path: string): Promise<T | null> {
@@ -221,10 +221,7 @@ function modelEntry(slug: string) {
 }
 
 async function loadManifest(slug: string) {
-  const text = await fetchWithRetry(`${DATA_BASE}/${slug}/manifest.json`, { signal: lifetime.signal })
-    .then((r) => (r.ok ? r.text() : null))
-    .catch(() => null);
-  const manifest = text ? parseForecastManifestJson(text) : null;
+  const manifest = await forecastClient.loadManifest(slug).catch(() => null);
   if (lifetime.disposed) return;
   if (manifest && manifest.sites.some((s) => s.slug === launch.slug)) manifests.set(slug, manifest);
 }
@@ -373,7 +370,7 @@ function renderMeteogram() {
     idPrefix: `mg-${launch.slug}`,
     launch: launchElevationM != null ? { name: launch.name, elevationM: launchElevationM } : null,
     launchWindows: arc ? [arc] : [],
-    capabilities: entry?.capabilities,
+    capabilities: AV_API_BASE && model !== null && avModel(model) ? undefined : entry?.capabilities,
     cursorStyle: { fill: '#fff', fillOpacity: 0.04, stroke: '#203747' },
     onSelectHour: validAt => {
       const i = skewtHours.findIndex(h => h.validAt === validAt);

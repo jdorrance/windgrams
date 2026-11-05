@@ -35,6 +35,7 @@ export interface BaseMapOptions {
   maxBounds?: [[number, number], [number, number]];
   /** When false, the wheel zooms the map only while it is focused. */
   scrollZoom?: boolean;
+  basemap?: BasemapId;
 }
 
 type BasemapId = "opentopo" | "terrain" | "streets" | "offline";
@@ -126,7 +127,7 @@ function applyBasemap(map: MapLibreMap, basemap: BasemapId) {
   }
 }
 
-function basemapControl(map: MapLibreMap) {
+function basemapControl(map: MapLibreMap, initial: BasemapId) {
   const control = document.createElement("div");
   control.className = "maplibregl-ctrl";
   const select = document.createElement("select");
@@ -136,7 +137,7 @@ function basemapControl(map: MapLibreMap) {
     const option = document.createElement("option");
     option.value = choice.id;
     option.textContent = choice.label;
-    option.selected = choice.id === "opentopo";
+    option.selected = choice.id === initial;
     select.appendChild(option);
   }
   select.addEventListener("change", () => applyBasemap(map, select.value as BasemapId));
@@ -164,13 +165,13 @@ export function baseMap(element: HTMLElement, options: BaseMapOptions = {}) {
     attributionControl: { compact: false },
   });
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
-  map.addControl({ onAdd: () => basemapControl(map), onRemove: () => undefined }, "top-right");
+  map.addControl({ onAdd: () => basemapControl(map, options.basemap ?? "opentopo"), onRemove: () => undefined }, "top-right");
   if (!options.scrollZoom) {
     map.scrollZoom.disable();
     element.addEventListener("focusin", () => map.scrollZoom.enable());
     element.addEventListener("focusout", () => map.scrollZoom.disable());
   }
-  map.on("load", () => applyBasemap(map, "opentopo"));
+  map.on("load", () => applyBasemap(map, options.basemap ?? "opentopo"));
   return map;
 }
 

@@ -2,7 +2,7 @@
 // Keeps `timeAxis` (which includes unavailable daylight ticks) distinct from
 // `hours` and `sampling` (which contain real forecast source data).
 
-import type { SiteForecast } from "@azohra/meteo.briefing/contract";
+import type { SiteForecast } from "@windgrams/contracts";
 import { localDateKey, localInstantMs } from "@azohra/meteo.briefing/derive";
 import type { WindgramHourFilterOptions } from './scene-types.ts';
 import { sunriseSunset } from "@windgrams/meteorology/sun";

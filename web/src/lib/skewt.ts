@@ -8,7 +8,7 @@ import { publishedEffectiveCloudLimit, publishedLift } from "./published-lift.ts
 // for: inversions, cloud layers, the freezing level, winds at launch and at
 // the top of the lift, and a plain-language reading of all of it.
 
-import type { SiteForecast } from "@azohra/meteo.briefing/contract";
+import type { SiteForecast } from "@windgrams/contracts";
 import { DRY_ADIABATIC_LAPSE_C_PER_M, lapseRateCPer1000Ft, parcelAscent, stabilityClass } from "@azohra/meteo.briefing/derive";
 import { sampleWindAtHeight } from '@windgrams/meteorology';
 import { GRAVITY_MPS2, RD_J_PER_KG_K } from '@windgrams/meteorology/thermodynamics';
@@ -110,7 +110,6 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
   const s = hour.surface;
   const ts = scalar(s.temperatureC);
   const tds = scalar(s.dewPointC);
-  if (ts === null) return null;
 
   // Missing humidity limits the sounding; it does not erase temperature or wind.
   // Dew points become NaN (not drawn, no cloud layers), mirroring the balloon path,
@@ -121,40 +120,40 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
     const z = scalar(l.heightM);
     const t = scalar(l.temperatureC);
     const td = scalar(l.dewPointC);
-    if (p === null || z === null || t === null || z <= zs + 5) continue;
-    levels.push({ pressureHpa: p, heightM: z, temperatureC: t, dewPointC: td === null ? Number.NaN : Math.min(td, t), windSpeedMps: scalar(l.windSpeedMps), windDirectionDeg: scalar(l.windDirectionDeg), surface: false });
+    if (z !== null && z <= zs + 5) continue;
+    levels.push({ pressureHpa: p ?? NaN, heightM: z ?? NaN, temperatureC: t ?? NaN, dewPointC: td === null ? NaN : t === null ? td : Math.min(td, t), windSpeedMps: scalar(l.windSpeedMps), windDirectionDeg: scalar(l.windDirectionDeg), surface: false });
   }
-  levels.sort((a, b) => a.heightM - b.heightM);
+  if (levels.every(level=>Number.isFinite(level.heightM))) levels.sort((a, b) => a.heightM - b.heightM);
   if (levels.length < 2) return null;
-  const hasDewPoint = tds !== null && levels.every(l => Number.isFinite(l.dewPointC));
+  const hasDewPoint = tds !== null || levels.some(l => Number.isFinite(l.dewPointC));
 
   const modelPressure = finiteScalar((s as { surfacePressureHpa?: unknown }).surfacePressureHpa);
   // The parcel calculation retains its model-ground initialization convention.
   // The returned environmental point is moved to its measured 2 m height below.
   const surface: SoundingPoint = {
-    pressureHpa: modelPressure !== null && modelPressure > 0 ? modelPressure : surfacePressureHpa({ heightM: zs, temperatureC: ts }, levels[0]),
+    pressureHpa: modelPressure !== null && modelPressure > 0 ? modelPressure : surfacePressureHpa({ heightM: zs, temperatureC: ts ?? NaN }, levels[0]),
     heightM: zs,
-    temperatureC: ts,
-    dewPointC: tds === null ? Number.NaN : Math.min(tds, ts),
+    temperatureC: ts ?? NaN,
+    dewPointC: tds === null ? Number.NaN : ts === null ? tds : Math.min(tds, ts),
     windSpeedMps: scalar(s.windSpeedMps),
     windDirectionDeg: scalar(s.windDirectionDeg),
     windHeightM: zs + 10,
     surface: true,
   };
   const parcelPoints = [surface, ...levels];
+  if(parcelPoints.filter(point=>Number.isFinite(point.pressureHpa)&&point.pressureHpa>0).length<2)return null;
   const points = [{ ...surface, heightM: zs + 2, pressureHpa: pressureAtHeight(parcelPoints, zs + 2) }, ...levels];
   const windPoints: SoundingWindPoint[] = [
     { heightM: zs + 10, windSpeedMps: surface.windSpeedMps, windDirectionDeg: surface.windDirectionDeg },
     ...hour.levels.flatMap(level => {
-      const heightM = scalar(level.heightM), pressureHpa = scalar(level.pressureHpa);
-      return heightM !== null && heightM > zs ? [{ heightM,
-        windSpeedMps: scalar(level.windSpeedMps), windDirectionDeg: scalar(level.windDirectionDeg),
-        ...(pressureHpa !== null ? { pressureHpa } : {}) }] : [];
+      const heightM=scalar(level.heightM),pressureHpa=scalar(level.pressureHpa);
+      return heightM===null||heightM>zs ? [{heightM:heightM??NaN,windSpeedMps:scalar(level.windSpeedMps),windDirectionDeg:scalar(level.windDirectionDeg),...(pressureHpa!==null?{pressureHpa}:{})}] : [];
     }),
-  ].sort((a, b) => a.heightM - b.heightM);
-  const topM = levels[levels.length - 1].heightM;
+  ];
+  if(windPoints.every(point=>Number.isFinite(point.heightM)))windPoints.sort((a,b)=>a.heightM-b.heightM);
+  const topM = Math.max(zs, ...levels.map(level=>level.heightM).filter(Number.isFinite));
 
-  const { parcel, lclM, dryParcelOnly } = liftParcel(parcelPoints, ts, surface.dewPointC);
+  const { parcel, lclM, dryParcelOnly } = liftParcel(parcelPoints, ts ?? NaN, surface.dewPointC);
 
   const d = publishedLift(hour);
   const w = scalar(d.thermalVelocityMps);
@@ -199,6 +198,9 @@ export function buildSounding(profile: Pick<SiteForecast, "site">, hour: Hour): 
  * levels does not resolve sub-grid inversions or extra vertical structure).
  */
 export function liftParcel(points: SoundingPoint[], surfaceTempC: number, surfaceDewPointC: number): ParcelCurve {
+  const gap=points.findIndex(point=>![point.pressureHpa,point.heightM,point.temperatureC].every(Number.isFinite));
+  if(gap>=0)points=points.slice(0,gap);
+  if(points.length<2||!Number.isFinite(surfaceTempC))return {parcel:[],lclM:null,dryParcelOnly:!Number.isFinite(surfaceDewPointC)};
   const surface = points[0];
   const zs = surface.heightM;
   const topM = points[points.length - 1].heightM;
@@ -263,32 +265,32 @@ export function isThermalTopProfileLimited(parcel: ParcelSample[]): boolean {
 
 // ── interpolation (linear in log-pressure, as the chart draws) ──────────────
 
-function bracket(points: SoundingPoint[], z: number) {
-  let i = 0;
-  while (i < points.length - 2 && points[i + 1].heightM < z) i += 1;
-  const a = points[i];
-  const b = points[i + 1];
-  return { a, b, f: (z - a.heightM) / (b.heightM - a.heightM) };
+function bracket(points: SoundingPoint[], value: number, key: 'heightM'|'pressureHpa') {
+  if(!Number.isFinite(value))return null;
+  for(let i=0;i<points.length;i++){
+    const a=points[i],b=points[i+1],x=a[key];
+    if(Number.isFinite(x)&&x===value)return {a,b:a,f:0};
+    if(!b||!Number.isFinite(x)||!Number.isFinite(b[key]))continue;
+    const y=b[key];
+    if((value>Math.min(x,y)&&value<Math.max(x,y))||(i===0&&(key==='heightM'?value<x:value>x))||(i===points.length-2&&(key==='heightM'?value>y:value<y))){
+      const f=key==='pressureHpa'?(Math.log(value)-Math.log(x))/(Math.log(y)-Math.log(x)):(value-x)/(y-x);
+      return {a,b,f};
+    }
+  }
+  return null;
 }
 
 export function pressureAtHeight(points: SoundingPoint[], z: number) {
-  const { a, b, f } = bracket(points, z);
-  return Math.exp(Math.log(a.pressureHpa) + f * (Math.log(b.pressureHpa) - Math.log(a.pressureHpa)));
+  const pair=bracket(points,z,'heightM');if(!pair)return NaN;const {a,b,f}=pair;
+  return Math.exp(Math.log(a.pressureHpa)+f*(Math.log(b.pressureHpa)-Math.log(a.pressureHpa)));
 }
-
 export function heightAtPressure(points: SoundingPoint[], p: number) {
-  let i = 0;
-  while (i < points.length - 2 && points[i + 1].pressureHpa > p) i += 1;
-  const a = points[i];
-  const b = points[i + 1];
-  const f = (Math.log(p) - Math.log(a.pressureHpa)) / (Math.log(b.pressureHpa) - Math.log(a.pressureHpa));
-  return a.heightM + f * (b.heightM - a.heightM);
+  const pair=bracket(points,p,'pressureHpa');if(!pair)return NaN;const {a,b,f}=pair;
+  return a.heightM+f*(b.heightM-a.heightM);
 }
-
 export function environmentAtHeight(points: SoundingPoint[], z: number) {
-  const { a, b, f } = bracket(points, z);
-  const lerp = (x: number, y: number) => x + f * (y - x);
-  return { temperatureC: lerp(a.temperatureC, b.temperatureC), dewPointC: lerp(a.dewPointC, b.dewPointC) };
+  const pair=bracket(points,z,'heightM');if(!pair)return {temperatureC:NaN,dewPointC:NaN};const {a,b,f}=pair;
+  return {temperatureC:a.temperatureC+f*(b.temperatureC-a.temperatureC),dewPointC:a.dewPointC+f*(b.dewPointC-a.dewPointC)};
 }
 
 /** Wind at a height in metres MSL, interpolated only within the available wind column. */
@@ -332,9 +334,9 @@ export function findStableLayers(points: SoundingPoint[]): Layer[] {
 export function findCloudLayers(points: SoundingPoint[]): Layer[] {
   const layers: Layer[] = [];
   points.forEach((p, i) => {
-    if (!(p.temperatureC - p.dewPointC <= 1)) return;
-    const below = i > 0 ? (points[i - 1].heightM + p.heightM) / 2 : p.heightM;
-    const above = i < points.length - 1 ? (points[i + 1].heightM + p.heightM) / 2 : p.heightM;
+    if (!Number.isFinite(p.heightM) || !(p.temperatureC - p.dewPointC <= 1)) return;
+    const below = i > 0 && Number.isFinite(points[i-1].heightM) && Number.isFinite(points[i-1].temperatureC) && Number.isFinite(points[i-1].dewPointC) ? (points[i - 1].heightM + p.heightM) / 2 : p.heightM;
+    const above = i < points.length - 1 && Number.isFinite(points[i+1].heightM) && Number.isFinite(points[i+1].temperatureC) && Number.isFinite(points[i+1].dewPointC) ? (points[i + 1].heightM + p.heightM) / 2 : p.heightM;
     const prev = layers[layers.length - 1];
     if (prev && prev.topM >= below - 1) prev.topM = above;
     else layers.push({ baseM: below, topM: above, kind: "cloud", grounded: p.surface });
@@ -348,7 +350,7 @@ export function freezingLevel(points: SoundingPoint[]): number | null {
   for (let i = 0; i < points.length - 1; i += 1) {
     const a = points[i];
     const b = points[i + 1];
-    if (a.temperatureC > 0 && b.temperatureC <= 0) return a.heightM + ((0 - a.temperatureC) / (b.temperatureC - a.temperatureC)) * (b.heightM - a.heightM);
+    if ([a.heightM,b.heightM,a.temperatureC,b.temperatureC].every(Number.isFinite) && a.temperatureC > 0 && b.temperatureC <= 0) return a.heightM + ((0 - a.temperatureC) / (b.temperatureC - a.temperatureC)) * (b.heightM - a.heightM);
   }
   return null;
 }
@@ -442,11 +444,11 @@ export function readSounding(sounding: Sounding, launchM: number | null): Readin
 
   // Clouds
   const base = sounding.cloudBaseM;
-  if (hasThermals && !sounding.hasDewPoint) {
+  if (hasThermals && base === null) {
     findings.push({
       key: "clouds",
       title: "Cloud base",
-      text: "Unavailable · Humidity missing",
+      text: !Number.isFinite(sounding.points[0].dewPointC) ? "Unavailable · Humidity missing" : "Cloud base unavailable",
       tone: "neutral",
     });
   } else if (hasThermals && base !== null && base <= bl! + 100) {

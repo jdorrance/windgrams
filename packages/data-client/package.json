@@ -35,7 +35,11 @@
       "types": "./dist/offline-browser.d.ts",
       "import": "./dist/offline-browser.js"
     },
-    "./build-inventory.json": "./dist/build-inventory.json"
+    "./build-inventory.json": "./dist/build-inventory.json",
+    "./av": {
+      "types": "./dist/av.d.ts",
+      "import": "./dist/av.js"
+    }
   },
   "scripts": {
     "build": "node ../../scripts/build-packages.mjs @windgrams/data-client",
@@ -45,6 +49,7 @@
   "dependencies": {
     "@azohra/meteo.briefing": "0.6.2",
     "@windgrams/contracts": "workspace:*",
-    "@windgrams/geography": "workspace:*"
+    "@windgrams/geography": "workspace:*",
+    "zod": "4.6.5"
   }
 }

@@ -122,6 +122,7 @@ jobs:
         env:
           WINDGRAMS_SITE: ${{ steps.urls.outputs.site }}
           WINDGRAMS_BASE: ${{ steps.urls.outputs.base }}
+          PUBLIC_AV_API_BASE: ${{ vars.AV_API_BASE }}
           PUBLIC_WINDGRAMS_DATA_BASE: ${{ vars.WINDGRAMS_DATA_BASE }}
         run: pnpm run build
       - name: Assemble and measure Pages artifact

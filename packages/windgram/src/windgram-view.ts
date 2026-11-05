@@ -2,7 +2,7 @@
 // Composes `windgram-time-axis`, `windgram-scale`, `windgram-sampling`,
 // `windgram-geometry`, and `windgram-inspector`.
 
-import type { SiteForecast } from "@azohra/meteo.briefing/contract";
+import type { SiteForecast } from "@windgrams/contracts";
 import { componentsToWind } from "@azohra/meteo.briefing/derive";
 import { buildMeteogramScene, type HourSampling, type MetricStrip } from "@azohra/meteo.briefing/meteogram";
 import type { WindgramLayout, WindgramHour as PublicHour, WindgramOptions } from './scene-types.ts';
@@ -17,6 +17,18 @@ import {
   type GustSemantics,
   type UnitSystem,
 } from "./windgram-format.ts";
+
+type PlotGaps<Fields> = { [Key in keyof Fields]: null extends Fields[Key] ? Exclude<Fields[Key], null> | number : Fields[Key] };
+/** The upstream scene retains NaN plot gaps while its legacy nullable guard drops whole hours. */
+function plotGaps<Fields extends object>(fields: Fields): PlotGaps<Fields> {
+  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value === null ? NaN : value])) as PlotGaps<Fields>;
+}
+
+function diagnosticProfile(profile: SiteForecast) {
+  return { ...profile, hours: profile.hours.map(hour => ({ ...hour, surface: plotGaps(hour.surface),
+    levels: hour.levels.map(plotGaps), derived: { ...plotGaps(hour.derived),
+      boundaryLayerTopM: hour.derived.boundaryLayerTopM, usableLiftTopM: hour.derived.usableLiftTopM } })) };
+}
 import {
   buildStabilityFieldPaths,
   temperatureContours,
@@ -201,9 +213,10 @@ export function buildWindgramView(profile: SiteForecast, options: WindgramOption
   const diagnosticStep = Math.min(columnWidth, plotWidth / Math.max(1, hours.length));
   const diagnosticColumnWidth = compact ? Math.max(44, diagnosticStep) : diagnosticStep;
   const diagnosticPlotWidth = diagnosticColumnWidth * Math.max(1, hours.length);
-  const scene = buildMeteogramScene(profile, {
+  const diagnostic = diagnosticProfile(profile);
+  const scene = buildMeteogramScene(diagnostic, {
     ...options,
-    hours,
+    hours: hours.map(hour => diagnostic.hours[profile.hours.indexOf(hour)]!),
     widthPx: diagnosticPlotWidth + 120,
     minColumnWidthPx: 1,
     plotHeightPx: 1,

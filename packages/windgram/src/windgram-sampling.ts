@@ -37,11 +37,18 @@ export function hourSampling(hour: ProfileHour, floorM: number, omegaPressureLev
   const levels = hour.levels
     .filter((l) => finite(finiteScalar(l.heightM)) && finiteScalar(l.heightM)! > floorM)
     .sort((a, b) => finiteScalar(a.heightM)! - finiteScalar(b.heightM)!);
+  const gaps: [number,number][]=[];
+  let lastHeight=floorM,missingHeight=false;
+  for(const level of hour.levels){const height=finiteScalar(level.heightM);if(height===null){missingHeight=true;continue;}if(height<=floorM)continue;if(missingHeight&&height>lastHeight)gaps.push([lastHeight,height]);lastHeight=height;missingHeight=false;}
+  const preserveHeightGaps=(nodes:FieldNode[]):FieldNode[]=>nodes.flatMap((node,i)=>{
+    const next=nodes[i+1];return next&&gaps.some(([lower,upper])=>lower<next.altitudeM&&upper>node.altitudeM)
+      ?[node,{altitudeM:node.altitudeM,value:NaN},{altitudeM:next.altitudeM,value:NaN}]:[node];
+  });
   const nodes = (key: "temperatureC" | "dewPointC") => [
     { altitudeM: floorM + 2, value: finiteScalar(hour.surface[key]) ?? NaN },
     ...levels.map((l) => ({ altitudeM: finiteScalar(l.heightM)!, value: finiteScalar(l[key]) ?? NaN })),
   ].sort((a, b) => a.altitudeM - b.altitudeM);
-  const temperatureC = nodes("temperatureC"), dewPointC = nodes("dewPointC");
+  const temperatureC = preserveHeightGaps(nodes("temperatureC")), dewPointC = preserveHeightGaps(nodes("dewPointC"));
   const wind = (speed: unknown, direction: unknown) => {
     const s = finiteScalar(speed), d = finiteScalar(direction);
     if (s === 0) return { uMps: 0, vMps: 0 };
@@ -86,13 +93,13 @@ export function hourSampling(hour: ProfileHour, floorM: number, omegaPressureLev
       altitudeM: p.altitudeM,
       value: Number.isFinite(p.value) && Number.isFinite(dewPointC[i].value) ? relativeHumidityPercent(p.value, dewPointC[i].value) : NaN,
     })),
-    windU: winds.map(p => ({ altitudeM: p.altitudeM, value: p.uMps })),
-    windV: winds.map(p => ({ altitudeM: p.altitudeM, value: p.vMps })),
-    verticalVelocityPaS: levels.map((l) => ({
+    windU: preserveHeightGaps(winds.map(p => ({ altitudeM: p.altitudeM, value: p.uMps }))),
+    windV: preserveHeightGaps(winds.map(p => ({ altitudeM: p.altitudeM, value: p.vMps }))),
+    verticalVelocityPaS: preserveHeightGaps(levels.map((l) => ({
       altitudeM: finiteScalar(l.heightM)!,
       value: !omegaPressureLevels || omegaPressureLevels.includes(finiteScalar(l.pressureHpa)!)
         ? finiteScalar(l.verticalVelocityPaS) ?? NaN : NaN,
-    })),
+    }))),
     thermalIndexC: [],
     smoke:
       hour.smoke && finite(finiteScalar(hour.smoke.surfaceUgm3))
@@ -100,7 +107,7 @@ export function hourSampling(hour: ProfileHour, floorM: number, omegaPressureLev
         : null,
     observation: null,
     aotObservation: null,
-    cloudCapped: usable === null || effectiveLimit === null ? null : usable >= effectiveLimit - 1,
+    cloudCapped: hour.soaring&&Object.hasOwn(hour.soaring,'cloudCapped')?hour.soaring.cloudCapped??null:usable === null || effectiveLimit === null ? null : usable >= effectiveLimit - 1,
     capeCapped:
       finiteScalar(hour.surface.capeJkg) === null || finiteScalar(hour.surface.cinJkg) === null
         ? null

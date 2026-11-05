@@ -513,7 +513,7 @@ test("empty and single-hour windows have finite geometry", () => {
   }
 });
 
-test("diagnostics keep their hour positions after an ensemble dropout", () => {
+test("diagnostics retain known rain when surface temperature is missing", () => {
   const profile = steadyProfile(4);
   profile.hours[0].surface.precipitationMmHr = 1;
   profile.hours[1].surface.temperatureC = null;
@@ -523,8 +523,8 @@ test("diagnostics keep their hour positions after an ensemble dropout", () => {
   const view = viewOf(profile);
   const rain = view.diagnostics.find((strip) => strip.key === "precipitation");
   assert.ok(rain);
-  assert.deepEqual(rain.values, [1, null, 3, 4]);
-  assert.ok(rain.linePath.includes(`M${view.diagnosticLeft + 2.5 * view.columnWidth},`), "the first value after the dropout starts at its own hour");
+  assert.deepEqual(rain.values, [1, 0, 3, 4]);
+  assert.equal((rain.linePath.match(/M/g)??[]).length,1, "a temperature gap does not erase known rain");
   assert.deepEqual(profile, before, "building the display never rewrites forecast measurements");
 });
 
@@ -854,4 +854,12 @@ test("a view retains its explicit units across rendering and later preference ch
     });
     assert.deepEqual(view.contours, same.contours, "explicit units govern the contour intervals too");
   }
+});
+test('native temperature and height gaps preserve independent winds and exact neighbouring measurements',()=>{
+ const profile=steadyProfile(1);profile.site.modelElevationM=100;Object.assign(profile.hours[0].surface,{temperatureC:24,dewPointC:15,windSpeedMps:1,windDirectionDeg:270,surfacePressureHpa:1000});
+ profile.hours[0].levels=[{pressureHpa:990,heightM:200,temperatureC:23,dewPointC:14,windSpeedMps:2,windDirectionDeg:270},{pressureHpa:950,heightM:500,temperatureC:null,dewPointC:12,windSpeedMps:20,windDirectionDeg:270},{pressureHpa:900,heightM:1000,temperatureC:18,dewPointC:9,windSpeedMps:4,windDirectionDeg:270}] as never;
+ const missingTemperature=viewOf(profile),reading=readWindgram(missingTemperature,0,700);assert.equal(reading.temperatureF,null);close(reading.speedKt!,13.6*1.9438444924406048);
+ Object.assign(profile.hours[0].levels[1],{heightM:null,temperatureC:21});const missingHeight=viewOf(profile);assert.equal(readWindgram(missingHeight,0,700).temperatureF,null);assert.equal(readWindgram(missingHeight,0,700).speedKt,null);
+ close(readWindgram(missingHeight,0,200).speedKt!,2*1.9438444924406048);close(readWindgram(missingHeight,0,1000).speedKt!,4*1.9438444924406048);
+ const svg=renderWindgramSvg(missingHeight);assert.doesNotMatch(svg,/NaN|Infinity/);
 });

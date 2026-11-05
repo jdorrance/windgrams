@@ -1,4 +1,4 @@
-import type { SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
 import type { WindgramView, WindgramOptions, WindgramReading, WindgramHourFilterOptions } from './scene-types.ts';
 export type { WindgramView, WindgramOptions, WindgramReading, WindgramHour, WindgramHourFilterOptions } from './scene-types.ts';
 import { publishScene, sceneData } from './scene-store.ts';

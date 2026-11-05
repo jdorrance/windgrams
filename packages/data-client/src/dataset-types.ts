@@ -1,4 +1,4 @@
-import type { SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
 import type { Grid, ReplayHour, ReplayManifest } from '@windgrams/contracts/regional';
 import type { FieldValue, RegionalField } from '@windgrams/contracts/fields';
 import type { Bounds, Position } from '@windgrams/geography';

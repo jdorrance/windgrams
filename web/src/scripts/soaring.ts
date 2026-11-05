@@ -1,9 +1,10 @@
 import { formatQuantity, getUnitSystem, gustNoun } from '../lib/units.ts';
 import { readRegionalJson } from '../lib/regional-data.ts';
 import { openRegionalDataset } from '@windgrams/data-client/dataset';
-import { parseModelCatalogue, type SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
+import { parseModelCatalogue } from '@azohra/meteo.briefing/contract';
 import { localDateKey } from '@azohra/meteo.briefing/derive';
-import { DATA_BASE } from '../lib/site.ts';
+import { DATA_BASE, AV_API_BASE } from '../lib/site.ts';
 import { windgramDayHours } from '../lib/windgram-view.ts';
 import { windgramViewport } from '../lib/windgram-viewport.ts';
 import { buildSounding, readSounding } from '../lib/skewt.ts';
@@ -69,6 +70,7 @@ const fmtFt = (m: number | null | undefined) => formatQuantity(m, 'elevation');
 const fmtM = (m: number | null | undefined, datum = 'MSL') => m == null ? 'Unavailable' : `${formatQuantity(m, 'elevation')} ${datum}`;
 
 async function main() {
+  if (AV_API_BASE && await (await import('./soaring-av.ts')).startAvSoaring(AV_API_BASE)) return;
   const requestQuery = new URLSearchParams(window.location.search);
   if (!requestQuery.has('country') && !requestQuery.has('case') && !requestQuery.has('region')) {
     try {

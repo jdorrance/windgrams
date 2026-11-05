@@ -1,7 +1,7 @@
 import { reconstructRegionalCellProfile } from '@windgrams/data-client/dataset';
 import { fieldDefinition } from '@windgrams/contracts/fields';
 import { convertQuantity, feetToMetres, formatQuantity, getUnitSystem, mphToMps, unitLabel, type QuantityKind, type UnitSystem } from './units.ts';
-import type { SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
 import { containsPolygon, distanceKm, validPosition as validCoordinates } from '@windgrams/geography';
 import type { Grid } from '@windgrams/contracts/regional';
 import { replayModel as explicitReplayModel, type Quality, type ReplayHour, type ReplayManifest, type RegionDescriptor, type RegionCatalogue } from '@windgrams/contracts/regional';

@@ -52,3 +52,14 @@ preview on port 4397 and checks model switching, chart lifecycle, stale notices
 and archived replay. The tests use local forecast files and replace external map
 tiles, so they run without live weather services. Failed runs retain Playwright traces in
 `test-results/`.
+
+Set `PUBLIC_AV_API_BASE` to the AV Worker origin to read GFS, ICON-EU and RRFS
+weather and profiles there. The Pages workflow reads the `AV_API_BASE`
+repository variable. An unset value keeps the static dataset configuration.
+
+The AV regional view uses the three raster layers and loads native point
+profiles on selection. Point times span the full profile horizon. Compare-launch
+rows label interpolation; route columns load on request for the map hour.
+Saved native profiles retain the selected launch, cursor and loaded route.
+Reopen them through **Open saved point and route profiles**; the offline view
+uses a grey basemap. App-shell caching belongs to the host.

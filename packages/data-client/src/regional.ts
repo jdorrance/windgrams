@@ -1,6 +1,6 @@
 import { fetchWithRetry } from './http.ts';
 import { parsePublishedProfileJson } from '@windgrams/contracts/published-lift';
-import type { SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
 import { type ReplayManifest } from '@windgrams/contracts/regional';
 
 export interface RegionalReadOptions { fetch?: typeof fetch; signal?: AbortSignal; timeoutMs?: number }

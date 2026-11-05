@@ -147,7 +147,7 @@ test('sounding wind support survives a missing thermodynamic level without bridg
   const middle = source.levels[1], z = middle.heightM;
   Object.assign(middle, { temperatureC: null, dewPointC: null, windSpeedMps: null });
   const missing = buildSounding(site, source)!;
-  assert.ok(!missing.points.some(point => point.heightM === z));
+  assert.ok(Number.isNaN(missing.points.find(point => point.heightM === z)!.temperatureC));
   assert.ok(missing.windPoints!.some(point => point.heightM === z));
   assert.equal(windAtHeight(missing.windPoints!, (source.levels[0].heightM + z) / 2), null);
   assert.equal(windAtHeight(missing.windPoints!, (z + source.levels[2].heightM) / 2), null);
@@ -163,22 +163,24 @@ test("a missing surface dew point keeps a qualified dry sounding instead of dele
   (source.surface as Record<string, unknown>).dewPointC = null;
   const s = buildSounding(site, source as never)!;
   assert.ok(s, "temperature and wind support survive a humidity gap");
-  assert.equal(s.hasDewPoint, false);
+  assert.equal(s.hasDewPoint, true, "known dew points remain drawable");
   assert.equal(s.dryParcelOnly, true);
   assert.equal(s.lclM, null);
-  assert.deepEqual(s.cloudLayers, []);
-  assert.equal(s.marks.cloudBaseM, null);
+  assert.ok(s.cloudLayers.every(layer=>layer.baseM> Z0), "known upper humidity remains independent of missing surface humidity");
+  assert.equal(s.marks.cloudBaseM, source.derived.cloudBaseM);
   assert.equal(s.points.length, 8, "levels are retained, not dropped for missing dew point");
   assert.ok(s.inversions.length > 0, "temperature-only features still resolve");
   const clouds = readSounding(s, 1268).findings.find((f) => f.key === "clouds")!;
-  assert.equal(clouds.text, "Unavailable · Humidity missing");
+  assert.match(clouds.text, /Cumulus base/, "published known cloud base remains available");
+  source.derived.cloudBaseM=null as never;
+  assert.match(readSounding(buildSounding(site,source)!,1268).findings.find(f=>f.key==="clouds")!.text,/Humidity missing/);
 });
 
 test("one missing level dew point keeps the level and drops only humidity", () => {
   const source = hour({ t: 25, td: 8 }, CUMULUS_LEVELS, { bl: 3380, w: 2.2, base: 3340, top: 3300 });
   (source.levels[2] as Record<string, unknown>).dewPointC = null;
   const s = buildSounding(site, source as never)!;
-  assert.equal(s.hasDewPoint, false);
+  assert.equal(s.hasDewPoint, true, "known dew points remain drawable");
   assert.equal(s.points.length, 8);
   assert.ok(Number.isNaN(s.points[3].dewPointC));
   assert.deepEqual(windAtHeight(s.windPoints!, source.levels[2].heightM), { speedMps: 5, directionDeg: 300 });
@@ -300,4 +302,16 @@ test("thermal strength and lapse descriptions avoid inferring ride quality", () 
   assert.match(reading.findings.find(finding => finding.key === "stability")!.text, /^Unstable · -/);
   assert.match(reading.findings.find(finding => finding.key === "thermals")!.text, /^Very strong · w\*/);
   assert.doesNotMatch(JSON.stringify(reading), /rough|punchy|lively|solid|workable|patchy/i);
+});
+test('native coordinate gaps retain independent winds and break unsupported thermodynamic interpolation',()=>{
+ const source=hour({t:24,td:15,ws:1,wd:270},[{p:990,z:200,t:23,td:14,ws:2,wd:270},{p:950,z:500,t:21,td:12,ws:20,wd:270},{p:900,z:1000,t:18,td:9,ws:4,wd:270}],{bl:700,w:2,base:1200,top:650});
+ Object.assign(source.surface,{surfacePressureHpa:1000});Object.assign(source.levels[1],{temperatureC:null});
+ const sounding=buildSounding({site:{...site.site,modelElevationM:100}},source)!;assert.ok(sounding);assert.ok(Number.isNaN(sounding.points[2].temperatureC));
+ const wind=windAtHeight(sounding.windPoints!,700)!;assert.ok(Math.abs(wind.speedMps-13.6)<1e-9);
+ assert.equal(sounding.parcel.at(-1)!.heightM,200,'parcel support terminates before the missing temperature');
+ Object.assign(source.levels[1],{heightM:null,temperatureC:21});const heightGap=buildSounding({site:{...site.site,modelElevationM:100}},source)!;
+ assert.ok(heightGap.points.some(point=>Number.isNaN(point.heightM)));assert.equal(windAtHeight(heightGap.windPoints!,700),null);
+ assert.ok(Number.isNaN(pressureAtHeight(heightGap.points,700)));assert.equal(heightGap.points[2].temperatureC,21);
+ Object.assign(source.levels[1],{heightM:500,pressureHpa:null});const pressureGap=buildSounding({site:{...site.site,modelElevationM:100}},source)!;assert.ok(Number.isNaN(pressureGap.points[2].pressureHpa));
+ assert.ok(windAtHeight(pressureGap.windPoints!,700));assert.equal(pressureGap.points[2].temperatureC,21);
 });

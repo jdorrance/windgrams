@@ -1,4 +1,4 @@
-import type { SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
 import { validateReplayHour, type ReplayHour } from '@windgrams/contracts/regional';
 import { fieldDefinition, readRegionalField } from '@windgrams/contracts/fields';
 import { parsePublishedProfileJson } from '@windgrams/contracts/published-lift';

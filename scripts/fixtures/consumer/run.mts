@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parsePublishedProfileJson } from '@windgrams/contracts/published-lift';
+import { parseSiteForecast } from '@azohra/meteo.briefing/contract';
 import { fieldDefinition, heightAboveGround } from '@windgrams/contracts/fields';
 import type { AcquisitionAdapter, ModelDescriptor, ProcessedProfileResult, SelectedRun } from '@windgrams/providers';
 import { postprocessPointForecast } from '@windgrams/soaring/compatibility';
@@ -12,8 +13,9 @@ import { buildWindgramView, readWindgram, type WindgramView } from '@windgrams/w
 import { renderWindgramSvg } from '@windgrams/windgram/svg';
 import { coversPoint } from '@windgrams/geography';
 
-const original = parsePublishedProfileJson(readFileSync(new URL('./profile.json', import.meta.url), 'utf8'));
-assert.ok(original, 'the retained input fixture must satisfy the published profile contract');
+const original = parseSiteForecast(JSON.parse(readFileSync(new URL('./profile.json', import.meta.url), 'utf8')));
+assert.ok(original, 'the acquisition fixture must satisfy the raw provider contract');
+assert.ok(parsePublishedProfileJson(JSON.stringify(original)), 'retained raw profiles remain valid published inputs');
 assert.equal(fieldDefinition('usableLiftTopM').heightReference, 'MSL');
 assert.equal(heightAboveGround(2500, 'EGM96', {
   kind: 'model', elevationM: 1600, verticalDatum: 'EGM96', source: 'fixture',

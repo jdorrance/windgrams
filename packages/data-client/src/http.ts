@@ -18,6 +18,8 @@ export interface FetchRetryOptions {
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   timeoutMs?: number;
+  /** Override retried HTTP statuses when a service uses 429 for request admission. */
+  retryStatuses?: ReadonlySet<number>;
 }
 
 /** Abort a backoff promptly; release its timer and signal listener on either outcome. */
@@ -51,7 +53,7 @@ export async function fetchWithRetry(
     try {
       signal.throwIfAborted();
       const response = await fetchImpl(url, { ...init, signal });
-      if (response.ok || response.status === 404 || !RETRYABLE.has(response.status)) return response;
+      if (response.ok || response.status === 404 || !(deps.retryStatuses ?? RETRYABLE).has(response.status)) return response;
       last = response;
       error = undefined;
     } catch (caught) {

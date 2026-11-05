@@ -1,5 +1,5 @@
 import type { AtmosphericColumn, AtmosphericLevel, Scalar, SiteForecast } from '@windgrams/contracts';
-import type { PressureLevel } from '@windgrams/meteorology';
+import type { PressureLevel, WindSample } from '@windgrams/meteorology';
 import type { SOARING_CONTRACT_VERSION } from './diagnostics.js';
 import type { DiagnosticSupport, VerticalResolution } from '@windgrams/contracts/published-lift';
 export type { DiagnosticSupport, VerticalResolution, VerticalSampling, ThermalDepthSupport } from '@windgrams/contracts/published-lift';
@@ -28,7 +28,7 @@ export interface TerrainAdjustment {
   /** Target is the launch ground elevation MSL, not 10 m above the launch. */
   targetHeightMslM?: number; targetReference?: 'launch-elevation';
   bracketMslM?: [number, number] | null;
-  unavailableReason?: 'below-model-ground' | 'outside-wind-support' | 'missing-bracket-wind' | 'duplicate-height' | null;
+  unavailableReason?: 'below-model-ground' | Extract<WindSample, { status: 'unavailable' }>['reason'] | null;
 }
 export type SoaringMetric =
   | 'resolvedThermalTopM' | 'thermalTopPlus1CM' | 'thermalVelocityV2Mps' | 'usableLiftTopV2M'

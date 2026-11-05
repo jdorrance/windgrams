@@ -25,6 +25,7 @@ export function sampleWindAtHeight(levels: readonly WindLevel[], heightM: number
 
   if (exact) return { status: 'available', speedMps: a.windSpeedMps,
     directionDeg: a.windSpeedMps === 0 ? null : a.windDirectionDeg!, bracketMslM: [heightM, heightM] };
+  if(levels.some(node=>!finite(node.heightM)))return {status:'unavailable',reason:'missing-height'};
   const from = windToComponents(a.windSpeedMps, a.windSpeedMps === 0 ? 0 : a.windDirectionDeg!);
   const to = windToComponents(b.windSpeedMps, b.windSpeedMps === 0 ? 0 : b.windDirectionDeg!);
   const fraction = (heightM - a.heightM) / (b.heightM - a.heightM);

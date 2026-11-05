@@ -28,3 +28,8 @@ test('physical wind sampling rejects extrapolation and cannot bridge missing or 
   }
   for (const height of [40, 60, 80]) assert.equal(reason([node(10), node(60), node(60, 8), node(110)], height), 'duplicate-height');
 });
+test('unknown height blocks interpolation while exact known wind measurements survive',()=>{
+ const levels=[node(200,2),node(NaN,20),node(1000,4)];
+ assert.equal(sampleWindAtHeight(levels,700).reason,'missing-height');
+ assert.equal(sampleWindAtHeight(levels,200).speedMps,2);assert.equal(sampleWindAtHeight(levels,1000).speedMps,4);
+});

@@ -64,3 +64,25 @@ The [`/http` helpers](src/http.ts) are also available separately. Requests get u
 to three attempts with a 15-second timeout per attempt by default. Cancellation
 stops both requests and retry waits. See the [client types](src/products.ts) for
 configuration and result types.
+
+## AV publications
+
+Configure `createForecastClient({ baseUrl, avApiBaseUrl, sites })` to read GFS,
+ICON-EU and RRFS from AV. Other models use `baseUrl`. AV failures remain explicit.
+`loadManifest` and `loadProfile` share one pinned run per model.
+
+`/av` exposes `createAvClient` and `openAvRegionalDataset` for raster templates,
+scalar batches and complete native point profiles. Heights remain MSL; native
+model terrain and requested launch coordinates stay separate. Nullable pressure,
+height, temperature, humidity and wind remain independent. Profiles retain the
+native time axis; `mapFrames` selects the raster prefix. See the
+[boundary types](src/av.ts) and [wire validation](src/av-wire.ts).
+
+`createAvSnapshotRepository` saves selected native profiles and scoped scalar
+samples, then commits their verified byte inventory. Supply the displayed
+`build` to save that pinned run. Reopening uses stored bytes and allows subsets
+of the saved points, fields and times. Route geometry, the selected launch and
+native cursor travel with the snapshot. Interrupted saves checkpoint validated
+immutable responses; retries verify cached blobs and refresh latest discovery.
+`prune()` removes resume checkpoints and unreferenced files. The host owns app-shell and basemap
+caching. See [snapshot types](src/av-offline.ts).

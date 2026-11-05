@@ -1,4 +1,5 @@
-import type { ModelCapabilities, SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
+import type { ModelCapabilities } from '@azohra/meteo.briefing/contract';
 import { buildWindgramView, windgramPresentationKey, type WindgramOptions, type WindgramView } from '@windgrams/windgram/scene';
 import { windgramViewport } from '../lib/windgram-viewport.ts';
 import { renderWindgramDiagnosticsSvg, renderWindgramKey, renderWindgramSvg } from '@windgrams/windgram/svg/external';

@@ -70,18 +70,19 @@ export function pOf(g: Geometry, y: number) {
  * quiet sounding is not blown up out of proportion.
  */
 export function fitGeometry(s: Sounding, box: { left: number; right: number; top: number; bottom: number }): Geometry {
-  const pBottom = s.points[0].pressureHpa + 4;
-  const pTop = s.points[s.points.length - 1].pressureHpa - 8;
+  const pressures=s.points.map(point=>point.pressureHpa).filter(value=>Number.isFinite(value)&&value>0);
+  const pBottom = Math.max(...pressures) + 4;
+  const pTop = Math.max(1,Math.min(...pressures) - 8);
   const width = box.right - box.left;
   const skewed: number[] = [];
-  const add = (t: number, p: number) => skewed.push(t + SKEW_C_PER_LNP * (Math.log(pBottom) - Math.log(p)));
+  const add = (t: number, p: number) => {if(Number.isFinite(t)&&Number.isFinite(p)&&p>0)skewed.push(t + SKEW_C_PER_LNP * (Math.log(pBottom) - Math.log(p)));};
   for (const p of s.points) {
     add(p.temperatureC, p.pressureHpa);
     if (Number.isFinite(p.dewPointC)) add(p.dewPointC, p.pressureHpa);
   }
   for (const p of s.parcel) add(p.parcelC, p.pressureHpa);
-  const min = Math.min(...skewed);
-  const max = Math.max(...skewed);
+  const min = skewed.length?Math.min(...skewed):-15;
+  const max = skewed.length?Math.max(...skewed):15;
   const pad = 26;
   const span = Math.max(30, max - min);
   const k = (width - 2 * pad) / span;
@@ -172,7 +173,7 @@ export class SkewTChart {
     const band = (z0: number, z1: number, cls: string, x0 = box.left, x1 = box.right) => {
       const ya = y(pAt(Math.min(z1, heightAtPressure(s.points, g.pTop))));
       const yb = y(pAt(Math.max(z0, s.modelElevationM)));
-      if (yb - ya < 1) return;
+      if (!Number.isFinite(ya)||!Number.isFinite(yb)||yb - ya < 1) return;
       // Lid bands fill with this chart's own hatch pattern (ids are per-instance).
       const attrs: Record<string, string | number> = { x: x0, y: ya, width: x1 - x0, height: yb - ya, class: cls };
       if (cls.includes("skewt-lid")) attrs.fill = `url(#${this.idPrefix}-hatch)`;
@@ -208,7 +209,7 @@ export class SkewTChart {
     const step = metric ? (zTop - s.modelElevationM > 4500 ? 1000 : 500) : ((zTop - s.modelElevationM) * FT > 14000 ? 2000 : 1000);
     for (let value = Math.ceil(convertQuantity(s.modelElevationM, "elevation")! / step) * step; value <= convertQuantity(zTop, "elevation")!; value += step) {
       const yy = y(pAt(fromDisplayQuantity(value, "elevation")!));
-      if (yy > box.bottom - 6) continue;
+      if (!Number.isFinite(yy)||yy > box.bottom - 6) continue;
       el("line", { x1: box.left, x2: box.right, y1: yy, y2: yy, class: "skewt-grid" }, svg);
       text(svg, box.left - 6, yy + 4, metric ? value.toLocaleString("en-US") : `${(value / 1000).toLocaleString("en-US")}k`, { class: "tick", "text-anchor": "end" });
     }
@@ -237,15 +238,15 @@ export class SkewTChart {
     flush();
 
     // Traces.
-    const path = (pts: [number, number][]) => pts.map(([t, p], i) => `${i ? "L" : "M"}${x(t, p).toFixed(1)},${y(p).toFixed(1)}`).join("");
+    const path = (pts: [number, number][]) => {let open=false;return pts.map(([t,p])=>{if(!Number.isFinite(t)||!Number.isFinite(p)||p<=0){open=false;return "";}const command=open?"L":"M";open=true;return `${command}${x(t,p).toFixed(1)},${y(p).toFixed(1)}`;}).join("");};
     el("path", { d: path(s.parcel.map((r) => [r.parcelC, r.pressureHpa])), class: "skewt-parcel" }, plot);
-    if (s.hasDewPoint) el("path", { d: path(s.points.filter((p) => Number.isFinite(p.dewPointC)).map((p) => [p.dewPointC, p.pressureHpa])), class: "skewt-dew" }, plot);
+    if (s.hasDewPoint) el("path", { d: path(s.points.map((p) => [p.dewPointC, p.pressureHpa])), class: "skewt-dew" }, plot);
     el("path", { d: path(s.points.map((p) => [p.temperatureC, p.pressureHpa])), class: "skewt-temp" }, plot);
     // Dots mark the published levels; a balloon's dense profile draws as a line alone.
     const dots = s.points.length <= 40;
     for (const p of s.points) {
-      if (dots) el("circle", { cx: x(p.temperatureC, p.pressureHpa), cy: y(p.pressureHpa), r: 2.6, class: "skewt-temp-dot" }, plot);
-      if (Number.isFinite(p.dewPointC) && dots) el("circle", { cx: x(p.dewPointC, p.pressureHpa), cy: y(p.pressureHpa), r: 2.6, class: "skewt-dew-dot" }, plot);
+      if (dots && Number.isFinite(p.temperatureC) && Number.isFinite(p.pressureHpa)) el("circle", { cx: x(p.temperatureC, p.pressureHpa), cy: y(p.pressureHpa), r: 2.6, class: "skewt-temp-dot" }, plot);
+      if (Number.isFinite(p.dewPointC) && Number.isFinite(p.pressureHpa) && dots) el("circle", { cx: x(p.dewPointC, p.pressureHpa), cy: y(p.pressureHpa), r: 2.6, class: "skewt-dew-dot" }, plot);
     }
 
     // Trace names at the ground, where they are furthest apart.
@@ -260,8 +261,8 @@ export class SkewTChart {
       text(plot, px + (anchor === "start" ? 6 : -6), box.bottom - 8, label, { class: `skewt-name ${cls}`, "text-anchor": anchor });
     };
     if (!narrow) {
-      if (Number.isFinite(p0.dewPointC)) nameAt(p0.dewPointC, "Dew point", "skewt-name-dew", "end");
-      nameAt(p0.temperatureC, "Temperature", "skewt-name-temp", "start");
+      if (Number.isFinite(p0.dewPointC)&&Number.isFinite(p0.pressureHpa)) nameAt(p0.dewPointC, "Dew point", "skewt-name-dew", "end");
+      if(Number.isFinite(p0.temperatureC)&&Number.isFinite(p0.pressureHpa))nameAt(p0.temperatureC, "Temperature", "skewt-name-temp", "start");
     }
 
     // Horizontal marks, named on the right; labels solved so they never overlap.
@@ -288,7 +289,7 @@ export class SkewTChart {
     const labelLayer = el("g", {}, svg);
     const place = (items: typeof marks, xPos: number, anchor: "start" | "end", above: boolean, reservedY: number[] = []) => {
       const solved = solveVerticalLabels(
-        items.map((m) => ({ id: m.id, trueY: y(pAt(m.z)) + (above ? -5 : 4) })),
+        items.filter(m=>Number.isFinite(pAt(m.z))).map((m) => ({ id: m.id, trueY: y(pAt(m.z)) + (above ? -5 : 4) })),
         { minGapPx: 15, topY: box.top + 12, bottomY: box.bottom - 22 },
       );
       for (const sol of solved) {
@@ -312,7 +313,7 @@ export class SkewTChart {
     for (const p of windPoints) {
       const heightM = p.windHeightM ?? p.heightM;
       if (heightM < s.points[0].heightM || heightM > s.topM) continue;
-      const wind = windAtHeight(windPoints, heightM);
+      const wind = Number.isFinite(heightM)?windAtHeight(windPoints,heightM):p.windSpeedMps!==null&&Number.isFinite(p.windSpeedMps)&&(p.windSpeedMps===0||p.windDirectionDeg!==null&&Number.isFinite(p.windDirectionDeg))?{speedMps:p.windSpeedMps,directionDeg:p.windSpeedMps===0?null:p.windDirectionDeg}:null;
       if (!wind) continue;
       const yy = y(p.windHeightM === undefined && p.pressureHpa !== undefined ? p.pressureHpa : pAt(heightM));
       if (!Number.isFinite(yy) || yy < box.top + 12 || yy > box.bottom || lastBarbY - yy < 15) continue;
@@ -348,7 +349,7 @@ export class SkewTChart {
     const yy = (event.clientY - box.top) * scale;
     const p = pOf(g, yy);
     const z = heightAtPressure(s.points, p);
-    if (z < s.points[0].heightM || z > s.topM) return;
+    if (!Number.isFinite(z)||z < s.points[0].heightM || z > s.topM) return;
     cross.setAttribute("y1", String(yy));
     cross.setAttribute("y2", String(yy));
     cross.setAttribute("visibility", "visible");

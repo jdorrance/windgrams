@@ -1,7 +1,7 @@
 // Vertical altitude/pressure scale construction and screen-coordinate transforms
 // for Windgram charts.
 
-import type { SiteForecast } from "@azohra/meteo.briefing/contract";
+import type { SiteForecast } from "@windgrams/contracts";
 import { publishedLift, publishedWxtoflyLiftTop } from "@windgrams/contracts/published-lift";
 import { finiteScalar } from "./windgram-format.ts";
 import { median } from "./windgram-time-axis.ts";

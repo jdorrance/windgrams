@@ -1,5 +1,6 @@
 import { finiteScalar as scalar, formatQuantity, gustNoun, type GustSemantics } from './units.ts';
-import type { ForecastManifest, SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { ForecastManifest } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
 import { localDateKey, localHourOfDay, localInstantMs } from '@azohra/meteo.briefing/derive';
 import { sunriseSunset } from '@windgrams/meteorology/sun';
 import { publishedLift, publishedLiftFamily, publishedCloudBaseKind } from './published-lift.ts';

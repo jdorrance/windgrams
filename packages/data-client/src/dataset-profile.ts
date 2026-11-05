@@ -1,4 +1,4 @@
-import type { SiteForecast } from '@azohra/meteo.briefing/contract';
+import type { SiteForecast } from '@windgrams/contracts';
 import { replayModel, type ReplayHour, type ReplayManifest } from '@windgrams/contracts/regional';
 
 type ProfileHour = SiteForecast['hours'][number];
